@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 pub struct Arg<'a> {
     name: CString,
     data: &'a dyn ToNSI,
@@ -26,7 +24,7 @@ impl<'a> Arg<'a> {
             data,
             type_of: data.type_nsi(),
             array_length: 1,
-            count: data.len_nsi(),
+            count: data.len_nsi() / data.type_nsi().element_size(),
             flags: 0,
         }
     }
@@ -48,6 +46,26 @@ impl<'a> Arg<'a> {
     pub fn type_of(mut self, type_of: Type) -> Self {
         // FIXME: check if we fit in data.count() without remainder
         self.type_of = type_of;
+
+        if self.array_length == 1 {
+            if self.count == self.data.len_nsi() {
+                self.count /= self.type_of.element_size();
+            }
+            assert!(
+                self.count * self.type_of.element_size()
+                    == self.data.len_nsi()
+            )
+        } /*else {
+              if self.count * self.arry_length == self.data.len_nsi() / self.type_of.element_size() {
+          }
+
+          4 * 2
+          128
+
+          32 elements
+          new(foo,32).count(2).array_size(2) -> error
+          new(foo,32).type_of(doublematrix)
+          */
         self
     }
 
@@ -56,7 +74,8 @@ impl<'a> Arg<'a> {
         assert!(self.data.len_nsi() % count == 0);
 
         self.count = count;
-        self.array_length = self.data.len_nsi() / count;
+        self.array_length =
+            self.data.len_nsi() / self.type_of.element_size() / count;
         self
     }
 
@@ -65,7 +84,9 @@ impl<'a> Arg<'a> {
         assert!(self.data.len_nsi() % array_length == 0);
 
         self.array_length = array_length;
-        self.count = self.data.len_nsi() / array_length;
+        self.count = self.data.len_nsi()
+            / self.type_of.element_size()
+            / array_length;
         self
     }
 
@@ -77,7 +98,7 @@ impl<'a> Arg<'a> {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Type {
-    None = -1,         // nsi_sys::NSIType_t::NSITypeInvalid,
+    Invalid = -1,      // nsi_sys::NSIType_t::NSITypeInvalid,
     Float = 0,         // nsi_sys::NSIType_t::NSITypeFloat,
     Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
     Integer = 2,       // nsi_sys::NSIType_t::NSITypeInteger,
@@ -92,10 +113,30 @@ pub enum Type {
     Pointer = 10, // nsi_sys::NSIType_t::NSITypePointer,
 }
 
+impl Type {
+    pub fn element_size(&self) -> usize {
+        match self {
+            Type::Invalid => 0,
+            Type::Float => 1,
+            Type::Double => 1,
+            Type::Integer => 1,
+            Type::String => 1,
+            Type::Color => 3,
+            Type::Point => 3,
+            Type::Vector => 3,
+            Type::Normal => 3,
+            Type::Matrix => 16,
+            Type::DoubleMatrix => 16,
+            Type::Pointer => 1,
+        }
+    }
+}
+
 pub trait ToNSI {
     fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void;
     fn len_nsi(&self) -> usize;
     fn type_nsi(&self) -> Type;
+    //fn size_nsi(&self) -> usize;
 }
 
 impl<T> ToNSI for T {
@@ -106,7 +147,7 @@ impl<T> ToNSI for T {
         1
     }
     default fn type_nsi(&self) -> Type {
-        Type::None
+        Type::Invalid
     }
 }
 
@@ -166,7 +207,7 @@ impl<T> ToNSI for Vec<T> {
         self.len()
     }
     default fn type_nsi(&self) -> Type {
-        Type::None
+        Type::Invalid
     }
 }
 

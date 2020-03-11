@@ -1,12 +1,11 @@
 #![feature(specialization)]
+use nsi_sys;
+use std::{ffi::CString, mem, ops::Drop, vec::Vec};
+mod test;
 
 static STR_ERROR: &str = "Found null byte in the middle of the string";
 
-extern crate nsi_sys;
-
 include!("argument.rs");
-
-use std::{ops::Drop, vec::Vec};
 
 //type Handle = impl Into<Vec<u8>>;
 
@@ -42,19 +41,20 @@ impl Context {
     /// * `handle` - A node handle. This string will uniquely identify
     ///   the node in the scene.
     ///
-    ///   If the supplied handle matches an existing node, the function
-    ///   does nothing if all other parameters match the call which
-    ///   created that node.
-    ///   Otherwise, it emits an error. Note that handles need only be
-    ///   unique within a given interface context. It is acceptable to
-    ///   reuse the same handle inside different contexts.
+    ///   If the supplied handle matches an existing node, the
+    /// function   does nothing if all other parameters
+    /// match the call which   created that node.
+    ///   Otherwise, it emits an error. Note that handles need only
+    /// be   unique within a given interface context. It is
+    /// acceptable to   reuse the same handle inside
+    /// different contexts.
     ///
     /// * `type` - The type of node to create.
     ///
     /// * `args` - A vector of optional [`Arg`] parameters. *There are
     ///   no optional parameters defined as of now*.
     pub fn create(
-        &mut self,
+        &self,
         handle: impl Into<Vec<u8>>,
         node_type: &Node,
         args: &ArgVec,
@@ -73,11 +73,7 @@ impl Context {
         }
     }
 
-    pub fn delete(
-        &mut self,
-        handle: impl Into<Vec<u8>>,
-        args: &ArgVec,
-    ) {
+    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec(args, &mut args_out);
 
@@ -92,7 +88,7 @@ impl Context {
     }
 
     pub fn set_attribute(
-        &mut self,
+        &self,
         object: impl Into<Vec<u8>>,
         args: &ArgVec,
     ) {
@@ -110,7 +106,7 @@ impl Context {
     }
 
     pub fn set_attribute_at_time(
-        &mut self,
+        &self,
         object: impl Into<Vec<u8>>,
         time: f64,
         args: &ArgVec,
@@ -130,7 +126,7 @@ impl Context {
     }
 
     pub fn connect(
-        &mut self,
+        &self,
         from: impl Into<Vec<u8>>,
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
@@ -156,7 +152,7 @@ impl Context {
     }
 
     pub fn disconnect(
-        &mut self,
+        &self,
         from: impl Into<Vec<u8>>,
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
@@ -175,7 +171,7 @@ impl Context {
         }
     }
 
-    pub fn evaluate(&mut self, args: &ArgVec) {
+    pub fn evaluate(&self, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec(args, &mut args_out);
 
@@ -188,7 +184,7 @@ impl Context {
         }
     }
 
-    pub fn render_control(&mut self, args: &ArgVec) {
+    pub fn render_control(&self, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec(args, &mut args_out);
 
@@ -212,7 +208,7 @@ impl Drop for Context {
 }
 
 pub enum Node {
-    Root,
+    Root, // = ".root",
     Global,
     Set,
     Shader,
