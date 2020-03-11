@@ -4,7 +4,11 @@ version = "0.1.0"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "vfx", "rendering", "nsi", "3delight"]
-
+license-file = "LICENSE.md"
+description = "High level bindings for Illumination Research’s Nodal Scene Interface – ɴsɪ."
+homepage = "https://www.3delight.com/"
+documentation = "https://nsi.readthedocs.io/"
+repository = "https://github.com/virtualritz/nsi/"
 
 [features]
 #default = ["algebra-nalgebra"]
@@ -13,7 +17,7 @@ keywords = ["graphics", "vfx", "rendering", "nsi", "3delight"]
 #algebra-nalgebra = ["alga", "nalgebra"]
 
 [dependencies]
-nsi-sys = "*" # { path = "../nsi-sys" }
+nsi-sys = "0.1.0" # { path = "../nsi-sys" }
 #alga = { version = "^0.9.0", optional = true }
 #cgmath = { version = "^0.17.0", optional = true }
 #mint = { version = "^0.5.0", optional = true }
