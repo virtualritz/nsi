@@ -18,7 +18,7 @@ use std::{ops::Drop, vec::Vec};
 
 //type Handle = impl Into<Vec<u8>>;
 
-struct Context {
+pub struct Context {
     context: nsi_sys::NSIContext_t,
 }
 
@@ -45,6 +45,22 @@ impl Context {
         }
     }
 
+    /// This function is used to create a new node.
+    /// # Arguments
+    /// * `handle` - A node handle. This string will uniquely identify
+    ///   the node in the scene.
+    ///
+    ///   If the supplied handle matches an existing node, the function
+    ///   does nothing if all other parameters match the call which
+    ///   created that node.
+    ///   Otherwise, it emits an error. Note that handles need only be
+    ///   unique within a given interface context. It is acceptable to
+    ///   reuse the same handle inside different contexts.
+    ///
+    /// * `type` - The type of node to create.
+    ///
+    /// * `args` - A vector of optional [`Arg`] parameters. *There are
+    ///   no optional parameters defined as of now*.
     pub fn create(
         &mut self,
         handle: impl Into<Vec<u8>>,
@@ -230,7 +246,7 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn as_c_str(&self) -> &'static [u8] {
+    fn as_c_str(&self) -> &'static [u8] {
         match *self {
             Node::Root => b".root\0",
             Node::Global => b".global\0",

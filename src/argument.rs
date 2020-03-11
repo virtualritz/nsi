@@ -1,7 +1,7 @@
 use std::ffi::CString;
 
 //#[derive(Debug)]
-struct Arg<'a> {
+pub struct Arg<'a> {
     name: CString,
     data: &'a dyn ToNSI,
     type_of: Type,
@@ -10,7 +10,7 @@ struct Arg<'a> {
     flags: u32,
 }
 
-type ArgVec<'a> = Vec<Arg<'a>>;
+pub type ArgVec<'a> = Vec<Arg<'a>>;
 
 fn get_c_param_vec<'a>(
     args_in: &'a ArgVec,
@@ -32,7 +32,7 @@ impl<'a> Arg<'a> {
         }
     }
 
-    pub fn to_nsi(&'a self) -> nsi_sys::NSIParam_t {
+    fn to_nsi(&'a self) -> nsi_sys::NSIParam_t {
         assert!(
             self.data.len_nsi() % (self.array_length * self.count) == 0
         );
@@ -78,7 +78,7 @@ impl<'a> Arg<'a> {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Type {
-    Invalid = -1,      //nsi_sys::NSIType_t::NSITypeInvalid,
+    None = -1,         // nsi_sys::NSIType_t::NSITypeInvalid,
     Float = 0,         // nsi_sys::NSIType_t::NSITypeFloat,
     Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
     Integer = 2,       // nsi_sys::NSIType_t::NSITypeInteger,
