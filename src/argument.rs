@@ -1,6 +1,5 @@
 use std::ffi::CString;
 
-//#[derive(Debug)]
 pub struct Arg<'a> {
     name: CString,
     data: &'a dyn ToNSI,
@@ -46,13 +45,13 @@ impl<'a> Arg<'a> {
         }
     }
 
-    fn type_of(mut self, type_of: Type) -> Self {
+    pub fn type_of(mut self, type_of: Type) -> Self {
         // FIXME: check if we fit in data.count() without remainder
         self.type_of = type_of;
         self
     }
 
-    fn count(mut self, count: usize) -> Self {
+    pub fn count(mut self, count: usize) -> Self {
         assert!(count * self.array_length <= self.data.len_nsi());
         assert!(self.data.len_nsi() % count == 0);
 
@@ -61,7 +60,7 @@ impl<'a> Arg<'a> {
         self
     }
 
-    fn array_length(mut self, array_length: usize) -> Self {
+    pub fn array_length(mut self, array_length: usize) -> Self {
         assert!(self.count * array_length <= self.data.len_nsi());
         assert!(self.data.len_nsi() % array_length == 0);
 
@@ -70,7 +69,7 @@ impl<'a> Arg<'a> {
         self
     }
 
-    fn flags(mut self, flags: u32) -> Self {
+    pub fn flags(mut self, flags: u32) -> Self {
         self.flags = flags;
         self
     }
@@ -107,7 +106,7 @@ impl<T> ToNSI for T {
         1
     }
     default fn type_nsi(&self) -> Type {
-        Type::Invalid
+        Type::None
     }
 }
 
@@ -167,7 +166,7 @@ impl<T> ToNSI for Vec<T> {
         self.len()
     }
     default fn type_nsi(&self) -> Type {
-        Type::Invalid
+        Type::None
     }
 }
 
