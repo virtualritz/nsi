@@ -19,4 +19,6 @@ This will set the `$DELIGHT` environment variable that the build script is looki
 
 ## Documentation
 
-TBD.
+Docs for the C, C++, Lua & Python bindings as well as an introduction and deep dive into the API [can be found here](https://nsi.readthedocs.io).
+
+Crate documentation is coming soon.
