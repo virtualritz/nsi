@@ -1,2 +1,22 @@
-# NSI
-Nodal Scene Interface high level Rust binding
+# ɴsɪ
+
+High level Rust bindings for Illumination Research’s Nodal Scene Interface – ɴsɪ.
+
+## Dependencies
+
+This crate depends on [nsi-sys](https://github.com/virtualritz/nsi) which in term requires a renderer that implements the ɴsɪ API. Currently the only renderer that does is [3Delight](https://www.3delight.com/).
+
+Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it.
+This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
+
+> **_Note:_** The free version of 3Delight will render with up to 12 cores on your machine. For crazier projects you can use their cheap cloud rendering service that gives you access to unlimited CPU cores.
+
+## Building
+
+```
+> cargo build
+```
+
+## Documentation
+
+TBD.
