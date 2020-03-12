@@ -1,3 +1,12 @@
+/// An argument type to specify optional parameters and/or attributes
+/// passed to ɴsɪ API calls.
+///
+/// This is used to pass variable parameter lists. Most [`Context`]
+/// methods accept a [`Vec`] of (optional) [`Arg`]s in the `args`
+/// parameter.
+///
+/// Also see the [ɴsɪ docmentation on optional
+/// parameters](https://nsi.readthedocs.io/en/latest/c-api.html#passing-optional-parameters)
 pub struct Arg<'a> {
     name: CString,
     data: &'a dyn ToNSI,
@@ -30,9 +39,14 @@ impl<'a> Arg<'a> {
     }
 
     fn to_nsi(&'a self) -> nsi_sys::NSIParam_t {
-        assert!(
+        // Check that we fit without remainder.
+        assert!(if nsi_sys::NSIParamIsArray & self.flags == 0 {
+            self.data.len_nsi() % self.count == 0
+        } else {
+            // Array case.
             self.data.len_nsi() % (self.array_length * self.count) == 0
-        );
+        });
+
         nsi_sys::NSIParam_t {
             name: self.name.as_ptr(),
             data: self.data.as_ptr_nsi(),
@@ -43,80 +57,107 @@ impl<'a> Arg<'a> {
         }
     }
 
-    pub fn type_of(mut self, type_of: Type) -> Self {
+
+    pub fn set_type(mut self, type_of: Type) -> Self {
         // FIXME: check if we fit in data.count() without remainder
         self.type_of = type_of;
 
-        if self.array_length == 1 {
-            if self.count == self.data.len_nsi() {
-                self.count /= self.type_of.element_size();
-            }
+        // Type can change count -> re-calculate.
+
+        if nsi_sys::NSIParamIsArray & self.flags == 0 {
+            self.count =
+                self.data.len_nsi() / self.type_of.element_size();
+
+            // Check that we fit w/o remainder.
             assert!(
-                self.count * self.type_of.element_size()
-                    == self.data.len_nsi()
-            )
-        } /*else {
-              if self.count * self.arry_length == self.data.len_nsi() / self.type_of.element_size() {
-          }
+                self.data.len_nsi() % self.type_of.element_size() == 0
+            );
+        } else {
+            // This is an array.
+            self.count = self.data.len_nsi()
+                / self.type_of.element_size()
+                / self.array_length;
 
-          4 * 2
-          128
+            // Check that we fit w/o remainder.
+            assert!(
+                self.data.len_nsi()
+                    % self.type_of.element_size()
+                    % self.array_length
+                    == 0
+            );
+        }
 
-          32 elements
-          new(foo,32).count(2).array_size(2) -> error
-          new(foo,32).type_of(doublematrix)
-          */
         self
     }
 
-    pub fn count(mut self, count: usize) -> Self {
-        assert!(count * self.array_length <= self.data.len_nsi());
-        assert!(self.data.len_nsi() % count == 0);
-
-        self.count = count;
-        self.array_length =
-            self.data.len_nsi() / self.type_of.element_size() / count;
-        self
-    }
-
-    pub fn array_length(mut self, array_length: usize) -> Self {
-        assert!(self.count * array_length <= self.data.len_nsi());
-        assert!(self.data.len_nsi() % array_length == 0);
+    pub fn set_array_length(mut self, array_length: usize) -> Self {
+        // Make sure we fit at all.
+        assert!(
+            self.data.len_nsi()
+                / self.type_of.element_size()
+                / array_length
+                >= 1
+        );
 
         self.array_length = array_length;
+        self.flags |= nsi_sys::NSIParamIsArray;
+
+        // Array length can change count -> re-calculate
         self.count = self.data.len_nsi()
             / self.type_of.element_size()
-            / array_length;
+            / self.array_length;
+
+        // Check that we fit w/o remainder.
+        assert!(
+            self.data.len_nsi()
+                % self.type_of.element_size()
+                % self.array_length
+                == 0
+        );
+
         self
     }
 
-    pub fn flags(mut self, flags: u32) -> Self {
+    pub fn set_flags(mut self, flags: u32) -> Self {
         self.flags = flags;
         self
     }
 }
 
+/// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug)]
 pub enum Type {
+    /// Undefined type.
     Invalid = -1,      // nsi_sys::NSIType_t::NSITypeInvalid,
+    /// Single 32-bit ([`f32`]) floating point value.
     Float = 0,         // nsi_sys::NSIType_t::NSITypeFloat,
+    /// Single 64-bit ([`f64`]) floating point value.
     Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
+    /// Single 32-bit ([`i32`]) integer value.
     Integer = 2,       // nsi_sys::NSIType_t::NSITypeInteger,
+    /// A [`String`].
     String = 3,        // nsi_sys::NSIType_t::NSITypeString,
+    /// Color, given as three 32-bit ([`i32`]) floating point values, usually in the range `0..1`. Red would e.g. be `[1.0, 0.0, 0.0]`
     Color = 4,         // nsi_sys::NSIType_t::NSITypeColor,
+    /// Point, given as three 32-bit ([`f32`])floating point values.
     Point = 5,         // nsi_sys::NSIType_t::NSITypePoint,
+    /// Vector, given as three 32-bit ([`f32`]) floating point values.
     Vector = 6,        // nsi_sys::NSIType_t::NSITypeVector,
+    /// Normal vector, given as three 32-bit ([`f32`]) floating point values.
     Normal = 7,        // nsi_sys::NSIType_t::NSITypeNormal,
+    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating point values.
     Matrix = 8,        // nsi_sys::NSIType_t::NSITypeMatrix,
+    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating point values.
     DoubleMatrix = 8 | 0x10, /* nsi_sys::NSIType_t::NSITypeMatrix |
                         * 0x10, */
+    /// Raw (`*const T`) pointer.
     Pointer = 10, // nsi_sys::NSIType_t::NSITypePointer,
 }
 
 impl Type {
     pub fn element_size(&self) -> usize {
         match self {
-            Type::Invalid => 0,
+            Type::Invalid => 1, // avoid division by zero
             Type::Float => 1,
             Type::Double => 1,
             Type::Integer => 1,
@@ -136,7 +177,6 @@ pub trait ToNSI {
     fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void;
     fn len_nsi(&self) -> usize;
     fn type_nsi(&self) -> Type;
-    //fn size_nsi(&self) -> usize;
 }
 
 impl<T> ToNSI for T {
@@ -175,26 +215,86 @@ impl ToNSI for String {
     }
 }
 
-impl ToNSI for [f32; 3] {
+impl<T, const N: usize> ToNSI for [T; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
     default fn type_nsi(&self) -> Type {
+        Type::Invalid
+    }
+}
+
+impl<const N: usize> ToNSI for [f32; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::Float
+    }
+}
+
+impl<const N: usize> ToNSI for [i32; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::Integer
+    }
+}
+
+impl<const N: usize> ToNSI for [f64; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::Double
+    }
+}
+
+impl<const N: usize> ToNSI for [String; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::String
+    }
+}
+
+impl ToNSI for [f32; 3] {
+    fn type_nsi(&self) -> Type {
         Type::Color
     }
 }
 
 impl ToNSI for [f32; 16] {
-    default fn type_nsi(&self) -> Type {
+    fn type_nsi(&self) -> Type {
         Type::Matrix
     }
 }
 
 impl ToNSI for [f64; 16] {
-    default fn type_nsi(&self) -> Type {
+    fn type_nsi(&self) -> Type {
         Type::DoubleMatrix
     }
 }
 
 impl<T> ToNSI for *const T {
-    default fn type_nsi(&self) -> Type {
+    fn type_nsi(&self) -> Type {
         Type::Pointer
     }
 }
@@ -259,6 +359,14 @@ impl<T> ToNSI for Vec<*const T> {
     }
 }
 
+#[macro_export]
+macro_rules! no_arg {
+    () => {
+        &nsi::ArgVec::new()
+    };
+}
+
+/*
 #[test]
 fn test() {
     let single = Arg::new("foo", &10.0f32);
@@ -269,4 +377,4 @@ fn test() {
     get_c_param_vec(&vec![single, array], &mut result_vec);
 
     dbg!(result_vec);
-}
+}*/

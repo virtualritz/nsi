@@ -1,7 +1,49 @@
+//! A Flexible, Modern API for Renderers
+//!
+//! The Nodal Scene Interface (ɴsɪ) is built around the concept of nodes.
+//! Each node has a unique handle to identify it and a type which
+//! describes its intended function in the scene. Nodes are abstract
+//! containers for data. The interpretation depends on the node type.
+//! Nodes can also be [connected to each
+//! other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
+//! to express relationships.
+//!
+//! Data is stored on nodes as attributes. Each attribute has a name which
+//! is unique on the node and a type which describes the kind of data it
+//! holds (strings, integer numbers, floating point numbers, etc).
+//!
+//! Relationships and data flow between nodes are represented as
+//! connections. Connections have a source and a destination. Both can be
+//! either a node or a specific attribute of a node. There are no type
+//! restrictions for connections in the interface itself. It is acceptable
+//! to connect attributes of different types or even attributes to nodes.
+//! The validity of such connections depends on the types of the nodes
+//! involved.
+//!
+//! What we refer to as the ɴsɪ has two major components:
+//!
+//! 1.  Methods to create nodes, attributes and their connections. These
+//!     are attached to a rendering [`Context`],
+//!
+//! 2.  [Node types](https://nsi.readthedocs.io/en/latest/nodes.html)
+//!     understood by the renderer.
+//!
+//! Much of the complexity and expressiveness of the interface comes from
+//! the supported nodes.
+//!
+//! The first part was kept deliberately simple to make it easy to support
+//! multiple ways of creating nodes.
+
+#![allow(incomplete_features)]
 #![feature(specialization)]
+#![feature(const_generics)]
+
 use nsi_sys;
-use std::{ffi::CString, mem, ops::Drop, vec::Vec};
+use std::{ffi::CString, ops::Drop, vec::Vec};
+
 mod test;
+
+
 
 static STR_ERROR: &str = "Found null byte in the middle of the string";
 
@@ -9,6 +51,10 @@ include!("argument.rs");
 
 //type Handle = impl Into<Vec<u8>>;
 
+/// An ɴsɪ context.
+///
+/// Also see the [ɴsɪ docmentation on context
+/// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
 pub struct Context {
     context: nsi_sys::NSIContext_t,
 }
@@ -41,13 +87,12 @@ impl Context {
     /// * `handle` - A node handle. This string will uniquely identify
     ///   the node in the scene.
     ///
-    ///   If the supplied handle matches an existing node, the
-    /// function   does nothing if all other parameters
-    /// match the call which   created that node.
-    ///   Otherwise, it emits an error. Note that handles need only
-    /// be   unique within a given interface context. It is
-    /// acceptable to   reuse the same handle inside
-    /// different contexts.
+    ///   If the supplied handle matches an existing node, the function
+    ///   does nothing if all other parameters match the call which
+    ///   created that node. Otherwise, it emits an error. Note that
+    ///   handles need only be unique within a given interface context.
+    ///   It is acceptable to reuse the same handle inside different
+    ///   contexts.
     ///
     /// * `type` - The type of node to create.
     ///
@@ -201,7 +246,6 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
-            //(len, arg_list) = nsi_sys_arg_list!( args );
             nsi_sys::NSIEnd(self.context);
         }
     }

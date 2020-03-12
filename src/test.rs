@@ -1,5 +1,5 @@
 #[cfg(test)]
-use super::*;
+#[macro_use]
 use crate as nsi;
 
 #[test]
@@ -27,22 +27,22 @@ fn live_edit() {
                 0.0, 1.0, 0.0, 0.0, 0.0,
             ],
         )
-        .type_of(nsi::Type::DoubleMatrix)],
+        .set_type(nsi::Type::DoubleMatrix)],
+    );
+
+    // Setup a screen.
+    c.create("s1", &nsi::Node::Screen, &nsi::ArgVec::new());
+    c.connect("s1", "", "cam1", "screens", &nsi::ArgVec::new());
+    c.set_attribute(
+        "s1",
+        &vec![
+            nsi::Arg::new("resolution", &[1280, 720]).set_array_length(2),
+            nsi::Arg::new("oversampling", &16i32),
+        ],
     );
 }
+
 /*
-# Setup a camera.
-c.Create('cam1', 'perspectivecamera')
-c.SetAttribute('cam1', fov=nsi.FloatArg(35))
-c.Connect('cam1', '', 'cam1_trs', 'objects')
-
-# Setup a screen.
-c.Create('s1', 'screen')
-c.Connect('s1', '', 'cam1', 'screens')
-c.SetAttribute('s1',
-    resolution=nsi.Arg((1280,720), arraylength=2),
-    oversampling=16)
-
 # Setup an output layer.
 c.Create('beauty', 'outputlayer')
 c.SetAttribute('beauty', variablename='Ci', withalpha=1, scalarformat='half')
