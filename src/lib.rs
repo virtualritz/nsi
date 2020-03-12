@@ -251,29 +251,66 @@ impl Drop for Context {
     }
 }
 
+/// A node in the ɴsɪ scene graph.
 pub enum Node {
+    /// The scene’s root.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
     Root, // = ".root",
+    /// Global settings node.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#the-global-node).
     Global,
+    /// Expresses relationships of groups of nodes.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-set).
     Set,
+    /// [ᴏsʟ](http://opensource.imageworks.com/?p=osl) shader or layer in a shader group.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-shader).
     Shader,
+    /// Container for generic attributes (e.g. visibility).
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-attributes).
     Attributes,
+    /// Transformation to place objects in the scene.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-transform).
     Transform,
+    /// Specifies instances of other nodes.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-instances).
     Instances,
+    /// Polygonal mesh or subdivision surface.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-mesh).
     Mesh,
+    /// Assign attributes to part of a mesh, curves or paticles.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-faceset).
     FaceSet,
+    /// Linear, b-spline and Catmull-Rom curves.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-curves).
     Curves,
+    /// Collection of particles.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-particles).
     Particles,
+    /// Geometry to be loaded or generated in delayed fashion.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
     Procedural,
+    /// A volume loaded from an [OpenVDB](https://www.openvdb.org) file.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-volume).
     Volume,
+    // Geometry type to define environment lighting.
+    // [Documentation]((https://nsi.readthedocs.io/en/latest/nodes.html#node-environment).
     Environment,
+    /// Set of nodes to create viewing cameras.
+    /// [Documentation]((https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
     Camera,
     /*OrthographicCamera,
     PerspectiveCamera,
     FisheyeCamera,
     CylindricalCamera,
     SphericalCamera,*/
+    /// A target where to output rendered pixels.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
     Outputdriver,
+    /// Describes one render layer to be connected to an `outputdriver` node.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
     Outputlayer,
+    /// Describes how the view from a camera node will be rasterized into an outputlayer node.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
 }
 

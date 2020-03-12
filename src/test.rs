@@ -16,8 +16,8 @@ fn live_edit() {
     )]);
 
     // Setup a camera transform.
-    c.create("cam1_trs", &nsi::Node::Transform, &nsi::ArgVec::new());
-    c.connect("cam1_trs", "", ".root", "objects", &nsi::ArgVec::new());
+    c.create("cam1_trs", &nsi::Node::Transform, no_arg!());
+    c.connect("cam1_trs", "", ".root", "objects", no_arg!());
     c.set_attribute(
         "cam1_trs",
         &vec![nsi::Arg::new(
@@ -31,8 +31,8 @@ fn live_edit() {
     );
 
     // Setup a screen.
-    c.create("s1", &nsi::Node::Screen, &nsi::ArgVec::new());
-    c.connect("s1", "", "cam1", "screens", &nsi::ArgVec::new());
+    c.create("s1", &nsi::Node::Screen, no_arg!());
+    c.connect("s1", "", "cam1", "screens", no_arg!());
     c.set_attribute(
         "s1",
         &vec![

@@ -11,11 +11,12 @@ pub struct Arg<'a> {
     name: CString,
     data: &'a dyn ToNSI,
     type_of: Type,
-    array_length: usize, // length of each element
+    array_length: usize, // length of each element if an array type
     count: usize,        // number of elements
     flags: u32,
 }
 
+/// A vector of (optional) [`Context`] method parameters.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
 
 fn get_c_param_vec<'a>(
@@ -155,7 +156,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn element_size(&self) -> usize {
+    fn element_size(&self) -> usize {
         match self {
             Type::Invalid => 1, // avoid division by zero
             Type::Float => 1,
@@ -359,11 +360,18 @@ impl<T> ToNSI for Vec<*const T> {
     }
 }
 
+/// A macro to specify an empty [`ArgVec`] to a [`Context`] method
+/// that supports optional parameters.
+///
+/// ```
+/// // Create rendering context.
+/// let context = nsi::Context::new(no_arg!());
+/// ```
 #[macro_export]
 macro_rules! no_arg {
     () => {
         &nsi::ArgVec::new()
-    };
+    }
 }
 
 /*
