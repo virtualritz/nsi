@@ -19,13 +19,54 @@ pub struct Arg<'a> {
 /// A vector of (optional) [`Context`] method parameters.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
 
-fn get_c_param_vec<'a>(
-    args_in: &'a ArgVec,
-    args_out: &'a mut Vec<nsi_sys::NSIParam_t>,
-) {
-    *args_out =
-        args_in.iter().map(|arg| arg.to_nsi()).collect::<Vec<_>>();
+
+
+macro_rules! get_c_param_vec {
+    ( $args_in:ident, $args_out: expr ) => {
+   /* $args_out =
+        $args_in.iter().map(|arg| to_nsi!(arg, args_in);).collect::<Vec<_>>();
+    }*/
+        // we create an array that holds our *const string pointers
+        // so we can take *const *const strings of these before sending
+        // to the FFI
+        let mut string_vec = Vec::<*const _>::new();
+        for arg_in in $args_in {
+            let tmp = to_nsi!(arg_in, string_vec);
+            $args_out.push(tmp);
+        }
+    }
 }
+
+macro_rules! to_nsi {
+    ($self:ident, $string_vec:ident) => {{
+        // Check that we fit without remainder.
+        assert!(if nsi_sys::NSIParamIsArray & $self.flags == 0 {
+            $self.data.len_nsi() % $self.count == 0
+        } else {
+            // Array case.
+            $self.data.len_nsi() % ($self.array_length * $self.count) == 0
+        });
+
+        let data_ptr = match $self.type_of {
+            Type::String => {
+                $string_vec.push($self.data.as_ptr_nsi());
+                unsafe { std::mem::transmute::<*const *const _, *const _>(&(*$string_vec.first().unwrap())) }
+            },
+            _ => $self.data.as_ptr_nsi(),
+        };
+
+        nsi_sys::NSIParam_t {
+            name: $self.name.as_ptr(),
+            data: data_ptr,
+            type_: $self.type_of as i32,
+            arraylength: $self.array_length as i32,
+            count: $self.count,
+            flags: $self.flags as std::os::raw::c_int,
+        }
+    }}
+}
+
+
 
 impl<'a> Arg<'a> {
     pub fn new(name: &str, data: &'a dyn ToNSI) -> Self {
@@ -39,24 +80,6 @@ impl<'a> Arg<'a> {
         }
     }
 
-    fn to_nsi(&'a self) -> nsi_sys::NSIParam_t {
-        // Check that we fit without remainder.
-        assert!(if nsi_sys::NSIParamIsArray & self.flags == 0 {
-            self.data.len_nsi() % self.count == 0
-        } else {
-            // Array case.
-            self.data.len_nsi() % (self.array_length * self.count) == 0
-        });
-
-        nsi_sys::NSIParam_t {
-            name: self.name.as_ptr(),
-            data: self.data.as_ptr_nsi(),
-            type_: self.type_of as i32,
-            arraylength: self.array_length as i32,
-            count: self.count,
-            flags: self.flags as std::os::raw::c_int,
-        }
-    }
 
 
     pub fn set_type(mut self, type_of: Type) -> Self {
@@ -210,11 +233,18 @@ impl ToNSI for i32 {
     }
 }
 
-impl ToNSI for String {
+impl ToNSI for CString {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        dbg!(self);
+        self.as_ptr() as _
+    }
+
     default fn type_nsi(&self) -> Type {
         Type::String
     }
 }
+
+
 
 impl<T, const N: usize> ToNSI for [T; N] {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
@@ -365,7 +395,7 @@ impl<T> ToNSI for Vec<*const T> {
 ///
 /// ```
 /// // Create rendering context.
-/// let context = nsi::Context::new(no_arg!());
+/// let context = nsi::Context::new(nsi::no_arg!()).unwrap();
 /// ```
 #[macro_export]
 macro_rules! no_arg {

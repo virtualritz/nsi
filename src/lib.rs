@@ -1,6 +1,7 @@
 //! A Flexible, Modern API for Renderers
 //!
-//! The Nodal Scene Interface (ɴsɪ) is built around the concept of nodes.
+//! The [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ) is
+//! built around the concept of nodes.
 //! Each node has a unique handle to identify it and a type which
 //! describes its intended function in the scene. Nodes are abstract
 //! containers for data. The interpretation depends on the node type.
@@ -43,8 +44,6 @@ use std::{ffi::CString, ops::Drop, vec::Vec};
 
 mod test;
 
-
-
 static STR_ERROR: &str = "Found null byte in the middle of the string";
 
 include!("argument.rs");
@@ -60,25 +59,37 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(args: &ArgVec) -> Self {
-        Self {
-            context: {
-                if args.is_empty() {
-                    unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
-                } else {
-                    let mut args_out =
-                        Vec::<nsi_sys::NSIParam_t>::new();
-                    get_c_param_vec(args, &mut args_out);
 
-                    unsafe {
-                        nsi_sys::NSIBegin(
-                            args_out.len() as i32,
-                            args_out.as_ptr()
-                                as *const nsi_sys::NSIParam_t,
-                        )
-                    }
+    /// Creates an ɴsɪ context.
+    ///
+    /// Contexts may be used in multiple threads at once.
+    ///
+    /// If this method fails for some reason, it returns [`None`].
+    /// ```
+    /// // Create rendering context that dumps to stdout.
+    /// let c = nsi::Context::new(&vec![nsi::Arg::new(
+    ///     "streamfilename",
+    ///     &String::from("stdout"),
+    /// )]).expect("Could not create ɴsɪ context.");
+    /// ```
+    pub fn new(args: &ArgVec) -> Option<Self> {
+        match {
+            if args.is_empty() {
+                unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
+            } else {
+                let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
+                get_c_param_vec!(args, &mut args_out);
+
+                unsafe {
+                    nsi_sys::NSIBegin(
+                        args_out.len() as i32,
+                        args_out.as_ptr() as *const nsi_sys::NSIParam_t,
+                    )
                 }
-            },
+            }
+        } {
+            0 => None,
+            ref c => Some(Self { context: *c }),
         }
     }
 
@@ -98,14 +109,9 @@ impl Context {
     ///
     /// * `args` - A vector of optional [`Arg`] parameters. *There are
     ///   no optional parameters defined as of now*.
-    pub fn create(
-        &self,
-        handle: impl Into<Vec<u8>>,
-        node_type: &Node,
-        args: &ArgVec,
-    ) {
+    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSICreate(
@@ -120,7 +126,7 @@ impl Context {
 
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSIDelete(
@@ -132,13 +138,9 @@ impl Context {
         }
     }
 
-    pub fn set_attribute(
-        &self,
-        object: impl Into<Vec<u8>>,
-        args: &ArgVec,
-    ) {
+    pub fn set_attribute(&self, object: impl Into<Vec<u8>>, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSISetAttribute(
@@ -150,14 +152,9 @@ impl Context {
         }
     }
 
-    pub fn set_attribute_at_time(
-        &self,
-        object: impl Into<Vec<u8>>,
-        time: f64,
-        args: &ArgVec,
-    ) {
+    pub fn set_attribute_at_time(&self, object: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSISetAttributeAtTime(
@@ -179,15 +176,13 @@ impl Context {
         args: &ArgVec,
     ) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSIConnect(
                 self.context,
                 CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into())
-                    .expect(STR_ERROR)
-                    .as_ptr(),
+                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
                 args_out.len() as i32,
@@ -207,9 +202,7 @@ impl Context {
             nsi_sys::NSIDisconnect(
                 self.context,
                 CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into())
-                    .expect(STR_ERROR)
-                    .as_ptr(),
+                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
             );
@@ -218,7 +211,7 @@ impl Context {
 
     pub fn evaluate(&self, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSIEvaluate(
@@ -231,7 +224,7 @@ impl Context {
 
     pub fn render_control(&self, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec(args, &mut args_out);
+        get_c_param_vec!(args, &mut args_out);
 
         unsafe {
             nsi_sys::NSIRenderControl(
@@ -241,6 +234,7 @@ impl Context {
             );
         }
     }
+
 }
 
 impl Drop for Context {
@@ -296,7 +290,7 @@ pub enum Node {
     // [Documentation]((https://nsi.readthedocs.io/en/latest/nodes.html#node-environment).
     Environment,
     /// Set of nodes to create viewing cameras.
-    /// [Documentation]((https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
     Camera,
     /*OrthographicCamera,
     PerspectiveCamera,

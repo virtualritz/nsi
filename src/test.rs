@@ -1,6 +1,7 @@
 #[cfg(test)]
 #[macro_use]
 use crate as nsi;
+use std::ffi::CString;
 
 #[test]
 fn live_edit() {
@@ -12,27 +13,26 @@ fn live_edit() {
     // Create rendering context.
     let c = nsi::Context::new(&vec![nsi::Arg::new(
         "streamfilename",
-        &String::from("stdout"),
-    )]);
+        &CString::new("stdout").unwrap(),
+    )]).unwrap();
 
     // Setup a camera transform.
-    c.create("cam1_trs", &nsi::Node::Transform, no_arg!());
-    c.connect("cam1_trs", "", ".root", "objects", no_arg!());
+    c.create("cam1_trs", &nsi::Node::Transform, &nsi::ArgVec::new()); // no_arg!());
+    c.connect("cam1_trs", "", ".root", "objects", &nsi::ArgVec::new()); // no_arg!());
     c.set_attribute(
         "cam1_trs",
         &vec![nsi::Arg::new(
             "transformationmatrix",
             &vec![
-                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
             ],
         )
         .set_type(nsi::Type::DoubleMatrix)],
     );
 
     // Setup a screen.
-    c.create("s1", &nsi::Node::Screen, no_arg!());
-    c.connect("s1", "", "cam1", "screens", no_arg!());
+    c.create("s1", &nsi::Node::Screen, &nsi::ArgVec::new()); //no_arg!());
+    c.connect("s1", "", "cam1", "screens", &nsi::ArgVec::new()); //no_arg!());
     c.set_attribute(
         "s1",
         &vec![
