@@ -1,6 +1,5 @@
 #[cfg(test)]
-#[macro_use]
-use crate as nsi;
+
 use std::ffi::CString;
 
 #[test]
@@ -11,28 +10,33 @@ fn live_edit() {
     // os.system('oslc waves.osl')
 
     // Create rendering context.
-    let c = nsi::Context::new(&vec![nsi::Arg::new(
-        "streamfilename",
-        &CString::new("stdout").unwrap(),
-    )]).unwrap();
+    let c = nsi::Context::new(&vec![nsi::Arg::new("streamfilename", c_str!("stdout"))])
+        .expect("Could not create NSI context.");
 
     // Setup a camera transform.
-    c.create("cam1_trs", &nsi::Node::Transform, &nsi::ArgVec::new()); // no_arg!());
-    c.connect("cam1_trs", "", ".root", "objects", &nsi::ArgVec::new()); // no_arg!());
+    c.create("cam1_trs", &nsi::Node::Transform, nsi::no_arg!());
+    c.connect("cam1_trs", "", ".root", "objects", nsi::no_arg!());
+
+    let _camera_matrix = nalgebra::Matrix4::<f64>::new(
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
+    )
+    .transpose();
+
     c.set_attribute(
         "cam1_trs",
         &vec![nsi::Arg::new(
             "transformationmatrix",
+            //&camera_matrix,
             &vec![
-                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
             ],
         )
         .set_type(nsi::Type::DoubleMatrix)],
     );
 
     // Setup a screen.
-    c.create("s1", &nsi::Node::Screen, &nsi::ArgVec::new()); //no_arg!());
-    c.connect("s1", "", "cam1", "screens", &nsi::ArgVec::new()); //no_arg!());
+    c.create("s1", &nsi::Node::Screen, nsi::no_arg!());
+    c.connect("s1", "", "cam1", "screens", nsi::no_arg!());
     c.set_attribute(
         "s1",
         &vec![
@@ -40,14 +44,20 @@ fn live_edit() {
             nsi::Arg::new("oversampling", &16i32),
         ],
     );
+
+    // Setup an output layer.
+    c.create("beauty", &nsi::Node::Outputlayer, nsi::no_arg!());
+    c.set_attribute(
+        "beauty",
+        &vec![
+            nsi::Arg::new("variablename", nsi::c_str!("Ci")),
+            nsi::Arg::new("withalpha", &1),
+            nsi::Arg::new("scalarformat", nsi::c_str!("half")),
+        ],
+    );
+    c.connect("beauty", "", "s1", "outputlayers", nsi::no_arg!());
 }
-
 /*
-# Setup an output layer.
-c.Create('beauty', 'outputlayer')
-c.SetAttribute('beauty', variablename='Ci', withalpha=1, scalarformat='half')
-c.Connect('beauty', '', 's1', 'outputlayers')
-
 # Setup an output driver.
 c.Create('driver1', 'outputdriver')
 c.Connect('driver1', '', 'beauty', 'outputdrivers')

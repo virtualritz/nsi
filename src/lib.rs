@@ -34,19 +34,24 @@
 //!
 //! The first part was kept deliberately simple to make it easy to support
 //! multiple ways of creating nodes.
-
 #![allow(incomplete_features)]
 #![feature(specialization)]
 #![feature(const_generics)]
 
+
+extern crate self as nsi;
 use nsi_sys;
 use std::{ffi::CString, ops::Drop, vec::Vec};
 
+#[macro_use]
+mod argument;
+pub use argument::*;
+
+
 mod test;
 
-static STR_ERROR: &str = "Found null byte in the middle of the string";
 
-include!("argument.rs");
+static STR_ERROR: &str = "Found null byte in the middle of the string";
 
 //type Handle = impl Into<Vec<u8>>;
 
@@ -59,7 +64,6 @@ pub struct Context {
 }
 
 impl Context {
-
     /// Creates an ɴsɪ context.
     ///
     /// Contexts may be used in multiple threads at once.
@@ -234,7 +238,6 @@ impl Context {
             );
         }
     }
-
 }
 
 impl Drop for Context {
@@ -332,3 +335,6 @@ impl Node {
         }
     }
 }
+
+
+
