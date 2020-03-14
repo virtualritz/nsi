@@ -40,6 +40,7 @@
 
 extern crate self as nsi;
 use nsi_sys;
+#[allow(unused_imports)]
 use std::{ffi::{CString, CStr}, ops::Drop, vec::Vec};
 
 #[macro_use]
@@ -294,11 +295,11 @@ pub enum Node {
     /// Set of nodes to create viewing cameras.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
     Camera,
-    /*OrthographicCamera,
+    OrthographicCamera,
     PerspectiveCamera,
     FisheyeCamera,
     CylindricalCamera,
-    SphericalCamera,*/
+    SphericalCamera,
     /// A target where to output rendered pixels.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
     Outputdriver,
@@ -328,6 +329,11 @@ impl Node {
             Node::Volume => b"volume\0",
             Node::Environment => b"environment\0",
             Node::Camera => b"camera\0",
+            Node::OrthographicCamera => b"orthographiccamera\0",
+            Node::PerspectiveCamera => b"perspectivecamera\0",
+            Node::FisheyeCamera => b"fisheyecamera\0",
+            Node::CylindricalCamera => b"cylindricalcamera\0",
+            Node::SphericalCamera => b"sphericalcamera\0",
             Node::Outputdriver => b"outputdriver\0",
             Node::Outputlayer => b"outputlayer\0",
             Node::Screen => b"screen\0",

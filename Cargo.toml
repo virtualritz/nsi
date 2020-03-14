@@ -20,7 +20,7 @@ algebra-nalgebra = ["nalgebra"]
 nsi-sys = "0.1.0" # { path = "../nsi-sys" }
 #cgmath = { version = "^0.17.0", optional = true }
 #mint = { version = "^0.5.0", optional = true }
-nalgebra = { version = "^0.18.0", optional = true }
+nalgebra = { version = "^0.20.0", optional = true }
 
 [profile.test]
 default = ["algebra-nalgebra"]

@@ -34,6 +34,11 @@ fn live_edit() {
         .set_type(nsi::Type::DoubleMatrix)],
     );
 
+    // Setup a camera.
+    c.Create("cam1", &nsi::Node::Transform, nsi::no_arg!());
+    c.set_attribute("cam1", &vec![nsi::Arg::new("fov" &35f32)], nsi::no_arg!());
+    c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
+
     // Setup a screen.
     c.create("s1", &nsi::Node::Screen, nsi::no_arg!());
     c.connect("s1", "", "cam1", "screens", nsi::no_arg!());

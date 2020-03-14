@@ -209,6 +209,8 @@ impl Type {
 }
 
 pub trait ToNSI {
+    // this could solve our string issues!!!
+    //fn new_nsi(&self) -> Self
     fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void;
     fn len_nsi(&self) -> usize;
     fn tuple_len_nsi(&self) -> usize;
@@ -274,7 +276,7 @@ impl ToNSI for CString {
 #[cfg(features="algebra-nalgebra")]
 impl ToNSI for nalgebra::Matrix4<f32> {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.data.as_ptr() as _
+        (self.data).as_ptr() as _
     }
     default fn len_nsi(&self) -> usize {
         self.len()
