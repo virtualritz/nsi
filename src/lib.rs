@@ -38,10 +38,9 @@
 #![feature(specialization)]
 #![feature(const_generics)]
 
-
 extern crate self as nsi;
 use nsi_sys;
-use std::{ffi::CString, ops::Drop, vec::Vec};
+use std::{ffi::{CString, CStr}, ops::Drop, vec::Vec};
 
 #[macro_use]
 mod argument;

@@ -1,5 +1,5 @@
 use std::ffi::CString;
-
+use crate::*;
 
 
 macro_rules! get_c_param_vec {
@@ -121,7 +121,7 @@ impl<'a> Arg<'a> {
         self
     }
 
-    pub fn set_array_length(mut self, array_length: usize) -> Self {
+    fn set_array_length(mut self, array_length: usize) -> Self {
         // Make sure we fit at all.
         assert!(
             self.data.len_nsi()
@@ -457,7 +457,7 @@ macro_rules! no_arg {
     }
 }
 
-/// A macro to create a [`CStr`] (&[`CString`]) from a [`Vec<u8>`].
+/// A macro to create a [`CStr`] (&[`CString`]) from a [`Vec`]<[`u8`]>.
 ///
 /// ```
 /// // Create rendering context.
