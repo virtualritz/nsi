@@ -468,10 +468,16 @@ macro_rules! no_arg {
 #[macro_export]
 macro_rules! c_str {
     ($str: expr) => {
-        &CString::new($str).unwrap()
+        &std::ffi::CString::new($str).unwrap()
     }
 }
 
+#[macro_export]
+macro_rules! arg {
+    ($token:expr, $value:expr) => {
+        nsi::Arg::new($token, $value)
+    }
+}
 
 /*
 #[test]

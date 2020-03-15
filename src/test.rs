@@ -10,7 +10,7 @@ fn live_edit() {
     // os.system('oslc waves.osl')
 
     // Create rendering context.
-    let c = nsi::Context::new(&vec![nsi::Arg::new("streamfilename", c_str!("stdout"))])
+    let c = nsi::Context::new(&vec![nsi::arg!("streamfilename", c_str!("stdout"))])
         .expect("Could not create NSI context.");
 
     // Setup a camera transform.
@@ -35,8 +35,8 @@ fn live_edit() {
     );
 
     // Setup a camera.
-    c.Create("cam1", &nsi::Node::Transform, nsi::no_arg!());
-    c.set_attribute("cam1", &vec![nsi::Arg::new("fov" &35f32)], nsi::no_arg!());
+    c.create("cam1", &nsi::Node::Transform, nsi::no_arg!());
+    c.set_attribute("cam1", &vec![nsi::Arg::new("fov", &35f32)]);
     c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
 
     // Setup a screen.
@@ -45,7 +45,7 @@ fn live_edit() {
     c.set_attribute(
         "s1",
         &vec![
-            nsi::Arg::new("resolution", &[1280, 720]).set_array_length(2),
+            nsi::Arg::new("resolution", &[1280, 720]).set_tuple_len(2),
             nsi::Arg::new("oversampling", &16i32),
         ],
     );
