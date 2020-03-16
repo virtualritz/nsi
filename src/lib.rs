@@ -271,6 +271,9 @@ pub enum Node {
     /// Specifies instances of other nodes.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-instances).
     Instances,
+    /// An infinite plane.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-plane).
+    Plane,
     /// Polygonal mesh or subdivision surface.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-mesh).
     Mesh,
@@ -302,10 +305,10 @@ pub enum Node {
     SphericalCamera,
     /// A target where to output rendered pixels.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
-    Outputdriver,
+    OutputDriver,
     /// Describes one render layer to be connected to an `outputdriver` node.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
-    Outputlayer,
+    OutputLayer,
     /// Describes how the view from a camera node will be rasterized into an outputlayer node.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
@@ -317,7 +320,8 @@ impl Node {
             Node::Root => b".root\0",
             Node::Global => b".global\0",
             Node::Set => b"set\0",
-            Node::Shader => b"set\0",
+            Node::Plane => b"plane\0",
+            Node::Shader => b"shader\0",
             Node::Attributes => b"attributes\0",
             Node::Transform => b"transform\0",
             Node::Instances => b"instances\0",
@@ -334,8 +338,8 @@ impl Node {
             Node::FisheyeCamera => b"fisheyecamera\0",
             Node::CylindricalCamera => b"cylindricalcamera\0",
             Node::SphericalCamera => b"sphericalcamera\0",
-            Node::Outputdriver => b"outputdriver\0",
-            Node::Outputlayer => b"outputlayer\0",
+            Node::OutputDriver => b"outputdriver\0",
+            Node::OutputLayer => b"outputlayer\0",
             Node::Screen => b"screen\0",
         }
     }

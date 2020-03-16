@@ -31,7 +31,7 @@ macro_rules! to_nsi {
         let data_ptr = match $self.type_of {
             Type::String => {
                 $string_vec.push($self.data.as_ptr_nsi());
-                unsafe { std::mem::transmute::<*const *const _, *const _>(&(*$string_vec.first().unwrap())) }
+                unsafe { std::mem::transmute::<*const *const _, *const _>(&(*$string_vec.last().unwrap())) }
             },
             _ => $self.data.as_ptr_nsi(),
         };
@@ -472,6 +472,12 @@ macro_rules! c_str {
     }
 }
 
+/// A macro to create an argument aka: [`Arg::new()`].
+///
+/// ```
+/// // Create rendering context.
+/// let context = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// ```
 #[macro_export]
 macro_rules! arg {
     ($token:expr, $value:expr) => {
