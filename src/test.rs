@@ -1,7 +1,5 @@
 #[cfg(test)]
 
-use std::ffi::CString;
-
 #[test]
 fn live_edit() {
     // # Compile the shaders.
@@ -35,7 +33,8 @@ fn live_edit() {
     );
 
     // Setup a camera.
-    c.create("cam1", &nsi::Node::Transform, nsi::no_arg!());
+    c.create("cam1", &nsi::Node::Camera, nsi::no_arg!());
+
     c.set_attribute("cam1", &vec![nsi::Arg::new("fov", &35f32)]);
     c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
 
@@ -51,7 +50,7 @@ fn live_edit() {
     );
 
     // Setup an output layer.
-    c.create("beauty", &nsi::Node::Outputlayer, nsi::no_arg!());
+    c.create("beauty", &nsi::Node::OutputLayer, nsi::no_arg!());
     c.set_attribute(
         "beauty",
         &vec![

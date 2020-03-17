@@ -41,15 +41,17 @@
 extern crate self as nsi;
 use nsi_sys;
 #[allow(unused_imports)]
-use std::{ffi::{CString, CStr}, ops::Drop, vec::Vec};
+use std::{
+    ffi::{CStr, CString},
+    ops::Drop,
+    vec::Vec,
+};
 
 #[macro_use]
 mod argument;
 pub use argument::*;
 
-
 mod test;
-
 
 static STR_ERROR: &str = "Found null byte in the middle of the string";
 
@@ -344,6 +346,3 @@ impl Node {
         }
     }
 }
-
-
-

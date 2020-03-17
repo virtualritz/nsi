@@ -1,12 +1,11 @@
-use std::ffi::CString;
 use crate::*;
-
+use std::ffi::CString;
 
 macro_rules! get_c_param_vec {
     ( $args_in:ident, $args_out: expr ) => {
-   /* $args_out =
-        $args_in.iter().map(|arg| to_nsi!(arg, args_in);).collect::<Vec<_>>();
-    }*/
+        /* $args_out =
+            $args_in.iter().map(|arg| to_nsi!(arg, args_in);).collect::<Vec<_>>();
+        }*/
         // we create an array that holds our *const string pointers
         // so we can take *const *const strings of these before sending
         // to the FFI
@@ -15,7 +14,7 @@ macro_rules! get_c_param_vec {
             let tmp = to_nsi!(arg_in, string_vec);
             $args_out.push(tmp);
         }
-    }
+    };
 }
 
 macro_rules! to_nsi {
@@ -31,8 +30,12 @@ macro_rules! to_nsi {
         let data_ptr = match $self.type_of {
             Type::String => {
                 $string_vec.push($self.data.as_ptr_nsi());
-                unsafe { std::mem::transmute::<*const *const _, *const _>(&(*$string_vec.last().unwrap())) }
-            },
+                unsafe {
+                    std::mem::transmute::<*const *const _, *const _>(
+                        &(*$string_vec.last().unwrap()),
+                    )
+                }
+            }
             _ => $self.data.as_ptr_nsi(),
         };
 
@@ -44,7 +47,7 @@ macro_rules! to_nsi {
             count: $self.count,
             flags: $self.flags as std::os::raw::c_int,
         }
-    }}
+    }};
 }
 
 /// An argument type to specify optional parameters and/or attributes
@@ -63,17 +66,16 @@ macro_rules! to_nsi {
 /// [`CString`]. If you use another string type, e.g. [`&str`] or
 /// [`String`] you'll get undefined behavior.
 pub struct Arg<'a> {
-    pub (crate) name: CString,
-    pub (crate) data: &'a dyn ToNSI,
-    pub (crate) type_of: Type,
-    pub (crate) array_length: usize, // length of each element if an array type
-    pub (crate) count: usize,        // number of elements
-    pub (crate) flags: u32,
+    pub(crate) name: CString,
+    pub(crate) data: &'a dyn ToNSI,
+    pub(crate) type_of: Type,
+    pub(crate) array_length: usize, // length of each element if an array type
+    pub(crate) count: usize,        // number of elements
+    pub(crate) flags: u32,
 }
 
 /// A vector of (optional) [`Context`] method parameters.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
-
 
 impl<'a> Arg<'a> {
     pub fn new(name: &str, data: &'a dyn ToNSI) -> Self {
@@ -87,8 +89,6 @@ impl<'a> Arg<'a> {
         }
     }
 
-
-
     pub fn set_type(mut self, type_of: Type) -> Self {
         // FIXME: check if we fit in data.count() without remainder
         self.type_of = type_of;
@@ -96,26 +96,16 @@ impl<'a> Arg<'a> {
         // Type can change count -> re-calculate.
 
         if nsi_sys::NSIParamIsArray & self.flags == 0 {
-            self.count =
-                self.data.len_nsi() / self.type_of.element_size();
+            self.count = self.data.len_nsi() / self.type_of.element_size();
 
             // Check that we fit w/o remainder.
-            assert!(
-                self.data.len_nsi() % self.type_of.element_size() == 0
-            );
+            assert!(self.data.len_nsi() % self.type_of.element_size() == 0);
         } else {
             // This is an array.
-            self.count = self.data.len_nsi()
-                / self.type_of.element_size()
-                / self.array_length;
+            self.count = self.data.len_nsi() / self.type_of.element_size() / self.array_length;
 
             // Check that we fit w/o remainder.
-            assert!(
-                self.data.len_nsi()
-                    % self.type_of.element_size()
-                    % self.array_length
-                    == 0
-            );
+            assert!(self.data.len_nsi() % self.type_of.element_size() % self.array_length == 0);
         }
 
         self
@@ -123,28 +113,16 @@ impl<'a> Arg<'a> {
 
     fn set_array_length(mut self, array_length: usize) -> Self {
         // Make sure we fit at all.
-        assert!(
-            self.data.len_nsi()
-                / self.type_of.element_size()
-                / array_length
-                >= 1
-        );
+        assert!(self.data.len_nsi() / self.type_of.element_size() / array_length >= 1);
 
         self.array_length = array_length;
         self.flags |= nsi_sys::NSIParamIsArray;
 
         // Array length can change count -> re-calculate
-        self.count = self.data.len_nsi()
-            / self.type_of.element_size()
-            / self.array_length;
+        self.count = self.data.len_nsi() / self.type_of.element_size() / self.array_length;
 
         // Check that we fit w/o remainder.
-        assert!(
-            self.data.len_nsi()
-                % self.type_of.element_size()
-                % self.array_length
-                == 0
-        );
+        assert!(self.data.len_nsi() % self.type_of.element_size() % self.array_length == 0);
 
         self
     }
@@ -163,28 +141,28 @@ impl<'a> Arg<'a> {
 #[derive(Copy, Clone, Debug)]
 pub enum Type {
     /// Undefined type.
-    Invalid = -1,      // nsi_sys::NSIType_t::NSITypeInvalid,
+    Invalid = 0, // nsi_sys::NSIType_t::NSITypeInvalid,
     /// Single 32-bit ([`f32`]) floating point value.
-    Float = 0,         // nsi_sys::NSIType_t::NSITypeFloat,
+    Float = 1, // nsi_sys::NSIType_t::NSITypeFloat,
     /// Single 64-bit ([`f64`]) floating point value.
     Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
     /// Single 32-bit ([`i32`]) integer value.
-    Integer = 2,       // nsi_sys::NSIType_t::NSITypeInteger,
+    Integer = 2, // nsi_sys::NSIType_t::NSITypeInteger,
     /// A [`String`].
-    String = 3,        // nsi_sys::NSIType_t::NSITypeString,
+    String = 3, // nsi_sys::NSIType_t::NSITypeString,
     /// Color, given as three 32-bit ([`i32`]) floating point values, usually in the range `0..1`. Red would e.g. be `[1.0, 0.0, 0.0]`
-    Color = 4,         // nsi_sys::NSIType_t::NSITypeColor,
+    Color = 4, // nsi_sys::NSIType_t::NSITypeColor,
     /// Point, given as three 32-bit ([`f32`])floating point values.
-    Point = 5,         // nsi_sys::NSIType_t::NSITypePoint,
+    Point = 5, // nsi_sys::NSIType_t::NSITypePoint,
     /// Vector, given as three 32-bit ([`f32`]) floating point values.
-    Vector = 6,        // nsi_sys::NSIType_t::NSITypeVector,
+    Vector = 6, // nsi_sys::NSIType_t::NSITypeVector,
     /// Normal vector, given as three 32-bit ([`f32`]) floating point values.
-    Normal = 7,        // nsi_sys::NSIType_t::NSITypeNormal,
+    Normal = 7, // nsi_sys::NSIType_t::NSITypeNormal,
     /// Transformation matrix, given as 16 32-bit ([`f32`]) floating point values.
-    Matrix = 8,        // nsi_sys::NSIType_t::NSITypeMatrix,
+    Matrix = 8, // nsi_sys::NSIType_t::NSITypeMatrix,
     /// Transformation matrix, given as 16 64-bit ([`f64`]) floating point values.
     DoubleMatrix = 8 | 0x10, /* nsi_sys::NSIType_t::NSITypeMatrix |
-                        * 0x10, */
+                              * 0x10, */
     /// Raw (`*const T`) pointer.
     Pointer = 10, // nsi_sys::NSIType_t::NSITypePointer,
 }
@@ -273,7 +251,7 @@ impl ToNSI for CString {
     }
 }
 
-#[cfg(features="algebra-nalgebra")]
+#[cfg(features = "algebra-nalgebra")]
 impl ToNSI for nalgebra::Matrix4<f32> {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         (self.data).as_ptr() as _
@@ -286,7 +264,7 @@ impl ToNSI for nalgebra::Matrix4<f32> {
     }
 }
 
-#[cfg(feature="algebra-nalgebra")]
+#[cfg(feature = "algebra-nalgebra")]
 impl ToNSI for nalgebra::Matrix4<f64> {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.data.as_ptr() as _
@@ -443,8 +421,6 @@ impl<T> ToNSI for Vec<*const T> {
     }
 }
 
-
-
 /// A macro to specify an empty [`ArgVec`] to a [`Context`] method
 /// that supports optional parameters.
 ///
@@ -456,7 +432,7 @@ impl<T> ToNSI for Vec<*const T> {
 macro_rules! no_arg {
     () => {
         &nsi::ArgVec::new()
-    }
+    };
 }
 
 /// A macro to create a [`CStr`] (&[`CString`]) from a [`Vec`]<[`u8`]>.
@@ -469,7 +445,7 @@ macro_rules! no_arg {
 macro_rules! c_str {
     ($str: expr) => {
         &std::ffi::CString::new($str).unwrap()
-    }
+    };
 }
 
 /// A macro to create an argument aka: [`Arg::new()`].
@@ -482,7 +458,7 @@ macro_rules! c_str {
 macro_rules! arg {
     ($token:expr, $value:expr) => {
         nsi::Arg::new($token, $value)
-    }
+    };
 }
 
 /*
