@@ -50,15 +50,14 @@ macro_rules! to_nsi {
     }};
 }
 
-/// An argument type to specify optional parameters and/or attributes
-/// passed to ɴsɪ API calls.
+/// A type to specify optional arguments passed to ɴsɪ API calls.
 ///
-/// This is used to pass variable parameter lists. Most [`Context`]
+/// This is used to pass variable argument lists. Most [`Context`]
 /// methods accept a [`Vec`] of (optional) [`Arg`]s in the `args`
-/// parameter.
+/// argument.
 ///
 /// Also see the [ɴsɪ docmentation on optional
-/// parameters](https://nsi.readthedocs.io/en/latest/c-api.html#passing-optional-parameters)
+/// arguments](https://nsi.readthedocs.io/en/latest/c-api.html#passing-optional-arguments)
 ///
 /// # String Caveats
 ///
@@ -74,7 +73,7 @@ pub struct Arg<'a> {
     pub(crate) flags: u32,
 }
 
-/// A vector of (optional) [`Context`] method parameters.
+/// A vector of (optional) [`Context`] method arguments.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
 
 impl<'a> Arg<'a> {
@@ -241,6 +240,12 @@ impl ToNSI for i32 {
     }
 }
 
+impl ToNSI for u32 {
+    default fn type_nsi(&self) -> Type {
+        Type::Integer
+    }
+}
+
 impl ToNSI for CString {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
@@ -302,6 +307,18 @@ impl<const N: usize> ToNSI for [f32; N] {
 }
 
 impl<const N: usize> ToNSI for [i32; N] {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self.as_ptr() as _
+    }
+    default fn len_nsi(&self) -> usize {
+        self.len()
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::Integer
+    }
+}
+
+impl<const N: usize> ToNSI for [u32; N] {
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
     }
@@ -391,6 +408,12 @@ impl ToNSI for Vec<i32> {
     }
 }
 
+impl ToNSI for Vec<u32> {
+    default fn type_nsi(&self) -> Type {
+        Type::Integer
+    }
+}
+
 impl ToNSI for Vec<CString> {
     default fn type_nsi(&self) -> Type {
         Type::String
@@ -422,7 +445,7 @@ impl<T> ToNSI for Vec<*const T> {
 }
 
 /// A macro to specify an empty [`ArgVec`] to a [`Context`] method
-/// that supports optional parameters.
+/// that supports optional arguments.
 ///
 /// ```
 /// // Create rendering context.
@@ -448,7 +471,7 @@ macro_rules! c_str {
     };
 }
 
-/// A macro to create an argument aka: [`Arg::new()`].
+/// A macro to create an Argument aka: [`Arg::new()`].
 ///
 /// ```
 /// // Create rendering context.
@@ -460,16 +483,3 @@ macro_rules! arg {
         nsi::Arg::new($token, $value)
     };
 }
-
-/*
-#[test]
-fn test() {
-    let single = Arg::new("foo", &10.0f32);
-    let vector = vec![1.0f32, 2.0f32, 3.0f32, 4.0f32];
-    let array = Arg::new("bar", &vector).count(2); // 2x2 array of f32
-
-    let mut result_vec = Vec::<nsi_sys::NSIParam_t>::new();
-    get_c_param_vec(&vec![single, array], &mut result_vec);
-
-    dbg!(result_vec);
-}*/

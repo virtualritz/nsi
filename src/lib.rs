@@ -100,7 +100,9 @@ impl Context {
     }
 
     /// This function is used to create a new node.
+    ///
     /// # Arguments
+    ///
     /// * `handle` - A node handle. This string will uniquely identify
     ///   the node in the scene.
     ///
@@ -113,7 +115,7 @@ impl Context {
     ///
     /// * `type` - The type of node to create.
     ///
-    /// * `args` - A vector of optional [`Arg`] parameters. *There are
+    /// * `args` - A [`Vec`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
