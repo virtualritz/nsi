@@ -7,15 +7,19 @@ fn live_edit() {
     // os.system('oslc waves.osl')
 
     // Create rendering context.
-    let c = nsi::Context::new(&vec![nsi::arg!("streamfilename", c_str!("stdout"))])
-        .expect("Could not create NSI context.");
+    let c = nsi::Context::new(&vec![nsi::arg!(
+        "streamfilename",
+        c_str!("stdout")
+    )])
+    .expect("Could not create NSI context.");
 
     // Setup a camera transform.
     c.create("cam1_trs", &nsi::Node::Transform, nsi::no_arg!());
     c.connect("cam1_trs", "", ".root", "objects", nsi::no_arg!());
 
     let _camera_matrix = nalgebra::Matrix4::<f64>::new(
-        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 5.0, 1.0,
     )
     .transpose();
 
@@ -25,7 +29,8 @@ fn live_edit() {
             "transformationmatrix",
             //&camera_matrix,
             &vec![
-                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                0.0, 0.0, 0.0, 5.0, 1.0,
             ],
         )
         .set_type(nsi::Type::DoubleMatrix)],
@@ -56,6 +61,7 @@ fn live_edit() {
             nsi::Arg::new("variablename", nsi::c_str!("Ci")),
             nsi::Arg::new("withalpha", &1),
             nsi::Arg::new("scalarformat", nsi::c_str!("half")),
+            nsi::Arg::new("some_color", &[0.1f32, 0.2, 0.3]),
         ],
     );
     c.connect("beauty", "", "s1", "outputlayers", nsi::no_arg!());

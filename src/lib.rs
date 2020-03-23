@@ -9,17 +9,18 @@
 //! other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 //! to express relationships.
 //!
-//! Data is stored on nodes as attributes. Each attribute has a name which
-//! is unique on the node and a type which describes the kind of data it
-//! holds (strings, integer numbers, floating point numbers, etc).
+//! Data is stored on nodes as attributes. Each attribute has a name
+//! which is unique on the node and a type which describes the kind of
+//! data it holds (strings, integer numbers, floating point numbers,
+//! etc).
 //!
 //! Relationships and data flow between nodes are represented as
-//! connections. Connections have a source and a destination. Both can be
-//! either a node or a specific attribute of a node. There are no type
-//! restrictions for connections in the interface itself. It is acceptable
-//! to connect attributes of different types or even attributes to nodes.
-//! The validity of such connections depends on the types of the nodes
-//! involved.
+//! connections. Connections have a source and a destination. Both can
+//! be either a node or a specific attribute of a node. There are no
+//! type restrictions for connections in the interface itself. It is
+//! acceptable to connect attributes of different types or even
+//! attributes to nodes. The validity of such connections depends on the
+//! types of the nodes involved.
 //!
 //! What we refer to as the ɴsɪ has two major components:
 //!
@@ -29,11 +30,11 @@
 //! 2.  [Node types](https://nsi.readthedocs.io/en/latest/nodes.html)
 //!     understood by the renderer.
 //!
-//! Much of the complexity and expressiveness of the interface comes from
-//! the supported nodes.
+//! Much of the complexity and expressiveness of the interface comes
+//! from the supported nodes.
 //!
-//! The first part was kept deliberately simple to make it easy to support
-//! multiple ways of creating nodes.
+//! The first part was kept deliberately simple to make it easy to
+//! support multiple ways of creating nodes.
 #![allow(incomplete_features)]
 #![feature(specialization)]
 #![feature(const_generics)]
@@ -117,7 +118,12 @@ impl Context {
     ///
     /// * `args` - A [`Vec`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
-    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
+    pub fn create(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        node_type: &Node,
+        args: &ArgVec,
+    ) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec!(args, &mut args_out);
 
@@ -146,7 +152,11 @@ impl Context {
         }
     }
 
-    pub fn set_attribute(&self, object: impl Into<Vec<u8>>, args: &ArgVec) {
+    pub fn set_attribute(
+        &self,
+        object: impl Into<Vec<u8>>,
+        args: &ArgVec,
+    ) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec!(args, &mut args_out);
 
@@ -160,7 +170,12 @@ impl Context {
         }
     }
 
-    pub fn set_attribute_at_time(&self, object: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
+    pub fn set_attribute_at_time(
+        &self,
+        object: impl Into<Vec<u8>>,
+        time: f64,
+        args: &ArgVec,
+    ) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec!(args, &mut args_out);
 
@@ -190,7 +205,9 @@ impl Context {
             nsi_sys::NSIConnect(
                 self.context,
                 CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(from_attr.into())
+                    .expect(STR_ERROR)
+                    .as_ptr(),
                 CString::new(to.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
                 args_out.len() as i32,
@@ -210,7 +227,9 @@ impl Context {
             nsi_sys::NSIDisconnect(
                 self.context,
                 CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(from_attr.into())
+                    .expect(STR_ERROR)
+                    .as_ptr(),
                 CString::new(to.into()).expect(STR_ERROR).as_ptr(),
                 CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
             );
@@ -310,11 +329,11 @@ pub enum Node {
     /// A target where to output rendered pixels.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
     OutputDriver,
-    /// Describes one render layer to be connected to an `outputdriver` node.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
+    /// Describes one render layer to be connected to an `outputdriver`
+    /// node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
     OutputLayer,
-    /// Describes how the view from a camera node will be rasterized into an outputlayer node.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
+    /// Describes how the view from a camera node will be rasterized
+    /// into an outputlayer node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
 }
 
