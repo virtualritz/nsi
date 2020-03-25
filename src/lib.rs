@@ -62,8 +62,13 @@ static STR_ERROR: &str = "Found null byte in the middle of the string";
 ///
 /// Also see the [ɴsɪ docmentation on context
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Context {
     context: nsi_sys::NSIContext_t,
+    // A pointer to the callback closure which we allocate from the
+    // heap and need to free after the context becomes invaldid (is
+    // dropped).
+    callback_ptr: *mut std::ffi::c_void,
 }
 
 impl Context {
@@ -96,7 +101,17 @@ impl Context {
             }
         } {
             0 => None,
-            ref c => Some(Self { context: *c }),
+            ref c => Some(Self {
+                context: *c,
+                callback_ptr: std::ptr::null_mut(),
+            }),
+        }
+    }
+
+    pub fn from_raw(context: nsi_sys::NSIContext_t) -> Self {
+        Self {
+            context,
+            callback_ptr: std::ptr::null_mut(),
         }
     }
 
@@ -261,12 +276,75 @@ impl Context {
             );
         }
     }
+
+    pub fn stopped_callback<'a, F>(&'a mut self, stopped_callback: F)
+    where
+        F: FnMut(Context, i32) + 'a,
+    {
+        //match extract_arg(&mut new_args, "stoppedcallback") {
+        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
+
+        let callbac_c_str = CString::new("stoppedcallback").unwrap();
+        args_out.push(nsi_sys::NSIParam_t {
+            name: callbac_c_str.as_ptr(),
+            data: call_stoppedcallback_closure::<F> as *mut _,
+            type_: Type::Pointer as i32,
+            arraylength: 1,
+            count: 1,
+            flags: 0,
+        });
+
+        // Create a pointer to our closure on the heap and
+        // store a raw copy for later deallocation in
+        // Context::drop().
+        self.callback_ptr =
+            Box::into_raw(Box::new(stopped_callback)) as *mut _;
+
+        // Set the data pointer to our callback wrapper
+        let data_c_str = CString::new("stoppedcallbackdata").unwrap();
+        args_out.push(nsi_sys::NSIParam_t {
+            name: data_c_str.as_ptr(),
+            data: self.callback_ptr,
+            type_: Type::Pointer as i32,
+            arraylength: 1,
+            count: 1,
+            flags: 0,
+        });
+
+        unsafe {
+            nsi_sys::NSIRenderControl(
+                self.context,
+                args_out.len() as i32,
+                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
+            );
+        }
+    }
+}
+
+/// The callback wrapper we register with NSI
+/// that calls our closure passed Context::render_control() via the
+/// "stoppedcallback" argument.
+unsafe extern "C" fn call_stoppedcallback_closure<F>(
+    data: *mut std::ffi::c_void,
+    context: nsi_sys::NSIContext_t,
+    status: i32,
+) where
+    F: FnMut(Context, i32),
+{
+    let callback_ptr = data as *mut F;
+    let callback = &mut *callback_ptr;
+    callback(Context::from_raw(context), status);
 }
 
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
             nsi_sys::NSIEnd(self.context);
+            if !self.callback_ptr.is_null() {
+                // We need to drop the memory reserved for the
+                // "stoppecallback"
+                let _drop = Box::from_raw(self.callback_ptr);
+            }
         }
     }
 }
@@ -366,4 +444,11 @@ impl Node {
             Node::Screen => b"screen\0",
         }
     }
+}
+
+pub enum StoppingStatus {
+    RenderCompleted = 0,
+    RenderAborted = 1,
+    RenderSynchronized = 2,
+    RenderRestarted = 3,
 }

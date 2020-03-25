@@ -25,15 +25,13 @@ fn live_edit() {
 
     c.set_attribute(
         "cam1_trs",
-        &vec![nsi::Arg::new(
+        &vec![nsi::arg!(
             "transformationmatrix",
-            //&camera_matrix,
             &vec![
-                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-                0.0, 0.0, 0.0, 5.0, 1.0,
+                1.0f64, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
             ],
-        )
-        .set_type(nsi::Type::DoubleMatrix)],
+        )],
     );
 
     // Setup a camera.

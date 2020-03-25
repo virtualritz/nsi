@@ -24,7 +24,8 @@ macro_rules! to_nsi {
             $self.data.len_nsi() % $self.count == 0
         } else {
             // Array case.
-            $self.data.len_nsi() % ($self.array_length * $self.count) == 0
+            $self.data.len_nsi() % ($self.array_length * $self.count)
+                == 0
         });
 
         let data_ptr = match $self.type_of {
@@ -68,10 +69,24 @@ pub struct Arg<'a> {
     pub(crate) name: CString,
     pub(crate) data: &'a dyn ToNSI,
     pub(crate) type_of: Type,
-    pub(crate) array_length: usize, // length of each element if an array type
-    pub(crate) count: usize,        // number of elements
+    // length of each element if an array type
+    pub(crate) array_length: usize,
+    // number of elements
+    pub(crate) count: usize,
     pub(crate) flags: u32,
 }
+
+/*
+impl Copy for Arg {}
+
+impl Clone for Arg {
+    fn clone(&self) -> Arg {
+        Arg {
+            nam: self.name,
+
+        }
+    }
+}*/
 
 /// A vector of (optional) [`Context`] method arguments.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
@@ -93,18 +108,27 @@ impl<'a> Arg<'a> {
         self.type_of = type_of;
 
         // Type can change count -> re-calculate.
-
         if nsi_sys::NSIParamIsArray & self.flags == 0 {
-            self.count = self.data.len_nsi() / self.type_of.element_size();
+            self.count =
+                self.data.len_nsi() / self.type_of.element_size();
 
             // Check that we fit w/o remainder.
-            assert!(self.data.len_nsi() % self.type_of.element_size() == 0);
+            assert!(
+                self.data.len_nsi() % self.type_of.element_size() == 0
+            );
         } else {
             // This is an array.
-            self.count = self.data.len_nsi() / self.type_of.element_size() / self.array_length;
+            self.count = self.data.len_nsi()
+                / self.type_of.element_size()
+                / self.array_length;
 
             // Check that we fit w/o remainder.
-            assert!(self.data.len_nsi() % self.type_of.element_size() % self.array_length == 0);
+            assert!(
+                self.data.len_nsi()
+                    % self.type_of.element_size()
+                    % self.array_length
+                    == 0
+            );
         }
 
         self
@@ -112,16 +136,28 @@ impl<'a> Arg<'a> {
 
     fn set_array_length(mut self, array_length: usize) -> Self {
         // Make sure we fit at all.
-        assert!(self.data.len_nsi() / self.type_of.element_size() / array_length >= 1);
+        assert!(
+            self.data.len_nsi()
+                / self.type_of.element_size()
+                / array_length
+                >= 1
+        );
 
         self.array_length = array_length;
         self.flags |= nsi_sys::NSIParamIsArray;
 
         // Array length can change count -> re-calculate
-        self.count = self.data.len_nsi() / self.type_of.element_size() / self.array_length;
+        self.count = self.data.len_nsi()
+            / self.type_of.element_size()
+            / self.array_length;
 
         // Check that we fit w/o remainder.
-        assert!(self.data.len_nsi() % self.type_of.element_size() % self.array_length == 0);
+        assert!(
+            self.data.len_nsi()
+                % self.type_of.element_size()
+                % self.array_length
+                == 0
+        );
 
         self
     }
@@ -133,6 +169,27 @@ impl<'a> Arg<'a> {
     pub fn set_flags(mut self, flags: u32) -> Self {
         self.flags = flags;
         self
+    }
+}
+
+/// Find the last occurrence of `name` in args
+/// and extract that.
+pub(crate) fn extract_arg<'a>(
+    args: &'a mut ArgVec,
+    name: &str,
+) -> Option<Arg<'a>> {
+    let mut index: isize = -1;
+    args.iter().enumerate().filter(|(i, arg)| {
+        let found = arg.name == CString::new(name).unwrap();
+        if found {
+            index = *i as isize;
+        }
+        !found
+    });
+
+    match index {
+        -1 => None,
+        _ => Some(args.remove(index as usize)),
     }
 }
 
@@ -149,17 +206,22 @@ pub enum Type {
     Integer = 2, // nsi_sys::NSIType_t::NSITypeInteger,
     /// A [`String`].
     String = 3, // nsi_sys::NSIType_t::NSITypeString,
-    /// Color, given as three 32-bit ([`i32`]) floating point values, usually in the range `0..1`. Red would e.g. be `[1.0, 0.0, 0.0]`
+    /// Color, given as three 32-bit ([`i32`]) floating point values,
+    /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
+    /// 0.0]`
     Color = 4, // nsi_sys::NSIType_t::NSITypeColor,
     /// Point, given as three 32-bit ([`f32`])floating point values.
     Point = 5, // nsi_sys::NSIType_t::NSITypePoint,
     /// Vector, given as three 32-bit ([`f32`]) floating point values.
     Vector = 6, // nsi_sys::NSIType_t::NSITypeVector,
-    /// Normal vector, given as three 32-bit ([`f32`]) floating point values.
+    /// Normal vector, given as three 32-bit ([`f32`]) floating point
+    /// values.
     Normal = 7, // nsi_sys::NSIType_t::NSITypeNormal,
-    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating point values.
+    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
+    /// point values.
     Matrix = 8, // nsi_sys::NSIType_t::NSITypeMatrix,
-    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating point values.
+    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
+    /// point values.
     DoubleMatrix = 8 | 0x10, /* nsi_sys::NSIType_t::NSITypeMatrix |
                               * 0x10, */
     /// Raw (`*const T`) pointer.
@@ -378,6 +440,21 @@ impl<T> ToNSI for *const T {
     }
 }
 
+impl ToNSI for dyn FnMut(Context, i32) + 'static {
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+        self as *const _ as _
+    }
+    default fn len_nsi(&self) -> usize {
+        1
+    }
+    default fn tuple_len_nsi(&self) -> usize {
+        1
+    }
+    default fn type_nsi(&self) -> Type {
+        Type::Pointer
+    }
+}
+
 impl<T> ToNSI for Vec<T> {
     fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
@@ -449,7 +526,7 @@ impl<T> ToNSI for Vec<*const T> {
 ///
 /// ```
 /// // Create rendering context.
-/// let context = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
 /// ```
 #[macro_export]
 macro_rules! no_arg {
@@ -462,7 +539,11 @@ macro_rules! no_arg {
 ///
 /// ```
 /// // Create rendering context.
-/// let context = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// let ctx = nsi::Context::new(&vec![nsi::arg!(
+///     "streamfilename",
+///     c_str!("stdout")
+/// )])
+/// .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
 macro_rules! c_str {
@@ -475,7 +556,11 @@ macro_rules! c_str {
 ///
 /// ```
 /// // Create rendering context.
-/// let context = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// let ctx = nsi::Context::new(&vec![nsi::arg!(
+///        "streamfilename",
+///        c_str!("stdout")
+///    )])
+/// .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
 macro_rules! arg {
