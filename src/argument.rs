@@ -45,7 +45,7 @@ macro_rules! to_nsi {
             data: data_ptr,
             type_: $self.type_of as i32,
             arraylength: $self.array_length as i32,
-            count: $self.count,
+            count: $self.count as u64,
             flags: $self.flags as std::os::raw::c_int,
         }
     }};
@@ -174,7 +174,7 @@ impl<'a> Arg<'a> {
 
 /// Find the last occurrence of `name` in args
 /// and extract that.
-pub(crate) fn extract_arg<'a>(
+pub(crate) fn _extract_arg<'a>(
     args: &'a mut ArgVec,
     name: &str,
 ) -> Option<Arg<'a>> {
@@ -541,7 +541,7 @@ macro_rules! no_arg {
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&vec![nsi::arg!(
 ///     "streamfilename",
-///     c_str!("stdout")
+///     nsi::c_str!("stdout")
 /// )])
 /// .expect("Could not create NSI context.");
 /// ```
@@ -557,9 +557,9 @@ macro_rules! c_str {
 /// ```
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&vec![nsi::arg!(
-///        "streamfilename",
-///        c_str!("stdout")
-///    )])
+///     "streamfilename",
+///     nsi::c_str!("stdout")
+/// )])
 /// .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
