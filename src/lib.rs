@@ -65,9 +65,6 @@ static STR_ERROR: &str = "Found null byte in the middle of the string";
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
 pub struct Context {
     context: nsi_sys::NSIContext_t,
-    // The callback closure.
-    callback_ptr: *mut std::ffi::c_void,
-    callback_args: Vec<nsi_sys::NSIParam_t>,
 }
 
 impl Context {
@@ -100,20 +97,13 @@ impl Context {
             }
         } {
             0 => None,
-            ref c => Some(Self {
-                context: *c,
-                callback_ptr: std::ptr::null_mut() as _,
-                callback_args: vec![],
-            }),
+            ref c => Some(Self { context: *c }),
         }
     }
 
+    #[allow(dead_code)]
     fn from_raw(context: nsi_sys::NSIContext_t) -> Self {
-        Self {
-            context,
-            callback_ptr: std::ptr::null_mut() as _,
-            callback_args: vec![],
-        }
+        Self { context }
     }
 
     /// This function is used to create a new node.
@@ -266,154 +256,23 @@ impl Context {
     }
 
     pub fn render_control(&mut self, args: &ArgVec) {
-        //match extract_arg(&mut new_args, "stoppedcallback") {
-        //let action_arg_iter = );
-        eprintln!(
-            "other arrays {:?}: {:?}",
-            self.callback_args.len(),
-            self.callback_args
-        );
+        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
+        get_c_param_vec!(args, &mut args_out);
 
-        if let Some(action_arg) = args
-            .iter()
-            .find(|&arg| arg.name == CString::new("action").unwrap())
-        {
-            let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-            get_c_param_vec!(args, &mut args_out);
-
-            eprintln!("Going out {:?}", args_out);
-
-            if unsafe {
-                CStr::from_bytes_with_nul_unchecked(b"start\0")
-                    == CStr::from_ptr(
-                        action_arg.data.as_ptr_nsi() as *const _
-                    )
-            } && !self.callback_args.is_empty()
-            {
-                args_out.extend_from_slice(&self.callback_args);
-                self.callback_args.clear();
-            }
-
-            unsafe {
-                nsi_sys::NSIRenderControl(
-                    self.context,
-                    args_out.len() as i32,
-                    args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-                );
-            }
-
-            return;
-        }
-
-        // No "action" argument -> just call NSI to produce an error
-        // message.
         unsafe {
             nsi_sys::NSIRenderControl(
                 self.context,
-                0,
-                std::ptr::null(),
+                args_out.len() as i32,
+                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
             );
         }
     }
-
-    pub fn set_stopped_callback<'a, F>(
-        &'a mut self,
-        stopped_callback_closure: F,
-    ) where
-        F: FnMut(Context, i32) + 'a + Copy,
-    {
-        if !self.callback_ptr.is_null() {
-            // Free previously allocated closure
-            unsafe {
-                Box::from_raw(self.callback_ptr);
-            }
-            self.callback_args.clear();
-        }
-
-        self.callback_args.push(nsi_sys::NSIParam_t {
-            name: STOPPED_CALLBACK_C_STR.as_ptr() as *const i8,
-            data: call_stopped_callback_closure::<F> as _, /*unsafe {
-                                                               std::mem::transmute(&call_stopped_callback_closure::<F>)
-                                                           },*/
-            type_: nsi_sys::NSIType_t_NSITypePointer as i32,
-            arraylength: 1,
-            count: 1,
-            flags: 0,
-        });
-
-        eprintln!(
-            "wrapper address: {:?}",
-            self.callback_args.last().unwrap().data
-        );
-
-        // If we had the closure allocated previously,
-        // free it here.
-        /*if !self.callback_ptr.is_null() {
-            unsafe {
-                Box::from_raw(self.callback_ptr);
-            }
-        }*/
-        // Create a pointer to our closure on the heap and
-        // store a raw copy for later deallocation in
-        // Context::drop().
-        /*self.callback_ptr =
-            Box::into_raw(Box::new(Box::new(stopped_callback_closure)))
-                as _;
-
-        Box::into_raw(Box::new(stopped_callback_closure)) as *mut _;
-        eprintln!("callback_ptr: {:?}", self.callback_ptr);
-
-        // Set the data pointer to our callback wrapper
-        self.callback_args.push(nsi_sys::NSIParam_t {
-            name: STOPPED_CALLBACK_DATA_C_STR.as_ptr() as *const i8,
-            data: self.callback_ptr,
-            type_: nsi_sys::NSIType_t_NSITypePointer as i32,
-            arraylength: 1,
-            count: 1,
-            flags: 0,
-        });*/
-
-        eprintln!("Setup done");
-    }
-}
-
-const STOPPED_CALLBACK_C_STR: &'static [u8] = b"stoppedcallback\0";
-
-const STOPPED_CALLBACK_DATA_C_STR: &'static [u8] =
-    b"stoppedcallbackdata\0";
-
-/// The callback wrapper we register with NSI
-/// that calls our closure passed Context::render_control() via the
-/// "stoppedcallback" argument.
-unsafe extern "C" fn call_stopped_callback_closure<F>(
-    data: *mut std::ffi::c_void,
-    context: nsi_sys::NSIContext_t,
-    status: i32,
-) where
-    F: FnMut(Context, i32),
-{
-    eprintln!("Callback wrapper called");
-    /*let callback_ptr = data as *mut F;
-    let callback = &mut *callback_ptr;
-    callback(Context::from_raw(context), status);*/
-
-    /*let mut callback_ptr: Box<Box<F>> = Box::from_raw(data as _);
-    let callback = callback_ptr.as_mut().as_mut();
-    callback(Context::from_raw(context), status);*/
 }
 
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
-            eprintln!("Byebye");
             nsi_sys::NSIEnd(self.context);
-            if !self.callback_ptr.is_null() {
-                eprintln!("Freeing callback memory");
-                // Drop the memory reserved for the
-                // "stoppecallback" closure.
-
-                Box::from_raw(self.callback_ptr);
-            }
         }
     }
 }

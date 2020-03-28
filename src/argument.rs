@@ -45,7 +45,7 @@ macro_rules! to_nsi {
             data: data_ptr,
             type_: $self.type_of as i32,
             arraylength: $self.array_length as i32,
-            count: $self.count as u64,
+            count: $self.count as usize,
             flags: $self.flags as std::os::raw::c_int,
         }
     }};
@@ -174,11 +174,13 @@ impl<'a> Arg<'a> {
 
 /// Find the last occurrence of `name` in args
 /// and extract that.
+#[allow(unused_must_use)]
 pub(crate) fn _extract_arg<'a>(
     args: &'a mut ArgVec,
     name: &str,
 ) -> Option<Arg<'a>> {
     let mut index: isize = -1;
+
     args.iter().enumerate().filter(|(i, arg)| {
         let found = arg.name == CString::new(name).unwrap();
         if found {

@@ -1,5 +1,3 @@
-use std::{thread, time};
-
 #[cfg(test)]
 #[test]
 fn live_edit() {
@@ -16,13 +14,6 @@ fn live_edit() {
     )*/
     ])
     .expect("Could not create NSI context.");
-
-    // Set a closure to execut when the render finishes
-    c.set_stopped_callback(|_ctx: nsi::Context, status: i32| {
-        if nsi::StoppingStatus::RenderCompleted as i32 == status {
-            println!("Render Done!");
-        }
-    });
 
     // Setup a camera transform.
     c.create("cam1_trs", &nsi::Node::Transform, nsi::no_arg!());
