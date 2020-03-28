@@ -255,7 +255,7 @@ impl Context {
         }
     }
 
-    pub fn render_control(&mut self, args: &ArgVec) {
+    pub fn render_control(&self, args: &ArgVec) {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
         get_c_param_vec!(args, &mut args_out);
 
