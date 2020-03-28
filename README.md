@@ -9,7 +9,7 @@ This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in
 Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it.
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
-> **_Note:_** The free version of 3Delight will render with up to 12 cores on your machine. For crazier projects you can use their cheap cloud rendering service that gives you access to unlimited CPU cores.
+> **_Note:_** The free version of 3Delight will render with up to 12 cores on your machine. For crazier projects you can use their cheap cloud rendering service that gives you access to unlimited CPU cores. When you register, you get 1,000 cloud minutes for free which ain't too shabby.
 
 ## Building
 
