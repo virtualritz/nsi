@@ -53,7 +53,7 @@ use std::{
 mod argument;
 pub use argument::*;
 
-mod test;
+mod tests;
 
 static STR_ERROR: &str = "Found null byte in the middle of the string";
 
