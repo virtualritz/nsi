@@ -19,14 +19,7 @@ macro_rules! get_c_param_vec {
 
 macro_rules! to_nsi {
     ($self:ident, $string_vec:ident) => {{
-        // Check that we fit without remainder.
-        assert!(if nsi_sys::NSIParamIsArray & $self.flags == 0 {
-            $self.data.len_nsi() % $self.count == 0
-        } else {
-            // Array case.
-            $self.data.len_nsi() % ($self.array_length * $self.count)
-                == 0
-        });
+        assert!(Type::Invalid != $self.type_nsi());
 
         let data_ptr = match $self.type_of {
             Type::String => {
@@ -45,7 +38,9 @@ macro_rules! to_nsi {
             data: data_ptr,
             type_: $self.type_of as i32,
             arraylength: $self.array_length as i32,
-            count: $self.count as usize,
+            count: ($self.data.len_nsi()
+                / $self.data.type_nsi().element_size()
+                / $self.array_length) as u64,
             flags: $self.flags as std::os::raw::c_int,
         }
     }};
@@ -65,14 +60,15 @@ macro_rules! to_nsi {
 /// The string value variant needs work. This currently only supports
 /// [`CString`]. If you use another string type, e.g. [`&str`] or
 /// [`String`] you'll get undefined behavior.
-pub struct Arg<'a> {
+pub struct Arg<'a>
+where
+    dyn ToNSI: ConstraintNSI,
+{
     pub(crate) name: CString,
     pub(crate) data: &'a dyn ToNSI,
     pub(crate) type_of: Type,
     // length of each element if an array type
     pub(crate) array_length: usize,
-    // number of elements
-    pub(crate) count: usize,
     pub(crate) flags: u32,
 }
 
@@ -91,83 +87,64 @@ impl Clone for Arg {
 /// A vector of (optional) [`Context`] method arguments.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
 
-impl<'a> Arg<'a> {
-    pub fn new(name: &str, data: &'a dyn ToNSI) -> Self {
+impl<'a> Arg<'a>
+where
+    dyn ToNSI: ConstraintNSI,
+{
+    #[inline]
+    pub fn new(name: &str, data: &'a dyn ToNSI) -> Self
+    where
+        dyn ToNSI: ConstraintNSI,
+    {
         Arg {
             name: CString::new(name).unwrap(),
             data,
             type_of: data.type_nsi(),
             array_length: data.tuple_len_nsi(),
-            count: data.len_nsi() / data.type_nsi().element_size(),
             flags: 0,
         }
     }
 
-    pub fn set_type(mut self, type_of: Type) -> Self {
+    #[inline]
+    // Sets the type of data this argument carries.
+    // This method is called kind as type is a reserved
+    // keyword in Rust
+    pub fn kind(&'a mut self, type_of: Type) -> &'a Self {
         // FIXME: check if we fit in data.count() without remainder
         self.type_of = type_of;
 
-        // Type can change count -> re-calculate.
-        if nsi_sys::NSIParamIsArray & self.flags == 0 {
-            self.count =
-                self.data.len_nsi() / self.type_of.element_size();
-
-            // Check that we fit w/o remainder.
-            assert!(
-                self.data.len_nsi() % self.type_of.element_size() == 0
-            );
-        } else {
-            // This is an array.
-            self.count = self.data.len_nsi()
-                / self.type_of.element_size()
-                / self.array_length;
-
-            // Check that we fit w/o remainder.
-            assert!(
-                self.data.len_nsi()
-                    % self.type_of.element_size()
-                    % self.array_length
-                    == 0
-            );
-        }
+        // Check that we fit.
+        //assert!(self.data.len_nsi() / type_of.element_size() == self.array_length * self.count);
 
         self
     }
 
-    fn set_array_length(mut self, array_length: usize) -> Self {
-        // Make sure we fit at all.
-        assert!(
-            self.data.len_nsi()
-                / self.type_of.element_size()
-                / array_length
-                >= 1
-        );
+    #[inline]
+    pub fn array_length(&'a mut self, array_length: usize) -> &'a Self {
+        // Check that we fit.
+        //assert!(self.data.len_nsi() / self.type_of.element_size() == array_length * self.count);
 
         self.array_length = array_length;
         self.flags |= nsi_sys::NSIParamIsArray;
 
-        // Array length can change count -> re-calculate
-        self.count = self.data.len_nsi()
-            / self.type_of.element_size()
-            / self.array_length;
-
-        // Check that we fit w/o remainder.
-        assert!(
-            self.data.len_nsi()
-                % self.type_of.element_size()
-                % self.array_length
-                == 0
-        );
-
         self
     }
 
-    pub fn set_tuple_len(self, tuple_length: usize) -> Self {
-        self.set_array_length(tuple_length)
+    #[inline]
+    pub fn per_face(&'a mut self) -> &'a mut Self {
+        self.flags |= nsi_sys::NSIParamPerFace;
+        self
     }
 
-    pub fn set_flags(mut self, flags: u32) -> Self {
-        self.flags = flags;
+    #[inline]
+    pub fn per_vertex(&'a mut self) -> &'a mut Self {
+        self.flags |= nsi_sys::NSIParamPerVertex;
+        self
+    }
+
+    #[inline]
+    pub fn linear_interpolation(&'a mut self) -> &'a mut Self {
+        self.flags |= nsi_sys::NSIParamInterpolateLinear;
         self
     }
 }
@@ -175,10 +152,8 @@ impl<'a> Arg<'a> {
 /// Find the last occurrence of `name` in args
 /// and extract that.
 #[allow(unused_must_use)]
-pub(crate) fn _extract_arg<'a>(
-    args: &'a mut ArgVec,
-    name: &str,
-) -> Option<Arg<'a>> {
+#[inline]
+pub(crate) fn _extract_arg<'a>(args: &'a mut ArgVec, name: &str) -> Option<Arg<'a>> {
     let mut index: isize = -1;
 
     args.iter().enumerate().filter(|(i, arg)| {
@@ -231,7 +206,8 @@ pub enum Type {
 }
 
 impl Type {
-    fn element_size(&self) -> usize {
+    #[inline]
+    pub(crate) fn element_size(&self) -> usize {
         match self {
             Type::Invalid => 1, // avoid division by zero
             Type::Float => 1,
@@ -258,6 +234,12 @@ pub trait ToNSI {
     fn type_nsi(&self) -> Type;
 }
 
+pub trait ConstraintNSI {
+    // No default impl for type_nsi() – this way we prevent the trait
+    // being valid for any type by default
+    fn no_op(&self);
+}
+
 /*
 impl From<String> for dyn ToNSI {
     fn from(string: String) -> Self {
@@ -271,254 +253,217 @@ impl From<&str> for dyn ToNSI {
     }
 }*/
 
-impl<T> ToNSI for T {
+#[macro_export]
+macro_rules! to_nsi_def {
+    ($type:ty, $nsi_type:expr) => {
+        impl ToNSI for $type
+        where
+            $type: ConstraintNSI,
+        {
+            #[inline]
+            default fn type_nsi(&self) -> Type {
+                $nsi_type
+            }
+        }
+
+        impl ConstraintNSI for $type {
+            #[inline]
+            fn no_op(&self) {}
+        }
+    };
+}
+
+macro_rules! to_nsi_array_def {
+    ($type:ty, $nsi_type:expr) => {
+        impl<const N: usize> ToNSI for $type
+        where
+            $type: ConstraintNSI,
+        {
+            #[inline]
+            default fn type_nsi(&self) -> Type {
+                $nsi_type
+            }
+        }
+
+        impl<const N: usize> ConstraintNSI for $type {
+            #[inline]
+            fn no_op(&self) {}
+        }
+    };
+}
+
+impl<T: ConstraintNSI> ToNSI for T {
+    #[inline]
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self as *const _ as _
     }
+    #[inline]
     default fn len_nsi(&self) -> usize {
         1
     }
+    #[inline]
     default fn tuple_len_nsi(&self) -> usize {
         1
     }
+    #[inline]
     default fn type_nsi(&self) -> Type {
         Type::Invalid
     }
 }
 
-impl ToNSI for f32 {
+to_nsi_def!(f32, Type::Float);
+to_nsi_def!(f64, Type::Double);
+to_nsi_def!(i32, Type::Integer);
+to_nsi_def!(u64, Type::Integer);
+
+impl<T> ToNSI for *const T
+where
+    *const T: ConstraintNSI,
+{
+    #[inline]
     default fn type_nsi(&self) -> Type {
-        Type::Float
+        Type::Pointer
     }
 }
 
-impl ToNSI for f64 {
-    default fn type_nsi(&self) -> Type {
-        Type::Double
-    }
+impl<T> ConstraintNSI for *const T {
+    #[inline]
+    fn no_op(&self) {}
 }
 
-impl ToNSI for i32 {
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl ToNSI for u32 {
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl ToNSI for CString {
+impl ToNSI for CString
+where
+    CString: ConstraintNSI,
+{
+    #[inline]
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
     }
-
+    #[inline]
     default fn type_nsi(&self) -> Type {
         Type::String
     }
 }
 
-#[cfg(features = "algebra-nalgebra")]
-impl ToNSI for nalgebra::Matrix4<f32> {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        (self.data).as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::Matrix
-    }
+impl ConstraintNSI for CString {
+    #[inline]
+    fn no_op(&self) {}
 }
 
-#[cfg(feature = "algebra-nalgebra")]
-impl ToNSI for nalgebra::Matrix4<f64> {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.data.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::DoubleMatrix
-    }
-}
-
-impl<T, const N: usize> ToNSI for [T; N] {
+impl<T: ConstraintNSI, const N: usize> ToNSI for [T; N]
+where
+    [T; N]: ConstraintNSI,
+{
+    #[inline]
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
     }
+    #[inline]
     default fn len_nsi(&self) -> usize {
         self.len()
     }
+    #[inline]
+    default fn tuple_len_nsi(&self) -> usize {
+        1
+    }
+    #[inline]
     default fn type_nsi(&self) -> Type {
         Type::Invalid
     }
 }
 
-impl<const N: usize> ToNSI for [f32; N] {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::Float
-    }
-}
+to_nsi_array_def!([f32; N], Type::Float);
+to_nsi_array_def!([f64; N], Type::Double);
+to_nsi_array_def!([i32; N], Type::Integer);
+to_nsi_array_def!([i64; N], Type::Integer);
 
-impl<const N: usize> ToNSI for [i32; N] {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl<const N: usize> ToNSI for [u32; N] {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl<const N: usize> ToNSI for [f64; N] {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::Double
-    }
-}
-
-impl<const N: usize> ToNSI for [String; N] {
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    default fn type_nsi(&self) -> Type {
-        Type::String
-    }
-}
+// FIXME Sting arrays
 
 impl ToNSI for [f32; 3] {
+    #[inline]
     fn type_nsi(&self) -> Type {
         Type::Color
     }
 }
 
 impl ToNSI for [f32; 16] {
+    #[inline]
     fn type_nsi(&self) -> Type {
         Type::Matrix
     }
 }
 
 impl ToNSI for [f64; 16] {
+    #[inline]
     fn type_nsi(&self) -> Type {
         Type::DoubleMatrix
     }
 }
 
-impl<T> ToNSI for *const T {
-    fn type_nsi(&self) -> Type {
-        Type::Pointer
-    }
-}
-
+/*
 impl ToNSI for dyn FnMut(Context, i32) + 'static {
+    #[inline]
     default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self as *const _ as _
     }
-    default fn len_nsi(&self) -> usize {
-        1
-    }
-    default fn tuple_len_nsi(&self) -> usize {
-        1
-    }
+    #[inline]
     default fn type_nsi(&self) -> Type {
         Type::Pointer
     }
-}
+}*/
 
-impl<T> ToNSI for Vec<T> {
-    fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
+impl<T: ConstraintNSI> ToNSI for Vec<T>
+where
+    Vec<T>: ConstraintNSI,
+{
+    #[inline]
+    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
         self.as_ptr() as _
     }
-    fn len_nsi(&self) -> usize {
+    #[inline]
+    default fn len_nsi(&self) -> usize {
         self.len()
     }
+
+    #[inline]
+    default fn tuple_len_nsi(&self) -> usize {
+        1
+    }
+    #[inline]
     default fn type_nsi(&self) -> Type {
         Type::Invalid
     }
 }
 
-impl ToNSI for Vec<f32> {
-    default fn type_nsi(&self) -> Type {
-        Type::Float
-    }
-}
-
-impl ToNSI for Vec<f64> {
-    default fn type_nsi(&self) -> Type {
-        Type::Double
-    }
-}
-
-impl ToNSI for Vec<i32> {
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl ToNSI for Vec<u32> {
-    default fn type_nsi(&self) -> Type {
-        Type::Integer
-    }
-}
-
-impl ToNSI for Vec<CString> {
-    default fn type_nsi(&self) -> Type {
-        Type::String
-    }
-}
+to_nsi_def!(Vec<f32>, Type::Float);
+to_nsi_def!(Vec<f64>, Type::Double);
+to_nsi_def!(Vec<i32>, Type::Integer);
+to_nsi_def!(Vec<u32>, Type::Integer);
 
 impl ToNSI for Vec<[f32; 3]> {
-    default fn type_nsi(&self) -> Type {
+    #[inline]
+    fn type_nsi(&self) -> Type {
         Type::Color
     }
 }
 
 impl ToNSI for Vec<[f32; 16]> {
-    default fn type_nsi(&self) -> Type {
+    #[inline]
+    fn type_nsi(&self) -> Type {
         Type::Matrix
     }
 }
 
 impl ToNSI for Vec<[f64; 16]> {
-    default fn type_nsi(&self) -> Type {
+    #[inline]
+    fn type_nsi(&self) -> Type {
         Type::DoubleMatrix
     }
 }
 
 impl<T> ToNSI for Vec<*const T> {
-    default fn type_nsi(&self) -> Type {
+    #[inline]
+    fn type_nsi(&self) -> Type {
         Type::Pointer
     }
 }

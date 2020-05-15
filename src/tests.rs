@@ -67,12 +67,21 @@ fn live_edit() {
     );
     c.connect("beauty", "", "s1", "outputlayers", nsi::no_arg!());
 
+    let mut foo = 42u64;
     // Setup an output driver.
     c.create("driver1", &nsi::Node::OutputDriver, nsi::no_arg!());
     c.connect("driver1", "", "beauty", "outputdrivers", nsi::no_arg!());
     c.set_attribute(
         "driver1",
-        &vec![arg!("drivername", nsi::c_str!("idisplay"))],
+        &vec![arg!("drivername", nsi::c_str!("/Users/moritz/code/r-display/target/debug/libr_display.dylib")),
+        nsi::arg!("blblabla_______",
+                &unsafe {
+                    std::mem::transmute::<_, f64>(
+                        &mut foo as *mut _,
+                    )
+                }
+            )
+        ],
     );
 
     // Add a plane.
