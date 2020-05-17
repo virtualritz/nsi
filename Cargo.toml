@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.1.13"
+version = "0.1.14"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "vfx", "rendering", "nsi", "3delight"]
@@ -17,10 +17,10 @@ default = ["algebra-nalgebra"]
 algebra-nalgebra = ["nalgebra"]
 
 [dependencies]
-nsi-sys = "^0.1.0"
+nsi-sys = "0.1.1"
 #cgmath = { version = "^0.17.0", optional = true }
 #mint = { version = "^0.5.0", optional = true }
-nalgebra = { version = "^0.21.0", optional = true }
+nalgebra = { version = "0.21.0", optional = true }
 
 [profile.test]
 default = ["algebra-nalgebra"]

@@ -45,7 +45,7 @@ macro_rules! to_nsi {
             data: data_ptr,
             type_: $self.type_of as i32,
             arraylength: $self.array_length as i32,
-            count: $self.count as usize,
+            count: $self.count as u64,
             flags: $self.flags as std::os::raw::c_int,
         }
     }};
