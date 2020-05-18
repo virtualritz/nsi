@@ -80,6 +80,8 @@ No suprises here. The crate works with stable, beta & nightly.
 > cargo build
 ```
 
+PRs are most welcome!
+
 ## Documentation
 
 Docs for the C, C++, Lua & Python bindings as well as an introduction and deep dive into the API [can be found here](https://nsi.readthedocs.io).
