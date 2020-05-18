@@ -35,20 +35,11 @@
 //!
 //! The first part was kept deliberately simple to make it easy to
 //! support multiple ways of creating nodes.
-#![allow(incomplete_features)]
-#![feature(specialization)]
-#![feature(const_generics)]
-#![feature(let_chains)]
-#![feature(trivial_bounds)]
 
 extern crate self as nsi;
 use nsi_sys;
 #[allow(unused_imports)]
-use std::{
-    ffi::{CStr, CString},
-    ops::Drop,
-    vec::Vec,
-};
+use std::{ffi::CString, ops::Drop, vec::Vec};
 
 #[macro_use]
 mod argument;
@@ -86,7 +77,7 @@ impl Context {
     /// // Create rendering context that dumps to stdout.
     /// let c = nsi::Context::new(&vec![nsi::Arg::new(
     ///     "streamfilename",
-    ///     &String::from("stdout"),
+    ///     &nsi::string!("stdout"),
     /// )]).expect("Could not create ɴsɪ context.");
     /// ```
     #[inline]
@@ -95,8 +86,7 @@ impl Context {
             if args.is_empty() {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
             } else {
-                let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-                get_c_param_vec!(args, &mut args_out);
+                let (args_out, _strings) = get_c_param_vec(args);
 
                 unsafe {
                     nsi_sys::NSIBegin(
@@ -131,8 +121,7 @@ impl Context {
     ///   no optional parameters defined as of now*.
     #[inline]
     pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSICreate(
@@ -147,8 +136,7 @@ impl Context {
 
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIDelete(
@@ -162,8 +150,7 @@ impl Context {
 
     #[inline]
     pub fn set_attribute(&self, object: impl Into<Vec<u8>>, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttribute(
@@ -177,8 +164,7 @@ impl Context {
 
     #[inline]
     pub fn set_attribute_at_time(&self, object: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttributeAtTime(
@@ -200,8 +186,7 @@ impl Context {
         to_attr: impl Into<Vec<u8>>,
         args: &ArgVec,
     ) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIConnect(
@@ -237,8 +222,7 @@ impl Context {
 
     #[inline]
     pub fn evaluate(&self, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIEvaluate(
@@ -251,8 +235,7 @@ impl Context {
 
     #[inline]
     pub fn render_control(&self, args: &ArgVec) {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::new();
-        get_c_param_vec!(args, &mut args_out);
+        let (args_out, _strings) = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIRenderControl(

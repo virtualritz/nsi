@@ -1,204 +1,301 @@
-use crate::*;
+use enum_dispatch::enum_dispatch;
+use nsi_sys;
 use std::ffi::CString;
 
-macro_rules! get_c_param_vec {
-    ( $args_in:ident, $args_out: expr ) => {
-        /* $args_out =
-            $args_in.iter().map(|arg| to_nsi!(arg, args_in);).collect::<Vec<_>>();
-        }*/
-        // we create an array that holds our *const string pointers
-        // so we can take *const *const strings of these before sending
-        // to the FFI
-        let mut string_vec = Vec::<*const _>::new();
-        for arg_in in $args_in {
-            let tmp = to_nsi!(arg_in, string_vec);
-            $args_out.push(tmp);
-        }
-    };
-}
+pub(crate) fn get_c_param_vec(
+    args_in: &ArgVec,
+) -> (Vec<nsi_sys::NSIParam_t>, Vec<*const std::ffi::c_void>) {
+    // we create an array that holds our *const string pointers
+    // so we can take *const *const strings of these before sending
+    // to the FFI
+    let mut string_ptr_vec = Vec::<*const _>::new();
 
-macro_rules! to_nsi {
-    ($self:ident, $string_vec:ident) => {{
-        assert!(Type::Invalid != $self.type_nsi());
-
-        let data_ptr = match $self.type_of {
-            Type::String => {
-                $string_vec.push($self.data.as_ptr_nsi());
+    let mut args_out = Vec::<nsi_sys::NSIParam_t>::with_capacity(args_in.len());
+    for arg_in in args_in {
+        args_out.push({
+            let data_ptr = if Type::String == arg_in.data.type_() {
+                string_ptr_vec.push(arg_in.data.as_c_ptr());
                 unsafe {
-                    std::mem::transmute::<*const *const _, *const _>(
-                        &(*$string_vec.last().unwrap()),
-                    )
+                    std::mem::transmute::<*const *const _, *const _>(string_ptr_vec.last().unwrap())
                 }
-            }
-            _ => $self.data.as_ptr_nsi(),
-        };
+            } else {
+                arg_in.data.as_c_ptr()
+            };
 
-        nsi_sys::NSIParam_t {
-            name: $self.name.as_ptr(),
-            data: data_ptr,
-            type_: $self.type_of as i32,
-            arraylength: $self.array_length as i32,
-            count: ($self.data.len_nsi()
-                / $self.data.type_nsi().element_size()
-                / $self.array_length) as u64,
-            flags: $self.flags as std::os::raw::c_int,
-        }
-    }};
-}
+            let param = nsi_sys::NSIParam_t {
+                name: arg_in.name.as_ptr(),
+                data: data_ptr,
+                type_: arg_in.data.type_() as i32,
+                arraylength: arg_in.array_length as i32,
+                count: (arg_in.data.len() / arg_in.array_length) as u64,
+                flags: arg_in.flags as std::os::raw::c_int,
+            };
 
-/// A type to specify optional arguments passed to ɴsɪ API calls.
-///
-/// This is used to pass variable argument lists. Most [`Context`]
-/// methods accept a [`Vec`] of (optional) [`Arg`]s in the `args`
-/// argument.
-///
-/// Also see the [ɴsɪ docmentation on optional
-/// arguments](https://nsi.readthedocs.io/en/latest/c-api.html#passing-optional-arguments)
-///
-/// # String Caveats
-///
-/// The string value variant needs work. This currently only supports
-/// [`CString`]. If you use another string type, e.g. [`&str`] or
-/// [`String`] you'll get undefined behavior.
-pub struct Arg<'a>
-where
-    dyn ToNSI: ConstraintNSI,
-{
-    pub(crate) name: CString,
-    pub(crate) data: &'a dyn ToNSI,
-    pub(crate) type_of: Type,
-    // length of each element if an array type
-    pub(crate) array_length: usize,
-    pub(crate) flags: u32,
-}
-
-/*
-impl Copy for Arg {}
-
-impl Clone for Arg {
-    fn clone(&self) -> Arg {
-        Arg {
-            nam: self.name,
-
-        }
+            param
+        });
     }
-}*/
+
+    (args_out, string_ptr_vec)
+}
 
 /// A vector of (optional) [`Context`] method arguments.
 pub type ArgVec<'a> = Vec<Arg<'a>>;
 
-impl<'a> Arg<'a>
-where
-    dyn ToNSI: ConstraintNSI,
-{
-    #[inline]
-    pub fn new(name: &str, data: &'a dyn ToNSI) -> Self
-    where
-        dyn ToNSI: ConstraintNSI,
-    {
+pub struct Arg<'a> {
+    pub(crate) name: CString,
+    pub(crate) data: &'a Data<'a>,
+    // length of each element if an array type
+    pub(crate) array_length: usize,
+    // number of elements
+    pub(crate) flags: u32,
+}
+
+impl<'a> Arg<'a> {
+    //const NO_DATA: Data = Data::None;
+    pub fn new(name: &str, data: &'a Data) -> Self {
         Arg {
             name: CString::new(name).unwrap(),
-            data,
-            type_of: data.type_nsi(),
-            array_length: data.tuple_len_nsi(),
+            data: data,
+            array_length: 1,
             flags: 0,
         }
     }
 
-    #[inline]
-    // Sets the type of data this argument carries.
-    // This method is called kind as type is a reserved
-    // keyword in Rust
-    pub fn kind(&'a mut self, type_of: Type) -> &'a Self {
-        // FIXME: check if we fit in data.count() without remainder
-        self.type_of = type_of;
-
-        // Check that we fit.
-        //assert!(self.data.len_nsi() / type_of.element_size() == self.array_length * self.count);
-
-        self
-    }
-
-    #[inline]
-    pub fn array_length(&'a mut self, array_length: usize) -> &'a Self {
-        // Check that we fit.
-        //assert!(self.data.len_nsi() / self.type_of.element_size() == array_length * self.count);
-
-        self.array_length = array_length;
+    pub fn array_len(mut self, length: usize) -> Self {
+        self.array_length = length;
         self.flags |= nsi_sys::NSIParamIsArray;
-
         self
     }
 
-    #[inline]
-    pub fn per_face(&'a mut self) -> &'a mut Self {
+    pub fn per_face(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamPerFace;
         self
     }
 
-    #[inline]
-    pub fn per_vertex(&'a mut self) -> &'a mut Self {
+    pub fn per_vertex(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamPerVertex;
         self
     }
 
-    #[inline]
-    pub fn linear_interpolation(&'a mut self) -> &'a mut Self {
+    pub fn linear_interpolation(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamInterpolateLinear;
         self
     }
 }
 
-/// Find the last occurrence of `name` in args
-/// and extract that.
-#[allow(unused_must_use)]
-#[inline]
-pub(crate) fn _extract_arg<'a>(args: &'a mut ArgVec, name: &str) -> Option<Arg<'a>> {
-    let mut index: isize = -1;
+#[enum_dispatch(Data)]
+trait DataMethods {
+    //const TYPE: Type;
+    fn type_(&self) -> Type;
+    fn len(&self) -> usize;
+    fn as_c_ptr(&self) -> *const std::ffi::c_void;
+}
 
-    args.iter().enumerate().filter(|(i, arg)| {
-        let found = arg.name == CString::new(name).unwrap();
-        if found {
-            index = *i as isize;
+#[enum_dispatch]
+
+pub enum Data<'a> {
+    /// Single 32-bit ([`f32`]) floating point data.
+    Float,
+    Floats(Floats<'a>),
+    /// Single 64-bit ([`f64`]) floating point data.
+    Double,
+    Doubles(Doubles<'a>),
+    /// Single 32-bit ([`i32`]) integer data.
+    Integer,
+    Integers(Integers<'a>),
+    /// A [`String`].
+    String(String),
+    /// Color in linear space, given as three RGB 32-bit ([`f32`])
+    /// floating point datas, usually in the range `0..1`.
+    Color(Color<'a>),
+    Colors(Colors<'a>),
+    /// Point, given as three 32-bit ([`f32`])floating point datas.
+    Point(Point<'a>),
+    Points(Points<'a>),
+    /// Vector, given as three 32-bit ([`f32`]) floating point datas.
+    Vector(Vector<'a>),
+    Vectors(Vectors<'a>),
+    /// Normal vector, given as three 32-bit ([`f32`]) floating point
+    /// datas.
+    Normal(Normal<'a>),
+    Normasl(Normals<'a>),
+    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
+    /// point datas.
+    Matrix(Matrix<'a>),
+    Matrices(Matrices<'a>),
+    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
+    /// point datas.
+    DoubleMatrix(DoubleMatrix<'a>),
+    DoubleMatrices(DoubleMatrices<'a>),
+    /// Raw (`*const T`) pointer.
+    Pointer,
+    Pointers(Pointers<'a>),
+}
+
+#[macro_export]
+macro_rules! nsi_data_def {
+    ($type: ty, $name: ident, $nsi_type: expr) => {
+        pub struct $name {
+            data: $type,
         }
-        !found
-    });
 
-    match index {
-        -1 => None,
-        _ => Some(args.remove(index as usize)),
+        impl $name {
+            pub fn new(data: $type) -> Self {
+                Self { data }
+            }
+        }
+
+        impl DataMethods for $name {
+            fn type_(&self) -> Type {
+                $nsi_type
+            }
+
+            fn len(&self) -> usize {
+                1
+            }
+
+            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+                &self.data as *const $type as _
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! nsi_data_array_def {
+    ($type: ty, $name: ident, $nsi_type: expr) => {
+        pub struct $name<'a> {
+            data: &'a [$type],
+        }
+
+        impl<'a> $name<'a> {
+            pub fn new(data: &'a [$type]) -> Self {
+                debug_assert!(data.len() % $nsi_type.element_size() == 0);
+                Self { data }
+            }
+        }
+
+        impl<'a> DataMethods for $name<'a> {
+            fn type_(&self) -> Type {
+                $nsi_type
+            }
+
+            fn len(&self) -> usize {
+                self.data.len() / $nsi_type.element_size()
+            }
+
+            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+                self.data.as_ptr() as _
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! nsi_tuple_data_def {
+    ($type: tt, $len: expr, $name: ident, $nsi_type: expr) => {
+        pub struct $name<'a> {
+            data: &'a [$type; $len],
+        }
+
+        impl<'a> $name<'a> {
+            pub fn new(data: &'a [$type; $len]) -> Self {
+                Self { data }
+            }
+        }
+
+        impl<'a> DataMethods for $name<'a> {
+            fn type_(&self) -> Type {
+                $nsi_type
+            }
+
+            fn len(&self) -> usize {
+                1
+            }
+
+            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+                self.data.as_ptr() as _
+            }
+        }
+    };
+}
+
+nsi_data_def!(f32, Float, Type::Float);
+nsi_data_def!(f64, Double, Type::Double);
+nsi_data_def!(i32, Integer, Type::Integer);
+nsi_data_def!(*const std::ffi::c_void, Pointer, Type::Pointer);
+
+nsi_data_array_def!(f32, Floats, Type::Float);
+nsi_data_array_def!(f64, Doubles, Type::Double);
+nsi_data_array_def!(i32, Integers, Type::Integer);
+nsi_data_array_def!(*const std::ffi::c_void, Pointers, Type::Pointer);
+nsi_data_array_def!(f32, Colors, Type::Color);
+nsi_data_array_def!(f32, Points, Type::Point);
+nsi_data_array_def!(f32, Vectors, Type::Vector);
+nsi_data_array_def!(f32, Normals, Type::Normal);
+nsi_data_array_def!(f32, Matrices, Type::Matrix);
+nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
+
+pub struct String {
+    data: CString,
+}
+
+impl String {
+    pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
+        String {
+            data: CString::new(data).unwrap(),
+        }
     }
 }
 
+impl DataMethods for String {
+    fn type_(&self) -> Type {
+        Type::String
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+        self.data.as_ptr() as _
+    }
+}
+
+nsi_tuple_data_def!(f32, 3, Color, Type::Color);
+nsi_tuple_data_def!(f32, 3, Point, Type::Point);
+nsi_tuple_data_def!(f32, 3, Vector, Type::Vector);
+nsi_tuple_data_def!(f32, 3, Normal, Type::Normal);
+nsi_tuple_data_def!(f32, 16, Matrix, Type::Matrix);
+nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
+
 /// Identifies an [`Arg`]’s data type.
-#[derive(Copy, Clone, Debug)]
-pub enum Type {
-    /// Undefined type.
-    Invalid = 0, // nsi_sys::NSIType_t::NSITypeInvalid,
-    /// Single 32-bit ([`f32`]) floating point value.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Type {
+    /// Single 32-bit ([`f32`]) floating point data.
     Float = 1, // nsi_sys::NSIType_t::NSITypeFloat,
-    /// Single 64-bit ([`f64`]) floating point value.
+    /// Single 64-bit ([`f64`]) floating point data.
     Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
-    /// Single 32-bit ([`i32`]) integer value.
+    /// Single 32-bit ([`i32`]) integer data.
     Integer = 2, // nsi_sys::NSIType_t::NSITypeInteger,
     /// A [`String`].
     String = 3, // nsi_sys::NSIType_t::NSITypeString,
-    /// Color, given as three 32-bit ([`i32`]) floating point values,
+    /// Color, given as three 32-bit ([`i32`]) floating point datas,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]`
     Color = 4, // nsi_sys::NSIType_t::NSITypeColor,
-    /// Point, given as three 32-bit ([`f32`])floating point values.
+    /// Point, given as three 32-bit ([`f32`])floating point datas.
     Point = 5, // nsi_sys::NSIType_t::NSITypePoint,
-    /// Vector, given as three 32-bit ([`f32`]) floating point values.
+    /// Vector, given as three 32-bit ([`f32`]) floating point datas.
     Vector = 6, // nsi_sys::NSIType_t::NSITypeVector,
     /// Normal vector, given as three 32-bit ([`f32`]) floating point
-    /// values.
+    /// datas.
     Normal = 7, // nsi_sys::NSIType_t::NSITypeNormal,
     /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
-    /// point values.
+    /// point datas.
     Matrix = 8, // nsi_sys::NSIType_t::NSITypeMatrix,
     /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
-    /// point values.
+    /// point datas.
     DoubleMatrix = 8 | 0x10, /* nsi_sys::NSIType_t::NSITypeMatrix |
                               * 0x10, */
     /// Raw (`*const T`) pointer.
@@ -209,7 +306,6 @@ impl Type {
     #[inline]
     pub(crate) fn element_size(&self) -> usize {
         match self {
-            Type::Invalid => 1, // avoid division by zero
             Type::Float => 1,
             Type::Double => 1,
             Type::Integer => 1,
@@ -222,249 +318,6 @@ impl Type {
             Type::DoubleMatrix => 16,
             Type::Pointer => 1,
         }
-    }
-}
-
-pub trait ToNSI {
-    // this could solve our string issues!!!
-    //fn new_nsi(&self) -> Self
-    fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void;
-    fn len_nsi(&self) -> usize;
-    fn tuple_len_nsi(&self) -> usize;
-    fn type_nsi(&self) -> Type;
-}
-
-pub trait ConstraintNSI {
-    // No default impl for type_nsi() – this way we prevent the trait
-    // being valid for any type by default
-    fn no_op(&self);
-}
-
-/*
-impl From<String> for dyn ToNSI {
-    fn from(string: String) -> Self {
-        CString::new(string).unwrap()
-    }
-}
-
-impl From<&str> for dyn ToNSI {
-    fn from(string: &str) -> Self {
-        CString::new(string).unwrap()
-    }
-}*/
-
-#[macro_export]
-macro_rules! to_nsi_def {
-    ($type:ty, $nsi_type:expr) => {
-        impl ToNSI for $type
-        where
-            $type: ConstraintNSI,
-        {
-            #[inline]
-            default fn type_nsi(&self) -> Type {
-                $nsi_type
-            }
-        }
-
-        impl ConstraintNSI for $type {
-            #[inline]
-            fn no_op(&self) {}
-        }
-    };
-}
-
-macro_rules! to_nsi_array_def {
-    ($type:ty, $nsi_type:expr) => {
-        impl<const N: usize> ToNSI for $type
-        where
-            $type: ConstraintNSI,
-        {
-            #[inline]
-            default fn type_nsi(&self) -> Type {
-                $nsi_type
-            }
-        }
-
-        impl<const N: usize> ConstraintNSI for $type {
-            #[inline]
-            fn no_op(&self) {}
-        }
-    };
-}
-
-impl<T: ConstraintNSI> ToNSI for T {
-    #[inline]
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self as *const _ as _
-    }
-    #[inline]
-    default fn len_nsi(&self) -> usize {
-        1
-    }
-    #[inline]
-    default fn tuple_len_nsi(&self) -> usize {
-        1
-    }
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::Invalid
-    }
-}
-
-to_nsi_def!(f32, Type::Float);
-to_nsi_def!(f64, Type::Double);
-to_nsi_def!(i32, Type::Integer);
-to_nsi_def!(u64, Type::Integer);
-
-impl<T> ToNSI for *const T
-where
-    *const T: ConstraintNSI,
-{
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::Pointer
-    }
-}
-
-impl<T> ConstraintNSI for *const T {
-    #[inline]
-    fn no_op(&self) {}
-}
-
-impl ToNSI for CString
-where
-    CString: ConstraintNSI,
-{
-    #[inline]
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::String
-    }
-}
-
-impl ConstraintNSI for CString {
-    #[inline]
-    fn no_op(&self) {}
-}
-
-impl<T: ConstraintNSI, const N: usize> ToNSI for [T; N]
-where
-    [T; N]: ConstraintNSI,
-{
-    #[inline]
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    #[inline]
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-    #[inline]
-    default fn tuple_len_nsi(&self) -> usize {
-        1
-    }
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::Invalid
-    }
-}
-
-to_nsi_array_def!([f32; N], Type::Float);
-to_nsi_array_def!([f64; N], Type::Double);
-to_nsi_array_def!([i32; N], Type::Integer);
-to_nsi_array_def!([i64; N], Type::Integer);
-
-// FIXME Sting arrays
-
-impl ToNSI for [f32; 3] {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::Color
-    }
-}
-
-impl ToNSI for [f32; 16] {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::Matrix
-    }
-}
-
-impl ToNSI for [f64; 16] {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::DoubleMatrix
-    }
-}
-
-/*
-impl ToNSI for dyn FnMut(Context, i32) + 'static {
-    #[inline]
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self as *const _ as _
-    }
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::Pointer
-    }
-}*/
-
-impl<T: ConstraintNSI> ToNSI for Vec<T>
-where
-    Vec<T>: ConstraintNSI,
-{
-    #[inline]
-    default fn as_ptr_nsi(&self) -> *const ::std::os::raw::c_void {
-        self.as_ptr() as _
-    }
-    #[inline]
-    default fn len_nsi(&self) -> usize {
-        self.len()
-    }
-
-    #[inline]
-    default fn tuple_len_nsi(&self) -> usize {
-        1
-    }
-    #[inline]
-    default fn type_nsi(&self) -> Type {
-        Type::Invalid
-    }
-}
-
-to_nsi_def!(Vec<f32>, Type::Float);
-to_nsi_def!(Vec<f64>, Type::Double);
-to_nsi_def!(Vec<i32>, Type::Integer);
-to_nsi_def!(Vec<u32>, Type::Integer);
-
-impl ToNSI for Vec<[f32; 3]> {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::Color
-    }
-}
-
-impl ToNSI for Vec<[f32; 16]> {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::Matrix
-    }
-}
-
-impl ToNSI for Vec<[f64; 16]> {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::DoubleMatrix
-    }
-}
-
-impl<T> ToNSI for Vec<*const T> {
-    #[inline]
-    fn type_nsi(&self) -> Type {
-        Type::Pointer
     }
 }
 
@@ -482,30 +335,13 @@ macro_rules! no_arg {
     };
 }
 
-/// A macro to create a [`CStr`] (&[`CString`]) from a [`Vec`]<[`u8`]>.
-///
-/// ```
-/// // Create rendering context.
-/// let ctx = nsi::Context::new(&vec![nsi::arg!(
-///     "streamfilename",
-///     nsi::c_str!("stdout")
-/// )])
-/// .expect("Could not create NSI context.");
-/// ```
-#[macro_export]
-macro_rules! c_str {
-    ($str: expr) => {
-        &std::ffi::CString::new($str).unwrap()
-    };
-}
-
 /// A macro to create an Argument aka: [`Arg::new()`].
 ///
 /// ```
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&vec![nsi::arg!(
 ///     "streamfilename",
-///     nsi::c_str!("stdout")
+///     &nsi::string!("stdout")
 /// )])
 /// .expect("Could not create NSI context.");
 /// ```
@@ -513,5 +349,145 @@ macro_rules! c_str {
 macro_rules! arg {
     ($token:expr, $value:expr) => {
         nsi::Arg::new($token, $value)
+    };
+}
+
+#[macro_export]
+macro_rules! float {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Float::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! double {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Double::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! integer {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Integer::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! integers {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Integers::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! color {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Color::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! colors {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Colors::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! point {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Point::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! points {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Points::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! vector {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Vector::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! vectors {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Vector::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! normal {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Normal::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! normals {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Normals::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! matrix {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Matrix::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! matrices {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Matrices::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! double_matrix {
+    ($value: expr) => {
+        nsi::Data::from(nsi::DoubleMatrix::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! double_matrices {
+    ($value: expr) => {
+        nsi::Data::from(nsi::DoubleMatrices::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! string {
+    ($value: expr) => {
+        nsi::Data::from(nsi::String::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! strings {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Strings::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! pointer {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Pointer::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! pointers {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Pointers::new($value))
     };
 }
