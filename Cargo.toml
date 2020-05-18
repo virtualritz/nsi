@@ -13,11 +13,13 @@ keywords = [
     "cgi",
     "renderman",
     "polygons",
-    "subdivison surface",
+    "subdivison",
     "nurbs",
     "hair",
     "particles",
-    "cloud rendering",
+    "cloud",
+    "osl",
+    "shading",
     "ipr",
 ]
 license-file = "LICENSE.md"
