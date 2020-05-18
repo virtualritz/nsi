@@ -2,7 +2,7 @@
 
 High level Rust bindings for Illumination Research’s Nodal Scene Interface – ɴsɪ.
 
-This puts one of the most advanced production offline renderers at your fingertips in Rust: 3Delight.
+This puts one of the most advanced 3D production offline renderers at your fingertips in Rust – [3Delight](https://www.3delight.com/).
 
 ![The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ](moana_island.jpg)
 The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ.
@@ -23,11 +23,11 @@ ctx.set_attribute(
     &vec![
         nsi::arg!("P", &nsi::points!(&positions)),
         nsi::arg!("P.indices", &nsi::unsigneds!(&face_index)),
-        // 5 vertices per each face
+        // 5 vertices per each face.
         nsi::arg!("nvertices", &nsi::unsigneds!(&[5; 12])),
-        // Render this as a subdivison surface and
+        // Render this as a subdivison surface.
         nsi::arg!("subdivision.scheme", &nsi::string!("catmull-clark")),
-        // Crease each of our 30 edges a bit
+        // Crease each of our 30 edges a bit.
         nsi::arg!("subdivision.creasevertices", &nsi::unsigneds!(&face_index)),
         nsi::arg!("subdivision.creasesharpness", &nsi::floats!(&[10.; 30])),
     ],
@@ -37,7 +37,7 @@ ctx.set_attribute(
 ## Dependencies
 
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in term requires a renderer that implements the ɴsɪ API.
-Currently the only renderer that does is [3Delight](https://www.3delight.com/). The being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
+Currently the only renderer that does is 3Delight. The being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
 
 Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
