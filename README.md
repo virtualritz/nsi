@@ -13,10 +13,9 @@ This will set the `$DELIGHT` environment variable that the build script is looki
 
 ## Building
 
-This crate uses [specialization](https://github.com/rust-lang/rust/issues/31844). This is an unstable feature. Thus, to build, it requires nightly:
+No suprises here. The crate works with stable, beta & nightly.
 
 ```
-> rustup override set nightly
 > cargo build
 ```
 
