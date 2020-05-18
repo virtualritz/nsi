@@ -52,7 +52,7 @@ ctx.set_attribute(
 );
 ```
 
-Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation) for more example code (demonstrates render settings, sending OBJ meshes to the renderer via instancing, particle rendering, [OSL](https://github.com/imageworks/OpenShadingLanguage) shaders, environment (lights) and dumping a scene description to disk.
+Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation) for more example code (demonstrates render settings, sending OBJ meshes to the renderer via instancing, particle rendering, [OSL](https://github.com/imageworks/OpenShadingLanguage) shaders, environment (lights) and dumping a scene description to disk).
 
 3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
 There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for this API and a [minimal Rust example display driver](https://github.com/virtualritz/r-display) to get you started.
