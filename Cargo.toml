@@ -3,25 +3,7 @@ name = "nsi"
 version = "0.2.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
-keywords = [
-    "graphics",
-    "vfx",
-    "rendering",
-    "nsi",
-    "3delight",
-    "3d",
-    "cgi",
-    "renderman",
-    "polygons",
-    "subdivison",
-    "nurbs",
-    "hair",
-    "particles",
-    "cloud",
-    "osl",
-    "shading",
-    "ipr",
-]
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 license-file = "LICENSE.md"
 description = "High level bindings for Illumination Research’s Nodal Scene Interface – ɴsɪ."
 readme = "README.md"
