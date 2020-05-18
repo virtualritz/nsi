@@ -63,14 +63,14 @@ There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for thi
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in term requires a renderer that implements the ɴsɪ API.
 Currently the only renderer that does is 3Delight which, though commercial, has been and is free for personal use since over twenty years.
 
+That being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
+
 ## Prerequisites
 
 Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
 > **_Note:_** The free version of 3Delight will render with up to 12 cores on your machine. For crazier projects you can use their cheap cloud rendering service that gives you access to unlimited CPU cores. When you register you get 1,000 cloud minutes for free which ain’t too shabby.
-
-The above being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
 
 ## Building
 
