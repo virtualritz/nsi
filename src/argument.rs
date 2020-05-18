@@ -360,11 +360,27 @@ macro_rules! float {
 }
 
 #[macro_export]
+macro_rules! floats {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Floats::new($value))
+    };
+}
+
+
+#[macro_export]
 macro_rules! double {
     ($value: expr) => {
         nsi::Data::from(nsi::Double::new($value))
     };
 }
+
+#[macro_export]
+macro_rules! doubles {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Doubles::new($value))
+    };
+}
+
 
 #[macro_export]
 macro_rules! integer {
@@ -471,12 +487,14 @@ macro_rules! string {
     };
 }
 
+/* FIXME
 #[macro_export]
 macro_rules! strings {
     ($value: expr) => {
         nsi::Data::from(nsi::Strings::new($value))
     };
 }
+*/
 
 #[macro_export]
 macro_rules! pointer {
