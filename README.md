@@ -5,6 +5,8 @@ High level Rust bindings for Illumination Research’s Nodal Scene Interface –
 This puts one of the most advanced production offline renderers at your fingertips in Rust: 3Delight.
 
 ![The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ](moana_island.jpg)
+The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ.
+
 This is a huge scene (72GB of data) made of 31 million instances, 78 million polygons defining subdivison surface geometry and 2,300 textures. The above image was rendered in less then two minutes using 3Delight Cloud.
 
 ## Example
