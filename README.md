@@ -4,10 +4,10 @@ High level Rust bindings for Illumination Research’s Nodal Scene Interface –
 
 This puts one of the most advanced 3D production offline renderers at your fingertips in Rust – [3Delight](https://www.3delight.com/).
 
-![The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ](moana_island.jpg)
-The Moana Island Scene, provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ.
+![Moana Island, rendered with 3Delight|ɴsɪ](moana_island.jpg)
+[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene), provided courtesy of Walt Disney Picture, rendered with 3Delight|ɴsɪ.
 
-This is a huge scene (72GB of data) made of 31 million instances, 78 million polygons defining subdivison surface geometry and 2,300 textures. The above image was rendered in less then two minutes using 3Delight Cloud.
+This is a huge scene (72GB of data) made of 31 million instances, 78 million polygons defining subdivison surface geometry and 2,300 textures. The above image was rendered in less then two minutes using [3Delight Cloud](https://documentation.3delightcloud.com/display/3DLC/Cloud+Rendering+Speed).
 
 ## Example
 
@@ -37,12 +37,14 @@ ctx.set_attribute(
 ## Dependencies
 
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in term requires a renderer that implements the ɴsɪ API.
-Currently the only renderer that does is 3Delight. The being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
+Currently the only renderer that does is 3Delight which, though commercial, has been and is free for personal use since over twenty years.
 
 Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
 > **_Note:_** The free version of 3Delight will render with up to 12 cores on your machine. For crazier projects you can use their cheap [cloud rendering service](https://www.3delight.com/signup-landing-page) that gives you access to unlimited CPU cores. When you register you get 1,000 cloud minutes for free which ain’t too shabby.
+
+The above being said – I hope this crate serves as inspiration for other people writing renderers, particualrly in Rust, to adopt this API for scene description.
 
 ## Building
 
