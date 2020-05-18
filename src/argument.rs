@@ -1,7 +1,9 @@
+use crate::*;
 use enum_dispatch::enum_dispatch;
 use nsi_sys;
 use std::ffi::CString;
 
+#[inline]
 pub(crate) fn get_c_param_vec(
     args_in: &ArgVec,
 ) -> (Vec<nsi_sys::NSIParam_t>, Vec<*const std::ffi::c_void>) {
@@ -51,7 +53,7 @@ pub struct Arg<'a> {
 }
 
 impl<'a> Arg<'a> {
-    //const NO_DATA: Data = Data::None;
+    #[inline]
     pub fn new(name: &str, data: &'a Data) -> Self {
         Arg {
             name: CString::new(name).unwrap(),
@@ -61,22 +63,26 @@ impl<'a> Arg<'a> {
         }
     }
 
+    #[inline]
     pub fn array_len(mut self, length: usize) -> Self {
         self.array_length = length;
         self.flags |= nsi_sys::NSIParamIsArray;
         self
     }
 
+    #[inline]
     pub fn per_face(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamPerFace;
         self
     }
 
+    #[inline]
     pub fn per_vertex(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamPerVertex;
         self
     }
 
+    #[inline]
     pub fn linear_interpolation(mut self) -> Self {
         self.flags |= nsi_sys::NSIParamInterpolateLinear;
         self
@@ -94,36 +100,42 @@ trait DataMethods {
 #[enum_dispatch]
 
 pub enum Data<'a> {
-    /// Single 32-bit ([`f32`]) floating point data.
+    /// Single [`f32`) value.
     Float,
     Floats(Floats<'a>),
-    /// Single 64-bit ([`f64`]) floating point data.
+    /// Single [`f64`] value.
     Double,
     Doubles(Doubles<'a>),
-    /// Single 32-bit ([`i32`]) integer data.
+    /// Single [`i32`] value.
     Integer,
+    /// An [[`i32`]] array.
     Integers(Integers<'a>),
+    /// Single [`i32`] value.
+    Unsigned,
+    /// An [[`i32`]] array.
+    Unsigneds(Unsigneds<'a>),
     /// A [`String`].
     String(String),
-    /// Color in linear space, given as three RGB 32-bit ([`f32`])
-    /// floating point datas, usually in the range `0..1`.
+    /// Color in linear space, given as a red, green, blue triplet
+    /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
+    /// An arry of colors.
     Colors(Colors<'a>),
-    /// Point, given as three 32-bit ([`f32`])floating point datas.
+    /// Point, given as three [`f32`] values.
     Point(Point<'a>),
     Points(Points<'a>),
-    /// Vector, given as three 32-bit ([`f32`]) floating point datas.
+    /// Vector, given as three [`f32`] values.
     Vector(Vector<'a>),
     Vectors(Vectors<'a>),
-    /// Normal vector, given as three 32-bit ([`f32`]) floating point
-    /// datas.
+    /// Normal vector, given as three [`f32`] values.
+    /// values.
     Normal(Normal<'a>),
     Normasl(Normals<'a>),
-    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
+    /// Transformation matrix, given as 16 [`f32`] floating
     /// point datas.
     Matrix(Matrix<'a>),
     Matrices(Matrices<'a>),
-    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
+    /// Transformation matrix, given as 16 [`f64`] floating
     /// point datas.
     DoubleMatrix(DoubleMatrix<'a>),
     DoubleMatrices(DoubleMatrices<'a>),
@@ -132,7 +144,6 @@ pub enum Data<'a> {
     Pointers(Pointers<'a>),
 }
 
-#[macro_export]
 macro_rules! nsi_data_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
         pub struct $name {
@@ -161,7 +172,6 @@ macro_rules! nsi_data_def {
     };
 }
 
-#[macro_export]
 macro_rules! nsi_data_array_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
         pub struct $name<'a> {
@@ -191,7 +201,6 @@ macro_rules! nsi_data_array_def {
     };
 }
 
-#[macro_export]
 macro_rules! nsi_tuple_data_def {
     ($type: tt, $len: expr, $name: ident, $nsi_type: expr) => {
         pub struct $name<'a> {
@@ -220,14 +229,17 @@ macro_rules! nsi_tuple_data_def {
     };
 }
 
+
 nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
+nsi_data_def!(u32, Unsigned, Type::Integer);
 nsi_data_def!(*const std::ffi::c_void, Pointer, Type::Pointer);
 
 nsi_data_array_def!(f32, Floats, Type::Float);
 nsi_data_array_def!(f64, Doubles, Type::Double);
 nsi_data_array_def!(i32, Integers, Type::Integer);
+nsi_data_array_def!(u32, Unsigneds, Type::Integer);
 nsi_data_array_def!(*const std::ffi::c_void, Pointers, Type::Pointer);
 nsi_data_array_def!(f32, Colors, Type::Color);
 nsi_data_array_def!(f32, Points, Type::Point);
@@ -271,35 +283,35 @@ nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 
 /// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(i32)]
 enum Type {
-    /// Single 32-bit ([`f32`]) floating point data.
-    Float = 1, // nsi_sys::NSIType_t::NSITypeFloat,
-    /// Single 64-bit ([`f64`]) floating point data.
-    Double = 1 | 0x10, // nsi_sys::NSIType_t::NSITypeFloat | 0x10,
+    /// A single 32-bit ([`f32`]) floating point value.
+    Float = nsi_sys::NSIType_t_NSITypeFloat as i32,
+    /// A single 64-bit ([`f64`]) floating point value.
+    Double = nsi_sys::NSIType_t_NSITypeDouble as i32,
     /// Single 32-bit ([`i32`]) integer data.
-    Integer = 2, // nsi_sys::NSIType_t::NSITypeInteger,
+    Integer = nsi_sys::NSIType_t_NSITypeInteger as i32,
     /// A [`String`].
-    String = 3, // nsi_sys::NSIType_t::NSITypeString,
+    String = nsi_sys::NSIType_t_NSITypeString as i32,
     /// Color, given as three 32-bit ([`i32`]) floating point datas,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]`
-    Color = 4, // nsi_sys::NSIType_t::NSITypeColor,
+    Color = nsi_sys::NSIType_t_NSITypeColor as i32,
     /// Point, given as three 32-bit ([`f32`])floating point datas.
-    Point = 5, // nsi_sys::NSIType_t::NSITypePoint,
+    Point = nsi_sys::NSIType_t_NSITypePoint as i32,
     /// Vector, given as three 32-bit ([`f32`]) floating point datas.
-    Vector = 6, // nsi_sys::NSIType_t::NSITypeVector,
+    Vector = nsi_sys::NSIType_t_NSITypeVector as i32,
     /// Normal vector, given as three 32-bit ([`f32`]) floating point
     /// datas.
-    Normal = 7, // nsi_sys::NSIType_t::NSITypeNormal,
+    Normal = nsi_sys::NSIType_t_NSITypeNormal as i32,
     /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
     /// point datas.
-    Matrix = 8, // nsi_sys::NSIType_t::NSITypeMatrix,
+    Matrix = nsi_sys::NSIType_t_NSITypeMatrix as i32,
     /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
     /// point datas.
-    DoubleMatrix = 8 | 0x10, /* nsi_sys::NSIType_t::NSITypeMatrix |
-                              * 0x10, */
+    DoubleMatrix = nsi_sys::NSIType_t_NSITypeDoubleMatrix as i32,
     /// Raw (`*const T`) pointer.
-    Pointer = 10, // nsi_sys::NSIType_t::NSITypePointer,
+    Pointer = nsi_sys::NSIType_t_NSITypePointer as i32,
 }
 
 impl Type {
@@ -366,7 +378,6 @@ macro_rules! floats {
     };
 }
 
-
 #[macro_export]
 macro_rules! double {
     ($value: expr) => {
@@ -381,7 +392,6 @@ macro_rules! doubles {
     };
 }
 
-
 #[macro_export]
 macro_rules! integer {
     ($value: expr) => {
@@ -393,6 +403,20 @@ macro_rules! integer {
 macro_rules! integers {
     ($value: expr) => {
         nsi::Data::from(nsi::Integers::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! unsigned {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Unsigned::new($value))
+    };
+}
+
+#[macro_export]
+macro_rules! unsigneds {
+    ($value: expr) => {
+        nsi::Data::from(nsi::Unsigneds::new($value))
     };
 }
 

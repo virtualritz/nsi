@@ -1,11 +1,28 @@
 [package]
 name = "nsi"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
-keywords = ["graphics", "vfx", "rendering", "nsi", "3delight"]
+keywords = [
+    "graphics",
+    "vfx",
+    "rendering",
+    "nsi",
+    "3delight",
+    "3d",
+    "cgi",
+    "renderman",
+    "polygons",
+    "subdivison surface",
+    "nurbs",
+    "hair",
+    "particles",
+    "cloud rendering",
+    "ipr",
+]
 license-file = "LICENSE.md"
 description = "High level bindings for Illumination Research’s Nodal Scene Interface – ɴsɪ."
+readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://nsi.readthedocs.io/"
 repository = "https://github.com/virtualritz/nsi/"

@@ -115,7 +115,7 @@ impl Context {
     ///   It is acceptable to reuse the same handle inside different
     ///   contexts.
     ///
-    /// * `type` - The type of node to create.
+    /// * `node_type` - The type of node to create.
     ///
     /// * `args` - A [`Vec`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
@@ -318,7 +318,7 @@ pub enum Node {
     /// node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
     OutputLayer,
     /// Describes how the view from a camera node will be rasterized
-    /// into an outputlayer node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
+    /// into an `outputlayer` node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
 }
 
