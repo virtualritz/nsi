@@ -85,3 +85,9 @@ No suprises here. The crate works with stable, beta & nightly.
 Docs for the C, C++, Lua & Python bindings as well as an introduction and deep dive into the API [can be found here](https://nsi.readthedocs.io).
 
 Crate documentation is coming soon.
+
+## Getting Help
+
+I hang out on the [3Delight Discord server](https://discord.gg/MGtJx4q) (I have the same user name as on GitHub). Ask for me in the `#3delight-lobby` channel.
+
+There is also a [3Delight Slack](https://join.slack.com/t/3delight/shared_invite/zt-eipakj10-lK84ZzUzWgDw0qJ3Z3KuOg) which has a dedicated, invitation only channel about ɴsɪ. If you have more advanced questions or want to add support for the ɴsɪ API/export to ɴsɪ to your renderer/DCC app/whatever ping me and I get you an invite.
