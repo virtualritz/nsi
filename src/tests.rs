@@ -7,7 +7,7 @@ fn live_edit() {
     // os.system("oslc waves.osl")
 
     // create rendering context.
-    let c = nsi::Context::new(&vec![nsi::arg!("streamfilename", &nsi::string!("stdout"))])
+    let c = nsi::Context::new(&vec![nsi::arg!("streamfilename", nsi::string!("stdout"))])
         .expect("Could not create NSI context.");
 
     // Setup a camera transform.
@@ -18,8 +18,8 @@ fn live_edit() {
         "cam1_trs",
         &vec![nsi::arg!(
             "transformationmatrix",
-            &nsi::double_matrix!(&[
-                1.0f64, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 5.0, 1.0,
+            nsi::double_matrix!(&[
+                1.0f64, 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
             ])
         )],
     );
@@ -27,10 +27,7 @@ fn live_edit() {
     // Setup a camera.
     c.create("cam1", &nsi::Node::PerspectiveCamera, nsi::no_arg!());
 
-    c.set_attribute(
-        "cam1",
-        &vec![nsi::arg!("fov", &nsi::Data::from(nsi::Float::new(35f32)))],
-    );
+    c.set_attribute("cam1", &vec![nsi::arg!("fov", nsi::float!(35f32))]);
     c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
 
     // Setup a screen.
@@ -39,8 +36,8 @@ fn live_edit() {
     c.set_attribute(
         "s1",
         &vec![
-            nsi::arg!("resolution", &nsi::integers!(&[1280, 720])).array_len(2),
-            nsi::arg!("oversampling", &nsi::integer!(16i32)),
+            nsi::arg!("resolution", nsi::integers!(&[1280, 720])).array_len(2),
+            nsi::arg!("oversampling", nsi::integer!(16i32)),
         ],
     );
 
@@ -49,10 +46,10 @@ fn live_edit() {
     c.set_attribute(
         "beauty",
         &vec![
-            nsi::arg!("variablename", &nsi::string!("Ci")),
-            nsi::arg!("withalpha", &nsi::integer!(1)),
-            nsi::arg!("scalarformat", &nsi::string!("half")),
-            nsi::arg!("some_color", &nsi::color!(&[0.1f32, 0.2, 0.3])),
+            nsi::arg!("variablename", nsi::string!("Ci")),
+            nsi::arg!("withalpha", nsi::integer!(1)),
+            nsi::arg!("scalarformat", nsi::string!("half")),
+            nsi::arg!("some_color", nsi::color!(&[0.1f32, 0.2, 0.3])),
         ],
     );
     c.connect("beauty", "", "s1", "outputlayers", nsi::no_arg!());
@@ -66,11 +63,11 @@ fn live_edit() {
         &vec![
             arg!(
                 "drivername",
-                &nsi::string!("/Users/moritz/code/r-display/target/debug/libr_display.dylib")
+                nsi::string!("/Users/moritz/code/r-display/target/debug/libr_display.dylib")
             ),
             nsi::arg!(
                 "blblabla_______",
-                &nsi::pointer!(
+                nsi::pointer!(
                     &unsafe { std::mem::transmute::<_, f64>(&mut foo as *mut _) } as *const f64
                         as _
                 )
@@ -84,12 +81,10 @@ fn live_edit() {
     c.set_attribute(
         "mesh1",
         &vec![
-            arg!("nvertices", &nsi::integer!(4i32)),
+            arg!("nvertices", nsi::integer!(4i32)),
             arg!(
                 "P",
-                &nsi::points!(&[
-                    -1.0f32, -0.8, -1.0, -1.0, -0.8, 1.0, 1.0, -0.8, 1.0, 1.0, -0.8, -1.0
-                ])
+                nsi::points!(&[-1.0f32, -0.8, -1., -1., -0.8, 1., 1., -0.8, 1., 1., -0.8, -1.0])
             ),
         ],
     );
@@ -98,7 +93,7 @@ fn live_edit() {
     c.create("shader1", &nsi::Node::Shader, nsi::no_arg!());
     c.set_attribute(
         "shader1",
-        &vec![nsi::arg!("shaderfilename", &nsi::string!("matte"))],
+        &vec![nsi::arg!("shaderfilename", nsi::string!("matte"))],
     );
     c.create("plane_attribs", &nsi::Node::Attributes, nsi::no_arg!());
     c.connect(
@@ -124,8 +119,8 @@ fn live_edit() {
         "light1_trs",
         &vec![nsi::arg!(
             "transformationmatrix",
-            &nsi::double_matrix!(&[
-                0.1f64, 0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 4.0, 0.0, 1.0,
+            nsi::double_matrix!(&[
+                0.1f64, 0., 0., 0., 0., 0.1, 0., 0., 0., 0., 0.1, 0., 0., 4., 0., 1.,
             ])
         )],
     );
@@ -137,10 +132,10 @@ fn live_edit() {
     c.set_attribute(
         "light1",
         &vec![
-            nsi::arg!("nvertices", &nsi::integer!(3i32)),
+            nsi::arg!("nvertices", nsi::integer!(3i32)),
             nsi::arg!(
                 "P",
-                &nsi::points!(&vec![-1.0f32, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0])
+                nsi::points!(&vec![-1.0f32, 0., 0., 0., 0., 1., 1., 0., 0.0])
             ),
         ],
     );
@@ -149,8 +144,8 @@ fn live_edit() {
     c.set_attribute(
         "light1_shader",
         &vec![
-            nsi::arg!("shaderfilename", &nsi::string!("emitter")),
-            nsi::arg!("power", &nsi::float!(80f32)),
+            nsi::arg!("shaderfilename", nsi::string!("emitter")),
+            nsi::arg!("power", nsi::float!(80f32)),
         ],
     );
 
@@ -171,12 +166,12 @@ fn live_edit() {
     );
 
     // Start interactive render.
-    c.render_control(&vec![nsi::arg!("action", &nsi::string!("start"))]); //, interactive=1)
+    c.render_control(&vec![nsi::arg!("action", nsi::string!("start"))]); //, interactive=1)
 
     // Let it render a while.
     //thread::sleep(time::Duration::from_secs(5));
 
-    c.render_control(&vec![nsi::arg!("action", &nsi::string!("wait"))]);
+    c.render_control(&vec![nsi::arg!("action", nsi::string!("wait"))]);
 }
 
 /*
@@ -206,10 +201,10 @@ c.connect("mesh2_trs", "", nsi.SCENE_ROOT, "objects")
 c.Disconnect("mesh2", "", nsi.SCENE_ROOT, "objects")
 c.connect("mesh2", "", "mesh2_trs", "objects")
 
-c.set_attributeAtTime("mesh2_trs", 0.0, transformationmatrix=nsi.Arg(
+c.set_attributeAtTime("mesh2_trs", 0., transformationmatrix=nsi.Arg(
     (1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1),
     type=nsi.Type.DoubleMatrix))
-c.set_attributeAtTime("mesh2_trs", 1.0, transformationmatrix=nsi.Arg(
+c.set_attributeAtTime("mesh2_trs", 1., transformationmatrix=nsi.Arg(
     (1,0,0,0, 0,1,0,0, 0,0,1,0, 0.4,0,0,1),
     type=nsi.Type.DoubleMatrix))
 

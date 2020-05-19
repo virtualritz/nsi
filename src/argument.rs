@@ -45,7 +45,7 @@ pub type ArgVec<'a> = Vec<Arg<'a>>;
 
 pub struct Arg<'a> {
     pub(crate) name: CString,
-    pub(crate) data: &'a Data<'a>,
+    pub(crate) data: Data<'a>,
     // length of each element if an array type
     pub(crate) array_length: usize,
     // number of elements
@@ -54,7 +54,7 @@ pub struct Arg<'a> {
 
 impl<'a> Arg<'a> {
     #[inline]
-    pub fn new(name: &str, data: &'a Data) -> Self {
+    pub fn new(name: &str, data: Data<'a>) -> Self {
         Arg {
             name: CString::new(name).unwrap(),
             data: data,
@@ -229,7 +229,6 @@ macro_rules! nsi_tuple_data_def {
     };
 }
 
-
 nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
@@ -353,7 +352,7 @@ macro_rules! no_arg {
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&vec![nsi::arg!(
 ///     "streamfilename",
-///     &nsi::string!("stdout")
+///     nsi::string!("stdout")
 /// )])
 /// .expect("Could not create NSI context.");
 /// ```

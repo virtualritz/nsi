@@ -77,7 +77,7 @@ impl Context {
     /// // Create rendering context that dumps to stdout.
     /// let c = nsi::Context::new(&vec![nsi::Arg::new(
     ///     "streamfilename",
-    ///     &nsi::string!("stdout"),
+    ///     nsi::string!("stdout"),
     /// )]).expect("Could not create ɴsɪ context.");
     /// ```
     #[inline]
