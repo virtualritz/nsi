@@ -47,8 +47,6 @@ pub use argument::*;
 
 mod tests;
 
-static STR_ERROR: &str = "Found null byte in the middle of the string";
-
 //type Handle = impl Into<Vec<u8>>;
 
 /// An ɴsɪ context.
@@ -75,9 +73,9 @@ impl Context {
     /// If this method fails for some reason, it returns [`None`].
     /// ```
     /// // Create rendering context that dumps to stdout.
-    /// let c = nsi::Context::new(&vec![nsi::Arg::new(
+    /// let c = nsi::Context::new(&vec![nsi::string!(
     ///     "streamfilename",
-    ///     nsi::string!("stdout"),
+    ///     "stdout"
     /// )]).expect("Could not create ɴsɪ context.");
     /// ```
     #[inline]
@@ -86,7 +84,7 @@ impl Context {
             if args.is_empty() {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
             } else {
-                let (args_out, _strings) = get_c_param_vec(args);
+                let args_out = get_c_param_vec(args);
 
                 unsafe {
                     nsi_sys::NSIBegin(
@@ -121,12 +119,12 @@ impl Context {
     ///   no optional parameters defined as of now*.
     #[inline]
     pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSICreate(
                 self.context,
-                CString::new(handle.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(handle).unwrap().as_ptr(),
                 node_type.as_c_str().as_ptr() as *const i8,
                 args_out.len() as i32,
                 args_out.as_ptr() as *const nsi_sys::NSIParam_t,
@@ -136,12 +134,12 @@ impl Context {
 
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIDelete(
                 self.context,
-                CString::new(handle.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(handle).unwrap().as_ptr(),
                 args_out.len() as i32,
                 args_out.as_ptr() as *const nsi_sys::NSIParam_t,
             );
@@ -149,13 +147,13 @@ impl Context {
     }
 
     #[inline]
-    pub fn set_attribute(&self, object: impl Into<Vec<u8>>, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttribute(
                 self.context,
-                CString::new(object.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(handle).unwrap().as_ptr(),
                 args_out.len() as i32,
                 args_out.as_ptr() as *const nsi_sys::NSIParam_t,
             );
@@ -163,13 +161,13 @@ impl Context {
     }
 
     #[inline]
-    pub fn set_attribute_at_time(&self, object: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+    pub fn set_attribute_at_time(&self, handle: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttributeAtTime(
                 self.context,
-                CString::new(object.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(handle).unwrap().as_ptr(),
                 time,
                 args_out.len() as i32,
                 args_out.as_ptr() as *const nsi_sys::NSIParam_t,
@@ -186,15 +184,15 @@ impl Context {
         to_attr: impl Into<Vec<u8>>,
         args: &ArgVec,
     ) {
-        let (args_out, _strings) = get_c_param_vec(args);
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIConnect(
                 self.context,
-                CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(to.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(from).unwrap().as_ptr(),
+                CString::new(from_attr).unwrap().as_ptr(),
+                CString::new(to).unwrap().as_ptr(),
+                CString::new(to_attr).unwrap().as_ptr(),
                 args_out.len() as i32,
                 args_out.as_ptr() as *const nsi_sys::NSIParam_t,
             );
@@ -212,17 +210,17 @@ impl Context {
         unsafe {
             nsi_sys::NSIDisconnect(
                 self.context,
-                CString::new(from.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(from_attr.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(to.into()).expect(STR_ERROR).as_ptr(),
-                CString::new(to_attr.into()).expect(STR_ERROR).as_ptr(),
+                CString::new(from).unwrap().as_ptr(),
+                CString::new(from_attr).unwrap().as_ptr(),
+                CString::new(to).unwrap().as_ptr(),
+                CString::new(to_attr).unwrap().as_ptr(),
             );
         }
     }
 
     #[inline]
     pub fn evaluate(&self, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIEvaluate(
@@ -235,7 +233,7 @@ impl Context {
 
     #[inline]
     pub fn render_control(&self, args: &ArgVec) {
-        let (args_out, _strings) = get_c_param_vec(args);
+        let args_out = get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIRenderControl(

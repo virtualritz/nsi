@@ -4,40 +4,22 @@ use nsi_sys;
 use std::ffi::CString;
 
 #[inline]
-pub(crate) fn get_c_param_vec(
-    args_in: &ArgVec,
-) -> (Vec<nsi_sys::NSIParam_t>, Vec<*const std::ffi::c_void>) {
-    // we create an array that holds our *const string pointers
-    // so we can take *const *const strings of these before sending
-    // to the FFI
-    let mut string_ptr_vec = Vec::<*const _>::new();
-
+pub(crate) fn get_c_param_vec(args_in: &ArgVec) -> Vec<nsi_sys::NSIParam_t> {
     let mut args_out = Vec::<nsi_sys::NSIParam_t>::with_capacity(args_in.len());
     for arg_in in args_in {
         args_out.push({
-            let data_ptr = if Type::String == arg_in.data.type_() {
-                string_ptr_vec.push(arg_in.data.as_c_ptr());
-                unsafe {
-                    std::mem::transmute::<*const *const _, *const _>(string_ptr_vec.last().unwrap())
-                }
-            } else {
-                arg_in.data.as_c_ptr()
-            };
-
             let param = nsi_sys::NSIParam_t {
                 name: arg_in.name.as_ptr(),
-                data: data_ptr,
+                data: arg_in.data.as_c_ptr(),
                 type_: arg_in.data.type_() as i32,
                 arraylength: arg_in.array_length as i32,
                 count: (arg_in.data.len() / arg_in.array_length) as u64,
                 flags: arg_in.flags as std::os::raw::c_int,
             };
-
             param
         });
     }
-
-    (args_out, string_ptr_vec)
+    args_out
 }
 
 /// A vector of (optional) [`Context`] method arguments.
@@ -45,7 +27,7 @@ pub type ArgVec<'a> = Vec<Arg<'a>>;
 
 pub struct Arg<'a> {
     pub(crate) name: CString,
-    pub(crate) data: Data<'a>,
+    pub(crate) data: ArgData<'a>,
     // length of each element if an array type
     pub(crate) array_length: usize,
     // number of elements
@@ -54,7 +36,7 @@ pub struct Arg<'a> {
 
 impl<'a> Arg<'a> {
     #[inline]
-    pub fn new(name: &str, data: Data<'a>) -> Self {
+    pub fn new(name: &str, data: ArgData<'a>) -> Self {
         Arg {
             name: CString::new(name).unwrap(),
             data: data,
@@ -89,8 +71,8 @@ impl<'a> Arg<'a> {
     }
 }
 
-#[enum_dispatch(Data)]
-trait DataMethods {
+#[enum_dispatch(ArgData)]
+pub(crate) trait ArgDataMethods {
     //const TYPE: Type;
     fn type_(&self) -> Type;
     fn len(&self) -> usize;
@@ -98,8 +80,7 @@ trait DataMethods {
 }
 
 #[enum_dispatch]
-
-pub enum Data<'a> {
+pub enum ArgData<'a> {
     /// Single [`f32`) value.
     Float,
     Floats(Floats<'a>),
@@ -156,7 +137,7 @@ macro_rules! nsi_data_def {
             }
         }
 
-        impl DataMethods for $name {
+        impl ArgDataMethods for $name {
             fn type_(&self) -> Type {
                 $nsi_type
             }
@@ -185,7 +166,7 @@ macro_rules! nsi_data_array_def {
             }
         }
 
-        impl<'a> DataMethods for $name<'a> {
+        impl<'a> ArgDataMethods for $name<'a> {
             fn type_(&self) -> Type {
                 $nsi_type
             }
@@ -213,7 +194,7 @@ macro_rules! nsi_tuple_data_def {
             }
         }
 
-        impl<'a> DataMethods for $name<'a> {
+        impl<'a> ArgDataMethods for $name<'a> {
             fn type_(&self) -> Type {
                 $nsi_type
             }
@@ -249,17 +230,18 @@ nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 
 pub struct String {
     data: CString,
+    pointer: *const std::ffi::c_void,
 }
 
 impl String {
     pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
-        String {
-            data: CString::new(data).unwrap(),
-        }
+        let data = CString::new(data).unwrap();
+        let pointer = data.as_ptr() as _;
+        String { data, pointer }
     }
 }
 
-impl DataMethods for String {
+impl ArgDataMethods for String {
     fn type_(&self) -> Type {
         Type::String
     }
@@ -269,7 +251,9 @@ impl DataMethods for String {
     }
 
     fn as_c_ptr(&self) -> *const std::ffi::c_void {
-        self.data.as_ptr() as _
+        unsafe { std::mem::transmute(&self.pointer) }
+
+        //self.data.as_ptr()
     }
 }
 
@@ -283,7 +267,7 @@ nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 /// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(i32)]
-enum Type {
+pub(crate) enum Type {
     /// A single 32-bit ([`f32`]) floating point value.
     Float = nsi_sys::NSIType_t_NSITypeFloat as i32,
     /// A single 64-bit ([`f64`]) floating point value.
@@ -346,189 +330,198 @@ macro_rules! no_arg {
     };
 }
 
-/// A macro to create an Argument aka: [`Arg::new()`].
-///
-/// ```
-/// // Create rendering context.
-/// let ctx = nsi::Context::new(&vec![nsi::arg!(
-///     "streamfilename",
-///     nsi::string!("stdout")
-/// )])
-/// .expect("Could not create NSI context.");
-/// ```
+/*
 #[macro_export]
 macro_rules! arg {
-    ($token:expr, $value:expr) => {
-        nsi::Arg::new($token, $value)
+    ($name:expr, $value:expr) => {
+        nsi::Arg::new($name, $value)
     };
 }
 
+
+#[macro_export]
+macro_rules! arg_data {
+    ($name: ident, $value: expr) => {
+        nsi::ArgData::from(nsi::$name::new($value))
+    };
+}
+*/
+
 #[macro_export]
 macro_rules! float {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Float::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Float::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! floats {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Floats::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Floats::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! double {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Double::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Double::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! doubles {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Doubles::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Doubles::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! integer {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Integer::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Integer::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! integers {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Integers::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Integers::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! unsigned {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Unsigned::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Unsigned::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! unsigneds {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Unsigneds::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Unsigneds::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! color {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Color::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Color::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! colors {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Colors::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Colors::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! point {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Point::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Point::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! points {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Points::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Points::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! vector {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Vector::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Vector::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! vectors {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Vector::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Vectors::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! normal {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Normal::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Normal::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! normals {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Normals::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Normals::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! matrix {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Matrix::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Matrix::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! matrices {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Matrices::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Matrices::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! double_matrix {
-    ($value: expr) => {
-        nsi::Data::from(nsi::DoubleMatrix::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrix::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! double_matrices {
-    ($value: expr) => {
-        nsi::Data::from(nsi::DoubleMatrices::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrices::new($value)))
     };
 }
 
+/// A macro to create a string argument.
+/// ```
+/// // Create rendering context.
+/// let ctx = nsi::Context::new(&vec![nsi::string!(
+///     "streamfilename",
+///     "stdout"
+/// )])
+/// .expect("Could not create NSI context.");
+/// ```
 #[macro_export]
 macro_rules! string {
-    ($value: expr) => {
-        nsi::Data::from(nsi::String::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::String::new($value)))
     };
 }
 
 /* FIXME
 #[macro_export]
 macro_rules! strings {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Strings::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::arg!($name, arg_data!(Strings, $value))
     };
 }
 */
 
 #[macro_export]
 macro_rules! pointer {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Pointer::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Pointer::new($value)))
     };
 }
 
 #[macro_export]
 macro_rules! pointers {
-    ($value: expr) => {
-        nsi::Data::from(nsi::Pointers::new($value))
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Pointers::new($value)))
     };
 }

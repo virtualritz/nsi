@@ -39,15 +39,15 @@ ctx.connect("dodecahedron", "", ".root", "objects", nsi::no_arg!());
 ctx.set_attribute(
     "dodecahedron",
     &vec![
-        nsi::arg!("P", nsi::points!(&positions)),
-        nsi::arg!("P.indices", nsi::unsigneds!(&face_index)),
+        nsi::points!("P", &positions),
+        nsi::unsigneds!("P.indices", &face_index),
         // 5 vertices per each face.
-        nsi::arg!("nvertices", nsi::unsigneds!(&[5; 12])),
+        nsi::unsigneds!("nvertices", &[5; 12]),
         // Render this as a subdivison surface.
-        nsi::arg!("subdivision.scheme", nsi::string!("catmull-clark")),
+        nsi::string!("subdivision.scheme", "catmull-clark"),
         // Crease each of our 30 edges a bit.
-        nsi::arg!("subdivision.creasevertices", nsi::unsigneds!(&face_index)),
-        nsi::arg!("subdivision.creasesharpness", nsi::floats!(&[10.; 30])),
+        nsi::unsigneds!("subdivision.creasevertices", &face_index),
+        nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
     ],
 );
 ```
