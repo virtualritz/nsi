@@ -97,6 +97,8 @@ pub enum ArgData<'a> {
     Unsigneds(Unsigneds<'a>),
     /// A [`String`].
     String(String),
+    /// A [[`String`]] array.
+    Strings(Strings),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
@@ -229,15 +231,17 @@ nsi_data_array_def!(f32, Matrices, Type::Matrix);
 nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 
 pub struct String {
-    data: CString,
+    _data: CString,
+    // The FFI API needs a pointer to a C string
     pointer: *const std::ffi::c_void,
 }
 
 impl String {
     pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
-        let data = CString::new(data).unwrap();
-        let pointer = data.as_ptr() as _;
-        String { data, pointer }
+        let _data = CString::new(data).unwrap();
+        let pointer = _data.as_ptr() as _;
+
+        String { _data, pointer }
     }
 }
 
@@ -252,8 +256,39 @@ impl ArgDataMethods for String {
 
     fn as_c_ptr(&self) -> *const std::ffi::c_void {
         unsafe { std::mem::transmute(&self.pointer) }
+    }
+}
 
-        //self.data.as_ptr()
+pub struct Strings {
+    _data: Vec<CString>,
+    pointer: Vec<*const std::ffi::c_void>,
+}
+
+impl Strings {
+    pub fn new<'a, T: Into<Vec<u8>> + Copy>(data: &'a [T]) -> Self {
+        let mut _data = Vec::<CString>::with_capacity(data.len());
+        let mut pointer = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
+
+        data.iter().for_each(|s| {
+            _data.push(CString::new(*s).unwrap());
+            pointer.push(_data.last().unwrap().as_ptr() as _);
+        });
+
+        Strings { _data, pointer }
+    }
+}
+
+impl ArgDataMethods for Strings {
+    fn type_(&self) -> Type {
+        Type::String
+    }
+
+    fn len(&self) -> usize {
+        self.pointer.len()
+    }
+
+    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+        self.pointer.as_ptr() as _
     }
 }
 
@@ -318,7 +353,7 @@ impl Type {
 
 /// A macro to specify an empty [`ArgVec`] to a [`Context`] method
 /// that supports optional arguments.
-///
+/// # Example
 /// ```
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
@@ -473,6 +508,25 @@ macro_rules! matrices {
     };
 }
 
+/// A macro to create a double precision 4×4 matrix argument.
+/// # Example
+/// ```
+/// // create rendering context.
+/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+///
+/// // Setup a transform node.
+/// ctx.create("xform", nsi::Node::Transform, nsi::no_arg!());
+/// ctx.connect("xform", "", ".root", "objects", nsi::no_arg!());
+///
+/// // Translate 5 units along z-axis.
+/// ctx.set_attribute(
+///     "xform",
+///     &vec![nsi::double_matrix!(
+///         "transformationmatrix",
+///         &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
+///     )],
+/// );
+/// ```
 #[macro_export]
 macro_rules! double_matrix {
     ($name: tt, $value: expr) => {
@@ -480,6 +534,7 @@ macro_rules! double_matrix {
     };
 }
 
+/// A macro to create a double precision 4×4 matrix array argument.
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
@@ -488,6 +543,7 @@ macro_rules! double_matrices {
 }
 
 /// A macro to create a string argument.
+/// # Example
 /// ```
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&vec![nsi::string!(
@@ -503,14 +559,22 @@ macro_rules! string {
     };
 }
 
-/* FIXME
+/// A macro to create a string array argument.
+/// # Example
+/// ```
+/// // Create rendering context.
+/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// // One of these is not an actor:
+/// ctx.create("dummy", nsi::Node::Attributes, &vec![
+///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"]).array_len(2)
+/// ]);
+/// ```
 #[macro_export]
 macro_rules! strings {
     ($name: tt, $value: expr) => {
-        nsi::arg!($name, arg_data!(Strings, $value))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Strings::new($value)))
     };
 }
-*/
 
 #[macro_export]
 macro_rules! pointer {

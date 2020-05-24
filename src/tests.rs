@@ -11,25 +11,25 @@ fn live_edit() {
         .expect("Could not create NSI context.");
 
     // Setup a camera transform.
-    c.create("cam1_trs", &nsi::Node::Transform, nsi::no_arg!());
+    c.create("cam1_trs", nsi::Node::Transform, nsi::no_arg!());
     c.connect("cam1_trs", "", ".root", "objects", nsi::no_arg!());
 
     c.set_attribute(
         "cam1_trs",
         &vec![nsi::double_matrix!(
             "transformationmatrix",
-            &[1.0f64, 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
+            &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
         )],
     );
 
     // Setup a camera.
-    c.create("cam1", &nsi::Node::PerspectiveCamera, nsi::no_arg!());
+    c.create("cam1", nsi::Node::PerspectiveCamera, nsi::no_arg!());
 
     c.set_attribute("cam1", &vec![nsi::float!("fov", 35.)]);
     c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
 
     // Setup a screen.
-    c.create("s1", &nsi::Node::Screen, nsi::no_arg!());
+    c.create("s1", nsi::Node::Screen, nsi::no_arg!());
     c.connect("s1", "", "cam1", "screens", nsi::no_arg!());
     c.set_attribute(
         "s1",
@@ -40,7 +40,7 @@ fn live_edit() {
     );
 
     // Setup an output layer.
-    c.create("beauty", &nsi::Node::OutputLayer, nsi::no_arg!());
+    c.create("beauty", nsi::Node::OutputLayer, nsi::no_arg!());
     c.set_attribute(
         "beauty",
         &vec![
@@ -54,7 +54,7 @@ fn live_edit() {
 
     let mut foo = 42u64;
     // Setup an output driver.
-    c.create("driver1", &nsi::Node::OutputDriver, nsi::no_arg!());
+    c.create("driver1", nsi::Node::OutputDriver, nsi::no_arg!());
     c.connect("driver1", "", "beauty", "outputdrivers", nsi::no_arg!());
     c.set_attribute(
         "driver1",
@@ -67,7 +67,7 @@ fn live_edit() {
     );
 
     // Add a plane.
-    c.create("mesh1", &nsi::Node::Mesh, nsi::no_arg!());
+    c.create("mesh1", nsi::Node::Mesh, nsi::no_arg!());
     c.connect("mesh1", "", ".root", "objects", nsi::no_arg!());
     c.set_attribute(
         "mesh1",
@@ -80,7 +80,7 @@ fn live_edit() {
         ],
     );
 
-    c.create("plane_attribs", &nsi::Node::Attributes, nsi::no_arg!());
+    c.create("plane_attribs", nsi::Node::Attributes, nsi::no_arg!());
     c.connect(
         "plane_attribs",
         "",
@@ -90,7 +90,7 @@ fn live_edit() {
     );
 
     // Add a basic shader for the plane.
-    c.create("shader1", &nsi::Node::Shader, nsi::no_arg!());
+    c.create("shader1", nsi::Node::Shader, nsi::no_arg!());
     c.set_attribute("shader1", &vec![nsi::string!("shaderfilename", "matte")]);
     c.connect(
         "shader1",
@@ -101,7 +101,7 @@ fn live_edit() {
     );
 
     // Add a triangular light, with shader.
-    c.create("light1_trs", &nsi::Node::Transform, nsi::no_arg!());
+    c.create("light1_trs", nsi::Node::Transform, nsi::no_arg!());
     c.connect("light1_trs", "", ".root", "objects", nsi::no_arg!());
 
     c.set_attribute(
@@ -112,7 +112,7 @@ fn live_edit() {
         )],
     );
 
-    c.create("light1", &nsi::Node::Mesh, nsi::no_arg!());
+    c.create("light1", nsi::Node::Mesh, nsi::no_arg!());
     // This one is connected to the transform instead of the mesh
     // itself. Because we can.
     c.connect("light1", "", "light1_trs", "objects", nsi::no_arg!());
@@ -124,7 +124,7 @@ fn live_edit() {
         ],
     );
 
-    c.create("light1_shader", &nsi::Node::Shader, nsi::no_arg!());
+    c.create("light1_shader", nsi::Node::Shader, nsi::no_arg!());
     c.set_attribute(
         "light1_shader",
         &vec![
@@ -133,7 +133,7 @@ fn live_edit() {
         ],
     );
 
-    c.create("light1_attribs", &nsi::Node::Attributes, nsi::no_arg!());
+    c.create("light1_attribs", nsi::Node::Attributes, nsi::no_arg!());
     c.connect(
         "light1_attribs",
         "",

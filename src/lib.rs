@@ -70,7 +70,7 @@ impl Context {
     ///
     /// Contexts may be used in multiple threads at once.
     ///
-    /// If this method fails for some reason, it returns [`None`].
+    /// # Example
     /// ```
     /// // Create rendering context that dumps to stdout.
     /// let c = nsi::Context::new(&vec![nsi::string!(
@@ -78,6 +78,8 @@ impl Context {
     ///     "stdout"
     /// )]).expect("Could not create ɴsɪ context.");
     /// ```
+    /// # Error
+    /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: &ArgVec) -> Option<Self> {
         match {
@@ -113,12 +115,12 @@ impl Context {
     ///   It is acceptable to reuse the same handle inside different
     ///   contexts.
     ///
-    /// * `node_type` - The type of node to create.
+    /// * `node_type` – The type of node to create.
     ///
-    /// * `args` - A [`Vec`] of optional [`Arg`] arguments. *There are
+    /// * `args` – A [`Vec`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     #[inline]
-    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: &Node, args: &ArgVec) {
+    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &ArgVec) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -132,6 +134,30 @@ impl Context {
         }
     }
 
+    /// This function deletes a node from the scene. All connections to
+    /// and from the node are also deleted.
+    ///
+    /// Note that it is not possible to delete the `.root` or the
+    /// `.global` nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` – A handle to a node previously created with
+    ///              [`Context::create()`].
+    ///
+    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
+    ///
+    /// # Optional Arguments
+    ///
+    /// * `"recursive"` ([`ArgData::Integer`]) – Specifies whether
+    ///   deletion is recursive. By default, only the specified node is
+    ///   deleted. If a value of `1` is given, then nodes which connect
+    ///   to the specified node are recursively removed. Unless they
+    ///   meet one of the following conditions:
+    ///   * They also have connections which do not eventually lead to the specified node.
+    ///   * Their connection to the deleted node was created with a `strength` greater than `0`.
+    ///
+    ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
         let args_out = get_c_param_vec(args);
@@ -146,6 +172,25 @@ impl Context {
         }
     }
 
+    /// This functions sets attributes on a previously node.
+    /// All optional arguments of the function become attributes of
+    /// the node.
+    ///
+    /// On a [`Node::Shader`], this function is used to set the implicitly
+    /// defined shader arguments.
+    ///
+    /// Setting an attribute using this function replaces any value
+    ///  previously set by [`Context::set_attribute()`] or
+    /// [`Context::set_attribute_at_time()`].
+    /// To reset an attribute to its default value, use
+    /// [`Context::delete_attribute()`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` – A handle to a node previously created with
+    ///               [`Context::create()`].
+    ///
+    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
         let args_out = get_c_param_vec(args);
@@ -160,6 +205,28 @@ impl Context {
         }
     }
 
+    /// This function sets time-varying attributes (i.e. motion blurred).
+    ///
+    /// The `time` argument specifies at which time the attribute is being
+    /// defined.
+    ///
+    /// It is not required to set time-varying attributes in any
+    /// particular order. In most uses, attributes that are motion blurred must
+    /// have the same specification throughout the time range.
+    ///
+    /// A notable  exception is the `P` attribute on (particles)[`Node::Particles`]
+    /// which can be of different size for each time step because of appearing
+    /// or disappearing particles. Setting an attribute using this function
+    /// replaces any value previously set by ``NSISetAttribute()``.
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` – A handle to a node previously created with
+    ///               [`Context::create()`].
+    ///
+    /// * `time` – The time at which to set the value.
+    ///
+    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute_at_time(&self, handle: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
         let args_out = get_c_param_vec(args);
@@ -175,6 +242,71 @@ impl Context {
         }
     }
 
+    /// This function deletes any attribute with a name which matches
+    /// the `name` argument on the specified object. There is no way to
+    /// delete an attribute only for a specific time value.
+    ///
+    /// Deleting an attribute resets it to its default value.
+    ///
+    /// For example, after deleting the `transformationmatrix` attribute
+    /// on a [`Node::Transform`], the transform will be an identity.
+    /// Deleting a previously set attribute on a [`Node::Shader`] will
+    /// default  to whatever is declared inside the shader.
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` – A handle to a node previously created with
+    ///               [`Context::create()`].
+    ///
+    /// * `name` – The name of the attribute to be deleted/reset.
+    #[inline]
+    pub fn delete_attribute(&self, handle: impl Into<Vec<u8>>, name: impl Into<Vec<u8>>) {
+        unsafe {
+            nsi_sys::NSIDeleteAttribute(
+                self.context,
+                CString::new(handle).unwrap().as_ptr(),
+                CString::new(name).unwrap().as_ptr(),
+            );
+        }
+    }
+
+    /// These two function creates a connection between two elements.
+    /// It is not an error to create a connection
+    /// which already exists or to remove a connection which does not
+    /// exist but the nodes on which the connection is performed must
+    /// exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` – The handle of the node from which the connection
+    ///   is made.
+    ///
+    /// * `from_attr` – The name of the attribute from which the
+    ///   connection is made. If this is an empty string then the
+    ///   connection is made from the node instead of from a specific
+    ///   attribute of the node.
+    ///
+    /// * `to` – The handle of the node to which the connection is made.
+    ///
+    /// * `to_attr` – The name of the attribute to which the connection
+    ///   is made. If this is an empty string then the connection is
+    ///   made to the node instead of to a specific attribute of the
+    ///   node.
+    ///
+    /// # Optional Arguments
+    ///
+    /// * `"value"` – This can be used to change the value of a node's
+    ///   attribute in some contexts. Refer to guidelines on
+    ///   inter-object visibility for more information about the utility
+    ///   of this parameter.
+    ///
+    /// * `"priority"` ([`ArgData::Integer`]) – When connecting
+    ///   attribute nodes, indicates in which order the nodes should be
+    ///   considered when evaluating the value of an attribute.
+    ///
+    /// * `"strength"` ([`ArgData::Integer`]) – A connection with a
+    ///   `strength` greater than `0` will *block* the progression of a
+    ///   recursive [`Context::delete()`].
     #[inline]
     pub fn connect(
         &self,
@@ -199,6 +331,20 @@ impl Context {
         }
     }
 
+    /// This function removes a connection between two elements.
+    ///
+    /// The handle for either node may be the special value `".all"`.
+    /// This will remove all connections which match the other three
+    /// arguments.
+    ///
+    /// # Example
+    /// ```
+    /// // Create a rendering context.
+    /// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+    /// // [...]
+    /// // Disconnect everything from the scene's root.
+    /// ctx.disconnect(".all", "", ".root", "" );
+    /// ```
     #[inline]
     pub fn disconnect(
         &self,
@@ -352,9 +498,9 @@ impl Node {
     }
 }
 
-pub enum StoppingStatus {
-    RenderCompleted = 0,
-    RenderAborted = 1,
-    RenderSynchronized = 2,
-    RenderRestarted = 3,
+pub enum RenderStatus {
+    Completed = 0,
+    Aborted = 1,
+    Synchronized = 2,
+    Restarted = 3,
 }
