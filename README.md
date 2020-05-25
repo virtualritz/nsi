@@ -12,28 +12,39 @@ This is a huge scene (72GB of data) made of 31 million instances, 78 million pol
 ## Example
 
 ```Rust
-let ctx = nsi::Context::new(nsi::no_arg!()).expect("Could not create ɴsɪ context.");
+let ctx = nsi::Context::new(nsi::no_arg!())
+    .expect("Could not create ɴsɪ context.");
 
 let face_index: [u32; 60] =
     // 12 regular pentagon faces
     [
-        0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3, 17, 1, 12, 14, 5, 9,
-        2, 13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7, 15, 13, 4, 8, 10, 6, 18, 14, 5, 19, 18,
-        4, 5, 19, 7, 11, 9, 15, 7, 19, 18, 6,
+         0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
+        16, 17,  1, 12,  0,  1,  9, 11,  3, 17,
+         1, 12, 14,  5,  9,  2, 13, 15,  6, 10,
+        13,  3, 17, 16,  2,  3, 11,  7, 15, 13,
+         4,  8, 10,  6, 18, 14,  5, 19, 18,  4,
+         5, 19,  7, 11,  9, 15,  7, 19, 18,  6,
     ];
 let positions: [f32; 60] =
     // 20 points @ 3 vertices
     [
-        1., 1., 1., 1., 1., -1., 1., -1., 1., 1., -1., -1., -1., 1., 1., -1., 1., -1., -1.,
-        -1., 1., -1., -1., -1., 0., 0.618, 1.618, 0., 0.618, -1.618, 0., -0.618, 1.618, 0.,
-        -0.618, -1.618, 0.618, 1.618, 0., 0.618, -1.618, 0., -0.618, 1.618, 0., -0.618, -1.618,
-        0., 1.618, 0., 0.618, 1.618, 0., -0.618, -1.618, 0., 0.618, -1.618, 0., -0.618,
+         1.,  1.,  1.,  1. , 1., -1.,  1., -1.,  1.,
+         1., -1., -1., -1.,  1.,  1., -1.,  1., -1.,
+        -1., -1.,  1., -1., -1., -1.,
+         0.,     0.618,  1.618,   0.,     0.618, -1.618,
+         0.,    -0.618,  1.618,   0.,    -0.618, -1.618,
+         0.618,  1.618,  0.,      0.618, -1.618,  0.,
+        -0.618,  1.618,  0.,     -0.618, -1.618,  0.,
+         1.618,  0.,     0.618,   1.618,  0.,    -0.618,
+        -1.618,  0.,     0.618,  -1.618,  0.,    -0.618,
     ];
 
 // Create a new mesh node and call it 'dodecahedron'.
-ctx.create("dodecahedron", &nsi::Node::Mesh, nsi::no_arg!());
+ctx.create("dodecahedron", nsi::Node::Mesh,
+    nsi::no_arg!());
 // Connect the 'dodecahedron' node to the scene's root.
-ctx.connect("dodecahedron", "", ".root", "objects", nsi::no_arg!());
+ctx.connect("dodecahedron", "", ".root", "objects",
+    nsi::no_arg!());
 
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
@@ -44,10 +55,17 @@ ctx.set_attribute(
         // 5 vertices per each face.
         nsi::unsigneds!("nvertices", &[5; 12]),
         // Render this as a subdivison surface.
-        nsi::string!("subdivision.scheme", "catmull-clark"),
+        nsi::string!("subdivision.scheme",
+            "catmull-clark"
+        ),
         // Crease each of our 30 edges a bit.
-        nsi::unsigneds!("subdivision.creasevertices", &face_index),
-        nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
+        nsi::unsigneds!("subdivision.creasevertices",
+            &face_index
+        ),
+        nsi::floats!(
+            "subdivision.creasesharpness",
+            &[10.; 30]
+        ),
     ],
 );
 ```
