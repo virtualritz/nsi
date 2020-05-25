@@ -11,12 +11,14 @@ This is a huge scene (72GB of data) made of 31 million instances, 78 million pol
 
 ## Example
 
-```Rust
+```rust
+// Create a context to send the scene to.
 let ctx = nsi::Context::new(nsi::no_arg!())
     .expect("Could not create ɴsɪ context.");
 
+// Create a dodecahedron.
 let face_index: [u32; 60] =
-    // 12 regular pentagon faces
+    // 12 regular pentagon faces.
     [
          0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
         16, 17,  1, 12,  0,  1,  9, 11,  3, 17,
@@ -26,7 +28,7 @@ let face_index: [u32; 60] =
          5, 19,  7, 11,  9, 15,  7, 19, 18,  6,
     ];
 let positions: [f32; 60] =
-    // 20 points @ 3 vertices
+    // 20 points @ 3 vertices.
     [
          1.,  1.,  1.,  1. , 1., -1.,  1., -1.,  1.,
          1., -1., -1., -1.,  1.,  1., -1.,  1., -1.,
