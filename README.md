@@ -42,11 +42,10 @@ let positions: [f32; 60] =
     ];
 
 // Create a new mesh node and call it 'dodecahedron'.
-ctx.create("dodecahedron", nsi::Node::Mesh,
-    &[]);
+ctx.create("dodecahedron", nsi::Node::Mesh, &[]);
+
 // Connect the 'dodecahedron' node to the scene's root.
-ctx.connect("dodecahedron", "", ".root", "objects",
-    &[]);
+ctx.connect("dodecahedron", "", ".root", "objects", &[]);
 
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
