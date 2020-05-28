@@ -81,12 +81,12 @@ impl Context {
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
-    pub fn new(args: &ArgSlice) -> Option<Self> {
+    pub fn new(args: &arg::ArgSlice) -> Option<Self> {
         match {
             if args.is_empty() {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
             } else {
-                let args_out = get_c_param_vec(args);
+                let args_out = arg::get_c_param_vec(args);
 
                 unsafe {
                     nsi_sys::NSIBegin(
@@ -117,11 +117,11 @@ impl Context {
     ///
     /// * `node_type` – The type of node to create.
     ///
-    /// * `args` – A [`Vec`] of optional [`Arg`] arguments. *There are
+    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     #[inline]
-    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &arg::ArgSlice) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSICreate(
@@ -145,11 +145,11 @@ impl Context {
     /// * `handle` – A handle to a node previously created with
     ///              [`Context::create()`].
     ///
-    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
+    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
     ///
     /// # Optional Arguments
     ///
-    /// * `"recursive"` ([`ArgData::Integer`]) – Specifies whether
+    /// * `"recursive"` ([`arg::ArgData::Integer`]) – Specifies whether
     ///   deletion is recursive. By default, only the specified node is
     ///   deleted. If a value of `1` is given, then nodes which connect
     ///   to the specified node are recursively removed. Unless they
@@ -159,8 +159,8 @@ impl Context {
     ///
     ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
-    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIDelete(
@@ -190,10 +190,10 @@ impl Context {
     /// * `handle` – A handle to a node previously created with
     ///               [`Context::create()`].
     ///
-    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
+    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
     #[inline]
-    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttribute(
@@ -226,10 +226,15 @@ impl Context {
     ///
     /// * `time` – The time at which to set the value.
     ///
-    /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
+    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
     #[inline]
-    pub fn set_attribute_at_time(&self, handle: impl Into<Vec<u8>>, time: f64, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn set_attribute_at_time(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        time: f64,
+        args: &arg::ArgSlice,
+    ) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSISetAttributeAtTime(
@@ -300,11 +305,11 @@ impl Context {
     ///   inter-object visibility for more information about the utility
     ///   of this parameter.
     ///
-    /// * `"priority"` ([`ArgData::Integer`]) – When connecting
+    /// * `"priority"` ([`arg::ArgData::Integer`]) – When connecting
     ///   attribute nodes, indicates in which order the nodes should be
     ///   considered when evaluating the value of an attribute.
     ///
-    /// * `"strength"` ([`ArgData::Integer`]) – A connection with a
+    /// * `"strength"` ([`arg::ArgData::Integer`]) – A connection with a
     ///   `strength` greater than `0` will *block* the progression of a
     ///   recursive [`Context::delete()`].
     #[inline]
@@ -314,9 +319,9 @@ impl Context {
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
         to_attr: impl Into<Vec<u8>>,
-        args: &ArgSlice,
+        args: &arg::ArgSlice,
     ) {
-        let args_out = get_c_param_vec(args);
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIConnect(
@@ -365,8 +370,8 @@ impl Context {
     }
 
     #[inline]
-    pub fn evaluate(&self, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn evaluate(&self, args: &arg::ArgSlice) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIEvaluate(
@@ -378,8 +383,8 @@ impl Context {
     }
 
     #[inline]
-    pub fn render_control(&self, args: &ArgSlice) {
-        let args_out = get_c_param_vec(args);
+    pub fn render_control(&self, args: &arg::ArgSlice) {
+        let args_out = arg::get_c_param_vec(args);
 
         unsafe {
             nsi_sys::NSIRenderControl(

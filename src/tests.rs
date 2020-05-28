@@ -81,24 +81,12 @@ fn live_edit() {
     );
 
     c.create("plane_attribs", nsi::Node::Attributes, &[]);
-    c.connect(
-        "plane_attribs",
-        "",
-        "mesh1",
-        "geometryattributes",
-        &[],
-    );
+    c.connect("plane_attribs", "", "mesh1", "geometryattributes", &[]);
 
     // Add a basic shader for the plane.
     c.create("shader1", nsi::Node::Shader, &[]);
     c.set_attribute("shader1", &[nsi::string!("shaderfilename", "matte")]);
-    c.connect(
-        "shader1",
-        "",
-        "plane_attribs",
-        "surfaceshader",
-        &[],
-    );
+    c.connect("shader1", "", "plane_attribs", "surfaceshader", &[]);
 
     // Add a triangular light, with shader.
     c.create("light1_trs", nsi::Node::Transform, &[]);
@@ -141,13 +129,7 @@ fn live_edit() {
         "geometryattributes",
         &[],
     );
-    c.connect(
-        "light1_shader",
-        "",
-        "light1_attribs",
-        "surfaceshader",
-        &[],
-    );
+    c.connect("light1_shader", "", "light1_attribs", "surfaceshader", &[]);
 
     // Start interactive render.
     c.render_control(&[nsi::string!("action", "start")]); //, interactive=1)
