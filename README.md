@@ -14,7 +14,7 @@ This is a huge scene (72GB of data) made of 31 million instances, 78 million pol
 ```rust
 // Create a context to send the scene to.
 let ctx = nsi::Context::new(&[])
-    .expect("Could not create ɴsɪ context.");
+    .expect("Could not create NSI context.");
 
 // Create a dodecahedron.
 let face_index: [u32; 60] =
