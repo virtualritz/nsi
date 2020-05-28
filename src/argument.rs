@@ -4,7 +4,7 @@ use nsi_sys;
 use std::ffi::CString;
 
 #[inline]
-pub(crate) fn get_c_param_vec(args_in: &ArgVec) -> Vec<nsi_sys::NSIParam_t> {
+pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<nsi_sys::NSIParam_t> {
     let mut args_out = Vec::<nsi_sys::NSIParam_t>::with_capacity(args_in.len());
     for arg_in in args_in {
         args_out.push({
@@ -23,7 +23,7 @@ pub(crate) fn get_c_param_vec(args_in: &ArgVec) -> Vec<nsi_sys::NSIParam_t> {
 }
 
 /// A vector of (optional) [`Context`] method arguments.
-pub type ArgVec<'a> = Vec<Arg<'a>>;
+pub(crate) type ArgSlice<'a> = [Arg<'a>];
 
 pub struct Arg<'a> {
     pub(crate) name: CString,
@@ -351,20 +351,6 @@ impl Type {
     }
 }
 
-/// A macro to specify an empty [`ArgVec`] to a [`Context`] method
-/// that supports optional arguments.
-/// # Example
-/// ```
-/// // Create rendering context.
-/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
-/// ```
-#[macro_export]
-macro_rules! no_arg {
-    () => {
-        &nsi::ArgVec::new()
-    };
-}
-
 /*
 #[macro_export]
 macro_rules! arg {
@@ -512,16 +498,16 @@ macro_rules! matrices {
 /// # Example
 /// ```
 /// // create rendering context.
-/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// let ctx = nsi::Context::new(&[]).unwrap();
 ///
 /// // Setup a transform node.
-/// ctx.create("xform", nsi::Node::Transform, nsi::no_arg!());
-/// ctx.connect("xform", "", ".root", "objects", nsi::no_arg!());
+/// ctx.create("xform", nsi::Node::Transform, &[]);
+/// ctx.connect("xform", "", ".root", "objects", &[]);
 ///
 /// // Translate 5 units along z-axis.
 /// ctx.set_attribute(
 ///     "xform",
-///     &vec![nsi::double_matrix!(
+///     &[nsi::double_matrix!(
 ///         "transformationmatrix",
 ///         &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
 ///     )],
@@ -546,7 +532,7 @@ macro_rules! double_matrices {
 /// # Example
 /// ```
 /// // Create rendering context.
-/// let ctx = nsi::Context::new(&vec![nsi::string!(
+/// let ctx = nsi::Context::new(&[nsi::string!(
 ///     "streamfilename",
 ///     "stdout"
 /// )])
@@ -563,9 +549,9 @@ macro_rules! string {
 /// # Example
 /// ```
 /// // Create rendering context.
-/// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+/// let ctx = nsi::Context::new(&[]).unwrap();
 /// // One of these is not an actor:
-/// ctx.create("dummy", nsi::Node::Attributes, &vec![
+/// ctx.create("dummy", nsi::Node::Attributes, &[
 ///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"]).array_len(2)
 /// ]);
 /// ```

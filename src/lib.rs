@@ -73,7 +73,7 @@ impl Context {
     /// # Example
     /// ```
     /// // Create rendering context that dumps to stdout.
-    /// let c = nsi::Context::new(&vec![nsi::string!(
+    /// let c = nsi::Context::new(&[nsi::string!(
     ///     "streamfilename",
     ///     "stdout"
     /// )]).expect("Could not create ɴsɪ context.");
@@ -81,7 +81,7 @@ impl Context {
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
-    pub fn new(args: &ArgVec) -> Option<Self> {
+    pub fn new(args: &ArgSlice) -> Option<Self> {
         match {
             if args.is_empty() {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
@@ -120,7 +120,7 @@ impl Context {
     /// * `args` – A [`Vec`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     #[inline]
-    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &ArgVec) {
+    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -159,7 +159,7 @@ impl Context {
     ///
     ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
-    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
+    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -192,7 +192,7 @@ impl Context {
     ///
     /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
     #[inline]
-    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgVec) {
+    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -228,7 +228,7 @@ impl Context {
     ///
     /// * `args` – A [`Vec`] of optional [`Arg`] arguments.
     #[inline]
-    pub fn set_attribute_at_time(&self, handle: impl Into<Vec<u8>>, time: f64, args: &ArgVec) {
+    pub fn set_attribute_at_time(&self, handle: impl Into<Vec<u8>>, time: f64, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -314,7 +314,7 @@ impl Context {
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
         to_attr: impl Into<Vec<u8>>,
-        args: &ArgVec,
+        args: &ArgSlice,
     ) {
         let args_out = get_c_param_vec(args);
 
@@ -340,10 +340,10 @@ impl Context {
     /// # Example
     /// ```
     /// // Create a rendering context.
-    /// let ctx = nsi::Context::new(nsi::no_arg!()).unwrap();
+    /// let ctx = nsi::Context::new(&[]).unwrap();
     /// // [...]
     /// // Disconnect everything from the scene's root.
-    /// ctx.disconnect(".all", "", ".root", "" );
+    /// ctx.disconnect(".all", "", ".root", "");
     /// ```
     #[inline]
     pub fn disconnect(
@@ -365,7 +365,7 @@ impl Context {
     }
 
     #[inline]
-    pub fn evaluate(&self, args: &ArgVec) {
+    pub fn evaluate(&self, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {
@@ -378,7 +378,7 @@ impl Context {
     }
 
     #[inline]
-    pub fn render_control(&self, args: &ArgVec) {
+    pub fn render_control(&self, args: &ArgSlice) {
         let args_out = get_c_param_vec(args);
 
         unsafe {

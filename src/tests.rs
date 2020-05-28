@@ -7,58 +7,58 @@ fn live_edit() {
     // os.system("oslc waves.osl")
 
     // create rendering context.
-    let c = nsi::Context::new(&vec![nsi::string!("streamfilename", "stdout")])
+    let c = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
         .expect("Could not create NSI context.");
 
     // Setup a camera transform.
-    c.create("cam1_trs", nsi::Node::Transform, nsi::no_arg!());
-    c.connect("cam1_trs", "", ".root", "objects", nsi::no_arg!());
+    c.create("cam1_trs", nsi::Node::Transform, &[]);
+    c.connect("cam1_trs", "", ".root", "objects", &[]);
 
     c.set_attribute(
         "cam1_trs",
-        &vec![nsi::double_matrix!(
+        &[nsi::double_matrix!(
             "transformationmatrix",
             &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
         )],
     );
 
     // Setup a camera.
-    c.create("cam1", nsi::Node::PerspectiveCamera, nsi::no_arg!());
+    c.create("cam1", nsi::Node::PerspectiveCamera, &[]);
 
-    c.set_attribute("cam1", &vec![nsi::float!("fov", 35.)]);
-    c.connect("cam1", "", "cam1_trs", "objects", nsi::no_arg!());
+    c.set_attribute("cam1", &[nsi::float!("fov", 35.)]);
+    c.connect("cam1", "", "cam1_trs", "objects", &[]);
 
     // Setup a screen.
-    c.create("s1", nsi::Node::Screen, nsi::no_arg!());
-    c.connect("s1", "", "cam1", "screens", nsi::no_arg!());
+    c.create("s1", nsi::Node::Screen, &[]);
+    c.connect("s1", "", "cam1", "screens", &[]);
     c.set_attribute(
         "s1",
-        &vec![
+        &[
             nsi::integers!("resolution", &[1280, 720]).array_len(2),
             nsi::integer!("oversampling", 16),
         ],
     );
 
     // Setup an output layer.
-    c.create("beauty", nsi::Node::OutputLayer, nsi::no_arg!());
+    c.create("beauty", nsi::Node::OutputLayer, &[]);
     c.set_attribute(
         "beauty",
-        &vec![
+        &[
             nsi::string!("variablename", "Ci"),
             nsi::integer!("withalpha", 1),
             nsi::string!("scalarformat", "half"),
             nsi::color!("some_color", &[0.1f32, 0.2, 0.3]),
         ],
     );
-    c.connect("beauty", "", "s1", "outputlayers", nsi::no_arg!());
+    c.connect("beauty", "", "s1", "outputlayers", &[]);
 
     let mut foo = 42u64;
     // Setup an output driver.
-    c.create("driver1", nsi::Node::OutputDriver, nsi::no_arg!());
-    c.connect("driver1", "", "beauty", "outputdrivers", nsi::no_arg!());
+    c.create("driver1", nsi::Node::OutputDriver, &[]);
+    c.connect("driver1", "", "beauty", "outputdrivers", &[]);
     c.set_attribute(
         "driver1",
-        &vec![
+        &[
             nsi::string!("drivername", "idisplay"),
             nsi::pointer!("blblabla_______", &unsafe {
                 std::mem::transmute::<_, f64>(&mut foo as *mut _)
@@ -67,11 +67,11 @@ fn live_edit() {
     );
 
     // Add a plane.
-    c.create("mesh1", nsi::Node::Mesh, nsi::no_arg!());
-    c.connect("mesh1", "", ".root", "objects", nsi::no_arg!());
+    c.create("mesh1", nsi::Node::Mesh, &[]);
+    c.connect("mesh1", "", ".root", "objects", &[]);
     c.set_attribute(
         "mesh1",
-        &vec![
+        &[
             nsi::integer!("nvertices", 4),
             nsi::points!(
                 "P",
@@ -80,82 +80,82 @@ fn live_edit() {
         ],
     );
 
-    c.create("plane_attribs", nsi::Node::Attributes, nsi::no_arg!());
+    c.create("plane_attribs", nsi::Node::Attributes, &[]);
     c.connect(
         "plane_attribs",
         "",
         "mesh1",
         "geometryattributes",
-        nsi::no_arg!(),
+        &[],
     );
 
     // Add a basic shader for the plane.
-    c.create("shader1", nsi::Node::Shader, nsi::no_arg!());
-    c.set_attribute("shader1", &vec![nsi::string!("shaderfilename", "matte")]);
+    c.create("shader1", nsi::Node::Shader, &[]);
+    c.set_attribute("shader1", &[nsi::string!("shaderfilename", "matte")]);
     c.connect(
         "shader1",
         "",
         "plane_attribs",
         "surfaceshader",
-        nsi::no_arg!(),
+        &[],
     );
 
     // Add a triangular light, with shader.
-    c.create("light1_trs", nsi::Node::Transform, nsi::no_arg!());
-    c.connect("light1_trs", "", ".root", "objects", nsi::no_arg!());
+    c.create("light1_trs", nsi::Node::Transform, &[]);
+    c.connect("light1_trs", "", ".root", "objects", &[]);
 
     c.set_attribute(
         "light1_trs",
-        &vec![nsi::double_matrix!(
+        &[nsi::double_matrix!(
             "transformationmatrix",
             &[0.1f64, 0., 0., 0., 0., 0.1, 0., 0., 0., 0., 0.1, 0., 0., 4., 0., 1.,]
         )],
     );
 
-    c.create("light1", nsi::Node::Mesh, nsi::no_arg!());
+    c.create("light1", nsi::Node::Mesh, &[]);
     // This one is connected to the transform instead of the mesh
     // itself. Because we can.
-    c.connect("light1", "", "light1_trs", "objects", nsi::no_arg!());
+    c.connect("light1", "", "light1_trs", "objects", &[]);
     c.set_attribute(
         "light1",
-        &vec![
+        &[
             nsi::integer!("nvertices", 3),
             nsi::points!("P", &[-1., 0., 0., 0., 0., 1., 1., 0., 0.]),
         ],
     );
 
-    c.create("light1_shader", nsi::Node::Shader, nsi::no_arg!());
+    c.create("light1_shader", nsi::Node::Shader, &[]);
     c.set_attribute(
         "light1_shader",
-        &vec![
+        &[
             nsi::string!("shaderfilename", "emitter"),
             nsi::float!("power", 80.),
         ],
     );
 
-    c.create("light1_attribs", nsi::Node::Attributes, nsi::no_arg!());
+    c.create("light1_attribs", nsi::Node::Attributes, &[]);
     c.connect(
         "light1_attribs",
         "",
         "light1_trs",
         "geometryattributes",
-        nsi::no_arg!(),
+        &[],
     );
     c.connect(
         "light1_shader",
         "",
         "light1_attribs",
         "surfaceshader",
-        nsi::no_arg!(),
+        &[],
     );
 
     // Start interactive render.
-    c.render_control(&vec![nsi::string!("action", "start")]); //, interactive=1)
+    c.render_control(&[nsi::string!("action", "start")]); //, interactive=1)
 
     // Let it render a while.
     //thread::sleep(time::Duration::from_secs(5));
 
-    c.render_control(&vec![nsi::string!("action", "wait")]);
+    c.render_control(&[nsi::string!("action", "wait")]);
 }
 
 /*

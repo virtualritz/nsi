@@ -13,7 +13,7 @@ This is a huge scene (72GB of data) made of 31 million instances, 78 million pol
 
 ```rust
 // Create a context to send the scene to.
-let ctx = nsi::Context::new(nsi::no_arg!())
+let ctx = nsi::Context::new(&[])
     .expect("Could not create ɴsɪ context.");
 
 // Create a dodecahedron.
@@ -51,7 +51,7 @@ ctx.connect("dodecahedron", "", ".root", "objects",
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
     "dodecahedron",
-    &vec![
+    &[
         nsi::points!("P", &positions),
         nsi::unsigneds!("P.indices", &face_index),
         // 5 vertices per each face.
@@ -77,7 +77,6 @@ Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com
 3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
 There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for this API and a [minimal Rust example display driver](https://github.com/virtualritz/r-display) to get you started.
 
-
 ## Dependencies
 
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in term requires a renderer that implements the ɴsɪ API.
@@ -98,7 +97,7 @@ This will set the `$DELIGHT` environment variable that the build script is looki
 
 No suprises here. The crate works with stable, beta & nightly.
 
-```
+```terminal
 > cargo build
 ```
 
@@ -108,7 +107,11 @@ PRs are most welcome!
 
 Docs for the C, C++, Lua & Python bindings as well as an introduction and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
 
-Crate documentation is coming soon.
+Crate documentation can’t be built automatically for [docs.rs](https://docs.rs/crate/nsi/) yet (see [above](#Dependencies)) but you can get local docs the usual way:
+
+```terminal
+> cargo doc --open
+```
 
 ## Getting Help
 
