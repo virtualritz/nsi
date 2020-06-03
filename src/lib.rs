@@ -369,6 +369,59 @@ impl Context {
         }
     }
 
+    /// This function includes a block of interface calls from an
+    /// external source into the current scene. It blends together the
+    /// concepts of a straight file include, commonly known as an
+    /// archive, with that of procedural include which is traditionally
+    /// a compiled executable. Both are really the same idea expressed
+    /// in a different language (note that for delayed procedural
+    /// evaluation one should use a ([`Node::Procedural`]) node).
+    ///
+    /// The ɴsɪ adds a third option which sits in-between — (Lua
+    /// scripts)[https://nsi.readthedocs.io/en/latest/lua-api.html]
+    /// They are much more powerful than a simple included file yet
+    /// they are also much easier to generate as they do not require
+    /// compilation. It is, for example, very realistic to export a
+    /// whole new script for every frame of an animation. It could also
+    /// be done for every character in a frame. This gives great
+    /// flexibility in how components of a scene are put together.
+    ///
+    /// The ability to load ɴsɪ commands straight from memory is also
+    /// provided.
+    ///
+    /// # Optional Arguments
+    ///
+    /// * `"type"` ([`arg::ArgData::String`]) – The type of file which
+    ///   will generate the interface calls. This can be one of:
+    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
+    ///     `"filename"` or `"buffer"`/`"size"` arguments to be
+    ///     specified too.
+    ///
+    ///   * `"lua"` – Execute a Lua script, either from file or inline.
+    ///     See also
+    ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
+    ///
+    ///   * `"dynamiclibrary"` – Execute native compiled code in a
+    ///     loadable library. See
+    ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
+    ///     for an implementation example in C.
+    ///
+    /// * `"filename"` ([`arg::ArgData::String`]) – The name of the
+    ///   file which contains the interface calls to include.
+    ///
+    /// * `"script"` ([`arg::ArgData::String`]) – A valid Lua script to
+    ///   execute when `"type"` is set to `"lua"`.
+    ///
+    /// * `"buffer"` ([`arg::ArgData::Pointer`])
+    /// * `"size"` ([`arg::ArgData::Integer`]) – These two parameters
+    ///   define a memory block that contain ɴsɪ commands to execute.
+    ///
+    /// * `"backgroundload"` ([`arg::ArgData::Integer`]) – If this is
+    ///   nonzero, the object may be loaded in a separate thread, at
+    ///   some later time. This requires that further interface calls
+    ///   not directly reference objects defined in the included file.
+    ///   The only guarantee is that the file will be loaded before
+    ///   rendering begins.
     #[inline]
     pub fn evaluate(&self, args: &arg::ArgSlice) {
         let args_out = arg::get_c_param_vec(args);
@@ -382,6 +435,41 @@ impl Context {
         }
     }
 
+    /// This function is the only control function of the api. It is
+    /// responsible of starting, suspending and stopping the render.
+    /// It also allows for synchronizing the render with interactive
+    /// calls that might have been issued.
+    ///
+    /// # Optional Arguments
+    ///
+    /// * `"action"` ([`arg::ArgData::String`]) – Specifies the
+    ///   operation to be performed, which should be one of the
+    ///   following:
+    ///   * `"start"` – This starts rendering the scene in the provided
+    ///     context. The render starts in parallel and the control flow
+    ///     is not blocked.
+    ///
+    ///   * `"wait"` – Wait for a render to finish.
+    ///
+    ///   * `"synchronize"` – For an interactive render, apply all the
+    ///     buffered calls to scene’s state.
+    ///
+    ///   * `"suspend"` – Suspends render in the provided context.
+    ///
+    ///   * `"resume"` – Resumes a previously suspended render.
+    ///
+    ///   * `"stop"` – Stops rendering in the provided context without
+    ///     destroying the scene
+    /// * `"progressive"` ([`arg::ArgData::Integer`]) – If set to `1`,
+    ///   render the image in a progressive fashion.
+    ///
+    /// * `"interactive"` ([`arg::ArgData::Integer`]) – If set to `1`,
+    ///   the renderer will accept commands to edit scene’s state while
+    ///   rendering. The difference with a normal render is that the
+    ///   render task will not exit even if rendering is finished.
+    ///   Interactive renders are by definition progressive.
+    ///
+    /// * `"frame"` – Specifies the frame number of this render.
     #[inline]
     pub fn render_control(&self, args: &arg::ArgSlice) {
         let args_out = arg::get_c_param_vec(args);

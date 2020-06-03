@@ -22,8 +22,11 @@ pub mod arg {
         args_out
     }
 
-    /// A vector of (optional) [`Context`] method arguments.
-    pub(crate) type ArgSlice<'a> = [Arg<'a>];
+    /// A slice of (optional) [`crate::Context`] method arguments.
+    pub type ArgSlice<'a> = [Arg<'a>];
+
+    /// A vector of (optional) [`crate::Context`] method arguments.
+    pub type ArgVec<'a> = Vec<Arg<'a>>;
 
     pub struct Arg<'a> {
         pub(crate) name: CString,
