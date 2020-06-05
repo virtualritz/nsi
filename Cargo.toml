@@ -1,12 +1,12 @@
 [package]
 name = "nsi"
-version = "0.4.4"
+version = "0.4.5"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 license = "BSD-3-Clause"
 license-file = "LICENSE.md"
-description = "High level bindings for Illumination Research’s Nodal Scene Interface for 3D renderers – ɴsɪ."
+description = "High level bindings for Illumination Research’s Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 readme = "README.md"
 homepage = "https://www.3delight.com/"

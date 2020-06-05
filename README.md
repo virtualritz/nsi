@@ -76,6 +76,8 @@ Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com
 3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
 There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for this API and a [minimal Rust example display driver](https://github.com/virtualritz/r-display) to get you started.
 
+PRs are most welcome!
+
 ## Dependencies
 
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys) which in term requires a renderer that implements the ɴsɪ API.
@@ -91,16 +93,6 @@ Before you start, [download a 3Delight package](https://www.3delight.com/downloa
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
 > **_Note:_** I'm in talks with the 3Delight guys to supply developer packages that will render this step superfluous (pun intended).
-
-## Building
-
-No suprises here. The crate works with stable, beta & nightly.
-
-```terminal
-> cargo build
-```
-
-PRs are most welcome!
 
 ## Documentation
 

@@ -1,12 +1,12 @@
-//! A Flexible, Modern API for Renderers
+//! A Flexible, Modern API for offline 3D Renderers
 //!
 //! The [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ) is
 //! built around the concept of nodes.
 //! Each node has a unique handle to identify it and a type which
 //! describes its intended function in the scene. Nodes are abstract
 //! containers for data. The interpretation depends on the node type.
-//! Nodes can also be [connected to each
-//! other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
+//! Nodes can also be [connected to each other]
+//! (https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 //! to express relationships.
 //!
 //! Data is stored on nodes as attributes. Each attribute has a name
@@ -19,25 +19,24 @@
 //! be either a node or a specific attribute of a node. There are no
 //! type restrictions for connections in the interface itself. It is
 //! acceptable to connect attributes of different types or even
-//! attributes to nodes. The validity of such connections depends on the
-//! types of the nodes involved.
+//! attributes to nodes. The validity of such connections depends on
+//! the types of the nodes involved.
 //!
 //! What we refer to as the ɴsɪ has two major components:
 //!
-//! 1.  Methods to create nodes, attributes and their connections. These
-//!     are attached to a rendering [`Context`],
+//! 1.  Methods to create nodes, attributes and their connections.
+//!     These are attached to a rendering [`Context`].
 //!
-//! 2.  [Node types](https://nsi.readthedocs.io/en/latest/nodes.html)
-//!     understood by the renderer.
+//! 2.  [`Node`] types understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
-//! from the supported nodes.
+//! from
+//! [the supported nodes](https://nsi.readthedocs.io/en/latest/nodes.html).
 //!
 //! The first part was kept deliberately simple to make it easy to
 //! support multiple ways of creating nodes.
 
 extern crate self as nsi;
-use nsi_sys;
 #[allow(unused_imports)]
 use std::{ffi::CString, ops::Drop, vec::Vec};
 
@@ -87,13 +86,10 @@ impl Context {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
             } else {
                 let args_out = arg::get_c_param_vec(args);
+                let args_len = args_out.len() as i32;
+                let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
-                unsafe {
-                    nsi_sys::NSIBegin(
-                        args_out.len() as i32,
-                        args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-                    )
-                }
+                unsafe { nsi_sys::NSIBegin(args_len, args_ptr) }
             }
         } {
             0 => None,
@@ -121,17 +117,13 @@ impl Context {
     ///   no optional parameters defined as of now*.
     #[inline]
     pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &arg::ArgSlice) {
+        let handle = CString::new(handle).unwrap();
+        let node_type = node_type.as_c_str().as_ptr() as *const i8;
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSICreate(
-                self.context,
-                CString::new(handle).unwrap().as_ptr(),
-                node_type.as_c_str().as_ptr() as *const i8,
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            )
-        }
+        unsafe { nsi_sys::NSICreate(self.context, handle.as_ptr(), node_type, args_len, args_ptr) }
     }
 
     /// This function deletes a node from the scene. All connections to
@@ -160,15 +152,13 @@ impl Context {
     ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+        let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
-            nsi_sys::NSIDelete(
-                self.context,
-                CString::new(handle).unwrap().as_ptr(),
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            );
+            nsi_sys::NSIDelete(self.context, handle.as_ptr(), args_len, args_ptr);
         }
     }
 
@@ -193,15 +183,13 @@ impl Context {
     /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+        let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
-            nsi_sys::NSISetAttribute(
-                self.context,
-                CString::new(handle).unwrap().as_ptr(),
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            );
+            nsi_sys::NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
         }
     }
 
@@ -234,16 +222,13 @@ impl Context {
         time: f64,
         args: &arg::ArgSlice,
     ) {
+        let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
-            nsi_sys::NSISetAttributeAtTime(
-                self.context,
-                CString::new(handle).unwrap().as_ptr(),
-                time,
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            );
+            nsi_sys::NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
         }
     }
 
@@ -266,12 +251,11 @@ impl Context {
     /// * `name` – The name of the attribute to be deleted/reset.
     #[inline]
     pub fn delete_attribute(&self, handle: impl Into<Vec<u8>>, name: impl Into<Vec<u8>>) {
+        let handle = CString::new(handle).unwrap();
+        let name = CString::new(name).unwrap();
+
         unsafe {
-            nsi_sys::NSIDeleteAttribute(
-                self.context,
-                CString::new(handle).unwrap().as_ptr(),
-                CString::new(name).unwrap().as_ptr(),
-            );
+            nsi_sys::NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
         }
     }
 
@@ -321,17 +305,23 @@ impl Context {
         to_attr: impl Into<Vec<u8>>,
         args: &arg::ArgSlice,
     ) {
+        let from = CString::new(from).unwrap();
+        let from_attr = CString::new(from_attr).unwrap();
+        let to = CString::new(to).unwrap();
+        let to_attr = CString::new(to_attr).unwrap();
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
             nsi_sys::NSIConnect(
                 self.context,
-                CString::new(from).unwrap().as_ptr(),
-                CString::new(from_attr).unwrap().as_ptr(),
-                CString::new(to).unwrap().as_ptr(),
-                CString::new(to_attr).unwrap().as_ptr(),
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
+                from.as_ptr(),
+                from_attr.as_ptr(),
+                to.as_ptr(),
+                to_attr.as_ptr(),
+                args_len,
+                args_ptr,
             );
         }
     }
@@ -358,13 +348,18 @@ impl Context {
         to: impl Into<Vec<u8>>,
         to_attr: impl Into<Vec<u8>>,
     ) {
+        let from = CString::new(from).unwrap();
+        let from_attr = CString::new(from_attr).unwrap();
+        let to = CString::new(to).unwrap();
+        let to_attr = CString::new(to_attr).unwrap();
+
         unsafe {
             nsi_sys::NSIDisconnect(
                 self.context,
-                CString::new(from).unwrap().as_ptr(),
-                CString::new(from_attr).unwrap().as_ptr(),
-                CString::new(to).unwrap().as_ptr(),
-                CString::new(to_attr).unwrap().as_ptr(),
+                from.as_ptr(),
+                from_attr.as_ptr(),
+                to.as_ptr(),
+                to_attr.as_ptr(),
             );
         }
     }
@@ -473,13 +468,11 @@ impl Context {
     #[inline]
     pub fn render_control(&self, args: &arg::ArgSlice) {
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
-            nsi_sys::NSIRenderControl(
-                self.context,
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            );
+            nsi_sys::NSIRenderControl(self.context, args_len, args_ptr);
         }
     }
 }

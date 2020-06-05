@@ -1,22 +1,18 @@
 pub mod arg {
     use enum_dispatch::enum_dispatch;
-    use nsi_sys;
     use std::ffi::CString;
 
     #[inline]
     pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<nsi_sys::NSIParam_t> {
         let mut args_out = Vec::<nsi_sys::NSIParam_t>::with_capacity(args_in.len());
         for arg_in in args_in {
-            args_out.push({
-                let param = nsi_sys::NSIParam_t {
-                    name: arg_in.name.as_ptr(),
-                    data: arg_in.data.as_c_ptr(),
-                    type_: arg_in.data.type_() as i32,
-                    arraylength: arg_in.array_length as i32,
-                    count: (arg_in.data.len() / arg_in.array_length) as u64,
-                    flags: arg_in.flags as std::os::raw::c_int,
-                };
-                param
+            args_out.push(nsi_sys::NSIParam_t {
+                name: arg_in.name.as_ptr(),
+                data: arg_in.data.as_c_ptr(),
+                type_: arg_in.data.type_() as i32,
+                arraylength: arg_in.array_length as i32,
+                count: (arg_in.data.len() / arg_in.array_length) as u64,
+                flags: arg_in.flags as std::os::raw::c_int,
             });
         }
         args_out
@@ -42,7 +38,7 @@ pub mod arg {
         pub fn new(name: &str, data: ArgData<'a>) -> Self {
             Arg {
                 name: CString::new(name).unwrap(),
-                data: data,
+                data,
                 array_length: 1,
                 flags: 0,
             }
@@ -268,7 +264,7 @@ pub mod arg {
     }
 
     impl Strings {
-        pub fn new<'a, T: Into<Vec<u8>> + Copy>(data: &'a [T]) -> Self {
+        pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
             let mut _data = Vec::<CString>::with_capacity(data.len());
             let mut pointer = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
 
