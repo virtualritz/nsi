@@ -2,6 +2,11 @@
 
 High level Rust bindings for Illumination Research’s Nodal Scene Interface – [ɴsɪ](https://nsi.readthedocs.io/).
 
+[![CI](https://github.com/virtualritz/nsi/workflows/Rust/badge.svg)](https://github.com/virtualritz/nsi/actions)
+[![Documentation](https://docs.rs/nsi/badge.svg)](https://docs.rs/nsi)
+[![Crate](https://img.shields.io/crates/v/nsi.svg)](https://crates.io/crates/nsi)
+[![Chat](https://badges.gitter.im/n-s-i/community.svg)](https://gitter.im/n-s-i/community)
+
 This puts one of the most advanced 3D production offline renderers at your fingertips in Rust – [3Delight](https://www.3delight.com/).
 
 ![Moana Island, rendered with 3Delight|ɴsɪ](moana_island.jpg)
@@ -70,11 +75,7 @@ ctx.set_attribute(
     ],
 );
 ```
-
 Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation) for more example code (demonstrates render settings, sending OBJ meshes to the renderer via instancing, particle rendering, [OSL](https://github.com/imageworks/OpenShadingLanguage) shaders, environment (lights) and dumping a scene description to disk).
-
-3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
-There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for this API and a [minimal Rust example display driver](https://github.com/virtualritz/r-display) to get you started.
 
 PRs are most welcome!
 
@@ -89,10 +90,15 @@ That being said – I hope this crate serves as inspiration for other people wri
 
 ## Prerequisites
 
-Before you start, [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
+Before you start it is suggested that you [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
-> **_Note:_** I'm in talks with the 3Delight guys to supply developer packages that will render this step superfluous (pun intended).
+It will also install 3Delight Display which you can render to, progressively, as an alternative to writing images to disk. When playing working with this crate this is very handy.
+
+## Getting Pixels
+
+3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
+There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for this API and a [minimal Rust example display driver](https://github.com/virtualritz/r-display) I cobbled together to get you started.
 
 ## Documentation
 
