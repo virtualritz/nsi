@@ -2,7 +2,7 @@
 
 High level Rust bindings for Illumination Research’s Nodal Scene Interface – [ɴsɪ](https://nsi.readthedocs.io/).
 
-[![CI](https://github.com/virtualritz/nsi/workflows/Rust/badge.svg)](https://github.com/virtualritz/nsi/actions)
+[![Build](https://github.com/virtualritz/nsi/workflows/Build/badge.svg)](https://github.com/virtualritz/nsi/actions)
 [![Documentation](https://docs.rs/nsi/badge.svg)](https://docs.rs/nsi)
 [![Crate](https://img.shields.io/crates/v/nsi.svg)](https://crates.io/crates/nsi)
 [![Chat](https://badges.gitter.im/n-s-i/community.svg)](https://gitter.im/n-s-i/community)
