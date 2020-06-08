@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.4.7"
+version = "0.4.8"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -12,6 +12,13 @@ readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://nsi.readthedocs.io/"
 repository = "https://github.com/virtualritz/nsi/"
+
+[features]
+# Whether to download a dynamic library version of 3Delight
+# if the renderer can't be found locally. The renderer is
+# needed as soon as the crate is linked against (e.g. for
+# running the tests).
+download_3delight_lib = ["nsi-sys/download_3delight_lib"]
 
 [dependencies]
 nsi-sys = "0.1.6"
