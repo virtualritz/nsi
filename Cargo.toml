@@ -14,5 +14,5 @@ documentation = "https://nsi.readthedocs.io/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-nsi-sys = "0.1.5"
+nsi-sys = "0.1.6"
 enum_dispatch = "0.3.0"
