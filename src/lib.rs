@@ -5,8 +5,7 @@
 //! Each node has a unique handle to identify it and a type which
 //! describes its intended function in the scene. Nodes are abstract
 //! containers for data. The interpretation depends on the node type.
-//! Nodes can also be [connected to each other]
-//! (https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
+//! Nodes can also be [connected to each other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 //! to express relationships.
 //!
 //! Data is stored on nodes as attributes. Each attribute has a name
@@ -38,7 +37,7 @@
 
 extern crate self as nsi;
 #[allow(unused_imports)]
-use std::{ffi::CString, ops::Drop, vec::Vec};
+use std::{ffi::CString, marker::PhantomData, ops::Drop, vec::Vec};
 
 #[macro_use]
 mod argument;
@@ -52,19 +51,25 @@ mod tests;
 ///
 /// Also see the [ɴsɪ docmentation on context
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
-pub struct Context {
+#[derive(Debug, Hash, PartialEq)]
+pub struct Context<'a> {
     context: nsi_sys::NSIContext_t,
+    _marker: PhantomData<*mut &'a ()>,
 }
 
-impl From<nsi_sys::NSIContext_t> for Context {
-    #[allow(dead_code)]
+impl<'a> From<nsi_sys::NSIContext_t> for Context<'a> {
     #[inline]
     fn from(context: nsi_sys::NSIContext_t) -> Self {
-        Self { context }
+        Self {
+            context,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl Context {
+impl<'a> Context<'a> {
+    //count: HashMap<nsi_sys::NSIContext_t
+
     /// Creates an ɴsɪ context.
     ///
     /// Contexts may be used in multiple threads at once.
@@ -80,7 +85,7 @@ impl Context {
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
-    pub fn new(args: &arg::ArgSlice) -> Option<Self> {
+    pub fn new(args: &arg::ArgSlice<'_, 'a>) -> Option<Self> {
         match {
             if args.is_empty() {
                 unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
@@ -93,7 +98,10 @@ impl Context {
             }
         } {
             0 => None,
-            ref c => Some(Self { context: *c }),
+            ref c => Some(Self {
+                context: *c,
+                _marker: PhantomData,
+            }),
         }
     }
 
@@ -116,7 +124,12 @@ impl Context {
     /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     #[inline]
-    pub fn create(&self, handle: impl Into<Vec<u8>>, node_type: Node, args: &arg::ArgSlice) {
+    pub fn create(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        node_type: Node,
+        args: &arg::ArgSlice<'_, 'a>,
+    ) {
         let handle = CString::new(handle).unwrap();
         let node_type = node_type.as_c_str().as_ptr() as *const i8;
         let args_out = arg::get_c_param_vec(args);
@@ -151,7 +164,7 @@ impl Context {
     ///
     ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
-    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
@@ -182,7 +195,7 @@ impl Context {
     ///
     /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
     #[inline]
-    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice) {
+    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
@@ -220,7 +233,7 @@ impl Context {
         &self,
         handle: impl Into<Vec<u8>>,
         time: f64,
-        args: &arg::ArgSlice,
+        args: &arg::ArgSlice<'_, 'a>,
     ) {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
@@ -303,7 +316,7 @@ impl Context {
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
         to_attr: impl Into<Vec<u8>>,
-        args: &arg::ArgSlice,
+        args: &arg::ArgSlice<'_, 'a>,
     ) {
         let from = CString::new(from).unwrap();
         let from_attr = CString::new(from_attr).unwrap();
@@ -418,15 +431,13 @@ impl Context {
     ///   The only guarantee is that the file will be loaded before
     ///   rendering begins.
     #[inline]
-    pub fn evaluate(&self, args: &arg::ArgSlice) {
+    pub fn evaluate(&self, args: &arg::ArgSlice<'_, 'a>) {
         let args_out = arg::get_c_param_vec(args);
+        let args_len = args_out.len() as i32;
+        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
         unsafe {
-            nsi_sys::NSIEvaluate(
-                self.context,
-                args_out.len() as i32,
-                args_out.as_ptr() as *const nsi_sys::NSIParam_t,
-            );
+            nsi_sys::NSIEvaluate(self.context, args_len, args_ptr);
         }
     }
 
@@ -466,7 +477,7 @@ impl Context {
     ///
     /// * `"frame"` – Specifies the frame number of this render.
     #[inline]
-    pub fn render_control(&self, args: &arg::ArgSlice) {
+    pub fn render_control(&self, args: &arg::ArgSlice<'_, 'a>) {
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
         let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
@@ -477,7 +488,7 @@ impl Context {
     }
 }
 
-impl Drop for Context {
+impl<'a> Drop for Context<'a> {
     #[inline]
     fn drop(&mut self) {
         unsafe {
@@ -584,6 +595,7 @@ impl Node {
     }
 }
 
+/// The status of a *interactive* render session.
 pub enum RenderStatus {
     Completed = 0,
     Aborted = 1,

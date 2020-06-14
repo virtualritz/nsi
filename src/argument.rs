@@ -1,6 +1,8 @@
 pub mod arg {
     use enum_dispatch::enum_dispatch;
-    use std::ffi::CString;
+    use std::{any::Any, ffi::CString, marker::PhantomData};
+
+    use crate::*;
 
     #[inline]
     pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<nsi_sys::NSIParam_t> {
@@ -19,23 +21,23 @@ pub mod arg {
     }
 
     /// A slice of (optional) [`crate::Context`] method arguments.
-    pub type ArgSlice<'a> = [Arg<'a>];
+    pub type ArgSlice<'a, 'b> = [Arg<'a, 'b>];
 
     /// A vector of (optional) [`crate::Context`] method arguments.
-    pub type ArgVec<'a> = Vec<Arg<'a>>;
+    pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
-    pub struct Arg<'a> {
+    pub struct Arg<'a, 'b> {
         pub(crate) name: CString,
-        pub(crate) data: ArgData<'a>,
+        pub(crate) data: ArgData<'a, 'b>,
         // length of each element if an array type
         pub(crate) array_length: usize,
         // number of elements
         pub(crate) flags: u32,
     }
 
-    impl<'a> Arg<'a> {
+    impl<'a, 'b> Arg<'a, 'b> {
         #[inline]
-        pub fn new(name: &str, data: ArgData<'a>) -> Self {
+        pub fn new(name: &str, data: ArgData<'a, 'b>) -> Self {
             Arg {
                 name: CString::new(name).unwrap(),
                 data,
@@ -78,8 +80,10 @@ pub mod arg {
         fn as_c_ptr(&self) -> *const std::ffi::c_void;
     }
 
+    // Lifetime 'a is for any tuple or array type
+    // Lifetime 'b is for the pointer type. This is pegged to the lifetime of the [`Context`]
     #[enum_dispatch]
-    pub enum ArgData<'a> {
+    pub enum ArgData<'a, 'b> {
         /// Single [`f32`) value.
         Float,
         Floats(Floats<'a>),
@@ -122,6 +126,9 @@ pub mod arg {
         DoubleMatrix(DoubleMatrix<'a>),
         DoubleMatrices(DoubleMatrices<'a>),
         /// Raw (`*const T`) pointer.
+        Reference(Reference<'b>),
+        References(References<'b>),
+
         Pointer,
         Pointers(Pointers<'a>),
     }
@@ -215,19 +222,78 @@ pub mod arg {
     nsi_data_def!(f64, Double, Type::Double);
     nsi_data_def!(i32, Integer, Type::Integer);
     nsi_data_def!(u32, Unsigned, Type::Integer);
-    nsi_data_def!(*const std::ffi::c_void, Pointer, Type::Pointer);
+    //nsi_data_def!(*const std::ffi::c_void, Pointer, Type::Pointer);
 
-    nsi_data_array_def!(f32, Floats, Type::Float);
-    nsi_data_array_def!(f64, Doubles, Type::Double);
-    nsi_data_array_def!(i32, Integers, Type::Integer);
-    nsi_data_array_def!(u32, Unsigneds, Type::Integer);
-    nsi_data_array_def!(*const std::ffi::c_void, Pointers, Type::Pointer);
-    nsi_data_array_def!(f32, Colors, Type::Color);
-    nsi_data_array_def!(f32, Points, Type::Point);
-    nsi_data_array_def!(f32, Vectors, Type::Vector);
-    nsi_data_array_def!(f32, Normals, Type::Normal);
-    nsi_data_array_def!(f32, Matrices, Type::Matrix);
-    nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
+    /// Reference type *with* lifetime guaratees.
+    ///
+    /// Prefer this over using a raw [`Pointer`]
+    /// as it allows the compiler to check that
+    /// the data you reference outlives the
+    /// [`crate::Context`] you eventually send it to.
+    pub struct Reference<'a> {
+        data: *const std::ffi::c_void,
+        _marker: PhantomData<&'a ()>,
+    }
+
+    impl<'a> Reference<'a> {
+        pub fn new(data: Option<&'a dyn Any>) -> Self {
+            Self {
+                data: data
+                    .map(|p| p as *const _ as *const std::ffi::c_void)
+                    .unwrap_or(std::ptr::null()),
+                _marker: PhantomData,
+            }
+        }
+    }
+
+    impl<'a> ArgDataMethods for Reference<'a> {
+        fn type_(&self) -> Type {
+            Type::Pointer
+        }
+
+        fn len(&self) -> usize {
+            1
+        }
+
+        fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            self.data
+        }
+    }
+
+    /// Raw pointer type *without* lifietime guaratees.
+    ///
+    /// This can't guarantee that the data this
+    /// points to outlives the [`Context`] you
+    /// eventually send this to. This is the user's
+    /// responsibility.
+    ///
+    /// If you need to send pointers a better
+    /// alternative is the [`Reference`] type
+    /// that allows the compiler to check that
+    /// the the data outlives the [`Context`].
+    pub struct Pointer {
+        data: *const std::ffi::c_void,
+    }
+
+    impl Pointer {
+        pub unsafe fn new(data: *const std::ffi::c_void) -> Self {
+            Self { data }
+        }
+    }
+
+    impl ArgDataMethods for Pointer {
+        fn type_(&self) -> Type {
+            Type::Pointer
+        }
+
+        fn len(&self) -> usize {
+            1
+        }
+
+        fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            self.data
+        }
+    }
 
     pub struct String {
         _data: CString,
@@ -255,6 +321,97 @@ pub mod arg {
 
         fn as_c_ptr(&self) -> *const std::ffi::c_void {
             unsafe { std::mem::transmute(&self.pointer) }
+        }
+    }
+
+    nsi_data_array_def!(f32, Floats, Type::Float);
+    nsi_data_array_def!(f64, Doubles, Type::Double);
+    nsi_data_array_def!(i32, Integers, Type::Integer);
+    nsi_data_array_def!(u32, Unsigneds, Type::Integer);
+    //nsi_data_array_def!(*const std::ffi::c_void, Pointers, Type::Pointer);
+    nsi_data_array_def!(f32, Colors, Type::Color);
+    nsi_data_array_def!(f32, Points, Type::Point);
+    nsi_data_array_def!(f32, Vectors, Type::Vector);
+    nsi_data_array_def!(f32, Normals, Type::Normal);
+    nsi_data_array_def!(f32, Matrices, Type::Matrix);
+    nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
+
+    /// Reference array type *with* lifetime guarantees.
+    pub struct References<'a> {
+        data: Vec<*const std::ffi::c_void>,
+        _marker: PhantomData<&'a ()>,
+    }
+
+    impl<'a> References<'a> {
+        pub fn new(data: &'a [Option<&'a dyn Any>]) -> Self {
+            debug_assert!(data.len() % Type::Pointer.element_size() == 0);
+
+            let mut c_data = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
+
+            for e in data {
+                c_data.push(
+                    e.map(|p| p as *const _ as *const std::ffi::c_void)
+                        .unwrap_or(std::ptr::null()),
+                );
+            }
+
+            Self {
+                data: c_data,
+                _marker: PhantomData,
+            }
+        }
+    }
+
+    impl<'a> ArgDataMethods for References<'a> {
+        fn type_(&self) -> Type {
+            Type::Pointer
+        }
+
+        fn len(&self) -> usize {
+            self.data.len() / Type::Pointer.element_size()
+        }
+
+        fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            self.data.as_ptr() as _
+        }
+    }
+
+    /// Raw pointer array type *without* lifietime guaratees.
+    ///
+    /// This can't guarantee that the data this
+    /// points to outlives the [`Context`] you
+    /// eventually send this to. This is the user's
+    /// responsibility.
+    ///
+    /// A better alternative is the [`References`]
+    /// type that allows the compiler to check
+    /// that the the data outlives the [`Context`].
+    pub struct Pointers<'a> {
+        data: &'a [*const std::ffi::c_void],
+    }
+
+    impl<'a> Pointers<'a> {
+        /// This is marked unsafe because the responsibility
+        /// to ensure the pointer can be safely dereferenced
+        /// after the function has returned lies with the user.
+        ///
+        /// [`References`] is as a *safe* alternative.
+        pub unsafe fn new(data: &'a [*const std::ffi::c_void]) -> Self {
+            Self { data }
+        }
+    }
+
+    impl<'a> ArgDataMethods for Pointers<'a> {
+        fn type_(&self) -> Type {
+            Type::Pointer
+        }
+
+        fn len(&self) -> usize {
+            self.data.len() / Type::Pointer.element_size()
+        }
+
+        fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            self.data.as_ptr() as _
         }
     }
 
@@ -615,6 +772,26 @@ macro_rules! strings {
         nsi::arg::Arg::new(
             $name,
             nsi::arg::ArgData::from(nsi::arg::Strings::new($value)),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! reference {
+    ($name: tt, $value: expr) => {
+        nsi::arg::Arg::new(
+            $name,
+            nsi::arg::ArgData::from(nsi::arg::Reference::new($value)),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! references {
+    ($name: tt, $value: expr) => {
+        nsi::arg::Arg::new(
+            $name,
+            nsi::arg::ArgData::from(nsi::arg::References::new($value)),
         )
     };
 }

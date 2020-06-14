@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.4.8"
+version = "0.4.9"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -22,4 +22,4 @@ download_3delight_lib = ["nsi-sys/download_3delight_lib"]
 
 [dependencies]
 nsi-sys = "0.1.6"
-enum_dispatch = "0.3.0"
+enum_dispatch = "0.3.1"

@@ -2,9 +2,9 @@
 #[test]
 fn live_edit() {
     // # Compile the shaders.
-    // os.system("oslc emitter.osl")
-    // os.system("oslc matte.osl")
-    // os.system("oslc waves.osl")
+    // "oslc emitter.osl")
+    // "oslc matte.osl")
+    // "oslc waves.osl")
 
     // create rendering context.
     let c = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
@@ -52,7 +52,7 @@ fn live_edit() {
     );
     c.connect("beauty", "", "s1", "outputlayers", &[]);
 
-    let mut foo = 42u64;
+    let foo = 42u64;
     // Setup an output driver.
     c.create("driver1", nsi::Node::OutputDriver, &[]);
     c.connect("driver1", "", "beauty", "outputdrivers", &[]);
@@ -60,9 +60,8 @@ fn live_edit() {
         "driver1",
         &[
             nsi::string!("drivername", "idisplay"),
-            nsi::pointer!("blblabla_______", &unsafe {
-                std::mem::transmute::<_, f64>(&mut foo as *mut _)
-            } as *const f64 as _),
+            // pass a pointer to foo to NSI
+            nsi::reference!("blblabla_______", Some(&foo)),
         ],
     );
 
@@ -138,97 +137,8 @@ fn live_edit() {
     //thread::sleep(time::Duration::from_secs(5));
 
     c.render_control(&[nsi::string!("action", "wait")]);
+
+    drop(c);
 }
 
-/*
-# Add something between light and plane to make some shadows.
-c.create("mesh2", "mesh")
-c.connect("mesh2", "", nsi.SCENE_ROOT, "objects")
-c.set_attribute("mesh2",
-    nvertices=3,
-    P=nsi.Arg((-0.2,-0.3,0.5,  0.2,-0.3,0.5,  0,-0.3,0), type=nsi.Type.Point))
-
-c.create("mesh2_attribs", "attributes")
-c.connect("shader1", "", "mesh2_attribs", "surfaceshader")
-c.connect("mesh2_attribs", "", "mesh2", "geometryattributes")
-
-# Increase quality.
-# This particular call uses a dictionary for arguments because the attribute
-# name has a "." in it and
-c.set_attribute(nsi.SCENE_GLOBAL, **{"quality.shadingsamples":64})
-
-# Apply changes and let render a while.
-c.RenderControl(action="synchronize")
-time.sleep(5)
-
-# Make it move. This inserts a transform node for mesh2.
-c.create("mesh2_trs", "transform")
-c.connect("mesh2_trs", "", nsi.SCENE_ROOT, "objects")
-c.Disconnect("mesh2", "", nsi.SCENE_ROOT, "objects")
-c.connect("mesh2", "", "mesh2_trs", "objects")
-
-c.set_attributeAtTime("mesh2_trs", 0., transformationmatrix=nsi.Arg(
-    (1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1),
-    type=nsi.Type.DoubleMatrix))
-c.set_attributeAtTime("mesh2_trs", 1., transformationmatrix=nsi.Arg(
-    (1,0,0,0, 0,1,0,0, 0,0,1,0, 0.4,0,0,1),
-    type=nsi.Type.DoubleMatrix))
-
-# Must also set shutter or no motion blur will be visible.
-c.set_attribute("cam1", shutterrange=(0.2, 0.8))
-
-# Apply changes and let render a while.
-c.RenderControl(action="synchronize")
-time.sleep(5)
-
-# Add an actual shader network, very basic.
-c.create("wave_shader", "shader")
-c.set_attribute("wave_shader", shaderfilename="waves")
-c.connect("wave_shader", "outColor", "shader1", "Cs")
-
-# Apply changes and let render a while.
-c.RenderControl(action="synchronize")
-time.sleep(5)
-
-# Recursively delete the shader network.
-c.Delete("shader1", recursive=1)
-# Replace by something else. Note that we only connect it to plane_attribs so
-# it will not apply to the small triangle creating the shadow, which no longer
-# has any shader. It will render black but still be visible in the alpha
-# channel.
-c.create("shader2", "shader")
-c.set_attribute("shader2", shaderfilename="matte", Cs=nsi.ColorArg(1,0.2,0.2))
-c.connect("shader2", "", "plane_attribs", "surfaceshader")
-
-# Apply changes and let render a while.
-c.RenderControl(action="synchronize")
-time.sleep(5)
-
-# Stop the render.
-c.RenderControl(action="stop")
-
-# Add a second output driver to produce an exr image.
-c.create("driver2", "outputdriver")
-c.connect("driver2", "", "beauty", "outputdrivers")
-c.set_attribute("driver2",
-    drivername="exr",
-    imagefilename="test_output.exr")
-
-# Add a second layer to that exr image. It"s a debug AOV from the sample matte
-# shader. See matte.osl.
-c.create("pattern_layer", "outputlayer")
-c.set_attribute("pattern_layer",
-    variablename="surfacecolor",
-    scalarformat="half")
-c.connect("pattern_layer", "", "s1", "outputlayers")
-c.connect("driver2", "", "pattern_layer", "outputdrivers")
-
-# Do a regular (non interactive) render with the same scene.
-c.RenderControl(action="start")
-c.RenderControl(action="wait")
-
-# Cleanup context.
-c.End()
-
-# vim: set softtabstop=4 expandtab shiftwidth=4:
-*/
+// FIXME: port rest of live_edit example from Python
