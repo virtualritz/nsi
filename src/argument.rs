@@ -125,10 +125,10 @@ pub mod arg {
         /// point datas.
         DoubleMatrix(DoubleMatrix<'a>),
         DoubleMatrices(DoubleMatrices<'a>),
-        /// Raw (`*const T`) pointer.
+        /// Reference to arbitrary data.
         Reference(Reference<'b>),
         References(References<'b>),
-
+        /// Raw (`*const T`) pointer.
         Pointer,
         Pointers(Pointers<'a>),
     }
@@ -229,7 +229,40 @@ pub mod arg {
     /// Prefer this over using a raw [`Pointer`]
     /// as it allows the compiler to check that
     /// the data you reference outlives the
-    /// [`crate::Context`] you eventually send it to.
+    /// [`Context`] you eventually send it to.
+    ///
+    /// This gets converted to a raw pointer when passed
+    /// through the FFI boundary.
+    /// ```
+    /// struct Payload {
+    ///     some_data: u32,
+    /// }
+    ///
+    /// let ctx = nsi::Context::new(&[]).unwrap();
+    ///
+    /// // Lots of scene setup omitted ...
+    ///
+    /// // Setup a custom output driver and send
+    /// // a payload to it through the FFI boundary
+    /// ctx.create("driver", nsi::Node::OutputDriver, &[]);
+    /// ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
+    /// let payload = Payload {
+    ///     some_data: 42,
+    /// };
+    /// ctx.set_attribute(
+    ///     "driver",
+    ///     &[
+    ///         nsi::string!("drivername", "custom_driver"),
+    ///         // Payload gets sent as raw pointer through
+    ///         // the FFI boundary.
+    ///         nsi::reference!("payload", Some(&payload)),
+    ///     ],
+    /// );
+    ///
+    /// // We need to explicitly call drop here as
+    /// // ctx's lifetime is pegged to that of payload.
+    /// drop(ctx);
+    /// ```
     pub struct Reference<'a> {
         data: *const std::ffi::c_void,
         _marker: PhantomData<&'a ()>,
@@ -267,7 +300,7 @@ pub mod arg {
     /// eventually send this to. This is the user's
     /// responsibility.
     ///
-    /// If you need to send pointers a better
+    /// If you need to send a pointer a better
     /// alternative is the [`Reference`] type
     /// that allows the compiler to check that
     /// the the data outlives the [`Context`].
@@ -328,7 +361,6 @@ pub mod arg {
     nsi_data_array_def!(f64, Doubles, Type::Double);
     nsi_data_array_def!(i32, Integers, Type::Integer);
     nsi_data_array_def!(u32, Unsigneds, Type::Integer);
-    //nsi_data_array_def!(*const std::ffi::c_void, Pointers, Type::Pointer);
     nsi_data_array_def!(f32, Colors, Type::Color);
     nsi_data_array_def!(f32, Points, Type::Point);
     nsi_data_array_def!(f32, Vectors, Type::Vector);
@@ -337,6 +369,14 @@ pub mod arg {
     nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 
     /// Reference array type *with* lifetime guarantees.
+    ///
+    /// Prefer this over using a raw [`Pointers`]
+    /// as it allows the compiler to check that
+    /// the data you reference outlives the
+    /// [`Context`] you eventually send it to.
+    ///
+    /// This gets converted to am array of raw pointers when
+    /// passed through the FFI boundary.
     pub struct References<'a> {
         data: Vec<*const std::ffi::c_void>,
         _marker: PhantomData<&'a ()>,
@@ -378,14 +418,14 @@ pub mod arg {
 
     /// Raw pointer array type *without* lifietime guaratees.
     ///
-    /// This can't guarantee that the data this
-    /// points to outlives the [`Context`] you
-    /// eventually send this to. This is the user's
-    /// responsibility.
+    /// This can't guarantee that the data this points to
+    /// outlives the [`Context`] you eventually send this
+    /// to. This is your responsibility.
     ///
-    /// A better alternative is the [`References`]
-    /// type that allows the compiler to check
-    /// that the the data outlives the [`Context`].
+    /// If you need to send pointers a better alternative
+    /// is the [`References`] type that allows the compiler
+    /// to check that the the referenced data outlives the
+    /// [`Context`].
     pub struct Pointers<'a> {
         data: &'a [*const std::ffi::c_void],
     }

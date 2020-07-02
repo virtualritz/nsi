@@ -1,5 +1,27 @@
 #[cfg(test)]
 #[test]
+fn test_reference() {
+    let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
+        .expect("Could not create NSI context.");
+
+    let foo = 42u64;
+    // Setup an output driver.
+    ctx.create("driver1", nsi::Node::OutputDriver, &[]);
+    ctx.connect("driver1", "", "beauty", "outputdrivers", &[]);
+    ctx.set_attribute(
+        "driver1",
+        &[
+            nsi::string!("drivername", "idisplay"),
+            // Pass a pointer to foo to NSI
+            nsi::reference!("_foo", Some(&foo)),
+        ],
+    );
+
+    drop(ctx);
+}
+
+#[cfg(test)]
+#[test]
 fn live_edit() {
     // # Compile the shaders.
     // "oslc emitter.osl")
@@ -52,18 +74,10 @@ fn live_edit() {
     );
     c.connect("beauty", "", "s1", "outputlayers", &[]);
 
-    let foo = 42u64;
     // Setup an output driver.
     c.create("driver1", nsi::Node::OutputDriver, &[]);
     c.connect("driver1", "", "beauty", "outputdrivers", &[]);
-    c.set_attribute(
-        "driver1",
-        &[
-            nsi::string!("drivername", "idisplay"),
-            // pass a pointer to foo to NSI
-            nsi::reference!("blblabla_______", Some(&foo)),
-        ],
-    );
+    c.set_attribute("driver1", &[nsi::string!("drivername", "idisplay")]);
 
     // Add a plane.
     c.create("mesh1", nsi::Node::Mesh, &[]);
@@ -137,8 +151,6 @@ fn live_edit() {
     //thread::sleep(time::Duration::from_secs(5));
 
     c.render_control(&[nsi::string!("action", "wait")]);
-
-    drop(c);
 }
 
 // FIXME: port rest of live_edit example from Python

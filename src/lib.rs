@@ -37,19 +37,30 @@
 
 extern crate self as nsi;
 #[allow(unused_imports)]
-use std::{ffi::CString, marker::PhantomData, ops::Drop, vec::Vec};
+use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 
 #[macro_use]
 mod argument;
 pub use argument::*;
-
 mod tests;
 
 //type Handle = impl Into<Vec<u8>>;
 
 /// An ɴsɪ context.
 ///
-/// Also see the [ɴsɪ docmentation on context
+/// # Lifetime
+/// A context can be used without worrying about its lifetime
+/// until you want to store it somewhere, e.g. in a struct.
+///
+/// The reason a context has an explicit lifetime is because it can
+/// take [`Reference`]s. These references must be valid until the
+/// context is dropped and this guarantee requires explicit lifetimes.
+/// When you use a context directly this is not an issue
+/// but when you want to reference it somewhere the same rules
+/// as with all references apply.
+///
+/// # Further Reading
+/// See the [ɴsɪ docmentation on context
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
 #[derive(Debug, Hash, PartialEq)]
 pub struct Context<'a> {
@@ -121,7 +132,7 @@ impl<'a> Context<'a> {
     ///
     /// * `node_type` – The type of node to create.
     ///
-    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments. *There are
+    /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
     #[inline]
     pub fn create(
@@ -150,11 +161,11 @@ impl<'a> Context<'a> {
     /// * `handle` – A handle to a node previously created with
     ///              [`Context::create()`].
     ///
-    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
+    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     ///
     /// # Optional Arguments
     ///
-    /// * `"recursive"` ([`arg::ArgData::Integer`]) – Specifies whether
+    /// * `"recursive"` ([`Integer`]) – Specifies whether
     ///   deletion is recursive. By default, only the specified node is
     ///   deleted. If a value of `1` is given, then nodes which connect
     ///   to the specified node are recursively removed. Unless they
@@ -179,11 +190,11 @@ impl<'a> Context<'a> {
     /// All optional arguments of the function become attributes of
     /// the node.
     ///
-    /// On a [`Node::Shader`], this function is used to set the implicitly
+    /// On a [`Shader`], this function is used to set the implicitly
     /// defined shader arguments.
     ///
     /// Setting an attribute using this function replaces any value
-    ///  previously set by [`Context::set_attribute()`] or
+    /// previously set by [`Context::set_attribute()`] or
     /// [`Context::set_attribute_at_time()`].
     /// To reset an attribute to its default value, use
     /// [`Context::delete_attribute()`]).
@@ -191,9 +202,9 @@ impl<'a> Context<'a> {
     /// # Arguments
     ///
     /// * `handle` – A handle to a node previously created with
-    ///               [`Context::create()`].
+    ///              [`Context::create()`].
     ///
-    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
+    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
@@ -215,7 +226,7 @@ impl<'a> Context<'a> {
     /// particular order. In most uses, attributes that are motion blurred must
     /// have the same specification throughout the time range.
     ///
-    /// A notable  exception is the `P` attribute on (particles)[`Node::Particles`]
+    /// A notable  exception is the `P` attribute on (particles)[`Particles`]
     /// which can be of different size for each time step because of appearing
     /// or disappearing particles. Setting an attribute using this function
     /// replaces any value previously set by ``NSISetAttribute()``.
@@ -227,7 +238,7 @@ impl<'a> Context<'a> {
     ///
     /// * `time` – The time at which to set the value.
     ///
-    /// * `args` – A [`std::slice`] of optional [`arg::Arg`] arguments.
+    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute_at_time(
         &self,
@@ -252,9 +263,9 @@ impl<'a> Context<'a> {
     /// Deleting an attribute resets it to its default value.
     ///
     /// For example, after deleting the `transformationmatrix` attribute
-    /// on a [`Node::Transform`], the transform will be an identity.
-    /// Deleting a previously set attribute on a [`Node::Shader`] will
-    /// default  to whatever is declared inside the shader.
+    /// on a [`Transform`] node, the transform will be an identity.
+    /// Deleting a previously set attribute on a [`Shader`] node will
+    /// default to whatever is declared inside the shader.
     ///
     /// # Arguments
     ///
@@ -302,11 +313,11 @@ impl<'a> Context<'a> {
     ///   inter-object visibility for more information about the utility
     ///   of this parameter.
     ///
-    /// * `"priority"` ([`arg::ArgData::Integer`]) – When connecting
+    /// * `"priority"` ([`Integer`]) – When connecting
     ///   attribute nodes, indicates in which order the nodes should be
     ///   considered when evaluating the value of an attribute.
     ///
-    /// * `"strength"` ([`arg::ArgData::Integer`]) – A connection with a
+    /// * `"strength"` ([`Integer`]) – A connection with a
     ///   `strength` greater than `0` will *block* the progression of a
     ///   recursive [`Context::delete()`].
     #[inline]
@@ -383,7 +394,7 @@ impl<'a> Context<'a> {
     /// archive, with that of procedural include which is traditionally
     /// a compiled executable. Both are really the same idea expressed
     /// in a different language (note that for delayed procedural
-    /// evaluation one should use a ([`Node::Procedural`]) node).
+    /// evaluation one should use a ([`Procedural`]) node).
     ///
     /// The ɴsɪ adds a third option which sits in-between — (Lua
     /// scripts)[https://nsi.readthedocs.io/en/latest/lua-api.html]
@@ -399,7 +410,7 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`arg::ArgData::String`]) – The type of file which
+    /// * `"type"` ([`String`]) – The type of file which
     ///   will generate the interface calls. This can be one of:
     ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
     ///     `"filename"` or `"buffer"`/`"size"` arguments to be
@@ -414,17 +425,17 @@ impl<'a> Context<'a> {
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`arg::ArgData::String`]) – The name of the
+    /// * `"filename"` ([`String`]) – The name of the
     ///   file which contains the interface calls to include.
     ///
-    /// * `"script"` ([`arg::ArgData::String`]) – A valid Lua script to
+    /// * `"script"` ([`String`]) – A valid Lua script to
     ///   execute when `"type"` is set to `"lua"`.
     ///
-    /// * `"buffer"` ([`arg::ArgData::Pointer`])
-    /// * `"size"` ([`arg::ArgData::Integer`]) – These two parameters
+    /// * `"buffer"` ([`Pointer`])
+    /// * `"size"` ([`Integer`]) – These two parameters
     ///   define a memory block that contain ɴsɪ commands to execute.
     ///
-    /// * `"backgroundload"` ([`arg::ArgData::Integer`]) – If this is
+    /// * `"backgroundload"` ([`Integer`]) – If this is
     ///   nonzero, the object may be loaded in a separate thread, at
     ///   some later time. This requires that further interface calls
     ///   not directly reference objects defined in the included file.
@@ -448,7 +459,7 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`arg::ArgData::String`]) – Specifies the
+    /// * `"action"` ([`String`]) – Specifies the
     ///   operation to be performed, which should be one of the
     ///   following:
     ///   * `"start"` – This starts rendering the scene in the provided
@@ -466,10 +477,10 @@ impl<'a> Context<'a> {
     ///
     ///   * `"stop"` – Stops rendering in the provided context without
     ///     destroying the scene
-    /// * `"progressive"` ([`arg::ArgData::Integer`]) – If set to `1`,
+    /// * `"progressive"` ([`Integer`]) – If set to `1`,
     ///   render the image in a progressive fashion.
     ///
-    /// * `"interactive"` ([`arg::ArgData::Integer`]) – If set to `1`,
+    /// * `"interactive"` ([`Integer`]) – If set to `1`,
     ///   the renderer will accept commands to edit scene’s state while
     ///   rendering. The difference with a normal render is that the
     ///   render task will not exit even if rendering is finished.
