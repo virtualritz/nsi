@@ -93,7 +93,7 @@ That being said – I hope this crate serves as inspiration for other people wri
 Before you start it is suggested that you [download a 3Delight package](https://www.3delight.com/download) for your platform & install it (supported: Linux, macOS, Windows).
 This will set the `$DELIGHT` environment variable that the build script is looking for to find headers and the library to link against.
 
-It will also install 3Delight Display which you can render to, progressively, as an alternative to writing images to disk. When playing working with this crate this is very handy.
+It will also install 3Delight Display which you can render to, progressively, as an alternative to writing images to disk. When working with this crate this is quite handy.
 
 ## Getting Pixels
 
