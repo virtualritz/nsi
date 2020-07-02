@@ -41,6 +41,10 @@ use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 
 #[macro_use]
 mod argument;
+#[allow(unused_imports)]
+use crate::Node::*;
+#[allow(unused_imports)]
+use arg::{Arg, ArgData::*};
 pub use argument::*;
 mod tests;
 

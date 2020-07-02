@@ -20,10 +20,10 @@ pub mod arg {
         args_out
     }
 
-    /// A slice of (optional) [`crate::Context`] method arguments.
+    /// A slice of (optional) [`Context`] method arguments.
     pub type ArgSlice<'a, 'b> = [Arg<'a, 'b>];
 
-    /// A vector of (optional) [`crate::Context`] method arguments.
+    /// A vector of (optional) [`Context`] method arguments.
     pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
     pub struct Arg<'a, 'b> {
@@ -529,6 +529,7 @@ pub mod arg {
     }
 
     impl Type {
+        /// Returns the size of the resp. type in bytes.
         #[inline]
         pub(crate) fn element_size(&self) -> usize {
             match self {
