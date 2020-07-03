@@ -26,7 +26,7 @@
 //! 1.  Methods to create nodes, attributes and their connections.
 //!     These are attached to a rendering [`Context`].
 //!
-//! 2.  [`Node`] types understood by the renderer.
+//! 2.  Nodes of different [`NodeType`]s understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -42,7 +42,7 @@ use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 #[macro_use]
 mod argument;
 #[allow(unused_imports)]
-use crate::Node::*;
+use crate::NodeType::*;
 #[allow(unused_imports)]
 use arg::{Arg, ArgData::*};
 pub use argument::*;
@@ -142,16 +142,16 @@ impl<'a> Context<'a> {
     pub fn create(
         &self,
         handle: impl Into<Vec<u8>>,
-        node_type: Node,
+        node_type: impl Into<Vec<u8>>,
         args: &arg::ArgSlice<'_, 'a>,
     ) {
         let handle = CString::new(handle).unwrap();
-        let node_type = node_type.as_c_str().as_ptr() as *const i8;
+        let node_type = CString::new(node_type).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
         let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
-        unsafe { nsi_sys::NSICreate(self.context, handle.as_ptr(), node_type, args_len, args_ptr) }
+        unsafe { nsi_sys::NSICreate(self.context, handle.as_ptr(), node_type.as_ptr(), args_len, args_ptr) }
     }
 
     /// This function deletes a node from the scene. All connections to
@@ -513,7 +513,7 @@ impl<'a> Drop for Context<'a> {
 }
 
 /// A node in the ɴsɪ scene graph.
-pub enum Node {
+pub enum NodeType {
     /// The scene’s root.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
     Root, // = ".root",
@@ -578,34 +578,34 @@ pub enum Node {
     Screen,
 }
 
-impl Node {
+impl From<NodeType> for Vec<u8> {
     #[inline]
-    fn as_c_str(&self) -> &'static [u8] {
-        match *self {
-            Node::Root => b".root\0",
-            Node::Global => b".global\0",
-            Node::Set => b"set\0",
-            Node::Plane => b"plane\0",
-            Node::Shader => b"shader\0",
-            Node::Attributes => b"attributes\0",
-            Node::Transform => b"transform\0",
-            Node::Instances => b"instances\0",
-            Node::Mesh => b"mesh\0",
-            Node::FaceSet => b"faceset\0",
-            Node::Curves => b"curves\0",
-            Node::Particles => b"particles\0",
-            Node::Procedural => b"procedural\0",
-            Node::Volume => b"volume\0",
-            Node::Environment => b"environment\0",
-            Node::Camera => b"camera\0",
-            Node::OrthographicCamera => b"orthographiccamera\0",
-            Node::PerspectiveCamera => b"perspectivecamera\0",
-            Node::FisheyeCamera => b"fisheyecamera\0",
-            Node::CylindricalCamera => b"cylindricalcamera\0",
-            Node::SphericalCamera => b"sphericalcamera\0",
-            Node::OutputDriver => b"outputdriver\0",
-            Node::OutputLayer => b"outputlayer\0",
-            Node::Screen => b"screen\0",
+    fn from(node_type: NodeType) -> Self {
+        match node_type {
+            NodeType::Root => b".root".to_vec(),
+            NodeType::Global => b".global".to_vec(),
+            NodeType::Set => b"set".to_vec(),
+            NodeType::Plane => b"plane".to_vec(),
+            NodeType::Shader => b"shader".to_vec(),
+            NodeType::Attributes => b"attributes".to_vec(),
+            NodeType::Transform => b"transform".to_vec(),
+            NodeType::Instances => b"instances".to_vec(),
+            NodeType::Mesh => b"mesh".to_vec(),
+            NodeType::FaceSet => b"faceset".to_vec(),
+            NodeType::Curves => b"curves".to_vec(),
+            NodeType::Particles => b"particles".to_vec(),
+            NodeType::Procedural => b"procedural".to_vec(),
+            NodeType::Volume => b"volume".to_vec(),
+            NodeType::Environment => b"environment".to_vec(),
+            NodeType::Camera => b"camera".to_vec(),
+            NodeType::OrthographicCamera => b"orthographiccamera".to_vec(),
+            NodeType::PerspectiveCamera => b"perspectivecamera".to_vec(),
+            NodeType::FisheyeCamera => b"fisheyecamera".to_vec(),
+            NodeType::CylindricalCamera => b"cylindricalcamera".to_vec(),
+            NodeType::SphericalCamera => b"sphericalcamera".to_vec(),
+            NodeType::OutputDriver => b"outputdriver".to_vec(),
+            NodeType::OutputLayer => b"outputlayer".to_vec(),
+            NodeType::Screen => b"screen".to_vec(),
         }
     }
 }

@@ -244,7 +244,7 @@ pub mod arg {
     ///
     /// // Setup a custom output driver and send
     /// // a payload to it through the FFI boundary
-    /// ctx.create("driver", nsi::Node::OutputDriver, &[]);
+    /// ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
     /// ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
     /// let payload = Payload {
     ///     some_data: 42,
@@ -744,7 +744,7 @@ macro_rules! matrices {
 /// let ctx = nsi::Context::new(&[]).unwrap();
 ///
 /// // Setup a transform node.
-/// ctx.create("xform", nsi::Node::Transform, &[]);
+/// ctx.create("xform", nsi::NodeType::Transform, &[]);
 /// ctx.connect("xform", "", ".root", "objects", &[]);
 ///
 /// // Translate 5 units along z-axis.
@@ -803,7 +803,7 @@ macro_rules! string {
 /// // Create rendering context.
 /// let ctx = nsi::Context::new(&[]).unwrap();
 /// // One of these is not an actor:
-/// ctx.create("dummy", nsi::Node::Attributes, &[
+/// ctx.create("dummy", nsi::NodeType::Attributes, &[
 ///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"]).array_len(2)
 /// ]);
 /// ```

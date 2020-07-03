@@ -6,7 +6,7 @@ fn test_reference() {
 
     let foo = 42u64;
     // Setup an output driver.
-    ctx.create("driver1", nsi::Node::OutputDriver, &[]);
+    ctx.create("driver1", nsi::NodeType::OutputDriver, &[]);
     ctx.connect("driver1", "", "beauty", "outputdrivers", &[]);
     ctx.set_attribute(
         "driver1",
@@ -33,7 +33,7 @@ fn live_edit() {
         .expect("Could not create NSI context.");
 
     // Setup a camera transform.
-    c.create("cam1_trs", nsi::Node::Transform, &[]);
+    c.create("cam1_trs", nsi::NodeType::Transform, &[]);
     c.connect("cam1_trs", "", ".root", "objects", &[]);
 
     c.set_attribute(
@@ -45,13 +45,13 @@ fn live_edit() {
     );
 
     // Setup a camera.
-    c.create("cam1", nsi::Node::PerspectiveCamera, &[]);
+    c.create("cam1", nsi::NodeType::PerspectiveCamera, &[]);
 
     c.set_attribute("cam1", &[nsi::float!("fov", 35.)]);
     c.connect("cam1", "", "cam1_trs", "objects", &[]);
 
     // Setup a screen.
-    c.create("s1", nsi::Node::Screen, &[]);
+    c.create("s1", nsi::NodeType::Screen, &[]);
     c.connect("s1", "", "cam1", "screens", &[]);
     c.set_attribute(
         "s1",
@@ -62,7 +62,7 @@ fn live_edit() {
     );
 
     // Setup an output layer.
-    c.create("beauty", nsi::Node::OutputLayer, &[]);
+    c.create("beauty", nsi::NodeType::OutputLayer, &[]);
     c.set_attribute(
         "beauty",
         &[
@@ -75,12 +75,12 @@ fn live_edit() {
     c.connect("beauty", "", "s1", "outputlayers", &[]);
 
     // Setup an output driver.
-    c.create("driver1", nsi::Node::OutputDriver, &[]);
+    c.create("driver1", nsi::NodeType::OutputDriver, &[]);
     c.connect("driver1", "", "beauty", "outputdrivers", &[]);
     c.set_attribute("driver1", &[nsi::string!("drivername", "idisplay")]);
 
     // Add a plane.
-    c.create("mesh1", nsi::Node::Mesh, &[]);
+    c.create("mesh1", nsi::NodeType::Mesh, &[]);
     c.connect("mesh1", "", ".root", "objects", &[]);
     c.set_attribute(
         "mesh1",
@@ -93,16 +93,16 @@ fn live_edit() {
         ],
     );
 
-    c.create("plane_attribs", nsi::Node::Attributes, &[]);
+    c.create("plane_attribs", nsi::NodeType::Attributes, &[]);
     c.connect("plane_attribs", "", "mesh1", "geometryattributes", &[]);
 
     // Add a basic shader for the plane.
-    c.create("shader1", nsi::Node::Shader, &[]);
+    c.create("shader1", nsi::NodeType::Shader, &[]);
     c.set_attribute("shader1", &[nsi::string!("shaderfilename", "matte")]);
     c.connect("shader1", "", "plane_attribs", "surfaceshader", &[]);
 
     // Add a triangular light, with shader.
-    c.create("light1_trs", nsi::Node::Transform, &[]);
+    c.create("light1_trs", nsi::NodeType::Transform, &[]);
     c.connect("light1_trs", "", ".root", "objects", &[]);
 
     c.set_attribute(
@@ -113,7 +113,7 @@ fn live_edit() {
         )],
     );
 
-    c.create("light1", nsi::Node::Mesh, &[]);
+    c.create("light1", nsi::NodeType::Mesh, &[]);
     // This one is connected to the transform instead of the mesh
     // itself. Because we can.
     c.connect("light1", "", "light1_trs", "objects", &[]);
@@ -125,7 +125,7 @@ fn live_edit() {
         ],
     );
 
-    c.create("light1_shader", nsi::Node::Shader, &[]);
+    c.create("light1_shader", nsi::NodeType::Shader, &[]);
     c.set_attribute(
         "light1_shader",
         &[
@@ -134,7 +134,7 @@ fn live_edit() {
         ],
     );
 
-    c.create("light1_attribs", nsi::Node::Attributes, &[]);
+    c.create("light1_attribs", nsi::NodeType::Attributes, &[]);
     c.connect(
         "light1_attribs",
         "",
