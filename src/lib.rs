@@ -1,4 +1,4 @@
-//! A Flexible, Modern API for offline 3D Renderers
+//! A flexible, modern API for offline 3D renderers
 //!
 //! The [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ) is
 //! built around the concept of nodes.
@@ -26,7 +26,7 @@
 //! 1.  Methods to create nodes, attributes and their connections.
 //!     These are attached to a rendering [`Context`].
 //!
-//! 2.  Nodes of different [`NodeType`]s understood by the renderer.
+//! 2.  Nodes of different [`NodeType`] understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -134,10 +134,23 @@ impl<'a> Context<'a> {
     ///   It is acceptable to reuse the same handle inside different
     ///   contexts.
     ///
-    /// * `node_type` – The type of node to create.
+    /// * `node_type` – The type of node to create. You can use
+    ///   [`NodeType`] to create nodes that are in the official NSI
+    ///   specificaion.
+    ///   As this parameter is just a string you can instance other
+    ///   node types that are a particualr implementation may provide
+    ///   and which are not in the official spec.
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are
     ///   no optional parameters defined as of now*.
+    ///
+    /// ```
+    /// // Create a context to send the scene to.
+    /// let ctx = nsi::Context::new(&[]).unwrap();
+    ///
+    /// // Create an infinte plane.
+    /// ctx.create("ground", nsi::NodeType::Plane, &[]);
+    /// ```
     #[inline]
     pub fn create(
         &self,
@@ -151,7 +164,15 @@ impl<'a> Context<'a> {
         let args_len = args_out.len() as i32;
         let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
 
-        unsafe { nsi_sys::NSICreate(self.context, handle.as_ptr(), node_type.as_ptr(), args_len, args_ptr) }
+        unsafe {
+            nsi_sys::NSICreate(
+                self.context,
+                handle.as_ptr(),
+                node_type.as_ptr(),
+                args_len,
+                args_ptr,
+            )
+        }
     }
 
     /// This function deletes a node from the scene. All connections to
@@ -174,8 +195,10 @@ impl<'a> Context<'a> {
     ///   deleted. If a value of `1` is given, then nodes which connect
     ///   to the specified node are recursively removed. Unless they
     ///   meet one of the following conditions:
-    ///   * They also have connections which do not eventually lead to the specified node.
-    ///   * Their connection to the deleted node was created with a `strength` greater than `0`.
+    ///   * They also have connections which do not eventually lead to
+    ///     the specified node.
+    ///   * Their connection to the node to be deleted was created with
+    ///     a `strength` greater than `0`.
     ///
     ///   This allows, for example, deletion of an entire shader network in a single call.
     #[inline]
@@ -512,12 +535,15 @@ impl<'a> Drop for Context<'a> {
     }
 }
 
-/// A node in the ɴsɪ scene graph.
+/// The type for a node in the ɴsɪ scene graph.
+///
+/// This will just convert into a `Vec<u8>` of the string representing
+/// the node type when you use it.
 pub enum NodeType {
-    /// The scene’s root.
+    /// The scene’s root (`".root"`).
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
     Root, // = ".root",
-    /// Global settings node.
+    /// Global settings node (`".global"`).
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#the-global-node).
     Global,
     /// Expresses relationships of groups of nodes.
