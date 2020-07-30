@@ -37,7 +37,9 @@
 #![allow(non_snake_case)]
 
 extern crate self as nsi;
-use std::{ffi::CString, marker::PhantomData, ops::Drop, vec::Vec};
+// slice is imported so the (doc) examples compile w/o hiccups.
+#[allow(unused_imports)]
+use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 
 #[cfg(not(feature = "link_lib3delight"))]
 #[macro_use]
@@ -199,15 +201,8 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn new(args: &arg::ArgSlice<'_, 'a>) -> Option<Self> {
         match {
-            if args.is_empty() {
-                NSI_API.NSIBegin(0, std::ptr::null())
-            } else {
-                let args_out = arg::get_c_param_vec(args);
-                let args_len = args_out.len() as i32;
-                let args_ptr = args_out.as_ptr() as *const NSIParam_t;
-
-                NSI_API.NSIBegin(args_len, args_ptr)
-            }
+            let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
+            NSI_API.NSIBegin(args_len, args_ptr)
         } {
             0 => None,
             ref c => Some(Self {
@@ -239,7 +234,7 @@ impl<'a> Context<'a> {
     ///   and which are not in the official spec.
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are
-    ///   no optional parameters defined as of now*.
+    ///   no optional arguments defined as of now*.
     ///
     /// ```
     /// // Create a context to send the scene to.
@@ -257,9 +252,7 @@ impl<'a> Context<'a> {
     ) {
         let handle = CString::new(handle).unwrap();
         let node_type = CString::new(node_type).unwrap();
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSICreate(
             self.context,
@@ -299,9 +292,7 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSIDelete(self.context, handle.as_ptr(), args_len, args_ptr);
     }
@@ -328,9 +319,7 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &arg::ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
     }
@@ -347,7 +336,7 @@ impl<'a> Context<'a> {
     /// A notable  exception is the `P` attribute on (particles)[`Particles`]
     /// which can be of different size for each time step because of appearing
     /// or disappearing particles. Setting an attribute using this function
-    /// replaces any value previously set by ``NSISetAttribute()``.
+    /// replaces any value previously set by [`Context::set_attribute()`].
     ///
     /// # Arguments
     ///
@@ -365,9 +354,7 @@ impl<'a> Context<'a> {
         args: &arg::ArgSlice<'_, 'a>,
     ) {
         let handle = CString::new(handle).unwrap();
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
     }
@@ -447,9 +434,7 @@ impl<'a> Context<'a> {
         let from_attr = CString::new(from_attr).unwrap();
         let to = CString::new(to).unwrap();
         let to_attr = CString::new(to_attr).unwrap();
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSIConnect(
             self.context,
@@ -553,9 +538,7 @@ impl<'a> Context<'a> {
     ///   rendering begins.
     #[inline]
     pub fn evaluate(&self, args: &arg::ArgSlice<'_, 'a>) {
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSIEvaluate(self.context, args_len, args_ptr);
     }
@@ -597,9 +580,7 @@ impl<'a> Context<'a> {
     /// * `"frame"` – Specifies the frame number of this render.
     #[inline]
     pub fn render_control(&self, args: &arg::ArgSlice<'_, 'a>) {
-        let args_out = arg::get_c_param_vec(args);
-        let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
+        let (args_len, args_ptr, _args_out) = arg::get_c_param_vec(args);
 
         NSI_API.NSIRenderControl(self.context, args_len, args_ptr);
     }

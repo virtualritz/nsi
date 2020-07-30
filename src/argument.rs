@@ -5,7 +5,7 @@ pub mod arg {
     use crate::*;
 
     #[inline]
-    pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<NSIParam_t> {
+    pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
         let mut args_out = Vec::<NSIParam_t>::with_capacity(args_in.len());
         for arg_in in args_in {
             args_out.push(NSIParam_t {
@@ -17,15 +17,20 @@ pub mod arg {
                 flags: arg_in.flags as std::os::raw::c_int,
             });
         }
-        args_out
+        (
+            args_out.len() as i32,
+            args_out.as_ptr() as *const NSIParam_t,
+            args_out,
+        )
     }
 
-    /// A slice of (optional) [`Context`] method arguments.
+    /// A slice of (optional) arguments passed to a method of [`Context`].
     pub type ArgSlice<'a, 'b> = [Arg<'a, 'b>];
 
-    /// A vector of (optional) [`Context`] method arguments.
+    /// A vector of (optional) arguments passed to a method of [`Context`].
     pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
+    /// An (optional) argument passed to a method of [`Context`].
     pub struct Arg<'a, 'b> {
         pub(crate) name: CString,
         pub(crate) data: ArgData<'a, 'b>,
@@ -46,6 +51,7 @@ pub mod arg {
             }
         }
 
+        /// Sets the length of the argument for each element.
         #[inline]
         pub fn array_len(mut self, length: usize) -> Self {
             self.array_length = length;
@@ -53,18 +59,21 @@ pub mod arg {
             self
         }
 
+        /// Marks this argument as having per-face granularity.
         #[inline]
         pub fn per_face(mut self) -> Self {
             self.flags |= NSIParamPerFace;
             self
         }
 
+        /// Marks this argument as having per-vertex granularity.
         #[inline]
         pub fn per_vertex(mut self) -> Self {
             self.flags |= NSIParamPerVertex;
             self
         }
 
+        /// Marks this argument as to be interolated linearly.
         #[inline]
         pub fn linear_interpolation(mut self) -> Self {
             self.flags |= NSIParamInterpolateLinear;
@@ -80,8 +89,11 @@ pub mod arg {
         fn as_c_ptr(&self) -> *const std::ffi::c_void;
     }
 
-    // Lifetime 'a is for any tuple or array type
-    // Lifetime 'b is for the pointer type. This is pegged to the lifetime of the [`Context`]
+    /// Lifetime `'a` is for any tuple or array type as these are
+    /// passed as references.
+    /// Lifetime `'b` is for the arbitrary reference type. This is
+    /// pegged to the lifetime of the [`Context`]. Use this to
+    /// pass arbitray Rust data through the FFI boundary.
     #[enum_dispatch]
     pub enum ArgData<'a, 'b> {
         /// Single [`f32`) value.
