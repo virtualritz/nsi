@@ -96,6 +96,24 @@ This will set the `$DELIGHT` environment variable that the build script is looki
 
 It will also install 3Delight Display which you can render to, progressively, as an alternative to writing images to disk. When working with this crate this is quite handy.
 
+## Features
+The 3Delight dynamic library (`lib3delight`) can either be linked to during build or loaded at runtime.
+By default the lib is loaded at runtime. This has several advantages:
+1. If you ship your application or library you can ship it without
+   the library. It can still run and will print an informative error
+   if the library cannot be loaded.
+2. A user can install an updated version of the renderer and stuff
+   will ‘just work’.
+
+* Dynamicall link against `lib3delight`.
+  * `lib3delight` becomes a depdency. If it cannot't be found your
+    lib/app will not load/start.
+  * The feature is called `link_lib3delight`.
+* Download `lib3delight` during build.
+  * `lib3delight` is downloaded during build. Note that this may be
+    an outdated version. This feature mainly exists for CI purposes.
+  * The feature is called `download_lib3delight`.
+
 ## Getting Pixels
 
 3Delight still uses the old RenderMan display driver API if you want to stream pixels directly to Rust, in-memory.
