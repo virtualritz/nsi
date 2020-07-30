@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -14,12 +14,27 @@ documentation = "https://nsi.readthedocs.io/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [features]
+default = ["dlopen_derive", "dlopen"]
+# Specify this to link agains lib3delight
+link_lib3delight = ["nsi-sys/link_lib3delight"]
 # Whether to download a dynamic library version of 3Delight
 # if the renderer can't be found locally. The renderer is
 # needed as soon as the crate is linked against (e.g. for
 # running the tests).
-download_3delight_lib = ["nsi-sys/download_3delight_lib"]
+download_lib3delight = ["nsi-sys/download_lib3delight"]
 
 [dependencies]
-nsi-sys = "0.1.8"
 enum_dispatch = "0.3.1"
+lazy_static = "1.4.0"
+
+[dependencies.nsi-sys]
+path = "../nsi-sys"
+version = "0.1.9"
+
+[dependencies.dlopen_derive]
+version = "0.1.4"
+optional = true
+
+[dependencies.dlopen]
+version = "0.1.8"
+optional = true

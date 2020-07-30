@@ -26,7 +26,7 @@
 //! 1.  Methods to create nodes, attributes and their connections.
 //!     These are attached to a rendering [`Context`].
 //!
-//! 2.  Nodes of different [`NodeType`] understood by the renderer.
+//! 2.  Nodes of different [`NodeType`]s understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -34,10 +34,104 @@
 //!
 //! The first part was kept deliberately simple to make it easy to
 //! support multiple ways of creating nodes.
+#![allow(non_snake_case)]
 
 extern crate self as nsi;
-#[allow(unused_imports)]
-use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
+use std::{ffi::CString, marker::PhantomData, ops::Drop, vec::Vec};
+
+#[cfg(not(feature = "link_lib3delight"))]
+#[macro_use]
+extern crate dlopen_derive;
+
+use nsi_sys::*;
+
+trait Api {
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
+    fn NSIEnd(&self, ctx: NSIContext_t);
+    fn NSICreate(
+        &self,
+        ctx: NSIContext_t,
+        handle: NSIHandle_t,
+        type_: *const ::std::os::raw::c_char,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSIDelete(
+        &self,
+        ctx: NSIContext_t,
+        handle: NSIHandle_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSISetAttribute(
+        &self,
+        ctx: NSIContext_t,
+        object: NSIHandle_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSISetAttributeAtTime(
+        &self,
+        ctx: NSIContext_t,
+        object: NSIHandle_t,
+        time: f64,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSIDeleteAttribute(
+        &self,
+        ctx: NSIContext_t,
+        object: NSIHandle_t,
+        name: *const ::std::os::raw::c_char,
+    );
+    fn NSIConnect(
+        &self,
+        ctx: NSIContext_t,
+        from: NSIHandle_t,
+        from_attr: *const ::std::os::raw::c_char,
+        to: NSIHandle_t,
+        to_attr: *const ::std::os::raw::c_char,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSIDisconnect(
+        &self,
+        ctx: NSIContext_t,
+        from: NSIHandle_t,
+        from_attr: *const ::std::os::raw::c_char,
+        to: NSIHandle_t,
+        to_attr: *const ::std::os::raw::c_char,
+    );
+    fn NSIEvaluate(
+        &self,
+        ctx: NSIContext_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+    fn NSIRenderControl(
+        &self,
+        ctx: NSIContext_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    );
+}
+
+#[cfg(not(feature = "link_lib3delight"))]
+mod dynamic;
+#[cfg(feature = "link_lib3delight")]
+mod linked;
+
+#[cfg(not(feature = "link_lib3delight"))]
+use self::dynamic as api;
+#[cfg(feature = "link_lib3delight")]
+use self::linked as api;
+
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().unwrap();
+}
 
 #[macro_use]
 mod argument;
@@ -56,7 +150,7 @@ mod tests;
 /// A context can be used without worrying about its lifetime
 /// until you want to store it somewhere, e.g. in a struct.
 ///
-/// The reason a context has an explicit lifetime is because it can
+/// The reason a context has an explicit lifetime is so that it can
 /// take [`Reference`]s. These references must be valid until the
 /// context is dropped and this guarantee requires explicit lifetimes.
 /// When you use a context directly this is not an issue
@@ -68,13 +162,16 @@ mod tests;
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
 #[derive(Debug, Hash, PartialEq)]
 pub struct Context<'a> {
-    context: nsi_sys::NSIContext_t,
+    context: NSIContext_t,
+    // _marker needs to be invariant in 'a.
+    // See "Making a struct outlive a parameter given to a method of
+    // that struct": https://stackoverflow.com/questions/62374326/
     _marker: PhantomData<*mut &'a ()>,
 }
 
-impl<'a> From<nsi_sys::NSIContext_t> for Context<'a> {
+impl<'a> From<NSIContext_t> for Context<'a> {
     #[inline]
-    fn from(context: nsi_sys::NSIContext_t) -> Self {
+    fn from(context: NSIContext_t) -> Self {
         Self {
             context,
             _marker: PhantomData,
@@ -83,7 +180,7 @@ impl<'a> From<nsi_sys::NSIContext_t> for Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    //count: HashMap<nsi_sys::NSIContext_t
+    //count: HashMap<NSIContext_t
 
     /// Creates an ɴsɪ context.
     ///
@@ -103,13 +200,13 @@ impl<'a> Context<'a> {
     pub fn new(args: &arg::ArgSlice<'_, 'a>) -> Option<Self> {
         match {
             if args.is_empty() {
-                unsafe { nsi_sys::NSIBegin(0, std::ptr::null()) }
+                NSI_API.NSIBegin(0, std::ptr::null())
             } else {
                 let args_out = arg::get_c_param_vec(args);
                 let args_len = args_out.len() as i32;
-                let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+                let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-                unsafe { nsi_sys::NSIBegin(args_len, args_ptr) }
+                NSI_API.NSIBegin(args_len, args_ptr)
             }
         } {
             0 => None,
@@ -162,17 +259,15 @@ impl<'a> Context<'a> {
         let node_type = CString::new(node_type).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSICreate(
-                self.context,
-                handle.as_ptr(),
-                node_type.as_ptr(),
-                args_len,
-                args_ptr,
-            )
-        }
+        NSI_API.NSICreate(
+            self.context,
+            handle.as_ptr(),
+            node_type.as_ptr(),
+            args_len,
+            args_ptr,
+        )
     }
 
     /// This function deletes a node from the scene. All connections to
@@ -206,11 +301,9 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSIDelete(self.context, handle.as_ptr(), args_len, args_ptr);
-        }
+        NSI_API.NSIDelete(self.context, handle.as_ptr(), args_len, args_ptr);
     }
 
     /// This functions sets attributes on a previously node.
@@ -237,11 +330,9 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
-        }
+        NSI_API.NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
     }
 
     /// This function sets time-varying attributes (i.e. motion blurred).
@@ -276,11 +367,9 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
-        }
+        NSI_API.NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
     }
 
     /// This function deletes any attribute with a name which matches
@@ -305,9 +394,7 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let name = CString::new(name).unwrap();
 
-        unsafe {
-            nsi_sys::NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
-        }
+        NSI_API.NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
     }
 
     /// These two function creates a connection between two elements.
@@ -362,19 +449,17 @@ impl<'a> Context<'a> {
         let to_attr = CString::new(to_attr).unwrap();
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSIConnect(
-                self.context,
-                from.as_ptr(),
-                from_attr.as_ptr(),
-                to.as_ptr(),
-                to_attr.as_ptr(),
-                args_len,
-                args_ptr,
-            );
-        }
+        NSI_API.NSIConnect(
+            self.context,
+            from.as_ptr(),
+            from_attr.as_ptr(),
+            to.as_ptr(),
+            to_attr.as_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function removes a connection between two elements.
@@ -404,15 +489,13 @@ impl<'a> Context<'a> {
         let to = CString::new(to).unwrap();
         let to_attr = CString::new(to_attr).unwrap();
 
-        unsafe {
-            nsi_sys::NSIDisconnect(
-                self.context,
-                from.as_ptr(),
-                from_attr.as_ptr(),
-                to.as_ptr(),
-                to_attr.as_ptr(),
-            );
-        }
+        NSI_API.NSIDisconnect(
+            self.context,
+            from.as_ptr(),
+            from_attr.as_ptr(),
+            to.as_ptr(),
+            to_attr.as_ptr(),
+        );
     }
 
     /// This function includes a block of interface calls from an
@@ -472,11 +555,9 @@ impl<'a> Context<'a> {
     pub fn evaluate(&self, args: &arg::ArgSlice<'_, 'a>) {
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSIEvaluate(self.context, args_len, args_ptr);
-        }
+        NSI_API.NSIEvaluate(self.context, args_len, args_ptr);
     }
 
     /// This function is the only control function of the api. It is
@@ -518,20 +599,16 @@ impl<'a> Context<'a> {
     pub fn render_control(&self, args: &arg::ArgSlice<'_, 'a>) {
         let args_out = arg::get_c_param_vec(args);
         let args_len = args_out.len() as i32;
-        let args_ptr = args_out.as_ptr() as *const nsi_sys::NSIParam_t;
+        let args_ptr = args_out.as_ptr() as *const NSIParam_t;
 
-        unsafe {
-            nsi_sys::NSIRenderControl(self.context, args_len, args_ptr);
-        }
+        NSI_API.NSIRenderControl(self.context, args_len, args_ptr);
     }
 }
 
 impl<'a> Drop for Context<'a> {
     #[inline]
     fn drop(&mut self) {
-        unsafe {
-            nsi_sys::NSIEnd(self.context);
-        }
+        NSI_API.NSIEnd(self.context);
     }
 }
 

@@ -5,10 +5,10 @@ pub mod arg {
     use crate::*;
 
     #[inline]
-    pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<nsi_sys::NSIParam_t> {
-        let mut args_out = Vec::<nsi_sys::NSIParam_t>::with_capacity(args_in.len());
+    pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> Vec<NSIParam_t> {
+        let mut args_out = Vec::<NSIParam_t>::with_capacity(args_in.len());
         for arg_in in args_in {
-            args_out.push(nsi_sys::NSIParam_t {
+            args_out.push(NSIParam_t {
                 name: arg_in.name.as_ptr(),
                 data: arg_in.data.as_c_ptr(),
                 type_: arg_in.data.type_() as i32,
@@ -49,25 +49,25 @@ pub mod arg {
         #[inline]
         pub fn array_len(mut self, length: usize) -> Self {
             self.array_length = length;
-            self.flags |= nsi_sys::NSIParamIsArray;
+            self.flags |= NSIParamIsArray;
             self
         }
 
         #[inline]
         pub fn per_face(mut self) -> Self {
-            self.flags |= nsi_sys::NSIParamPerFace;
+            self.flags |= NSIParamPerFace;
             self
         }
 
         #[inline]
         pub fn per_vertex(mut self) -> Self {
-            self.flags |= nsi_sys::NSIParamPerVertex;
+            self.flags |= NSIParamPerVertex;
             self
         }
 
         #[inline]
         pub fn linear_interpolation(mut self) -> Self {
-            self.flags |= nsi_sys::NSIParamInterpolateLinear;
+            self.flags |= NSIParamInterpolateLinear;
             self
         }
     }
@@ -500,32 +500,32 @@ pub mod arg {
     #[repr(i32)]
     pub(crate) enum Type {
         /// A single 32-bit ([`f32`]) floating point value.
-        Float = nsi_sys::NSIType_t_NSITypeFloat as i32,
+        Float = NSIType_t_NSITypeFloat as i32,
         /// A single 64-bit ([`f64`]) floating point value.
-        Double = nsi_sys::NSIType_t_NSITypeDouble as i32,
+        Double = NSIType_t_NSITypeDouble as i32,
         /// Single 32-bit ([`i32`]) integer data.
-        Integer = nsi_sys::NSIType_t_NSITypeInteger as i32,
+        Integer = NSIType_t_NSITypeInteger as i32,
         /// A [`String`].
-        String = nsi_sys::NSIType_t_NSITypeString as i32,
+        String = NSIType_t_NSITypeString as i32,
         /// Color, given as three 32-bit ([`i32`]) floating point datas,
         /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
         /// 0.0]`
-        Color = nsi_sys::NSIType_t_NSITypeColor as i32,
+        Color = NSIType_t_NSITypeColor as i32,
         /// Point, given as three 32-bit ([`f32`])floating point datas.
-        Point = nsi_sys::NSIType_t_NSITypePoint as i32,
+        Point = NSIType_t_NSITypePoint as i32,
         /// Vector, given as three 32-bit ([`f32`]) floating point datas.
-        Vector = nsi_sys::NSIType_t_NSITypeVector as i32,
+        Vector = NSIType_t_NSITypeVector as i32,
         /// Normal vector, given as three 32-bit ([`f32`]) floating point
         /// datas.
-        Normal = nsi_sys::NSIType_t_NSITypeNormal as i32,
+        Normal = NSIType_t_NSITypeNormal as i32,
         /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
         /// point datas.
-        Matrix = nsi_sys::NSIType_t_NSITypeMatrix as i32,
+        Matrix = NSIType_t_NSITypeMatrix as i32,
         /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
         /// point datas.
-        DoubleMatrix = nsi_sys::NSIType_t_NSITypeDoubleMatrix as i32,
+        DoubleMatrix = NSIType_t_NSITypeDoubleMatrix as i32,
         /// Raw (`*const T`) pointer.
-        Pointer = nsi_sys::NSIType_t_NSITypePointer as i32,
+        Pointer = NSIType_t_NSITypePointer as i32,
     }
 
     impl Type {
