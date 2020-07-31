@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -10,7 +10,7 @@ description = "High level bindings for Illumination Research’s Nodal Scene Int
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 readme = "README.md"
 homepage = "https://www.3delight.com/"
-documentation = "https://nsi.readthedocs.io/"
+documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [features]

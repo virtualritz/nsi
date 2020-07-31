@@ -46,7 +46,7 @@
 //! 2. A user can install an updated version of the renderer and stuff
 //!    will ‘just work’.
 //!
-//! * Dynamicall link against `lib3delight`.
+//! * Dynamically link against `lib3delight`.
 //!   * `lib3delight` becomes a depdency. If it cannot't be found your
 //!     lib/app will not load/start.
 //!   * The feature is called `link_lib3delight`.
