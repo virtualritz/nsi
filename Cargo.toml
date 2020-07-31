@@ -28,7 +28,7 @@ enum_dispatch = "0.3.1"
 lazy_static = "1.4.0"
 
 [dependencies.nsi-sys]
-path = "../nsi-sys"
+#path = "../nsi-sys"
 version = "0.1.9"
 
 [dependencies.dlopen_derive]
