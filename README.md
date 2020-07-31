@@ -121,13 +121,9 @@ There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys) for thi
 
 ## Documentation
 
+Crate documentation can be found (@ docs.rs)[https://docs.rs/nsi/].
+
 Docs for the C, C++, Lua & Python bindings as well as an introduction and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
-
-Crate documentation can’t be built automatically for [docs.rs](https://docs.rs/crate/nsi/) yet (see [above](#Dependencies)) but you can get local docs the usual way:
-
-```terminal
-> cargo doc --open
-```
 
 ## Getting Help
 

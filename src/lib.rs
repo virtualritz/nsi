@@ -2,10 +2,13 @@
 //!
 //! The [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ) is
 //! built around the concept of nodes.
-//! Each node has a unique handle to identify it and a type which
-//! describes its intended function in the scene. Nodes are abstract
-//! containers for data. The interpretation depends on the node type.
-//! Nodes can also be [connected to each other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
+//!
+//! Each node has a unique handle to identify it. It also has a type
+//! which describes its intended function in the scene.
+//!
+//! Nodes are abstract containers for data. The interpretation depends
+//! on the node type. Nodes can also be [connected to each
+//! other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 //! to express relationships.
 //!
 //! Data is stored on nodes as attributes. Each attribute has a name
