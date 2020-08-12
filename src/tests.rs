@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use crate as nsi;
+
 #[cfg(test)]
 #[test]
 fn test_dodecahedron() {

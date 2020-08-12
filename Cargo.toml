@@ -1,13 +1,13 @@
 [package]
 name = "nsi"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "BSD-3-Clause"
 license-file = "LICENSE.md"
-description = "High level bindings for Illumination Research’s Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
-categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
 readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi/"
@@ -23,18 +23,15 @@ link_lib3delight = ["nsi-sys/link_lib3delight"]
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
 
+[dev-dependencies]
+cargo-husky = "1.5.0"
+
 [dependencies]
-enum_dispatch = "0.3.1"
+enum_dispatch = "0.3.2"
 lazy_static = "1.4.0"
+dlopen = { version = "0.1.8", optional = true }
+dlopen_derive = { version = "0.1.4", optional = true }
 
 [dependencies.nsi-sys]
-#path = "../nsi-sys"
+path = "../nsi-sys"
 version = "0.1.9"
-
-[dependencies.dlopen_derive]
-version = "0.1.4"
-optional = true
-
-[dependencies.dlopen]
-version = "0.1.8"
-optional = true
