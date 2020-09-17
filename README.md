@@ -116,7 +116,7 @@ Before you start it is suggested that you [download a 3Delight
 package](https://www.3delight.com/download) for your platform & install
 it (supported: Linux, macOS, Windows). This will set the `DELIGHT`
 environment variable that the build script is looking for to find
-headers and the library to link against.
+headers and the library to load/link against.
 
 It will also install 3Delight Display which you can render to,
 progressively, as an alternative to writing images to disk. When working
@@ -153,7 +153,7 @@ I cobbled together to get you started.
 
 ## Documentation
 
-Crate documentation can be found (@ docs.rs)[https://docs.rs/nsi/].
+Crate documentation can be found at (docs.rs)[https://docs.rs/nsi/].
 
 Docs for the C, C++, Lua & Python bindings as well as an introduction
 and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
