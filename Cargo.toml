@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.5.3"
+version = "0.5.4"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -27,11 +27,8 @@ download_lib3delight = ["nsi-sys/download_lib3delight"]
 cargo-husky = "1.5.0"
 
 [dependencies]
-enum_dispatch = "0.3.2"
+enum_dispatch = "0.3.3"
 lazy_static = "1.4.0"
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
-
-[dependencies.nsi-sys]
-path = "../nsi-sys"
-version = "0.1.9"
+nsi-sys = "0.1.12"

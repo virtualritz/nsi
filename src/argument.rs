@@ -1,6 +1,5 @@
 use enum_dispatch::enum_dispatch;
 use std::{any::Any, ffi::CString, marker::PhantomData};
-
 use nsi_sys::*;
 
 #[inline]
@@ -386,7 +385,7 @@ nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 /// the data you reference outlives the
 /// [`Context`] you eventually send it to.
 ///
-/// This gets converted to am array of raw pointers when
+/// This gets converted to an array of raw pointers when
 /// passed through the FFI boundary.
 pub struct References<'a> {
     data: Vec<*const std::ffi::c_void>,
@@ -427,7 +426,7 @@ impl<'a> ArgDataMethods for References<'a> {
     }
 }
 
-/// Raw pointer array type *without* lifietime guaratees.
+/// Raw pointer array type *without* lifetime guaratees.
 ///
 /// This can't guarantee that the data this points to
 /// outlives the [`Context`] you eventually send this
@@ -446,7 +445,7 @@ impl<'a> Pointers<'a> {
     /// to ensure the pointer can be safely dereferenced
     /// after the function has returned lies with the user.
     ///
-    /// [`References`] is as a *safe* alternative.
+    /// [`References`] is a *safe* alternative.
     pub unsafe fn new(data: &'a [*const std::ffi::c_void]) -> Self {
         Self { data }
     }

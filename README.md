@@ -82,9 +82,12 @@ ctx.set_attribute(
     ],
 );
 ```
-Also check out my [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation)
-for more example code (demonstrates render settings, sending OBJ meshes
-to the renderer via instancing, particle rendering, [OSL](https://github.com/imageworks/OpenShadingLanguage)
+Also check out my
+[Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation)
+or
+[Polyhedron Operators](https://github.com/virtualritz/polyhedron-operators)
+for more example code (demonstrates render settings, sending meshes
+to the renderer, instancing, particle rendering, [OSL](https://github.com/imageworks/OpenShadingLanguage)
 shaders, environment (lights) and dumping a scene description to disk).
 
 PRs are most welcome!
