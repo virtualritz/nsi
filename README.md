@@ -153,7 +153,7 @@ I cobbled together to get you started.
 
 ## Documentation
 
-Crate documentation can be found at (docs.rs)[https://docs.rs/nsi/].
+Crate documentation can be found at [docs.rs](https://docs.rs/nsi/).
 
 Docs for the C, C++, Lua & Python bindings as well as an introduction
 and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
