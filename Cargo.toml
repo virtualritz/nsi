@@ -1,12 +1,11 @@
 [package]
 name = "nsi"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
-license = "BSD-3-Clause"
-license-file = "LICENSE.md"
+license = "MIT OR Apache-2.0 OR Zlib"
 description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
 readme = "README.md"
 homepage = "https://www.3delight.com/"
@@ -22,13 +21,15 @@ link_lib3delight = ["nsi-sys/link_lib3delight"]
 # needed as soon as the crate is linked against (e.g. for
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
+toolbelt = ["ultraviolet"]
 
 [dev-dependencies]
 cargo-husky = "1.5.0"
 
 [dependencies]
-enum_dispatch = "0.3.3"
+enum_dispatch = "0.3.4"
 lazy_static = "1.4.0"
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
 nsi-sys = "0.1.12"
+ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }

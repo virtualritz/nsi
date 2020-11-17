@@ -88,7 +88,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// This function is used to create a new node.
+    /// Creates a new node.
     ///
     /// # Arguments
     ///
@@ -98,16 +98,16 @@ impl<'a> Context<'a> {
     ///   If the supplied handle matches an existing node, the function
     ///   does nothing if all other parameters match the call which
     ///   created that node. Otherwise, it emits an error. Note that
-    ///   handles need only be unique within a given interface context.
+    ///   handles need only be unique within a given [`Context`].
     ///   It is acceptable to reuse the same handle inside different
-    ///   contexts.
+    ///   [`Context`]s.
     ///
     /// * `node_type` – The type of node to create. You can use
     ///   [`NodeType`] to create nodes that are in the official NSI
     ///   specificaion.
     ///   As this parameter is just a string you can instance other
-    ///   node types that are a particualr implementation may provide
-    ///   and which are not in the official spec.
+    ///   node types that a particualr implementation may provide and
+    ///   which are not part of the official specification.
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are
     ///   no optional arguments defined as of now*.
@@ -177,7 +177,7 @@ impl<'a> Context<'a> {
     /// All optional arguments of the function become attributes of
     /// the node.
     ///
-    /// On a [`Shader`], this function is used to set the implicitly
+    /// On a [`NodeType::Shader`], this function is used to set the implicitly
     /// defined shader arguments.
     ///
     /// Setting an attribute using this function replaces any value
@@ -209,7 +209,7 @@ impl<'a> Context<'a> {
     /// particular order. In most uses, attributes that are motion blurred must
     /// have the same specification throughout the time range.
     ///
-    /// A notable  exception is the `P` attribute on (particles)[`Particles`]
+    /// A notable  exception is the `P` attribute on [`NodeType::Particles`]
     /// which can be of different size for each time step because of appearing
     /// or disappearing particles. Setting an attribute using this function
     /// replaces any value previously set by [`Context::set_attribute()`].
@@ -242,9 +242,9 @@ impl<'a> Context<'a> {
     /// Deleting an attribute resets it to its default value.
     ///
     /// For example, after deleting the `transformationmatrix` attribute
-    /// on a [`Transform`] node, the transform will be an identity.
-    /// Deleting a previously set attribute on a [`Shader`] node will
-    /// default to whatever is declared inside the shader.
+    /// on a [`NodeType::Transform`], the transform will be an identity.
+    /// Deleting a previously set attribute on a [`NodeType::Shader`]
+    /// will default to whatever is declared inside the shader.
     ///
     /// # Arguments
     ///
@@ -260,11 +260,11 @@ impl<'a> Context<'a> {
         NSI_API.NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
     }
 
-    /// These two function creates a connection between two elements.
-    /// It is not an error to create a connection
-    /// which already exists or to remove a connection which does not
-    /// exist but the nodes on which the connection is performed must
-    /// exist.
+    /// Create a connection between two elements.
+    ///
+    /// It is not an error to create a connection which already exists
+    /// or to remove a connection which does not exist but the nodes
+    /// on which the connection is performed must exist.
     ///
     /// # Arguments
     ///
@@ -365,10 +365,10 @@ impl<'a> Context<'a> {
     /// archive, with that of procedural include which is traditionally
     /// a compiled executable. Both are really the same idea expressed
     /// in a different language (note that for delayed procedural
-    /// evaluation one should use a ([`Procedural`]) node).
+    /// evaluation one should use a [`NodeType::Procedural`]).
     ///
-    /// The ɴsɪ adds a third option which sits in-between — (Lua
-    /// scripts)[https://nsi.readthedocs.io/en/latest/lua-api.html]
+    /// The ɴsɪ adds a third option which sits in-between — [Lua
+    /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html).
     /// They are much more powerful than a simple included file yet
     /// they are also much easier to generate as they do not require
     /// compilation. It is, for example, very realistic to export a
@@ -474,6 +474,7 @@ impl<'a> Drop for Context<'a> {
 /// This will just convert into a `Vec<u8>` of the string representing
 /// the node type when you use it.
 pub enum NodeType {
+    All,
     /// The scene’s root (`".root"`).
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
     Root, // = ".root",
@@ -542,6 +543,7 @@ impl From<NodeType> for Vec<u8> {
     #[inline]
     fn from(node_type: NodeType) -> Self {
         match node_type {
+            NodeType::All => b".all".to_vec(),
             NodeType::Root => b".root".to_vec(),
             NodeType::Global => b".global".to_vec(),
             NodeType::Set => b"set".to_vec(),

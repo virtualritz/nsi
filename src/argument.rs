@@ -1,6 +1,10 @@
 use enum_dispatch::enum_dispatch;
-use std::{any::Any, ffi::CString, marker::PhantomData};
 use nsi_sys::*;
+use std::{ffi::CString, marker::PhantomData};
+
+// Needed for docs.
+#[allow(unused_imports)]
+use crate::*;
 
 #[inline]
 pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
@@ -71,7 +75,7 @@ impl<'a, 'b> Arg<'a, 'b> {
         self
     }
 
-    /// Marks this argument as to be interolated linearly.
+    /// Marks this argument as to be interpolated linearly.
     #[inline]
     pub fn linear_interpolation(mut self) -> Self {
         self.flags |= NSIParamInterpolateLinear;
@@ -87,8 +91,13 @@ pub(crate) trait ArgDataMethods {
     fn as_c_ptr(&self) -> *const std::ffi::c_void;
 }
 
+/// A variant describing data passed to the renderer.
+///
+/// # Lifetimes
 /// Lifetime `'a` is for any tuple or array type as these are
-/// passed as references.
+/// passed as references and only need to live as long as the
+/// function call where they get passed.
+///
 /// Lifetime `'b` is for the arbitrary reference type. This is
 /// pegged to the lifetime of the [`Context`]. Use this to
 /// pass arbitray Rust data through the FFI boundary.
@@ -279,7 +288,7 @@ pub struct Reference<'a> {
 }
 
 impl<'a> Reference<'a> {
-    pub fn new(data: Option<&'a dyn Any>) -> Self {
+    pub fn new<T>(data: Option<&'a T>) -> Self {
         Self {
             data: data
                 .map(|p| p as *const _ as *const std::ffi::c_void)
@@ -393,7 +402,7 @@ pub struct References<'a> {
 }
 
 impl<'a> References<'a> {
-    pub fn new(data: &'a [Option<&'a dyn Any>]) -> Self {
+    pub fn new<T>(data: &'a [Option<&'a T>]) -> Self {
         debug_assert!(data.len() % Type::Pointer.element_size() == 0);
 
         let mut c_data = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
@@ -710,7 +719,8 @@ macro_rules! double_matrix {
     };
 }
 
-/// A macro to create a double precision 4×4 matrix array argument.
+/// A macro to create a [`DoubleMatrices`] double precision 4×4 matrix
+/// array argument.
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
@@ -718,7 +728,7 @@ macro_rules! double_matrices {
     };
 }
 
-/// A macro to create a string argument.
+/// A macro to create a [`String`] argument.
 /// # Example
 /// ```
 /// // Create rendering context.

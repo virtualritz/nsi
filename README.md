@@ -12,12 +12,13 @@ This puts one of the most advanced 3D production offline renderers at
 your fingertips in Rust – [3Delight](https://www.3delight.com/).
 
 ![Moana Island, rendered with 3Delight|ɴsɪ](moana_island.jpg)
-[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene),
-provided courtesy of Walt Disney Pictures, rendered with 3Delight|ɴsɪ.
+*[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene),
+provided courtesy of Walt Disney Pictures, rendered with 3Delight|ɴsɪ.*
 
 This is a huge scene (72GB of data) made of 31 million instances,
-78 million polygons defining subdivison surface geometry and 2,300 [Ptex](http://ptex.us/) textures.
-The above image was rendered in less than two minutes (wall time) using
+78 million polygons defining subdivison surface geometry and 2,300
+[Ptex](http://ptex.us/) textures. The above image was rendered in less
+than two minutes (wall time) using
 [3Delight Cloud](https://documentation.3delightcloud.com/display/3DLC/Cloud+Rendering+Speed).
 
 ## Example
@@ -134,7 +135,7 @@ By default the lib is loaded at runtime. This has several advantages:
    will ‘just work’.
 
 * Dynamically link against `lib3delight`.
-  * `lib3delight` becomes a depdency. If it cannot't be found your
+  * `lib3delight` becomes a depedency. If it cannot be found your
     lib/app will not load/start.
   * The feature is called `link_lib3delight`.
 * Download `lib3delight` during build.

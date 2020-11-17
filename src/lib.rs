@@ -38,7 +38,69 @@
 //! The first part was kept deliberately simple to make it easy to
 //! support multiple ways of creating nodes.
 //!
-//! ## Features
+//! ## Example
+//!
+//! ```
+//! // Create a context to send the scene to.
+//! let ctx = nsi::Context::new(&[])
+//!     .expect("Could not create NSI context.");
+//!
+//! // Create a dodecahedron.
+//! let face_index: [u32; 60] =
+//!     // 12 regular pentagon faces.
+//!    [
+//!          0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
+//!         16, 17,  1, 12,  0,  1,  9, 11,  3, 17,
+//!          1, 12, 14,  5,  9,  2, 13, 15,  6, 10,
+//!         13,  3, 17, 16,  2,  3, 11,  7, 15, 13,
+//!          4,  8, 10,  6, 18, 14,  5, 19, 18,  4,
+//!          5, 19,  7, 11,  9, 15,  7, 19, 18,  6,
+//!     ];
+//! let positions: [f32; 60] =
+//!     // 20 points @ 3 vertices.
+//!     [
+//!          1.,     1.,     1.,     1.,     1.,    -1.,
+//!          1.,    -1.,     1.,     1.,    -1.,    -1.,
+//!         -1.,     1.,     1.,    -1.,     1.,    -1.,
+//!         -1.,    -1.,     1.,    -1.,    -1.,    -1.,
+//!          0.,     0.618,  1.618,  0.,     0.618, -1.618,
+//!          0.,    -0.618,  1.618,  0.,    -0.618, -1.618,
+//!          0.618,  1.618,  0.,     0.618, -1.618,  0.,
+//!        -0.618,  1.618,  0.,    -0.618, -1.618,  0.,
+//!          1.618,  0.,     0.618,  1.618,  0.,    -0.618,
+//!         -1.618,  0.,     0.618, -1.618,  0.,    -0.618,
+//!     ];
+//!
+//! // Create a new mesh node and call it 'dodecahedron'.
+//! ctx.create("dodecahedron", nsi::NodeType::Mesh, &[]);
+//!
+//! // Connect the 'dodecahedron' node to the scene's root.
+//! ctx.connect("dodecahedron", "", ".root", "objects", &[]);
+//!
+//! // Define the geometry of the 'dodecahedron' node.
+//! ctx.set_attribute(
+//!     "dodecahedron",
+//!     &[
+//!         nsi::points!("P", &positions),
+//!         nsi::unsigneds!("P.indices", &face_index),
+//!         // 5 vertices per each face.
+//!         nsi::unsigneds!("nvertices", &[5; 12]),
+//!         // Render this as a subdivison surface.
+//!         nsi::string!("subdivision.scheme",
+//!             "catmull-clark"
+//!         ),
+//!         // Crease each of our 30 edges a bit.
+//!         nsi::unsigneds!("subdivision.creasevertices",
+//!             &face_index
+//!         ),
+//!         nsi::floats!(
+//!             "subdivision.creasesharpness",
+//!             &[10.; 30]
+//!         ),
+//!     ],
+//! );
+//! ```
+//! ## Cargo Features
 //! The 3Delight dynamic library (`lib3delight`) can either be linked to
 //! during build or loaded at runtime.
 //! By default the lib is loaded at runtime. This has several
@@ -49,10 +111,19 @@
 //! 2. A user can install an updated version of the renderer and stuff
 //!    will ‘just work’.
 //!
+//! * Load `lib3deligh` at runtime (default).
 //! * Dynamically link against `lib3delight`.
 //!   * `lib3delight` becomes a depdency. If it cannot't be found your
 //!     lib/app will not load/start.
 //!   * The feature is called `link_lib3delight`.
+//!   * You should disable default features (they are not needed/used)
+//!   * in this case:
+//!     ```toml
+//!     [dependencies.nsi]
+//!     version = "0.5.5"
+//!     features = [ "link_lib3delight" ]
+//!     default-features = false
+//!     ```
 //! * Download `lib3delight` during build.
 //!   * `lib3delight` is downloaded during build. Note that this may be
 //!     an outdated version. This feature mainly exists for CI purposes.
@@ -85,6 +156,9 @@ lazy_static! {
 #[macro_use]
 pub mod argument;
 pub mod context;
+
+#[cfg(feature = "toolbelt")]
+mod toolbelt;
 
 mod tests;
 
