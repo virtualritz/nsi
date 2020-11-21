@@ -5,7 +5,7 @@ use std::{env, path::Path};
 
 pub type ApiImpl = DynamicApi;
 
-use nsi_sys::*;
+use crate::*;
 
 #[derive(WrapperApi)]
 struct CApi {
@@ -60,27 +60,66 @@ struct CApi {
         extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
     NSIRenderControl:
         extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
+
+    #[cfg(feature = "output")]
+    DspyRegisterDriver: extern "C" fn(
+        driver_name: *const ::std::os::raw::c_char,
+        p_open: ndspy_sys::PtDspyOpenFuncPtr,
+        p_write: ndspy_sys::PtDspyWriteFuncPtr,
+        p_close: ndspy_sys::PtDspyCloseFuncPtr,
+        p_query: ndspy_sys::PtDspyQueryFuncPtr,
+    ) -> ndspy_sys::PtDspyError,
 }
 
 pub struct DynamicApi {
     api: Container<CApi>,
 }
 
+#[cfg(target_os = "linux")]
+static DELIGHT_APP_PATH: &str = "/usr/local/3delight/lib/lib3delight.so";
+
+#[cfg(target_os = "macos")]
+static DELIGHT_APP_PATH: &str = "/Applications/3Delight/lib/lib3delight.dylib";
+
+#[cfg(target_os = "windows")]
+static DELIGHT_APP_PATH: &str = "C:/%ProgramFiles%/3Delight/lib/lib3delight.dll";
+
+#[cfg(target_os = "linux")]
+static DELIGHT_LIB: &str = "lib3delight.so";
+
+#[cfg(target_os = "macos")]
+static DELIGHT_LIB: &str = "lib3delight.dylib";
+
+#[cfg(target_os = "windows")]
+static DELIGHT_LIB: &str = "lib3delight.dll";
+
 impl DynamicApi {
-    // macOS implementation
     #[inline]
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        match unsafe { Container::load("/Applications/3Delight/lib/lib3delight.dylib") }
-            .or_else(|_| unsafe { Container::load("lib3delight.dylib") })
+        match unsafe { Container::load(DELIGHT_APP_PATH) }
+            .or_else(|_| unsafe { Container::load(DELIGHT_LIB) })
             .or_else(|_| match env::var("DELIGHT") {
                 Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
-                Ok(delight) => unsafe {
-                    Container::load(Path::new(&delight).join("lib").join("lib3delight.dylib"))
+                Ok(delight) => {
+                    unsafe { Container::load(Path::new(&delight).join("lib").join(DELIGHT_LIB)) }
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
                 }
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
             }) {
             Err(e) => Err(e),
-            Ok(api) => Ok(DynamicApi { api }),
+            Ok(api) => {
+                let api = DynamicApi { api };
+
+                #[cfg(feature = "output")]
+                api.DspyRegisterDriver(
+                    b"ferris\0" as *const u8 as _,
+                    Some(output::image_open),
+                    Some(output::image_write),
+                    Some(output::image_close),
+                    Some(output::image_query),
+                );
+
+                Ok(api)
+            }
         }
     }
 }
@@ -188,5 +227,18 @@ impl Api for DynamicApi {
         params: *const NSIParam_t,
     ) {
         self.api.NSIRenderControl(ctx, nparams, params);
+    }
+    #[cfg(feature = "output")]
+    #[inline]
+    fn DspyRegisterDriver(
+        &self,
+        driver_name: *const ::std::os::raw::c_char,
+        p_open: ndspy_sys::PtDspyOpenFuncPtr,
+        p_write: ndspy_sys::PtDspyWriteFuncPtr,
+        p_close: ndspy_sys::PtDspyCloseFuncPtr,
+        p_query: ndspy_sys::PtDspyQueryFuncPtr,
+    ) -> ndspy_sys::PtDspyError {
+        self.api
+            .DspyRegisterDriver(driver_name, p_open, p_write, p_close, p_query)
     }
 }

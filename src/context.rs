@@ -1,13 +1,10 @@
 // Needed for the example dode to build.
 extern crate self as nsi;
-// std::slice is imported so the (doc) examples compile w/o hiccups.
 use crate::argument::*;
 use crate::*;
+// std::slice is imported so the (doc) examples compile w/o hiccups.
 #[allow(unused_imports)]
 use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
-
-#[allow(unused_imports)]
-//use NodeType::*;
 
 /// An ɴsɪ context.
 ///
@@ -53,8 +50,6 @@ impl<'a> From<Context<'a>> for NSIContext_t {
 }
 
 impl<'a> Context<'a> {
-    //count: HashMap<NSIContext_t
-
     /// Creates an ɴsɪ context.
     ///
     /// Contexts may be used in multiple threads at once.

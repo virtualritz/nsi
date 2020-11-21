@@ -9,7 +9,18 @@ pub struct LinkedApi {}
 impl LinkedApi {
     #[inline]
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(LinkedApi {})
+        let api = LinkedApi {};
+
+        #[cfg(feature = "output")]
+        api.DspyRegisterDriver(
+            b"ferris\0" as *const u8 as _,
+            Some(output::image_open),
+            Some(output::image_write),
+            Some(output::image_close),
+            Some(output::image_query),
+        );
+
+        Ok(api)
     }
 }
 
@@ -114,5 +125,17 @@ impl Api for LinkedApi {
         params: *const NSIParam_t,
     ) {
         unsafe { NSIRenderControl(ctx, nparams, params) };
+    }
+    #[cfg(feature = "output")]
+    #[inline]
+    fn DspyRegisterDriver(
+        &self,
+        driver_name: *const ::std::os::raw::c_char,
+        p_open: ndspy_sys::PtDspyOpenFuncPtr,
+        p_write: ndspy_sys::PtDspyWriteFuncPtr,
+        p_close: ndspy_sys::PtDspyCloseFuncPtr,
+        p_query: ndspy_sys::PtDspyQueryFuncPtr,
+    ) -> ndspy_sys::PtDspyError {
+        unsafe { ndspy_sys::DspyRegisterDriver(driver_name, p_open, p_write, p_close, p_query) }
     }
 }

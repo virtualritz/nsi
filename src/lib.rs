@@ -27,9 +27,9 @@
 //! What we refer to as the ɴsɪ has two major components:
 //!
 //! 1.  Methods to create nodes, attributes and their connections.
-//!     These are attached to a rendering [`Context`].
+//!     These are attached to a rendering [`Context`](context::Context).
 //!
-//! 2.  Nodes of different [`NodeType`]s understood by the renderer.
+//! 2.  Nodes of different [`NodeType`](context::NodeType)s understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -129,12 +129,16 @@
 //!     an outdated version. This feature mainly exists for CI purposes.
 //!   * The feature is called `download_lib3delight`.
 #![allow(non_snake_case)]
+//#![warn(missing_docs)]
+//#![warn(missing_doc_code_examples)]
 
 #[cfg(not(feature = "link_lib3delight"))]
 #[macro_use]
 extern crate dlopen_derive;
 
 use nsi_sys::*;
+
+// Crate features -----------------------------------------------------
 
 #[cfg(not(feature = "link_lib3delight"))]
 mod dynamic;
@@ -146,6 +150,11 @@ use self::dynamic as api;
 #[cfg(feature = "link_lib3delight")]
 use self::linked as api;
 
+#[cfg(feature = "output")]
+use ndspy_sys;
+
+// API initalization/on-demand loading of lib3delight -----------------
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -153,9 +162,17 @@ lazy_static! {
     static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight.");
 }
 
+// Default modules ----------------------------------------------------
+
 #[macro_use]
 pub mod argument;
 pub mod context;
+
+// Optional modules ---------------------------------------------------
+
+#[cfg(feature = "output")]
+pub mod output;
+//pub use crate::display::*;
 
 #[cfg(feature = "toolbelt")]
 mod toolbelt;
@@ -165,20 +182,8 @@ mod tests;
 pub use crate::argument::*;
 pub use crate::context::*;
 
-pub mod prelude {
-    //! Re-exports commonly used types and traits.
-    //!
-    //! Importing the contents of this module is recommended.
-
-    pub use crate::argument::Arg;
-    pub use crate::argument::*;
-
-    pub use crate::context::Context;
-    pub use crate::context::NodeType;
-    pub use crate::context::*;
-
-    pub use crate::*;
-}
+#[deprecated]
+pub mod prelude {}
 
 trait Api {
     fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
@@ -249,4 +254,14 @@ trait Api {
         nparams: ::std::os::raw::c_int,
         params: *const NSIParam_t,
     );
+
+    #[cfg(feature = "output")]
+    fn DspyRegisterDriver(
+        &self,
+        driver_name: *const ::std::os::raw::c_char,
+        p_open: ndspy_sys::PtDspyOpenFuncPtr,
+        p_write: ndspy_sys::PtDspyWriteFuncPtr,
+        p_close: ndspy_sys::PtDspyCloseFuncPtr,
+        p_query: ndspy_sys::PtDspyQueryFuncPtr,
+    ) -> ndspy_sys::PtDspyError;
 }

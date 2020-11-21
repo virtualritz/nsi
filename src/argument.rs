@@ -13,26 +13,25 @@ pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> (i32, *const NSIParam_t, Ve
         args_out.push(NSIParam_t {
             name: arg_in.name.as_ptr(),
             data: arg_in.data.as_c_ptr(),
-            type_: arg_in.data.type_() as i32,
-            arraylength: arg_in.array_length as i32,
-            count: (arg_in.data.len() / arg_in.array_length) as u64,
-            flags: arg_in.flags as std::os::raw::c_int,
+            type_: arg_in.data.type_() as _,
+            arraylength: arg_in.array_length as _,
+            count: (arg_in.data.len() / arg_in.array_length) as _,
+            flags: arg_in.flags as _,
         });
     }
-    (
-        args_out.len() as i32,
-        args_out.as_ptr() as *const NSIParam_t,
-        args_out,
-    )
+    (args_out.len() as _, args_out.as_ptr(), args_out)
 }
 
-/// A slice of (optional) arguments passed to a method of [`Context`].
+/// A slice of (optional) arguments passed to a method of
+/// [`Context`](context::Context).
 pub type ArgSlice<'a, 'b> = [Arg<'a, 'b>];
 
-/// A vector of (optional) arguments passed to a method of [`Context`].
+/// A vector of (optional) arguments passed to a method of
+/// [`Context`](context::Context).
 pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
-/// An (optional) argument passed to a method of [`Context`].
+/// An (optional) argument passed to a method of
+/// [`Context`](context::Context).
 pub struct Arg<'a, 'b> {
     pub(crate) name: CString,
     pub(crate) data: ArgData<'a, 'b>,
@@ -88,7 +87,7 @@ pub(crate) trait ArgDataMethods {
     //const TYPE: Type;
     fn type_(&self) -> Type;
     fn len(&self) -> usize;
-    fn as_c_ptr(&self) -> *const std::ffi::c_void;
+    fn as_c_ptr(&self) -> *const core::ffi::c_void;
 }
 
 /// A variant describing data passed to the renderer.
@@ -99,8 +98,8 @@ pub(crate) trait ArgDataMethods {
 /// function call where they get passed.
 ///
 /// Lifetime `'b` is for the arbitrary reference type. This is
-/// pegged to the lifetime of the [`Context`]. Use this to
-/// pass arbitray Rust data through the FFI boundary.
+/// pegged to the lifetime of the [`Context`](crate::context::Context).
+/// Use this to pass arbitray Rust data through the FFI boundary.
 #[enum_dispatch]
 pub enum ArgData<'a, 'b> {
     /// Single [`f32`) value.
@@ -147,6 +146,8 @@ pub enum ArgData<'a, 'b> {
     /// Reference to arbitrary data.
     Reference(Reference<'b>),
     References(References<'b>),
+    /// Callback.
+    Callback(Callback<'b>),
     /// Raw (`*const T`) pointer.
     Pointer,
     Pointers(Pointers<'a>),
@@ -173,7 +174,7 @@ macro_rules! nsi_data_def {
                 1
             }
 
-            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            fn as_c_ptr(&self) -> *const core::ffi::c_void {
                 &self.data as *const $type as _
             }
         }
@@ -202,7 +203,7 @@ macro_rules! nsi_data_array_def {
                 self.data.len() / $nsi_type.element_size()
             }
 
-            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            fn as_c_ptr(&self) -> *const core::ffi::c_void {
                 self.data.as_ptr() as _
             }
         }
@@ -230,7 +231,7 @@ macro_rules! nsi_tuple_data_def {
                 1
             }
 
-            fn as_c_ptr(&self) -> *const std::ffi::c_void {
+            fn as_c_ptr(&self) -> *const core::ffi::c_void {
                 self.data.as_ptr() as _
             }
         }
@@ -241,14 +242,15 @@ nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
 nsi_data_def!(u32, Unsigned, Type::Integer);
-//nsi_data_def!(*const std::ffi::c_void, Pointer, Type::Pointer);
+//nsi_data_def!(*const core::ffi::c_void, Pointer, Type::Pointer);
 
 /// Reference type *with* lifetime guaratees.
 ///
 /// Prefer this over using a raw [`Pointer`]
 /// as it allows the compiler to check that
 /// the data you reference outlives the
-/// [`Context`] you eventually send it to.
+/// [`Context`](context::Context) you eventually
+/// send it to.
 ///
 /// This gets converted to a raw pointer when passed
 /// through the FFI boundary.
@@ -283,16 +285,16 @@ nsi_data_def!(u32, Unsigned, Type::Integer);
 /// drop(ctx);
 /// ```
 pub struct Reference<'a> {
-    data: *const std::ffi::c_void,
+    data: *const core::ffi::c_void,
     _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Reference<'a> {
-    pub fn new<T>(data: Option<&'a T>) -> Self {
+    pub fn new<T: Sized>(data: Option<&'a T>) -> Self {
         Self {
             data: data
-                .map(|p| p as *const _ as *const std::ffi::c_void)
-                .unwrap_or(std::ptr::null()),
+                .map(|p| p as *const _ as _)
+                .unwrap_or(core::ptr::null()),
             _marker: PhantomData,
         }
     }
@@ -307,28 +309,58 @@ impl<'a> ArgDataMethods for Reference<'a> {
         1
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
         self.data
     }
 }
 
-/// Raw pointer type *without* lifietime guaratees.
+pub trait CallbackPtr {
+    fn to_ptr(self) -> *const core::ffi::c_void;
+}
+
+pub struct Callback<'a> {
+    data: *const core::ffi::c_void,
+    _marker: PhantomData<&'a mut ()>,
+}
+
+impl<'a> Callback<'a> {
+    pub fn new<T: CallbackPtr>(data: T) -> Self {
+        Self {
+            data: data.to_ptr(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a> ArgDataMethods for Callback<'a> {
+    fn type_(&self) -> Type {
+        Type::Pointer
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+        self.data
+    }
+}
+/// Raw pointer type *without* lifetime guaratees.
 ///
-/// This can't guarantee that the data this
-/// points to outlives the [`Context`] you
-/// eventually send this to. This is the user's
-/// responsibility.
+/// This can't guarantee that the data this points to
+/// outlives the [`Context`](context::Context) you
+/// eventually send this to. This is your responsibility.
 ///
-/// If you need to send a pointer a better
-/// alternative is the [`Reference`] type
-/// that allows the compiler to check that
-/// the the data outlives the [`Context`].
+/// If you need to send pointers a better alternative
+/// is the [`References`] type that allows the compiler
+/// to check that the the referenced data outlives the
+/// [`Context`](context::Context).
 pub struct Pointer {
-    data: *const std::ffi::c_void,
+    data: *const core::ffi::c_void,
 }
 
 impl Pointer {
-    pub unsafe fn new(data: *const std::ffi::c_void) -> Self {
+    pub unsafe fn new(data: *const core::ffi::c_void) -> Self {
         Self { data }
     }
 }
@@ -342,7 +374,7 @@ impl ArgDataMethods for Pointer {
         1
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
         self.data
     }
 }
@@ -350,7 +382,7 @@ impl ArgDataMethods for Pointer {
 pub struct String {
     _data: CString,
     // The FFI API needs a pointer to a C string
-    pointer: *const std::ffi::c_void,
+    pointer: *const core::ffi::c_void,
 }
 
 impl String {
@@ -371,8 +403,8 @@ impl ArgDataMethods for String {
         1
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
-        unsafe { std::mem::transmute(&self.pointer) }
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+        unsafe { core::mem::transmute(&self.pointer) }
     }
 }
 
@@ -392,12 +424,13 @@ nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 /// Prefer this over using a raw [`Pointers`]
 /// as it allows the compiler to check that
 /// the data you reference outlives the
-/// [`Context`] you eventually send it to.
+/// [`Context`](context::Context) you eventually send
+/// it to.
 ///
 /// This gets converted to an array of raw pointers when
 /// passed through the FFI boundary.
 pub struct References<'a> {
-    data: Vec<*const std::ffi::c_void>,
+    data: Vec<*const core::ffi::c_void>,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -405,12 +438,12 @@ impl<'a> References<'a> {
     pub fn new<T>(data: &'a [Option<&'a T>]) -> Self {
         debug_assert!(data.len() % Type::Pointer.element_size() == 0);
 
-        let mut c_data = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
+        let mut c_data = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
 
         for e in data {
             c_data.push(
-                e.map(|p| p as *const _ as *const std::ffi::c_void)
-                    .unwrap_or(std::ptr::null()),
+                e.map(|p| p as *const _ as *const core::ffi::c_void)
+                    .unwrap_or(core::ptr::null()),
             );
         }
 
@@ -430,7 +463,7 @@ impl<'a> ArgDataMethods for References<'a> {
         self.data.len() / Type::Pointer.element_size()
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
         self.data.as_ptr() as _
     }
 }
@@ -438,15 +471,15 @@ impl<'a> ArgDataMethods for References<'a> {
 /// Raw pointer array type *without* lifetime guaratees.
 ///
 /// This can't guarantee that the data this points to
-/// outlives the [`Context`] you eventually send this
-/// to. This is your responsibility.
+/// outlives the [`Context`](context::Context) you
+/// eventually send this to. This is your responsibility.
 ///
 /// If you need to send pointers a better alternative
 /// is the [`References`] type that allows the compiler
 /// to check that the the referenced data outlives the
-/// [`Context`].
+/// [`Context`](context::Context).
 pub struct Pointers<'a> {
-    data: &'a [*const std::ffi::c_void],
+    data: &'a [*const core::ffi::c_void],
 }
 
 impl<'a> Pointers<'a> {
@@ -455,7 +488,7 @@ impl<'a> Pointers<'a> {
     /// after the function has returned lies with the user.
     ///
     /// [`References`] is a *safe* alternative.
-    pub unsafe fn new(data: &'a [*const std::ffi::c_void]) -> Self {
+    pub unsafe fn new(data: &'a [*const core::ffi::c_void]) -> Self {
         Self { data }
     }
 }
@@ -469,20 +502,20 @@ impl<'a> ArgDataMethods for Pointers<'a> {
         self.data.len() / Type::Pointer.element_size()
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
         self.data.as_ptr() as _
     }
 }
 
 pub struct Strings {
     _data: Vec<CString>,
-    pointer: Vec<*const std::ffi::c_void>,
+    pointer: Vec<*const core::ffi::c_void>,
 }
 
 impl Strings {
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
         let mut _data = Vec::<CString>::with_capacity(data.len());
-        let mut pointer = Vec::<*const std::ffi::c_void>::with_capacity(data.len());
+        let mut pointer = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
 
         data.iter().for_each(|s| {
             _data.push(CString::new(*s).unwrap());
@@ -502,7 +535,7 @@ impl ArgDataMethods for Strings {
         self.pointer.len()
     }
 
-    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+    fn as_c_ptr(&self) -> *const core::ffi::c_void {
         self.pointer.as_ptr() as _
     }
 }
@@ -519,36 +552,36 @@ nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 #[repr(i32)]
 pub(crate) enum Type {
     /// A single 32-bit ([`f32`]) floating point value.
-    Float = NSIType_t_NSITypeFloat as i32,
+    Float = NSIType_t_NSITypeFloat as _,
     /// A single 64-bit ([`f64`]) floating point value.
-    Double = NSIType_t_NSITypeDouble as i32,
+    Double = NSIType_t_NSITypeDouble as _,
     /// Single 32-bit ([`i32`]) integer data.
-    Integer = NSIType_t_NSITypeInteger as i32,
+    Integer = NSIType_t_NSITypeInteger as _,
     /// A [`String`].
-    String = NSIType_t_NSITypeString as i32,
+    String = NSIType_t_NSITypeString as _,
     /// Color, given as three 32-bit ([`i32`]) floating point datas,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]`
-    Color = NSIType_t_NSITypeColor as i32,
+    Color = NSIType_t_NSITypeColor as _,
     /// Point, given as three 32-bit ([`f32`])floating point datas.
-    Point = NSIType_t_NSITypePoint as i32,
+    Point = NSIType_t_NSITypePoint as _,
     /// Vector, given as three 32-bit ([`f32`]) floating point datas.
-    Vector = NSIType_t_NSITypeVector as i32,
+    Vector = NSIType_t_NSITypeVector as _,
     /// Normal vector, given as three 32-bit ([`f32`]) floating point
     /// datas.
-    Normal = NSIType_t_NSITypeNormal as i32,
+    Normal = NSIType_t_NSITypeNormal as _,
     /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
     /// point datas.
-    Matrix = NSIType_t_NSITypeMatrix as i32,
+    Matrix = NSIType_t_NSITypeMatrix as _,
     /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
     /// point datas.
-    DoubleMatrix = NSIType_t_NSITypeDoubleMatrix as i32,
+    DoubleMatrix = NSIType_t_NSITypeDoubleMatrix as _,
     /// Raw (`*const T`) pointer.
-    Pointer = NSIType_t_NSITypePointer as i32,
+    Pointer = NSIType_t_NSITypePointer as _,
 }
 
 impl Type {
-    /// Returns the size of the resp. type in bytes.
+    /// Returns the number of components of the resp. type.
     #[inline]
     pub(crate) fn element_size(&self) -> usize {
         match self {
@@ -567,6 +600,7 @@ impl Type {
     }
 }
 
+/// Create a [`Float`] argument.
 #[macro_export]
 macro_rules! float {
     ($name: tt, $value: expr) => {
@@ -574,6 +608,7 @@ macro_rules! float {
     };
 }
 
+/// Create a [`Float`] array argument.
 #[macro_export]
 macro_rules! floats {
     ($name: tt, $value: expr) => {
@@ -581,6 +616,7 @@ macro_rules! floats {
     };
 }
 
+/// Create a [`Double`] precision argument.
 #[macro_export]
 macro_rules! double {
     ($name: tt, $value: expr) => {
@@ -588,6 +624,7 @@ macro_rules! double {
     };
 }
 
+/// Create a [`Double`] precision array argument.
 #[macro_export]
 macro_rules! doubles {
     ($name: tt, $value: expr) => {
@@ -595,6 +632,7 @@ macro_rules! doubles {
     };
 }
 
+/// Create a [`Integer`] argument.
 #[macro_export]
 macro_rules! integer {
     ($name: tt, $value: expr) => {
@@ -602,6 +640,7 @@ macro_rules! integer {
     };
 }
 
+/// Create a [`Integer`] array argument.
 #[macro_export]
 macro_rules! integers {
     ($name: tt, $value: expr) => {
@@ -609,6 +648,7 @@ macro_rules! integers {
     };
 }
 
+/// Create a [`Unsigned`] integer argument.
 #[macro_export]
 macro_rules! unsigned {
     ($name: tt, $value: expr) => {
@@ -616,6 +656,7 @@ macro_rules! unsigned {
     };
 }
 
+/// Create a [`Unsigned`] integer array argument.
 #[macro_export]
 macro_rules! unsigneds {
     ($name: tt, $value: expr) => {
@@ -623,6 +664,7 @@ macro_rules! unsigneds {
     };
 }
 
+/// Create a [`Color`] argument.
 #[macro_export]
 macro_rules! color {
     ($name: tt, $value: expr) => {
@@ -630,6 +672,7 @@ macro_rules! color {
     };
 }
 
+/// Create a [`Color`] array argument.
 #[macro_export]
 macro_rules! colors {
     ($name: tt, $value: expr) => {
@@ -637,6 +680,7 @@ macro_rules! colors {
     };
 }
 
+/// Create a [`Point`] argument.
 #[macro_export]
 macro_rules! point {
     ($name: tt, $value: expr) => {
@@ -644,6 +688,7 @@ macro_rules! point {
     };
 }
 
+/// Create a [`Point`] array argument.
 #[macro_export]
 macro_rules! points {
     ($name: tt, $value: expr) => {
@@ -651,6 +696,7 @@ macro_rules! points {
     };
 }
 
+/// Create a [`Vector`] argument.
 #[macro_export]
 macro_rules! vector {
     ($name: tt, $value: expr) => {
@@ -658,6 +704,7 @@ macro_rules! vector {
     };
 }
 
+/// Create a [`Vector`] array argument.
 #[macro_export]
 macro_rules! vectors {
     ($name: tt, $value: expr) => {
@@ -665,6 +712,7 @@ macro_rules! vectors {
     };
 }
 
+/// Create a [`Normal`] argument.
 #[macro_export]
 macro_rules! normal {
     ($name: tt, $value: expr) => {
@@ -672,6 +720,7 @@ macro_rules! normal {
     };
 }
 
+/// Create a [`Normal`] array argument.
 #[macro_export]
 macro_rules! normals {
     ($name: tt, $value: expr) => {
@@ -679,6 +728,7 @@ macro_rules! normals {
     };
 }
 
+/// Create a [`Matrices`] single precision 4×4 matrix argument.
 #[macro_export]
 macro_rules! matrix {
     ($name: tt, $value: expr) => {
@@ -686,6 +736,8 @@ macro_rules! matrix {
     };
 }
 
+/// Create a [`Matrices`] single precision 4×4 matrix array
+/// argument.
 #[macro_export]
 macro_rules! matrices {
     ($name: tt, $value: expr) => {
@@ -693,12 +745,10 @@ macro_rules! matrices {
     };
 }
 
-/// A macro to create a double precision 4×4 matrix argument.
+/// Create a [`DoubleMatrix`] double precision 4×4 matrix argument.
 /// # Example
 /// ```
-/// // create rendering context.
-/// let ctx = nsi::Context::new(&[]).unwrap();
-///
+/// # let ctx = nsi::Context::new(&[]).unwrap();
 /// // Setup a transform node.
 /// ctx.create("xform", nsi::NodeType::Transform, &[]);
 /// ctx.connect("xform", "", ".root", "objects", &[]);
@@ -719,7 +769,7 @@ macro_rules! double_matrix {
     };
 }
 
-/// A macro to create a [`DoubleMatrices`] double precision 4×4 matrix
+/// Create a [`DoubleMatrices`] double precision 4×4 matrix
 /// array argument.
 #[macro_export]
 macro_rules! double_matrices {
@@ -728,7 +778,7 @@ macro_rules! double_matrices {
     };
 }
 
-/// A macro to create a [`String`] argument.
+/// Create a [`String`] argument.
 /// # Example
 /// ```
 /// // Create rendering context.
@@ -745,14 +795,13 @@ macro_rules! string {
     };
 }
 
-/// A macro to create a string array argument.
+/// Create a [`String`] array argument.
 /// # Example
 /// ```
-/// // Create rendering context.
-/// let ctx = nsi::Context::new(&[]).unwrap();
+/// # let ctx = nsi::Context::new(&[]).unwrap();
 /// // One of these is not an actor:
-/// ctx.create("dummy", nsi::NodeType::Attributes, &[
-///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"]).array_len(2)
+/// ctx.set_attribute("dummy" &[
+///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"])
 /// ]);
 /// ```
 #[macro_export]
@@ -762,6 +811,7 @@ macro_rules! strings {
     };
 }
 
+/// Create a [`Reference`] argument.
 #[macro_export]
 macro_rules! reference {
     ($name: tt, $value: expr) => {
@@ -769,6 +819,7 @@ macro_rules! reference {
     };
 }
 
+/// Create a [`Reference`] array argument.
 #[macro_export]
 macro_rules! references {
     ($name: tt, $value: expr) => {
@@ -776,6 +827,29 @@ macro_rules! references {
     };
 }
 
+/// Create a [`Callback`] argument.
+/// # Example
+/// ```
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// ctx.set_attribute(
+///     "display_driver",
+///     &[
+///         nsi::string!("drivername", "ferris"),
+///         // When done, send all pixels to the finish closure.
+///         nsi::callback!("callback.finish", finish),
+///     ],
+/// );
+///
+/// ```
+#[macro_export]
+macro_rules! callback {
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::Callback::new($value)))
+    };
+}
+
+/// Create a [`Pointer`] array argument.
 #[macro_export]
 macro_rules! pointer {
     ($name: tt, $value: expr) => {
@@ -783,6 +857,7 @@ macro_rules! pointer {
     };
 }
 
+/// Create a [`Pointer`] array argument.
 #[macro_export]
 macro_rules! pointers {
     ($name: tt, $value: expr) => {
