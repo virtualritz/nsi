@@ -26,6 +26,7 @@ use core::ptr;
 use ndspy_sys;
 use num_enum::IntoPrimitive;
 use std::{
+    collections::VecDeque,
     ffi::CStr,
     os::raw::{c_char, c_int, c_void},
 };
@@ -48,6 +49,35 @@ pub enum Error {
     Stop = ndspy_sys::PtDspyError_PkDspyErrorStop as _,
 }
 
+/// A closure which is called once per
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) node
+/// instance. It is passed to NSI via the `"callback.open"` attribute
+/// on that node.
+///
+/// The closure is called once, before the renderer starts sending
+/// pixels to the output driver.
+///
+/// The `pixel_format` parameter is an array of strings that details
+/// the composition of the `f32` data that the renderer will send to
+/// the [`FnWrite`] and/or [`FnFinish`] closures
+/// # Example
+/// ```
+/// # #[cfg(feature = "output")]
+/// # {
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// let open = nsi::output::OpenCallback::new(
+///     |name: &str,
+///      width: usize,
+///      height: usize,
+///      pixel_format: &mut Vec<&str>,
+///         println!(
+///             "Resolution:"
+///             pixel_data[0]
+///         );
+///         nsi::output::Error::None
+///     },
+/// );
 pub type FnOpen<'a> = dyn FnMut(
         // Filename.
         &str,
@@ -56,7 +86,7 @@ pub type FnOpen<'a> = dyn FnMut(
         // Height.
         usize,
         // Pixel format.
-        &mut Vec<&str>,
+        &mut FormatVec,
     ) -> Error
     + 'a;
 //Result<(Vec<Format>, Flags), Error>;
@@ -77,7 +107,7 @@ pub type FnWrite<'a> = dyn FnMut(
         // y_max_plus_one,
         usize,
         // Pixel format.
-        &[&str],
+        &[String],
         // Pixel data.
         &mut [f32],
     ) -> Error
@@ -97,7 +127,7 @@ pub type FnWrite<'a> = dyn FnMut(
 ///     |name: &str,
 ///      width: usize,
 ///      height: usize,
-///      pixel_format: Vec<&str>,
+///      pixel_format: Vec<String>,
 ///      pixel_data: Vec<f32>| {
 ///         println!(
 ///             "The 1st channel of the 1st pixel has the value {}.",
@@ -125,7 +155,7 @@ pub type FnFinish<'a> = dyn FnMut(
         // Height.
         usize,
         // Pixel format.
-        Vec<&str>,
+        Vec<String>,
         // Pixel data.
         Vec<f32>,
     ) -> Error
@@ -133,16 +163,14 @@ pub type FnFinish<'a> = dyn FnMut(
 
 enum Query {}
 
-type FnQuery<'a> = dyn FnMut(
-    Query
-) -> Error + 'a;
+type FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 
 pub struct OpenCallback<'a>(Box<Box<Box<FnOpen<'a>>>>);
 
 impl<'a> OpenCallback<'a> {
     pub fn new<F>(fn_open: F) -> Self
     where
-        F: FnMut(&str, usize, usize, &mut Vec<&str>) -> Error + 'a,
+        F: FnMut(&str, usize, usize, &mut FormatVec) -> Error + 'a,
     {
         OpenCallback(Box::new(Box::new(Box::new(fn_open))))
     }
@@ -159,7 +187,7 @@ pub struct WriteCallback<'a>(Box<Box<Box<FnWrite<'a>>>>);
 impl<'a> WriteCallback<'a> {
     pub fn new<F>(fn_write: F) -> Self
     where
-        F: FnMut(&str, usize, usize, usize, usize, usize, usize, &[&str], &mut [f32]) -> Error + 'a,
+        F: FnMut(&str, usize, usize, usize, usize, usize, usize, &[String], &mut [f32]) -> Error + 'a,
     {
         WriteCallback(Box::new(Box::new(Box::new(fn_write))))
     }
@@ -176,7 +204,7 @@ pub struct FinishCallback<'a>(Box<Box<Box<FnFinish<'a>>>>);
 impl<'a> FinishCallback<'a> {
     pub fn new<F>(fn_finish: F) -> Self
     where
-        F: FnMut(&str, usize, usize, Vec<&str>, Vec<f32>) -> Error + 'a,
+        F: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a,
     {
         FinishCallback(Box::new(Box::new(Box::new(fn_finish))))
     }
@@ -192,7 +220,7 @@ struct DisplayData<'a> {
     name: &'a str,
     width: usize,
     height: usize,
-    pixel_format: Vec<&'a str>,
+    pixel_format: Vec<String>,
     pixel_data: Vec<f32>,
     fn_open: Option<Box<Box<Box<FnOpen<'a>>>>>,
     fn_write: Option<Box<Box<Box<FnWrite<'a>>>>>,
@@ -201,8 +229,68 @@ struct DisplayData<'a> {
     fn_finish: Option<Box<Box<Box<FnFinish<'a>>>>>,
 }
 
+pub struct FormatVec<'a>(VecDeque<&'a str>);
+
+impl<'a> FormatVec<'a> {
+    fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
+        // Collect format names as &str and force format to f32.
+        FormatVec(
+            format
+                .iter()
+                .map(|format| unsafe { CStr::from_ptr(format.name).to_str().unwrap() })
+                .collect(),
+        )
+    }
+
+    fn update_dspy_dev_format(&self, format: &mut [ndspy_sys::PtDspyDevFormat]) {
+        format
+            .iter_mut()
+            .zip(self.0.iter())
+            .for_each(|(format, name)| {
+                // Ensure all channels are sent to us as 32bit float.
+                format.type_ = ndspy_sys::PkDspyFloat32;
+                format.name = name.as_ptr() as *const _;
+            });
+    }
+
+    fn into_vec(format_vec: Self) -> Vec<String> {
+        format_vec.0.into_iter().map(|name| String::from(name)).collect()
+    }
+
+    pub fn move_back(&mut self, i: usize) {
+        if i < self.len() - 1 {
+            let name = self.0.remove(i).unwrap();
+            self.0.push_back(name);
+        }
+        // do nothing - element is already at the end.
+    }
+    pub fn move_front(&mut self, i: usize) {
+        if 0 < i {
+            let name = self.0.remove(i).unwrap();
+            self.0.push_front(name);
+        }
+        // do nothing - element is already at the start.
+    }
+    pub fn swap(&mut self, i: usize, j: usize) {
+        self.0.swap(i, j);
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 impl<'a> DisplayData<'a> {
-    fn box_into_tuple(display_data: Box<Self>) -> (&'a str, usize, usize, Vec<&'a str>, Vec<f32>, Option<Box<Box<Box<FnFinish<'a>>>>>) {
+    fn box_into_tuple(
+        display_data: Box<Self>,
+    ) -> (
+        &'a str,
+        usize,
+        usize,
+        Vec<String>,
+        Vec<f32>,
+        Option<Box<Box<Box<FnFinish<'a>>>>>,
+    ) {
         // These boxes somehow get deallocated twice if we don't suppress this here.
         // No idea why.
         if let Some(fn_open) = display_data.fn_open {
@@ -221,7 +309,7 @@ impl<'a> DisplayData<'a> {
             display_data.height,
             display_data.pixel_format,
             display_data.pixel_data,
-            display_data.fn_finish
+            display_data.fn_finish,
         )
     }
 }
@@ -267,44 +355,41 @@ pub(crate) extern "C" fn image_open(
     }
 
     let parameters = unsafe {
+        // We need to const->mut transmute() here because we need
+        // pointers to FnMut below.
         std::slice::from_raw_parts_mut(std::mem::transmute(parameters), parameters_count as _)
     };
-
-    let format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
-
-    // Collect format names as &str and force format to f32.
-    let pixel_format = format
-        .iter_mut()
-        .enumerate()
-        .map(|format| {
-            // Ensure all channels are sent to us as 32bit float.
-            format.1.type_ = ndspy_sys::PkDspyFloat32;
-            unsafe { CStr::from_ptr(format.1.name).to_str().unwrap() }
-        })
-        .collect::<Vec<_>>();
 
     let mut display_data = Box::new(DisplayData {
         name: unsafe { CStr::from_ptr(output_filename).to_str().unwrap() },
         width: width as _,
         height: height as _,
-        pixel_format,
-        pixel_data: vec![0.0f32; width as usize * height as usize * format.len()],
+        pixel_format: Vec::new(),
+        pixel_data: vec![0.0f32; (width * height * format_count) as _],
         fn_open: get_parameter_triple_box::<FnOpen>("callback.open", b'p', 1, parameters),
         fn_write: get_parameter_triple_box::<FnWrite>("callback.write", b'p', 1, parameters),
         fn_query: None, // get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1, parameters),
         fn_finish: get_parameter_triple_box::<FnFinish>("callback.finish", b'p', 1, parameters),
     });
 
+    let mut format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
+    let mut format_vec = FormatVec::new(&format);
+
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        fn_open(
+        let error = fn_open(
             display_data.name,
             width as _,
             height as _,
-            &mut display_data.pixel_format
-        )
+            &mut format_vec,
+        );
+        // Update possibly re-ordered format array.
+        format_vec.update_dspy_dev_format(&mut format);
+        error
     } else {
         Error::None
     };
+
+    display_data.pixel_format = FormatVec::into_vec(format_vec);
 
     unsafe {
         *image_handle_ptr = Box::into_raw(display_data) as _;
@@ -389,7 +474,7 @@ pub(crate) extern "C" fn image_write(
             x_max_plus_one as _,
             y_min as _,
             y_max_plus_one as _,
-            &display_data.pixel_format,
+            display_data.pixel_format.as_slice(),
             display_data.pixel_data.as_mut_slice(),
         )
     } else {
@@ -408,7 +493,7 @@ pub(crate) extern "C" fn image_close(
     let display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
-    DisplayData::box_into_tuple(display_data);
+        DisplayData::box_into_tuple(display_data);
 
     let error = if let Some(mut fn_finish) = fn_finish {
         let error = fn_finish(name, width, height, pixel_format, pixel_data);
@@ -419,7 +504,6 @@ pub(crate) extern "C" fn image_close(
     };
 
     //if let Some(ref mut fn_finish
-
 
     error.into()
 }

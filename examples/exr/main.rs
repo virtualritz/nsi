@@ -1,10 +1,9 @@
 use exr::prelude::rgba_image::*;
-use polyhedron_ops as p_ops;
 use nsi::output::Error;
+use polyhedron_ops as p_ops;
 use std::sync::{Arc, Mutex};
 
 mod render;
-
 
 fn write_exr(name: &str, width: usize, height: usize, pixel_length: usize, pixel_data: &[f32]) {
     //println!("Writing EXR ... {:?}", pixel_data);
@@ -69,7 +68,11 @@ pub fn main() {
         );
 
         let finish = nsi::output::FinishCallback::new(
-            |name: &str, width: usize, height: usize, pixel_format: Vec<&str>, pixel_data: Vec<f32>| {
+            |name: &str,
+             width: usize,
+             height: usize,
+             pixel_format: Vec<&str>,
+             pixel_data: Vec<f32>| {
                 write_exr(
                     (String::from(name) + ".exr").as_str(),
                     width,
