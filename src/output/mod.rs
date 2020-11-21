@@ -1,3 +1,4 @@
+#![doc(cfg(feature = "output"))]
 //! # Output Driver Callbacks
 //! This module allows passing closures to the renderer as callbacks.
 //!
@@ -19,9 +20,8 @@
 //!   passed back to this closure.
 //! * To update a buffer while the renderer is working implement an
 //!   [`FnWrite`] closure.
-//! *
 //!
-
+//!
 use core::ptr;
 use ndspy_sys;
 use num_enum::IntoPrimitive;
@@ -83,8 +83,40 @@ pub type FnWrite<'a> = dyn FnMut(
     ) -> Error
     + 'a;
 
-/// A closure which is called once per [`OutputDriver`](crate::context::NodeType::OutputDriver)
-/// instance. It is passed to NSI via the `"callback.finish"` attribute on that node.
+/// A closure which is called once per
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver)
+/// instance. It is passed to NSI via the `"callback.finish"` attribute
+/// on that node.
+/// # Example
+/// ```
+/// # #[cfg(feature = "output")]
+/// # {
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// let finish = nsi::output::FinishCallback::new(
+///     |name: &str,
+///      width: usize,
+///      height: usize,
+///      pixel_format: Vec<&str>,
+///      pixel_data: Vec<f32>| {
+///         println!(
+///             "The 1st channel of the 1st pixel has the value {}.",
+///             pixel_data[0]
+///         );
+///         nsi::output::Error::None
+///     },
+/// );
+///
+/// ctx.set_attribute(
+///     "oxidized_output_driver",
+///     &[
+///         nsi::string!("drivername", "ferris"),
+///         // When done, send all pixels to the finish closure.
+///         nsi::callback!("callback.finish", finish),
+///     ],
+/// );
+/// # }
+/// ```
 pub type FnFinish<'a> = dyn FnMut(
         // Filename.
         &str,

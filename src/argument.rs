@@ -800,8 +800,10 @@ macro_rules! string {
 /// ```
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// // One of these is not an actor:
-/// ctx.set_attribute("dummy" &[
-///    nsi::strings!("actors", &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt", "Helge Schneider"])
+/// ctx.set_attribute("dummy", &[
+///     nsi::strings!("actors",
+///         &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt"]
+///     )
 /// ]);
 /// ```
 #[macro_export]
@@ -828,20 +830,6 @@ macro_rules! references {
 }
 
 /// Create a [`Callback`] argument.
-/// # Example
-/// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
-/// ctx.set_attribute(
-///     "display_driver",
-///     &[
-///         nsi::string!("drivername", "ferris"),
-///         // When done, send all pixels to the finish closure.
-///         nsi::callback!("callback.finish", finish),
-///     ],
-/// );
-///
-/// ```
 #[macro_export]
 macro_rules! callback {
     ($name: tt, $value: expr) => {

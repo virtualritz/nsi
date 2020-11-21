@@ -38,3 +38,8 @@ nsi-sys = "0.1.12"
 ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
 ndspy-sys = { path = "../ndspy-sys", optional = true }
 num_enum = { version = "0.5.1", optional = true }
+
+[[example]]
+path = "examples/exr/main.rs"
+name = "exr"
+required-features = [ "output" ]

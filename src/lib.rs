@@ -1,10 +1,11 @@
+#![feature(doc_cfg)]
+//! # Nodal Scene Interface – ɴsɪ
 //! A flexible, modern API for offline 3D renderers
 //!
-//! The [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ) is
-//! built around the concept of nodes.
-//!
-//! Each node has a unique handle to identify it. It also has a type
-//! which describes its intended function in the scene.
+//! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
+//! nodes. Each node has a *unique handle* to identify it. It also has
+//! a [type](context::NodeType) which describes its intended function
+//! in the scene.
 //!
 //! Nodes are abstract containers for data. The interpretation depends
 //! on the node type. Nodes can also be [connected to each
@@ -172,7 +173,6 @@ pub mod context;
 
 #[cfg(feature = "output")]
 pub mod output;
-//pub use crate::display::*;
 
 #[cfg(feature = "toolbelt")]
 mod toolbelt;
