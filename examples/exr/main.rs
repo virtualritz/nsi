@@ -1,13 +1,16 @@
+use colorspace as cs;
 use exr::prelude::rgba_image::*;
 use nsi::output::Error;
+use png;
 use polyhedron_ops as p_ops;
+use std::fs::File;
+use std::io::BufWriter;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 mod render;
 
 fn write_exr(name: &str, width: usize, height: usize, pixel_length: usize, pixel_data: &[f32]) {
-    //println!("Writing EXR ... {:?}", pixel_data);
-
     let sample = |position: Vec2<usize>| {
         let index = pixel_length * (position.x() + position.y() * width);
 
@@ -21,13 +24,11 @@ fn write_exr(name: &str, width: usize, height: usize, pixel_length: usize, pixel
 
     let image_info = ImageInfo::rgba((width, height), SampleType::F32);
 
-    // write it to a file with all cores in parallel
     image_info
-        //.with_encoding(encoding)
-        //.remove_excess()
         .write_pixels_to_file(
             name.clone(),
-            // this will actually generate the pixels in parallel on all cores
+            // This will actually suck the pixels from our buffer in
+            // parallel on all cores.
             write_options::high(),
             &sample,
         )
@@ -35,36 +36,69 @@ fn write_exr(name: &str, width: usize, height: usize, pixel_length: usize, pixel
 }
 
 pub fn main() {
-    let mut width = 0usize;
-    let mut height = 0usize;
-    let mut pixel_len = 0usize;
-
-    let mut final_pixel_data = Vec::<f32>::new(); // = Arc::new(Mutex::new(Vec::<f32>::new()));
-
-    let index = Arc::new(Mutex::new(Vec::new()));
+    let mut dimensions = (0u32, 0u32);
+    let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
     {
         let open = nsi::output::OpenCallback::new(
-            |_name: &str, w: usize, h: usize, format: &mut nsi::output::PixelFormat| {
-                width = w;
-                height = h;
-                pixel_len = format.len();
-                let mut index = index.lock().unwrap();
-                *index = (0..format.len()).map(|i| i).collect::<Vec<usize>>();
+            |_name: &str, width: usize, height: usize, format: &mut nsi::output::PixelFormat| {
+                // Reserve out
+                let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
+                *quantized_pixel_data = vec![0u8; width * height * format.len()];
                 Error::None
             },
         );
 
-        let _write = nsi::output::WriteCallback::new(
+        // Source and target spaces.
+        let model_aces_cg = &cs::color_space_rgb::model_f32::ACES_CG;
+        let model_srgb = &cs::color_space_rgb::model_f32::SRGB;
+
+        let write = nsi::output::WriteCallback::new(
             |_name: &str,
-             _width: usize,
+             width: usize,
              _height: usize,
-             _x_min: usize,
-             _x_max_plus_one: usize,
-             _y_min: usize,
-             _y_max_plus_one: usize,
-             _pixel_format: &[String],
-             _pixel_data: &[f32]| { Error::None },
+             x_min: usize,
+             x_max_plus_one: usize,
+             y_min: usize,
+             y_max_plus_one: usize,
+             pixel_format: &[String],
+             pixel_data: &[f32]| {
+                let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
+
+                for scanline in y_min..y_max_plus_one {
+                    let y_offset = scanline * width;
+                    for index in y_offset + x_min..y_offset + x_max_plus_one {
+                        let index = index * pixel_format.len();
+
+                        let alpha = pixel_data[index + 3];
+                        // We ignore pixels with zero alpha.
+                        if 0.0 != alpha {
+                            let mut color = [cs::rgb::RGBf::new(0f32, 0., 0.)];
+                            cs::rgb_to_rgb(
+                                model_aces_cg,
+                                model_srgb,
+                                &[cs::rgb::RGBf::new(
+                                    pixel_data[index + 0] / alpha,
+                                    pixel_data[index + 1] / alpha,
+                                    pixel_data[index + 2] / alpha,
+                                )],
+                                &mut color,
+                            );
+
+                            let color: cs::rgb::RGBu8 = model_srgb
+                                .encode(cs::rgb::RGBf::new(color[0].r, color[0].g, color[0].b))
+                                .into();
+
+                            quantized_pixel_data[index + 0] = (color.r as f32 * alpha) as _;
+                            quantized_pixel_data[index + 1] = (color.g as f32 * alpha) as _;
+                            quantized_pixel_data[index + 2] = (color.b as f32 * alpha) as _;
+                            quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
+                        }
+                    }
+                }
+
+                Error::None
+            },
         );
 
         let finish = nsi::output::FinishCallback::new(
@@ -80,8 +114,8 @@ pub fn main() {
                     pixel_format.len(),
                     &pixel_data,
                 );
-                final_pixel_data = pixel_data;
-                println!("{:?}", index.lock().unwrap());
+                // Remember the dimensions for writingb out our 8bit PNG
+                dimensions = (width as _, height as _);
                 Error::None
             },
         );
@@ -94,9 +128,24 @@ pub fn main() {
         polyhedron.kis(Some(-0.2), None, true, true);
         polyhedron.normalize();
 
-        //inspect_boxed_trait_object(&open);
-        render::nsi_render(&polyhedron, &[0.0f64; 16], 1, false, open, finish);
+        render::nsi_render(&polyhedron, 1, false, open, write, finish);
     }
 
-    final_pixel_data.push(0.0);
+    let quantized_pixel_data = Arc::<_>::try_unwrap(quantized_pixel_data)
+        .unwrap()
+        .into_inner()
+        .unwrap();
+
+    let path = Path::new("test.png");
+    let file = File::create(path).unwrap();
+    let ref mut writer = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(writer, dimensions.0, dimensions.1);
+    encoder.set_color(png::ColorType::RGBA);
+    encoder.set_depth(png::BitDepth::Eight);
+
+    let mut writer = encoder.write_header().unwrap();
+    writer
+        .write_image_data(&quantized_pixel_data)
+        .expect("Error writing PNG.");
 }

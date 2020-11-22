@@ -1,12 +1,12 @@
-use polyhedron_ops as p_ops;
+use crate::p_ops;
 use std::{env, path::PathBuf};
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
     name: &str,
-    camera_xform: &[f64; 16],
     samples: u32,
     open: nsi::output::OpenCallback,
+    write: nsi::output::WriteCallback,
     finish: nsi::output::FinishCallback,
 ) {
     // Setup a camera transform.
@@ -103,6 +103,7 @@ fn nsi_camera<'a>(
             nsi::string!("drivername", "ferris"),
             nsi::string!("imagefilename", name),
             nsi::callback!("callback.open", open),
+            nsi::callback!("callback.write", write),
             nsi::callback!("callback.finish", finish),
         ],
     );
@@ -308,10 +309,10 @@ fn nsi_material(c: &nsi::Context, name: &str) {
 
 pub(crate) fn nsi_render<'a>(
     polyhedron: &p_ops::Polyhedron,
-    camera_xform: &[f64; 16],
     samples: u32,
     cloud_render: bool,
     open: nsi::output::OpenCallback,
+    write: nsi::output::WriteCallback,
     finish: nsi::output::FinishCallback,
 ) {
     let ctx = {
@@ -326,14 +327,7 @@ pub(crate) fn nsi_render<'a>(
     }
     .expect("Could not create NSI rendering context.");
 
-    nsi_camera(
-        &ctx,
-        &polyhedron.name(),
-        camera_xform,
-        samples,
-        open,
-        finish,
-    );
+    nsi_camera(&ctx, &polyhedron.name(), samples, open, write, finish);
 
     nsi_environment(&ctx);
 

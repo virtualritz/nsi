@@ -312,7 +312,7 @@ pub struct WriteCallback<'a>(Box<Box<Box<dyn FnWrite<'a>>>>);
 impl<'a> WriteCallback<'a> {
     pub fn new<F>(fn_write: F) -> Self
     where
-        F: FnWrite<'a>
+        F: FnWrite<'a>,
     {
         WriteCallback(Box::new(Box::new(Box::new(fn_write))))
     }
@@ -401,7 +401,7 @@ impl<'a> DisplayData<'a> {
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer)s,
 /// an *RGBA* **color** output layer and a world space **normal**, will look
 /// like this:
-/// ```text
+/// ``
 /// r
 /// g
 /// b
@@ -409,7 +409,7 @@ impl<'a> DisplayData<'a> {
 /// N_world.000.x
 /// N_world.001.y
 /// N_world.002.z
-/// ```
+/// ``
 /// ## On-Demand Reordering
 /// The type allows reordering of the pixel format to fit your needs.
 /// This is mainly meant for convenience so that any code in
@@ -427,9 +427,9 @@ impl<'a> DisplayData<'a> {
 ///
 /// ## Channel Name Format
 /// The channel name format is:
-/// ```text
+/// ``
 /// [<output layer name>.<###>.]<channel id>
-/// ```
+/// ``
 /// * `output layer name` – The name of the
 ///     [`OutputLayer`](crate::context::NodeType::OutputLayer).
 /// * `###` - Zero padded number starting from `000` that is appended
@@ -763,20 +763,23 @@ extern "C" fn image_progress(
 pub use color::*;
 
 pub mod color {
-    use num_traits::{
-        float::Float,
-        identities::{One, Zero},
-    };
-    use rand::{distributions::uniform::SampleUniform, Rng};
+    use core::ops::Mul;
+    use num_traits::float::Float;
+    use oorandom;
 
-    pub fn quantize<T>(value: T, one: T, min: T, max: T, dither_amplitude: T) -> T
+    pub fn quantize<T>(
+        value: T,
+        one: T,
+        min: T,
+        max: T,
+        dither_amplitude: T,
+        rng: &mut oorandom::Rand32,
+    ) -> T
     where
-        T: Float + Zero + One + SampleUniform,
+        T: Float + Mul<f32, Output = T>,
     {
         use clamped::Clamp;
-
-        let mut rng = rand::thread_rng();
-        (one * value + dither_amplitude * rng.gen_range(T::zero(), T::one()))
+        (one * value + dither_amplitude * rng.rand_float())
             .round()
             .clamped(min, max)
     }

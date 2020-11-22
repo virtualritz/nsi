@@ -14,10 +14,10 @@ impl LinkedApi {
         #[cfg(feature = "output")]
         api.DspyRegisterDriver(
             b"ferris\0" as *const u8 as _,
-            Some(output::image_open),
-            Some(output::image_write),
-            Some(output::image_close),
-            Some(output::image_query),
+            Some(crate::output::image_open),
+            Some(crate::output::image_write),
+            Some(crate::output::image_close),
+            Some(crate::output::image_query),
         );
 
         Ok(api)
