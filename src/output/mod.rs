@@ -1,28 +1,33 @@
 #![doc(cfg(feature = "output"))]
 //! # Output Driver Callbacks
-//! This module allows passing closures to the renderer as callbacks.
+//! This module declares several closure types that can passed via
+//! [`Callback`](crate::argument::Callback)s to an
+//! [`OutputDriver`](crate::context::NodeType::OutputDriver) node to
+//! stream pixels during and/or after a render, in-memory.
 //!
 //! There are three types of closure:
 //! * [`FnOpen`] is called once when the
 //!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is
 //!   *opened* by the renderer.
+//!
 //! * [`FnWrite`] is called for each bucket of pixel data the renderer
 //!   sends to the
 //!   [`OutputDriver`](crate::context::NodeType::OutputDriver).
+//!
 //! * [`FnFinish`] is called once when the
 //!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is
 //!   *closed* by the renderer.
 //!
 //! As a user you can choose how to use this API.
+//!
 //! * To get one final big blob of pixel data, when rendering is
 //!   finished, it suffices to only implement an [`FnFinish`] closure.
 //!   The [`Vec<f32>`] buffer that was used to accumulate the data is
 //!   passed back to this closure.
-//! * To update a buffer while the renderer is working implement an
-//!   [`FnWrite`] closure.
 //!
-//!
-use core::ptr;
+//! * To get an updated buffer while the renderer is working implement
+//!   an [`FnWrite`] closure.
+use core::{ops::Index, ptr};
 use ndspy_sys;
 use num_enum::IntoPrimitive;
 use std::{
@@ -50,35 +55,57 @@ pub enum Error {
 }
 
 /// A closure which is called once per
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) node
-/// instance. It is passed to NSI via the `"callback.open"` attribute
-/// on that node.
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+///
+/// It is passed to NSI via the `"callback.open"` attribute on that
+/// node.
 ///
 /// The closure is called once, before the renderer starts sending
 /// pixels to the output driver.
-///
+/// # Arguments
 /// The `pixel_format` parameter is an array of strings that details
 /// the composition of the `f32` data that the renderer will send to
-/// the [`FnWrite`] and/or [`FnFinish`] closures
+/// the [`FnWrite`] and/or [`FnFinish`] closures.
+///
 /// # Example
 /// ```
 /// # #[cfg(feature = "output")]
 /// # {
+/// # use nsi::output::PixelFormat;
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
 /// let open = nsi::output::OpenCallback::new(
 ///     |name: &str,
 ///      width: usize,
 ///      height: usize,
-///      pixel_format: &mut Vec<&str>,
+///      pixel_format: &mut PixelFormat| {
 ///         println!(
-///             "Resolution:"
-///             pixel_data[0]
+///             "Resolution: {}×{}\nPixel Format:\n{:?}",
+///             width,
+///             height,
+///             pixel_format
 ///         );
 ///         nsi::output::Error::None
 ///     },
 /// );
-pub type FnOpen<'a> = dyn FnMut(
+/// # }
+/// ```
+pub trait FnOpen<'a>: FnMut(
+    // Filename.
+    &str,
+    // Width.
+    usize,
+    // Height.
+    usize,
+    // Pixel format.
+    &mut PixelFormat,
+) -> Error
++ 'a {}
+impl<'a, T: FnMut(&str, usize, usize, &mut PixelFormat) -> Error + 'a> FnOpen<'a> for T {}
+
+// FIXME once trait aliases are in stable.
+/*
+trait FnOpen<'a> = FnMut(
         // Filename.
         &str,
         // Width.
@@ -86,12 +113,49 @@ pub type FnOpen<'a> = dyn FnMut(
         // Height.
         usize,
         // Pixel format.
-        &mut FormatVec,
+        &mut PixelFormat,
     ) -> Error
-    + 'a;
-//Result<(Vec<Format>, Flags), Error>;
+    + 'a
+*/
 
-pub type FnWrite<'a> = dyn FnMut(
+/// A closure which is called for each bucket of pixels the
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+/// sends during rendering.
+///
+/// It is passed to NSI via the `"callback.write"` attribute on that
+/// node.
+/// # Example
+/// ```
+/// # #[cfg(feature = "output")]
+/// # {
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// let write = nsi::output::WriteCallback::new(
+///     |name: &str,
+///      width: usize,
+///      height: usize,
+///      x_min: usize,
+///      x_max_plus_one: usize,
+///      y_min: usize,
+///      y_max_plus_one: usize,
+///      pixel_format: &[String],
+///      pixel_data: &[f32]| {
+///         /// Send our pixels to some texture for realtime display.
+///         nsi::output::Error::None
+///     },
+/// );
+///
+/// ctx.set_attribute(
+///     "oxidized_output_driver",
+///     &[
+///         nsi::string!("drivername", "ferris"),
+///         // While rendering, send all pixel buckets to the write closure.
+///         nsi::callback!("callback.write", write),
+///     ],
+/// );
+/// # }
+/// ```
+pub trait FnWrite<'a>: FnMut(
         // Filename.
         &str,
         // Width.
@@ -109,14 +173,49 @@ pub type FnWrite<'a> = dyn FnMut(
         // Pixel format.
         &[String],
         // Pixel data.
-        &mut [f32],
+        &[f32],
     ) -> Error
-    + 'a;
+    + 'a {}
+impl<
+        'a,
+        T: FnMut(&str, usize, usize, usize, usize, usize, usize, &[String], &[f32]) -> Error + 'a,
+    > FnWrite<'a> for T
+{
+}
+
+// FIXME once trait aliases are in stable.
+/*
+pub trait FnWrite<'a> = FnMut(
+    // Filename.
+    &str,
+    // Width.
+    usize,
+    // Height.
+    usize,
+    // x_min.
+    usize,
+    // x_max_plus_one
+    usize,
+    // y_min.
+    usize,
+    // y_max_plus_one,
+    usize,
+    // Pixel format.
+    &[String],
+    // Pixel data.
+    &mut [f32],
+) -> Error
++ 'a
+*/
 
 /// A closure which is called once per
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver)
-/// instance. It is passed to NSI via the `"callback.finish"` attribute
-/// on that node.
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+///
+/// It is passed to NSI via the `"callback.finish"` attribute on that
+/// node.
+///
+/// The closure is called once, before after renderer has finished
+/// sending pixels to the output driver.
 /// # Example
 /// ```
 /// # #[cfg(feature = "output")]
@@ -130,8 +229,9 @@ pub type FnWrite<'a> = dyn FnMut(
 ///      pixel_format: Vec<String>,
 ///      pixel_data: Vec<f32>| {
 ///         println!(
-///             "The 1st channel of the 1st pixel has the value {}.",
-///             pixel_data[0]
+///             "The '{}' channel of the top, left pixel has the value {}.",
+///             pixel_format[0],
+///             pixel_data[0],
 ///         );
 ///         nsi::output::Error::None
 ///     },
@@ -147,7 +247,24 @@ pub type FnWrite<'a> = dyn FnMut(
 /// );
 /// # }
 /// ```
-pub type FnFinish<'a> = dyn FnMut(
+pub trait FnFinish<'a>: FnMut(
+    // Filename.
+    &str,
+    // Width.
+    usize,
+    // Height.
+    usize,
+    // Pixel format.
+    Vec<String>,
+    // Pixel data.
+    Vec<f32>,
+) -> Error
++ 'a {}
+impl<'a, T: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
+
+// FIXME once trait aliases are in stable.
+/*
+pub trait FnFinish<'a> = dyn FnMut(
         // Filename.
         &str,
         // Width.
@@ -160,57 +277,67 @@ pub type FnFinish<'a> = dyn FnMut(
         Vec<f32>,
     ) -> Error
     + 'a;
+*/
 
 enum Query {}
 
-type FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
+trait FnQuery<'a>: FnMut(Query) -> Error + 'a {}
+impl<'a, T: FnMut(Query) -> Error + 'a> FnQuery<'a> for T {}
 
-pub struct OpenCallback<'a>(Box<Box<Box<FnOpen<'a>>>>);
+// FIXME once trait aliases are in stable.
+/*
+pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
+*/
+
+pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
 
 impl<'a> OpenCallback<'a> {
     pub fn new<F>(fn_open: F) -> Self
     where
-        F: FnMut(&str, usize, usize, &mut FormatVec) -> Error + 'a,
+        F: FnOpen<'a>,
     {
         OpenCallback(Box::new(Box::new(Box::new(fn_open))))
     }
 }
 
 impl CallbackPtr for OpenCallback<'_> {
+    #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
 }
 
-pub struct WriteCallback<'a>(Box<Box<Box<FnWrite<'a>>>>);
+pub struct WriteCallback<'a>(Box<Box<Box<dyn FnWrite<'a>>>>);
 
 impl<'a> WriteCallback<'a> {
     pub fn new<F>(fn_write: F) -> Self
     where
-        F: FnMut(&str, usize, usize, usize, usize, usize, usize, &[String], &mut [f32]) -> Error + 'a,
+        F: FnWrite<'a>
     {
         WriteCallback(Box::new(Box::new(Box::new(fn_write))))
     }
 }
 
 impl CallbackPtr for WriteCallback<'_> {
+    #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
 }
 
-pub struct FinishCallback<'a>(Box<Box<Box<FnFinish<'a>>>>);
+pub struct FinishCallback<'a>(Box<Box<Box<dyn FnFinish<'a>>>>);
 
 impl<'a> FinishCallback<'a> {
     pub fn new<F>(fn_finish: F) -> Self
     where
-        F: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a,
+        F: FnFinish<'a>,
     {
         FinishCallback(Box::new(Box::new(Box::new(fn_finish))))
     }
 }
 
 impl CallbackPtr for FinishCallback<'_> {
+    #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
@@ -222,66 +349,17 @@ struct DisplayData<'a> {
     height: usize,
     pixel_format: Vec<String>,
     pixel_data: Vec<f32>,
-    fn_open: Option<Box<Box<Box<FnOpen<'a>>>>>,
-    fn_write: Option<Box<Box<Box<FnWrite<'a>>>>>,
+    fn_open: Option<Box<Box<Box<dyn FnOpen<'a>>>>>,
+    fn_write: Option<Box<Box<Box<dyn FnWrite<'a>>>>>,
     // Unused atm.
-    fn_query: Option<Box<Box<Box<FnQuery<'a>>>>>,
-    fn_finish: Option<Box<Box<Box<FnFinish<'a>>>>>,
-}
-
-pub struct FormatVec<'a>(VecDeque<&'a str>);
-
-impl<'a> FormatVec<'a> {
-    fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
-        // Collect format names as &str and force format to f32.
-        FormatVec(
-            format
-                .iter()
-                .map(|format| unsafe { CStr::from_ptr(format.name).to_str().unwrap() })
-                .collect(),
-        )
-    }
-
-    fn update_dspy_dev_format(&self, format: &mut [ndspy_sys::PtDspyDevFormat]) {
-        format
-            .iter_mut()
-            .zip(self.0.iter())
-            .for_each(|(format, name)| {
-                // Ensure all channels are sent to us as 32bit float.
-                format.type_ = ndspy_sys::PkDspyFloat32;
-                format.name = name.as_ptr() as *const _;
-            });
-    }
-
-    fn into_vec(format_vec: Self) -> Vec<String> {
-        format_vec.0.into_iter().map(|name| String::from(name)).collect()
-    }
-
-    pub fn move_back(&mut self, i: usize) {
-        if i < self.len() - 1 {
-            let name = self.0.remove(i).unwrap();
-            self.0.push_back(name);
-        }
-        // do nothing - element is already at the end.
-    }
-    pub fn move_front(&mut self, i: usize) {
-        if 0 < i {
-            let name = self.0.remove(i).unwrap();
-            self.0.push_front(name);
-        }
-        // do nothing - element is already at the start.
-    }
-    pub fn swap(&mut self, i: usize, j: usize) {
-        self.0.swap(i, j);
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+    fn_query: Option<Box<Box<Box<dyn FnQuery<'a>>>>>,
+    fn_finish: Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
 }
 
 impl<'a> DisplayData<'a> {
-    fn box_into_tuple(
+    /// Used to disect DisplayData into its components
+    /// before being dropped.
+    fn boxed_into_tuple(
         display_data: Box<Self>,
     ) -> (
         &'a str,
@@ -289,10 +367,10 @@ impl<'a> DisplayData<'a> {
         usize,
         Vec<String>,
         Vec<f32>,
-        Option<Box<Box<Box<FnFinish<'a>>>>>,
+        Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
     ) {
-        // These boxes somehow get deallocated twice if we don't suppress this here.
-        // No idea why.
+        // FIXME: These boxes somehow get deallocated twice if we
+        // don't suppress this here. No fucking idea why.
         if let Some(fn_open) = display_data.fn_open {
             Box::into_raw(fn_open);
         }
@@ -311,6 +389,182 @@ impl<'a> DisplayData<'a> {
             display_data.pixel_data,
             display_data.fn_finish,
         )
+    }
+}
+
+/// # Pixel Format
+/// Accessor for the pixel format the renderer sends in [`FnOpen`].
+///
+/// This is a list of channel names.
+///
+/// A typical pixel format for a pixel containing two
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s,
+/// an *RGBA* **color** output layer and a world space **normal**, will look
+/// like this:
+/// ```text
+/// r
+/// g
+/// b
+/// a
+/// N_world.000.x
+/// N_world.001.y
+/// N_world.002.z
+/// ```
+/// ## On-Demand Reordering
+/// The type allows reordering of the pixel format to fit your needs.
+/// This is mainly meant for convenience so that any code in
+/// [`FnWrite`] or [`FnFinish`] (or after) does not have to deal with
+/// explicit indexing.
+///
+/// By default the pixel format is in the order in which
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were
+/// defined in the [ɴsɪ
+/// scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
+///
+/// Use the methods in [`FnOpen`] to re-order the pixel format.
+/// E.g. to request pixels to be delivered as `ABGR` instead of
+/// `RGBA`.
+///
+/// ## Channel Name Format
+/// The channel name format is:
+/// ```text
+/// [<output layer name>.<###>.]<channel id>
+/// ```
+/// * `output layer name` – The name of the
+///     [`OutputLayer`](crate::context::NodeType::OutputLayer).
+/// * `###` - Zero padded number starting from `000` that is appended
+///     to ensure unique naming if the same output layer was requested
+///     more than once.
+///
+///     *For most practical purposes this can be ignored.*
+/// * `channel id` – Identifier of the channel. Typically single
+///     letters like `r`, `g`, `b`, `a` for color AOVs or `x`, `y`
+///     & `z` for point, normal and vector AOVs.
+///
+/// The first part, `<output layer name>.<###>.` may be missing if the
+/// output layer is the final color (`Ci`). In this case the channel
+/// name contains *only* the`channel id`.
+///
+/// There are convenience methods,
+/// [`layer_name()`](PixelFormat::layer_name()),
+/// [`channel_id()`](PixelFormat::channel_id()) and
+/// [`unique_layer_name_and_channel_id()`](PixelFormat::unique_layer_name_and_channel_id())
+/// to obtain the resp. substrings from a channel entry.
+#[derive(Debug)]
+pub struct PixelFormat<'a>(VecDeque<&'a str>);
+
+impl<'a> PixelFormat<'a> {
+    #[inline]
+    fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
+        // Collect format names as &str and force format to f32.
+        PixelFormat(
+            format
+                .iter()
+                .map(|format| unsafe { CStr::from_ptr(format.name).to_str().unwrap() })
+                .collect(),
+        )
+    }
+    #[inline]
+    fn update_dspy_dev_format(&self, format: &mut [ndspy_sys::PtDspyDevFormat]) {
+        format
+            .iter_mut()
+            .zip(self.0.iter())
+            .for_each(|(format, name)| {
+                // Ensure all channels are sent to us as 32bit float.
+                format.type_ = ndspy_sys::PkDspyFloat32;
+                format.name = name.as_ptr() as *const _;
+            });
+    }
+    #[inline]
+    fn into_vec(format_vec: Self) -> Vec<String> {
+        format_vec
+            .0
+            .into_iter()
+            .map(|name| String::from(name))
+            .collect()
+    }
+    /// Returns the name of the channel at `index`.
+    ///
+    /// For example `"albedo.000.r"`.
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&&'a str> {
+        self.0.get(index)
+    }
+    /// Returns the *layer name* part of the channel at `index`.
+    ///
+    /// For example, if the *channel name* is `"albedo.000.r"`, this
+    /// will return `"albedo"`
+    #[inline]
+    pub fn layer_name(&self, index: usize) -> &'a str {
+        if self.0[index].as_bytes().contains(&b'.') {
+            let (layer_name, _) = self.0[index].split_once('.').unwrap();
+            layer_name
+        } else {
+            // There is no channel name
+            ""
+        }
+    }
+    /// Returns the *channel id* part of the name of the channel at
+    /// `index`.
+    ///
+    /// For example, if the *channel name* is `"albedo.000.r"`, this
+    /// will return `"r"`.
+    #[inline]
+    pub fn channel_id(&self, index: usize) -> &'a str {
+        if self.0[index].as_bytes().contains(&b'.') {
+            let (_, channel_id) = self.unique_layer_name_and_channel_id(index);
+            channel_id
+        } else {
+            self.0[index]
+        }
+    }
+    /// Returns a tuple of *layer name* and *channel id* at `index`.
+    ///
+    /// For example, if the *channel name* is `"albedo.000.r"`, this will
+    /// return `("albedo.000", "r")`.
+    #[inline]
+    pub fn unique_layer_name_and_channel_id(&self, index: usize) -> (&'a str, &'a str) {
+        if self.0[index].as_bytes().contains(&b'.') {
+            self.0[index].rsplit_once('.').unwrap()
+        } else {
+            ("", self.0[index])
+        }
+    }
+    /// Returns the number of channels in a pixel.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Move channel at `index` to the back of the pixel format.
+    #[inline]
+    pub fn move_back(&mut self, index: usize) {
+        if index < self.len() - 1 {
+            let name = self.0.remove(index).unwrap();
+            self.0.push_back(name);
+        }
+        // do nothing - element is already at the end.
+    }
+    /// Move channel at `index` to the front of the pixel format.
+    #[inline]
+    pub fn move_front(&mut self, index: usize) {
+        if 0 < index {
+            let name = self.0.remove(index).unwrap();
+            self.0.push_front(name);
+        }
+        // do nothing - element is already at the start.
+    }
+    /// Swaps the names at `index_a` and `index_b`.
+    #[inline]
+    pub fn swap(&mut self, index_a: usize, index_b: usize) {
+        self.0.swap(index_a, index_b);
+    }
+}
+
+impl<'a> Index<usize> for PixelFormat<'a> {
+    type Output = str;
+    #[inline]
+    fn index(&self, index: usize) -> &'a str {
+        self.0.get(index).expect("Out of bounds access")
     }
 }
 
@@ -366,22 +620,17 @@ pub(crate) extern "C" fn image_open(
         height: height as _,
         pixel_format: Vec::new(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
-        fn_open: get_parameter_triple_box::<FnOpen>("callback.open", b'p', 1, parameters),
-        fn_write: get_parameter_triple_box::<FnWrite>("callback.write", b'p', 1, parameters),
+        fn_open: get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters),
+        fn_write: get_parameter_triple_box::<dyn FnWrite>("callback.write", b'p', 1, parameters),
         fn_query: None, // get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1, parameters),
-        fn_finish: get_parameter_triple_box::<FnFinish>("callback.finish", b'p', 1, parameters),
+        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
     });
 
     let mut format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
-    let mut format_vec = FormatVec::new(&format);
+    let mut format_vec = PixelFormat::new(&format);
 
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        let error = fn_open(
-            display_data.name,
-            width as _,
-            height as _,
-            &mut format_vec,
-        );
+        let error = fn_open(display_data.name, width as _, height as _, &mut format_vec);
         // Update possibly re-ordered format array.
         format_vec.update_dspy_dev_format(&mut format);
         error
@@ -389,7 +638,7 @@ pub(crate) extern "C" fn image_open(
         Error::None
     };
 
-    display_data.pixel_format = FormatVec::into_vec(format_vec);
+    display_data.pixel_format = PixelFormat::into_vec(format_vec);
 
     unsafe {
         *image_handle_ptr = Box::into_raw(display_data) as _;
@@ -410,8 +659,6 @@ pub(crate) extern "C" fn image_query(
     data_len: c_int,
     data: *mut c_void,
 ) -> ndspy_sys::PtDspyError {
-    println!("Query: {:?}", query_type);
-
     match query_type {
         ndspy_sys::PtDspyQueryType_PkRenderProgress => {
             if (data_len as usize) < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
@@ -488,12 +735,10 @@ pub(crate) extern "C" fn image_write(
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    println!("Closing!");
-
     let display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
-        DisplayData::box_into_tuple(display_data);
+        DisplayData::boxed_into_tuple(display_data);
 
     let error = if let Some(mut fn_finish) = fn_finish {
         let error = fn_finish(name, width, height, pixel_format, pixel_data);
@@ -502,8 +747,6 @@ pub(crate) extern "C" fn image_close(
     } else {
         Error::None
     };
-
-    //if let Some(ref mut fn_finish
 
     error.into()
 }
@@ -515,4 +758,26 @@ extern "C" fn image_progress(
 ) -> ndspy_sys::PtDspyError {
     println!("\rProgress: {}", progress * 100.0);
     Error::None.into()
+}
+
+pub use color::*;
+
+pub mod color {
+    use num_traits::{
+        float::Float,
+        identities::{One, Zero},
+    };
+    use rand::{distributions::uniform::SampleUniform, Rng};
+
+    pub fn quantize<T>(value: T, one: T, min: T, max: T, dither_amplitude: T) -> T
+    where
+        T: Float + Zero + One + SampleUniform,
+    {
+        use clamped::Clamp;
+
+        let mut rng = rand::thread_rng();
+        (one * value + dither_amplitude * rng.gen_range(T::zero(), T::one()))
+            .round()
+            .clamped(min, max)
+    }
 }

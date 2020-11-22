@@ -21,8 +21,8 @@ link_lib3delight = ["nsi-sys/link_lib3delight"]
 # needed as soon as the crate is linked against (e.g. for
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
-toolbelt = ["ultraviolet"]
-output = ["ndspy-sys", "num_enum"]
+toolbelt = ["ultraviolet", "rand"]
+output = ["clamped", "ndspy-sys", "num_enum", "num-traits"]
 
 [dev-dependencies]
 cargo-husky = "1.5.0"
@@ -32,12 +32,15 @@ polyhedron-ops = { path = "../polyhedron-ops", features = [ "nsi" ] }
 [dependencies]
 enum_dispatch = "0.3.4"
 lazy_static = "1.4.0"
+clamped = { version = "1.0.0", optional = true }
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
-nsi-sys = "0.1.12"
-ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
 ndspy-sys = { path = "../ndspy-sys", optional = true }
 num_enum = { version = "0.5.1", optional = true }
+num-traits = { version = "0.2.14", optional = true }
+nsi-sys = "0.1.12"
+ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
+rand = { version = "0.7.3", optional = true }
 
 [[example]]
 path = "examples/exr/main.rs"

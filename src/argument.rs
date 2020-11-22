@@ -315,6 +315,7 @@ impl<'a> ArgDataMethods for Reference<'a> {
 }
 
 pub trait CallbackPtr {
+    #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void;
 }
 

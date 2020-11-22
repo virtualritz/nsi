@@ -45,7 +45,7 @@ pub fn main() {
 
     {
         let open = nsi::output::OpenCallback::new(
-            |_name: &str, w: usize, h: usize, format: &mut Vec<&str>| {
+            |_name: &str, w: usize, h: usize, format: &mut nsi::output::PixelFormat| {
                 width = w;
                 height = h;
                 pixel_len = format.len();
@@ -63,15 +63,15 @@ pub fn main() {
              _x_max_plus_one: usize,
              _y_min: usize,
              _y_max_plus_one: usize,
-             _pixel_format: &[&str],
-             _pixel_data: &mut [f32]| { Error::None },
+             _pixel_format: &[String],
+             _pixel_data: &[f32]| { Error::None },
         );
 
         let finish = nsi::output::FinishCallback::new(
             |name: &str,
              width: usize,
              height: usize,
-             pixel_format: Vec<&str>,
+             pixel_format: Vec<String>,
              pixel_data: Vec<f32>| {
                 write_exr(
                     (String::from(name) + ".exr").as_str(),

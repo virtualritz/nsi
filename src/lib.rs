@@ -1,4 +1,5 @@
 #![feature(doc_cfg)]
+#![feature(str_split_once)]
 //! # Nodal Scene Interface – ɴsɪ
 //! A flexible, modern API for offline 3D renderers
 //!
@@ -174,8 +175,10 @@ pub mod context;
 #[cfg(feature = "output")]
 pub mod output;
 
+/// Add a bunch of utility methods to [`Context`].
 #[cfg(feature = "toolbelt")]
-mod toolbelt;
+#[doc(no_inline)]
+pub mod toolbelt;
 
 mod tests;
 

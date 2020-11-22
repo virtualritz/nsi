@@ -66,9 +66,6 @@ impl<'a> Context<'a> {
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: &ArgSlice<'_, 'a>) -> Option<Self> {
-        /*API_LOADER.call_once(|| unsafe {
-            NSI_API = api::ApiImpl::new().expect("Could not load lib3delight.");
-        });*/
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
         let context = NSI_API.NSIBegin(args_len, args_ptr);
@@ -114,6 +111,7 @@ impl<'a> Context<'a> {
     /// // Create an infinte plane.
     /// ctx.create("ground", nsi::NodeType::Plane, &[]);
     /// ```
+    #[cfg(not(feature = "toolbelt"))]
     #[inline]
     pub fn create(
         &self,
@@ -134,6 +132,28 @@ impl<'a> Context<'a> {
         );
     }
 
+    #[cfg(feature = "toolbelt")]
+    #[inline]
+    pub fn create(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        node_type: impl Into<Vec<u8>>,
+        args: &ArgSlice<'_, 'a>,
+    ) -> String {
+        let handle = CString::new(handle).unwrap();
+        let node_type = CString::new(node_type).unwrap();
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+
+        NSI_API.NSICreate(
+            self.context,
+            handle.as_ptr(),
+            node_type.as_ptr(),
+            args_len,
+            args_ptr,
+        );
+
+        String::new(handle)
+    }
     /// This function deletes a node from the scene. All connections to
     /// and from the node are also deleted.
     ///
@@ -141,14 +161,12 @@ impl<'a> Context<'a> {
     /// `.global` nodes.
     ///
     /// # Arguments
-    ///
     /// * `handle` – A handle to a node previously created with
-    ///              [`Context::create()`].
+    ///              [`create()`](Context::create()).
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     ///
     /// # Optional Arguments
-    ///
     /// * `"recursive"` ([`Integer`]) – Specifies whether
     ///   deletion is recursive. By default, only the specified node is
     ///   deleted. If a value of `1` is given, then nodes which connect
@@ -176,15 +194,15 @@ impl<'a> Context<'a> {
     /// defined shader arguments.
     ///
     /// Setting an attribute using this function replaces any value
-    /// previously set by [`Context::set_attribute()`] or
-    /// [`Context::set_attribute_at_time()`].
+    /// previously set by [`set_attribute()`](Context::set_attribute()) or
+    /// [`set_attribute_at_time()`](Context::set_attribute_at_time()).
+    ///
     /// To reset an attribute to its default value, use
-    /// [`Context::delete_attribute()`]).
+    /// [`delete_attribute()`](Context::delete_attribute()).
     ///
     /// # Arguments
-    ///
     /// * `handle` – A handle to a node previously created with
-    ///              [`Context::create()`].
+    ///     [`create()`](Context::create()).
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     #[inline]
@@ -207,12 +225,12 @@ impl<'a> Context<'a> {
     /// A notable  exception is the `P` attribute on [`NodeType::Particles`]
     /// which can be of different size for each time step because of appearing
     /// or disappearing particles. Setting an attribute using this function
-    /// replaces any value previously set by [`Context::set_attribute()`].
+    /// replaces any value previously set by
+    /// [`set_attribute()`](Context::set_attribute()).
     ///
     /// # Arguments
-    ///
     /// * `handle` – A handle to a node previously created with
-    ///               [`Context::create()`].
+    ///     [`create()`](Context::create()).
     ///
     /// * `time` – The time at which to set the value.
     ///
@@ -242,9 +260,8 @@ impl<'a> Context<'a> {
     /// will default to whatever is declared inside the shader.
     ///
     /// # Arguments
-    ///
     /// * `handle` – A handle to a node previously created with
-    ///               [`Context::create()`].
+    ///    [`create()`](Context::create()).
     ///
     /// * `name` – The name of the attribute to be deleted/reset.
     #[inline]
@@ -262,7 +279,6 @@ impl<'a> Context<'a> {
     /// on which the connection is performed must exist.
     ///
     /// # Arguments
-    ///
     /// * `from` – The handle of the node from which the connection
     ///   is made.
     ///
@@ -291,7 +307,7 @@ impl<'a> Context<'a> {
     ///
     /// * `"strength"` ([`Integer`]) – A connection with a
     ///   `strength` greater than `0` will *block* the progression of a
-    ///   recursive [`Context::delete()`].
+    ///   recursive [`delete()`](Context::delete()).
     #[inline]
     pub fn connect(
         &self,
