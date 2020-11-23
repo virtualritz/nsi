@@ -29,7 +29,7 @@ nightly = []
 cargo-husky = "1.5.0"
 exr = "0.9.0"
 png = "0.16.7"
-polyhedron-ops = { path = "../polyhedron-ops", features = [ "nsi" ] }
+polyhedron-ops = { version = "0.1.2", features = [ "nsi" ] }
 colorspace = { git = "https://github.com/anderslanglands/colorspace-rs.git" }
 
 [dependencies]
@@ -37,7 +37,7 @@ enum_dispatch = "0.3.4"
 lazy_static = "1.4.0"
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
-ndspy-sys = { path = "../ndspy-sys", optional = true }
+ndspy-sys = { version = "0.1.6", optional = true }
 num_enum = { version = "0.5.1", optional = true }
 nsi-sys = "0.1.12"
 rand = { version = "*", features = [ "small_rng" ], optional = true }
@@ -48,3 +48,6 @@ ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
 path = "examples/output/main.rs"
 name = "output"
 required-features = [ "output" ]
+
+[package.metadata.docs.rs]
+features = ["output", "toolbelt", "nightly"]

@@ -93,6 +93,16 @@ shaders, environment (lights) and dumping a scene description to disk).
 
 PRs are most welcome!
 
+## Getting Pixels
+
+The crate has support for streaming pixels from the renderer, via
+callbacks (i.e. closures) during, and or after rendering via the
+`output` module. This module is enabled through the feature of the
+same name.
+
+There is a full example showing color conversion and writing data
+out to 8bit/channel PNG and 32bit/channel (float) OpenEXR formats.
+
 ## Dependencies
 
 This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys)
@@ -123,34 +133,46 @@ It will also install 3Delight Display which you can render to,
 progressively, as an alternative to writing images to disk. When working
 with this crate this is quite handy.
 
-## Features
+You can skip this step and build with the `download_3delight` feature.
+However, this will download an older version of 3Delight so this is
+not suggested.
+
+## Cargo Features
+* `toolbelt` – Add convenience methods to [`Context`].
+* `output` – Add support for streaming pixels from the renderer to
+    to the calling context via closures.
+* `nightly` – enable some unstable features (suggested if you
+    build with a `nightly` toolchain)
+
+## Linking Style
+
 The 3Delight dynamic library (`lib3delight`) can either be linked to
 during build or loaded at runtime.
-
-By default the lib is loaded at runtime. This has several advantages:
-1. You can ship your application or library without
-   the `lib3delight`. It can still run/load and will print an error if
-   the library cannot be loaded.
+By default the lib is loaded at runtime. This has several
+advantages:
+1. If you ship your application or library you can ship it without
+   the library. It can still run and will print an informative error
+   if the library cannot be loaded.
 2. A user can install an updated version of the renderer and stuff
    will ‘just work’.
 
+* Load `lib3deligh` at runtime (default).
 * Dynamically link against `lib3delight`.
-  * `lib3delight` becomes a depedency. If it cannot be found your
+  * `lib3delight` becomes a depdency. If it cannot't be found your
     lib/app will not load/start.
   * The feature is called `link_lib3delight`.
+  * You should disable default features (they are not needed/used)
+  * in this case:
+    ```toml
+    [dependencies.nsi]
+    version = "0.5.5"
+    features = [ "link_lib3delight" ]
+    default-features = false
+    ```
 * Download `lib3delight` during build.
   * `lib3delight` is downloaded during build. Note that this may be
     an outdated version. This feature mainly exists for CI purposes.
   * The feature is called `download_lib3delight`.
-
-## Getting Pixels
-
-3Delight still uses the old RenderMan display driver API if you want to
-stream pixels directly to Rust, in-memory.
-
-There is a [low-level wrapper](https://github.com/virtualritz/ndspy-sys)
-for this API and a [minimal Rust example displaydriver](https://github.com/virtualritz/r-display)
-I cobbled together to get you started.
 
 ## Documentation
 

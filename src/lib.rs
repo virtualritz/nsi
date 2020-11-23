@@ -106,17 +106,25 @@
 //!     ],
 //! );
 //! ```
+//! ## Getting Pixels
+//! The crate has support for streaming pixels from the renderer, via
+//! callbacks (i.e. closures) during, and or after rendering via the
+//! `output` module. This module is enabled through the feature of the
+//! same name (see below).
+//! ## Examples
+//! ### Output
+//! This is a full output example showing color conversion and writing
+//! data out to 8bit/channel PNG and 32bit/channel (float) OpenEXR
+//! formats.
 //! ## Cargo Features
 //! * `toolbelt` – Add convenience methods to [`Context`].
 //!
 //! * `output` – Add support for streaming pixels from the renderer to
 //!     to the calling context via closures.
 //!
-//! * `nightly` – enable runtime checks on `debug_assertions` builds
-//!     for [`String`](argument::String)/[`Strings`](argument::Strings)
-//!     UTF-8 sanitation. I.e. passing a string that has internal `NUL`s
-//!     will cause a panic
-//! ### Linking Style
+//! * `nightly` – enable some unstable features (suggested if you
+//!     build with a `nightly` toolchain)
+//! ## Linking Style
 //! The 3Delight dynamic library (`lib3delight`) can either be linked to
 //! during build or loaded at runtime.
 //! By default the lib is loaded at runtime. This has several
