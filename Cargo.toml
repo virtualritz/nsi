@@ -22,7 +22,7 @@ link_lib3delight = ["nsi-sys/link_lib3delight", "ndspy-sys/link_lib3delight"]
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
 # Jupyter notebooks integration.
-jupyter = ["base64", "colorspace", "image", "ndspy-sys", "num_enum", "rayon"]
+jupyter = ["base64", "image", "ndspy-sys", "num_enum", "rayon"]
 output = ["ndspy-sys", "num_enum"]
 toolbelt = ["ultraviolet", "rand", "snafu"]
 nightly = []
@@ -37,7 +37,6 @@ colorspace = { git = "https://github.com/anderslanglands/colorspace-rs.git" }
 
 [dependencies]
 base64 = { version = "0.13.0", optional = true }
-colorspace = { git = "https://github.com/anderslanglands/colorspace-rs.git", optional = true }
 enum_dispatch = "0.3.4"
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }

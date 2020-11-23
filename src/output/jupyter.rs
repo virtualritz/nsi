@@ -7,7 +7,6 @@
 //! This allows visualizing a camera inside a notebook.
 use crate as nsi;
 use crate::ArgSlice;
-use colorspace as cs;
 use image;
 use rayon::prelude::*;
 
@@ -123,7 +122,7 @@ impl<'a> nsi::Context<'a> {
         let mut buffer = Vec::new();
         image::png::PngEncoder::new(&mut buffer)
             .encode(
-                &*quantized_pixel_data.lock().unwrap(),
+                quantized_pixel_data.lock().unwrap().as_slice(),
                 *pixel_data_width.lock().unwrap() as _,
                 *pixel_data_height.lock().unwrap() as _,
                 image::ColorType::Rgba8,
@@ -136,6 +135,20 @@ impl<'a> nsi::Context<'a> {
     }
 }
 
+
+fn linear_to_srgb(x: f32) -> f32 {
+	if x <= 0.0 {
+		0.0
+    } else if x >= 1.0 {
+		1.0
+    } else if x < 0.0031308 {
+		x * 12.92
+    } else {
+        x.powf(1.0 / 2.4) * 1.055 - 0.055
+    }
+}
+
+
 use std::sync::{Arc, Mutex};
 /// Multi-threaded color profile application & quantization to 8bit.
 fn buffer_rgba_f32_to_rgba_u8(
@@ -145,10 +158,6 @@ fn buffer_rgba_f32_to_rgba_u8(
     pixel_data: &[f32],
     quantized_pixel_data: &Arc<Mutex<Vec<u8>>>,
 ) {
-    // Source and target spaces.
-    let model_aces_cg = &cs::color_space_rgb::model_f32::ACES_CG;
-    let model_srgb = &cs::color_space_rgb::model_f32::SRGB;
-
     (0..height).into_par_iter().for_each(|scanline| {
         let y_offset = scanline * width * pixel_size;
         for index in
@@ -157,32 +166,19 @@ fn buffer_rgba_f32_to_rgba_u8(
             let alpha = pixel_data[index + 3];
             // We ignore pixels with zero alpha.
             if 0.0 != alpha {
-                let mut color = [cs::rgb::RGBf::new(0f32, 0., 0.)];
-                cs::rgb_to_rgb(
-                    model_aces_cg,
-                    model_srgb,
-                    &[cs::rgb::RGBf::new(
-                        // Unpremultiply.
-                        pixel_data[index + 0] / alpha,
-                        pixel_data[index + 1] / alpha,
-                        pixel_data[index + 2] / alpha,
-                    )],
-                    &mut color,
-                );
 
-                let color: cs::rgb::RGBu8 = model_srgb
-                    .encode(cs::rgb::RGBf::new(
-                        color[0].r, color[0].g, color[0].b,
-                    ))
-                    .into();
+                let r: u8 = (linear_to_srgb(pixel_data[index + 0] / alpha) * 255.0) as _;
+                let g: u8 = (linear_to_srgb(pixel_data[index + 1] / alpha) * 255.0) as _;
+                let b: u8 = (linear_to_srgb(pixel_data[index + 2] / alpha) * 255.0) as _;
+                let a: u8 = (alpha * 255.0) as _;
 
                 let mut quantized_pixel_data =
                     quantized_pixel_data.lock().unwrap();
 
-                quantized_pixel_data[index + 0] = color.r;
-                quantized_pixel_data[index + 1] = color.g;
-                quantized_pixel_data[index + 2] = color.b;
-                quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
+                quantized_pixel_data[index + 0] = r;
+                quantized_pixel_data[index + 1] = g;
+                quantized_pixel_data[index + 2] = b;
+                quantized_pixel_data[index + 3] = a;
             }
         }
     });
