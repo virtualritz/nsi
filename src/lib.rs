@@ -176,8 +176,8 @@ use self::dynamic as api;
 #[cfg(feature = "link_lib3delight")]
 use self::linked as api;
 
-#[cfg(feature = "output")]
-use ndspy_sys;
+//#[cfg(any(feature = "output", feature = "jupyter"))]
+//use ndspy_sys;
 
 // API initalization/on-demand loading of lib3delight -----------------
 
@@ -198,7 +198,7 @@ mod context;
 
 // Optional modules ---------------------------------------------------
 
-#[cfg(feature = "output")]
+#[cfg(any(feature = "output", feature = "jupyter"))]
 pub mod output;
 
 // Add a bunch of utility methods to [`Context`].
@@ -290,7 +290,7 @@ trait Api {
         params: *const NSIParam_t,
     );
 
-    #[cfg(feature = "output")]
+    #[cfg(any(feature = "output", feature = "jupyter"))]
     fn DspyRegisterDriver(
         &self,
         driver_name: *const ::std::os::raw::c_char,

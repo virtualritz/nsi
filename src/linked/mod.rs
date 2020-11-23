@@ -11,7 +11,7 @@ impl LinkedApi {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let api = LinkedApi {};
 
-        #[cfg(feature = "output")]
+        #[cfg(any(feature = "output", feature = "jupyter"))]
         api.DspyRegisterDriver(
             b"ferris\0" as *const u8 as _,
             Some(crate::output::image_open),
@@ -132,7 +132,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIRenderControl(ctx, nparams, params) };
     }
-    #[cfg(feature = "output")]
+    #[cfg(any(feature = "output", feature = "jupyter"))]
     #[inline]
     fn DspyRegisterDriver(
         &self,

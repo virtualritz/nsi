@@ -142,7 +142,7 @@ not suggested.
 * `output` – Add support for streaming pixels from the renderer
     to the calling context via closures.
 * `nightly` – Enable some unstable features (suggested if you
-    build with a `nightly` toolchain)
+    build with a `nightly` toolchain).
 
 ## Linking Style
 

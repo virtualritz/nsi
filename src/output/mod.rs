@@ -169,8 +169,8 @@ use std::{
 };
 
 // Juypiter notebook support ------------------------------------------
-#[cfg(feature = "juypiter")]
-mod juypiter;
+#[cfg(feature = "jupyter")]
+pub mod jupyter;
 
 pub static FERRIS: &str = "ferris";
 
@@ -254,7 +254,7 @@ trait FnOpen<'a> = FnMut(
 */
 
 /// A closure which is called for each bucket of pixels the
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance
 /// sends during rendering.
 ///
 /// It is passed to NSI via the `"callback.write"` attribute on that

@@ -71,8 +71,7 @@ struct CApi {
         nparams: ::std::os::raw::c_int,
         params: *const NSIParam_t,
     ),
-
-    #[cfg(feature = "output")]
+    #[cfg(any(feature = "output", feature = "jupyter"))]
     DspyRegisterDriver: extern "C" fn(
         driver_name: *const ::std::os::raw::c_char,
         p_open: ndspy_sys::PtDspyOpenFuncPtr,
@@ -123,7 +122,7 @@ impl DynamicApi {
             Ok(api) => {
                 let api = DynamicApi { api };
 
-                #[cfg(feature = "output")]
+                #[cfg(any(feature = "output", feature = "jupyter"))]
                 api.DspyRegisterDriver(
                     b"ferris\0" as *const u8 as _,
                     Some(output::image_open),
@@ -246,7 +245,7 @@ impl Api for DynamicApi {
     ) {
         self.api.NSIRenderControl(ctx, nparams, params);
     }
-    #[cfg(feature = "output")]
+    #[cfg(any(feature = "output", feature = "jupyter"))]
     #[inline]
     fn DspyRegisterDriver(
         &self,

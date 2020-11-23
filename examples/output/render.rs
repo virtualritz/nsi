@@ -35,16 +35,6 @@ fn nsi_camera<'a>(
         ],
     );
 
-    c.set_attribute(
-        ".global",
-        &[
-            nsi::integer!("renderatlowpriority", 1),
-            nsi::string!("bucketorder", "spiral"),
-            nsi::unsigned!("quality.shadingsamples", samples),
-            nsi::integer!("maximumraydepth.reflection", 6),
-        ],
-    );
-
     // RGB layer.
     c.create("beauty", nsi::NodeType::OutputLayer, &[]);
     c.set_attribute(
@@ -176,6 +166,16 @@ pub(crate) fn nsi_render<'a>(
 ) {
     let ctx = nsi::Context::new(&[]) //&[nsi::string!("streamfilename", "stdout")])
         .expect("Could not create NSI rendering context.");
+
+    ctx.set_attribute(
+        ".global",
+        &[
+            nsi::integer!("renderatlowpriority", 1),
+            nsi::string!("bucketorder", "spiral"),
+            nsi::unsigned!("quality.shadingsamples", samples),
+            nsi::integer!("maximumraydepth.reflection", 6),
+        ],
+    );
 
     nsi_camera(&ctx, &polyhedron.name(), 1, open, write, finish);
 
