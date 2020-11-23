@@ -96,7 +96,7 @@ PRs are most welcome!
 ## Getting Pixels
 
 The crate has support for streaming pixels from the renderer, via
-callbacks (i.e. closures) during, and or after rendering via the
+callbacks (i.e. closures) during and/or after rendering via the
 `output` module. This module is enabled through the feature of the
 same name.
 
@@ -138,10 +138,10 @@ However, this will download an older version of 3Delight so this is
 not suggested.
 
 ## Cargo Features
-* `toolbelt` – Add convenience methods to [`Context`].
-* `output` – Add support for streaming pixels from the renderer to
+* `toolbelt` – Add convenience methods to `Context`.
+* `output` – Add support for streaming pixels from the renderer
     to the calling context via closures.
-* `nightly` – enable some unstable features (suggested if you
+* `nightly` – Enable some unstable features (suggested if you
     build with a `nightly` toolchain)
 
 ## Linking Style
