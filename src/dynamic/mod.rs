@@ -9,8 +9,10 @@ use crate::*;
 
 #[derive(WrapperApi)]
 struct CApi {
-    NSIBegin:
-        extern "C" fn(nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t,
+    NSIBegin: extern "C" fn(
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    ) -> NSIContext_t,
     NSIEnd: extern "C" fn(ctx: NSIContext_t),
     NSICreate: extern "C" fn(
         ctx: NSIContext_t,
@@ -38,8 +40,11 @@ struct CApi {
         nparams: ::std::os::raw::c_int,
         params: *const NSIParam_t,
     ),
-    NSIDeleteAttribute:
-        extern "C" fn(ctx: NSIContext_t, object: NSIHandle_t, name: *const ::std::os::raw::c_char),
+    NSIDeleteAttribute: extern "C" fn(
+        ctx: NSIContext_t,
+        object: NSIHandle_t,
+        name: *const ::std::os::raw::c_char,
+    ),
     NSIConnect: extern "C" fn(
         ctx: NSIContext_t,
         from: NSIHandle_t,
@@ -56,10 +61,16 @@ struct CApi {
         to: NSIHandle_t,
         to_attr: *const ::std::os::raw::c_char,
     ),
-    NSIEvaluate:
-        extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
-    NSIRenderControl:
-        extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
+    NSIEvaluate: extern "C" fn(
+        ctx: NSIContext_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    ),
+    NSIRenderControl: extern "C" fn(
+        ctx: NSIContext_t,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    ),
 
     #[cfg(feature = "output")]
     DspyRegisterDriver: extern "C" fn(
@@ -82,7 +93,8 @@ static DELIGHT_APP_PATH: &str = "/usr/local/3delight/lib/lib3delight.so";
 static DELIGHT_APP_PATH: &str = "/Applications/3Delight/lib/lib3delight.dylib";
 
 #[cfg(target_os = "windows")]
-static DELIGHT_APP_PATH: &str = "C:/%ProgramFiles%/3Delight/lib/lib3delight.dll";
+static DELIGHT_APP_PATH: &str =
+    "C:/%ProgramFiles%/3Delight/lib/lib3delight.dll";
 
 #[cfg(target_os = "linux")]
 static DELIGHT_LIB: &str = "lib3delight.so";
@@ -100,10 +112,12 @@ impl DynamicApi {
             .or_else(|_| unsafe { Container::load(DELIGHT_LIB) })
             .or_else(|_| match env::var("DELIGHT") {
                 Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
-                Ok(delight) => {
-                    unsafe { Container::load(Path::new(&delight).join("lib").join(DELIGHT_LIB)) }
-                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                Ok(delight) => unsafe {
+                    Container::load(
+                        Path::new(&delight).join("lib").join(DELIGHT_LIB),
+                    )
                 }
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
             }) {
             Err(e) => Err(e),
             Ok(api) => {
@@ -126,7 +140,11 @@ impl DynamicApi {
 
 impl Api for DynamicApi {
     #[inline]
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t {
+    fn NSIBegin(
+        &self,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    ) -> NSIContext_t {
         self.api.NSIBegin(nparams, params)
     }
     #[inline]
@@ -238,7 +256,12 @@ impl Api for DynamicApi {
         p_close: ndspy_sys::PtDspyCloseFuncPtr,
         p_query: ndspy_sys::PtDspyQueryFuncPtr,
     ) -> ndspy_sys::PtDspyError {
-        self.api
-            .DspyRegisterDriver(driver_name, p_open, p_write, p_close, p_query)
+        self.api.DspyRegisterDriver(
+            driver_name,
+            p_open,
+            p_write,
+            p_close,
+            p_query,
+        )
     }
 }

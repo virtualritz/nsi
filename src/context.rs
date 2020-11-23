@@ -6,9 +6,9 @@ use crate::*;
 #[allow(unused_imports)]
 use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 
+/// # Context
 /// An ɴsɪ context.
-///
-/// # Lifetime
+/// ## Lifetime
 /// A context can be used without worrying about its lifetime
 /// until you want to store it somewhere, e.g. in a struct.
 ///
@@ -19,7 +19,7 @@ use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
 /// but when you want to reference it somewhere the same rules
 /// as with all references apply.
 ///
-/// # Further Reading
+/// ## Further Reading
 /// See the [ɴsɪ docmentation on context
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
 #[derive(Debug, Hash, PartialEq)]
@@ -57,7 +57,7 @@ impl<'a> Context<'a> {
     /// # Example
     /// ```
     /// // Create rendering context that dumps to stdout.
-    /// let c = nsi::Context::new(&[nsi::string!(
+    /// let ctx = nsi::Context::new(&[nsi::string!(
     ///     "streamfilename",
     ///     "stdout"
     /// )]).expect("Could not create ɴsɪ context.");
@@ -111,7 +111,6 @@ impl<'a> Context<'a> {
     /// // Create an infinte plane.
     /// ctx.create("ground", nsi::NodeType::Plane, &[]);
     /// ```
-    #[cfg(not(feature = "toolbelt"))]
     #[inline]
     pub fn create(
         &self,
@@ -132,28 +131,6 @@ impl<'a> Context<'a> {
         );
     }
 
-    #[cfg(feature = "toolbelt")]
-    #[inline]
-    pub fn create(
-        &self,
-        handle: impl Into<Vec<u8>>,
-        node_type: impl Into<Vec<u8>>,
-        args: &ArgSlice<'_, 'a>,
-    ) -> String {
-        let handle = CString::new(handle).unwrap();
-        let node_type = CString::new(node_type).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
-
-        NSI_API.NSICreate(
-            self.context,
-            handle.as_ptr(),
-            node_type.as_ptr(),
-            args_len,
-            args_ptr,
-        );
-
-        String::new(handle)
-    }
     /// This function deletes a node from the scene. All connections to
     /// and from the node are also deleted.
     ///
@@ -206,11 +183,20 @@ impl<'a> Context<'a> {
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     #[inline]
-    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
+    pub fn set_attribute(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        args: &ArgSlice<'_, 'a>,
+    ) {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
+        NSI_API.NSISetAttribute(
+            self.context,
+            handle.as_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function sets time-varying attributes (i.e. motion blurred).
@@ -245,7 +231,13 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
+        NSI_API.NSISetAttributeAtTime(
+            self.context,
+            handle.as_ptr(),
+            time,
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function deletes any attribute with a name which matches
@@ -265,11 +257,19 @@ impl<'a> Context<'a> {
     ///
     /// * `name` – The name of the attribute to be deleted/reset.
     #[inline]
-    pub fn delete_attribute(&self, handle: impl Into<Vec<u8>>, name: impl Into<Vec<u8>>) {
+    pub fn delete_attribute(
+        &self,
+        handle: impl Into<Vec<u8>>,
+        name: impl Into<Vec<u8>>,
+    ) {
         let handle = CString::new(handle).unwrap();
         let name = CString::new(name).unwrap();
 
-        NSI_API.NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
+        NSI_API.NSIDeleteAttribute(
+            self.context,
+            handle.as_ptr(),
+            name.as_ptr(),
+        );
     }
 
     /// Create a connection between two elements.
@@ -372,23 +372,25 @@ impl<'a> Context<'a> {
 
     /// This function includes a block of interface calls from an
     /// external source into the current scene. It blends together the
-    /// concepts of a straight file include, commonly known as an
-    /// archive, with that of procedural include which is traditionally
-    /// a compiled executable. Both are really the same idea expressed
-    /// in a different language (note that for delayed procedural
-    /// evaluation one should use a [`NodeType::Procedural`]).
+    /// concepts of a file include, commonly known as an  *archive*,
+    /// with that of procedural include which is traditionally a
+    /// compiled executable. Both are the same idea expressed in a
+    /// different language.
+    ///
+    /// Note that for delayed procedural evaluation you should use a
+    /// [`Procedural`](NodeType::Procedural) node.
     ///
     /// The ɴsɪ adds a third option which sits in-between — [Lua
     /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html).
-    /// They are much more powerful than a simple included file yet
-    /// they are also much easier to generate as they do not require
-    /// compilation. It is, for example, very realistic to export a
-    /// whole new script for every frame of an animation. It could also
-    /// be done for every character in a frame. This gives great
-    /// flexibility in how components of a scene are put together.
+    /// They are more powerful than a simple included file yet they are
+    /// also easier to generate as they do not require compilation
     ///
-    /// The ability to load ɴsɪ commands straight from memory is also
-    /// provided.
+    /// For example, it is realistic to export a whole new script for
+    /// every frame of an animation. It could also be done for every
+    /// character in a frame. This gives great flexibility in how
+    /// components of a scene are put together.
+    ///
+    /// The ability to load ɴsɪ commands from memory is also provided.
     ///
     /// # Optional Arguments
     ///

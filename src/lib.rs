@@ -1,5 +1,9 @@
-#![feature(doc_cfg)]
-#![feature(str_split_once)]
+#![cfg_attr(
+    all(debug_assertions, feature = "nightly"),
+    feature(cstring_from_vec_with_nul)
+)]
+#![cfg_attr(feature = "nightly", feature(str_split_once))]
+#![cfg_attr(feature = "nightly", feature(doc_cfg))]
 //! # Nodal Scene Interface – ɴsɪ
 //! A flexible, modern API for offline 3D renderers
 //!
@@ -103,6 +107,16 @@
 //! );
 //! ```
 //! ## Cargo Features
+//! * `toolbelt` – Add convenience methods to [`Context`].
+//!
+//! * `output` – Add support for streaming pixels from the renderer to
+//!     to the calling context via closures.
+//!
+//! * `nightly` – enable runtime checks on `debug_assertions` builds
+//!     for [`String`](argument::String)/[`Strings`](argument::Strings)
+//!     UTF-8 sanitation. I.e. passing a string that has internal `NUL`s
+//!     will cause a panic
+//! ### Linking Style
 //! The 3Delight dynamic library (`lib3delight`) can either be linked to
 //! during build or loaded at runtime.
 //! By default the lib is loaded at runtime. This has several
@@ -161,23 +175,24 @@ use ndspy_sys;
 extern crate lazy_static;
 
 lazy_static! {
-    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight.");
+    static ref NSI_API: api::ApiImpl =
+        api::ApiImpl::new().expect("Could not load lib3delight.");
 }
 
 // Default modules ----------------------------------------------------
 
 #[macro_use]
 pub mod argument;
-pub mod context;
+// Context should be in the crate root so we keep the module private.`
+mod context;
 
 // Optional modules ---------------------------------------------------
 
 #[cfg(feature = "output")]
 pub mod output;
 
-/// Add a bunch of utility methods to [`Context`].
+// Add a bunch of utility methods to [`Context`].
 #[cfg(feature = "toolbelt")]
-#[doc(no_inline)]
 pub mod toolbelt;
 
 mod tests;
@@ -185,11 +200,18 @@ mod tests;
 pub use crate::argument::*;
 pub use crate::context::*;
 
+#[cfg(feature = "toolbelt")]
+pub use crate::toolbelt::*;
+
 #[deprecated]
 pub mod prelude {}
 
 trait Api {
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
+    fn NSIBegin(
+        &self,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam_t,
+    ) -> NSIContext_t;
     fn NSIEnd(&self, ctx: NSIContext_t);
     fn NSICreate(
         &self,

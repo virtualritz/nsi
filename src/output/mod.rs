@@ -1,4 +1,4 @@
-#![doc(cfg(feature = "output"))]
+#![cfg_attr(feature = "nightly", doc(cfg(feature = "output")))]
 //! # Output Driver Callbacks
 //! This module declares several closure types that can passed via
 //! [`Callback`](crate::argument::Callback)s to an
@@ -20,13 +20,145 @@
 //!
 //! As a user you can choose how to use this API.
 //!
-//! * To get one final big blob of pixel data, when rendering is
-//!   finished, it suffices to only implement an [`FnFinish`] closure.
+//! * To get a single blob of pixel data when rendering is finished it
+//!   is enough to only implement an [`FnFinish`] closure.
+//!
 //!   The [`Vec<f32>`] buffer that was used to accumulate the data is
 //!   passed back to this closure.
 //!
 //! * To get an updated buffer while the renderer is working implement
 //!   an [`FnWrite`] closure.
+//!
+//! ## Example
+//! ```
+//! # fn write_exr(_: &str, _: usize, _: usize, _: usize, _: &[f32]) {}
+//! # let ctx = nsi::Context::new(&[]).unwrap();
+//! // Setup a screen.
+//! ctx.create("screen", nsi::NodeType::Screen, &[]);
+//! // We pretend we defined a camera node earlier.
+//! ctx.connect("screen", "", "camera", "screens", &[]);
+//! ctx.set_attribute(
+//!     "screen",
+//!     &[
+//!         // The resolution becomes the width & height passed to
+//!         // FnOpen, FnWrite and FnFinish type callbacks.
+//!         nsi::integers!("resolution", &[1920, 1080]).array_len(2),
+//!     ],
+//! );
+//!
+//! // Setup an RGBA output layer.
+//! ctx.create("beauty", nsi::NodeType::OutputLayer, &[]);
+//! ctx.set_attribute(
+//!     "beauty",
+//!     &[
+//!         // The Ci variable comes from Open Shading Language.
+//!         nsi::string!("variablename", "Ci"),
+//!         // We want the data as raw, 32 bit float.
+//!         nsi::string!("scalarformat", "float"),
+//!         nsi::integer!("withalpha", 1),
+//!     ],
+//! );
+//! ctx.connect("beauty", "", "screen", "outputlayers", &[]);
+//!
+//! // Setup an output driver.
+//! ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
+//! ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
+//!
+//! // Our FnFinish callback. We will be called once.
+//! let finish = nsi::output::FinishCallback::new(
+//!     |// Passed from the output driver node, below.
+//!      image_filename: &str,
+//!      // Passed from the screen node, above.
+//!      width: usize,
+//!      // Passed from the screen node, above.
+//!      height: usize,
+//!      pixel_format: Vec<String>,
+//!      pixel_data: Vec<f32>| {
+//!         // Call some function to write our image to an OpenEXR file.
+//!         write_exr(
+//!             (String::from(image_filename) + ".exr").as_str(),
+//!             width,
+//!             height,
+//!             pixel_format.len(),
+//!             &pixel_data,
+//!         );
+//!         nsi::output::Error::None
+//!     },
+//! );
+//!
+//! ctx.set_attribute(
+//!     "driver",
+//!     &[
+//!         // Important: FERRIS is the built-in output driver
+//!         // we must use with Rust.
+//!         nsi::string!("drivername", nsi::output::FERRIS),
+//!         // This will end up in the `name` parameter passed
+//!         // to finish().
+//!         nsi::string!("imagefilename", "render"),
+//!         nsi::callback!("callback.finish", finish),
+//!     ],
+//! );
+//!
+//! ctx.render_control(&[nsi::string!("action", "start")]);
+//!
+//! // The finish() closure will be called once, before the next call returns.
+//! ctx.render_control(&[nsi::string!("action", "wait")]);
+//! ```
+//!
+//! ## Color Profiles
+//!
+//! The pixel color data that the renderer generates is linear and
+//! referred by whatever units you used to describe illuminants in your
+//! scene.
+//!
+//! Using the
+//! [`"colorprofile"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you
+//! can ask the renderer to apply an
+//! [Open Color IO](https://opencolorio.org/) (OCIO)
+//! [profile/LUT](https://github.com/colour-science/OpenColorIO-Configs/tree/feature/aces-1.2-config/aces_1.2/luts)
+//! before quantizing (see below).
+//!
+//! Once OCIO has a Rust wrapper you can easily choose to do these
+//! color conversions yourself. In the meantime there is the
+//! [`colorspace`](https://crates.io/crates/colorspace) crate which has
+//! some usefule profiles built in, e.g.
+//! [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
+//!
+//! ```
+//! ctx.create("beauty", nsi::NodeType::OutputLayer, &[]);
+//! ctx.set_attribute(
+//!     "beauty",
+//!     &[
+//!         // The Ci variable comes from Open Shading Language.
+//!         nsi::string!("variablename", "Ci"),
+//!         // We want the pixel data 'display referred' in sRGB and quantized down to 0.0..255.0.
+//!         nsi::string!("colorprofile", "/home/luts/linear_to_sRGB.spi1d"),
+//!         nsi::string!("scalarformat", "uint8"),
+//!     ],
+//! );
+//! ```
+//!
+//! ## Quantization
+//!
+//! Using the
+//! [`"scalarformat"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you
+//! can ask the renderer to quantize data down to a suitable range. For
+//! example, setting this to `"uint16"` will get you valid `u16` values
+//! from `0.0..65535.0`, but stored in the `f32`s of the `pixel_data`
+//! buffer.
+//! The value of `1.0` will map to `65535.0` and everything above will
+//! be clipped.
+//! You can just convert these value straight via `f32 as u16`.
+//!
+//! Unless you asked the renderer to also apply some color profile (see
+//! above) the data is linear and needs to be made display referred
+//! before is will look good on screen.
+//!
+//! See the `output` example on how to do this using the
+//! [`colorspace`](https://crates.io/crates/colorspace) crate.
+use crate::argument::CallbackPtr;
 use core::{ops::Index, ptr};
 use ndspy_sys;
 use num_enum::IntoPrimitive;
@@ -36,11 +168,11 @@ use std::{
     os::raw::{c_char, c_int, c_void},
 };
 
-use crate::argument::CallbackPtr;
-
 // Juypiter notebook support ------------------------------------------
 #[cfg(feature = "juypiter")]
 mod juypiter;
+
+pub static FERRIS: &str = "ferris";
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, IntoPrimitive)]
@@ -101,7 +233,10 @@ pub trait FnOpen<'a>: FnMut(
     &mut PixelFormat,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, &mut PixelFormat) -> Error + 'a> FnOpen<'a> for T {}
+impl<'a, T: FnMut(&str, usize, usize, &mut PixelFormat) -> Error + 'a>
+    FnOpen<'a> for T
+{
+}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -178,7 +313,18 @@ pub trait FnWrite<'a>: FnMut(
     + 'a {}
 impl<
         'a,
-        T: FnMut(&str, usize, usize, usize, usize, usize, usize, &[String], &[f32]) -> Error + 'a,
+        T: FnMut(
+                &str,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                &[String],
+                &[f32],
+            ) -> Error
+            + 'a,
     > FnWrite<'a> for T
 {
 }
@@ -260,7 +406,10 @@ pub trait FnFinish<'a>: FnMut(
     Vec<f32>,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
+impl<'a, T: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a>
+    FnFinish<'a> for T
+{
+}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -401,7 +550,7 @@ impl<'a> DisplayData<'a> {
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer)s,
 /// an *RGBA* **color** output layer and a world space **normal**, will look
 /// like this:
-/// ``
+/// ```text
 /// r
 /// g
 /// b
@@ -409,7 +558,7 @@ impl<'a> DisplayData<'a> {
 /// N_world.000.x
 /// N_world.001.y
 /// N_world.002.z
-/// ``
+/// ```
 /// ## On-Demand Reordering
 /// The type allows reordering of the pixel format to fit your needs.
 /// This is mainly meant for convenience so that any code in
@@ -421,15 +570,17 @@ impl<'a> DisplayData<'a> {
 /// defined in the [ɴsɪ
 /// scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
 ///
-/// Use the methods in [`FnOpen`] to re-order the pixel format.
+/// Use the methods in [`PixelFormat`] to re-order the pixel format
+/// while in [`FnOpen`].
+///
 /// E.g. to request pixels to be delivered as `ABGR` instead of
 /// `RGBA`.
 ///
 /// ## Channel Name Format
 /// The channel name format is:
-/// ``
+/// ```text
 /// [<output layer name>.<###>.]<channel id>
-/// ``
+/// ```
 /// * `output layer name` – The name of the
 ///     [`OutputLayer`](crate::context::NodeType::OutputLayer).
 /// * `###` - Zero padded number starting from `000` that is appended
@@ -460,12 +611,17 @@ impl<'a> PixelFormat<'a> {
         PixelFormat(
             format
                 .iter()
-                .map(|format| unsafe { CStr::from_ptr(format.name).to_str().unwrap() })
+                .map(|format| unsafe {
+                    CStr::from_ptr(format.name).to_str().unwrap()
+                })
                 .collect(),
         )
     }
     #[inline]
-    fn update_dspy_dev_format(&self, format: &mut [ndspy_sys::PtDspyDevFormat]) {
+    fn update_dspy_dev_format(
+        &self,
+        format: &mut [ndspy_sys::PtDspyDevFormat],
+    ) {
         format
             .iter_mut()
             .zip(self.0.iter())
@@ -487,21 +643,30 @@ impl<'a> PixelFormat<'a> {
     ///
     /// For example `"albedo.000.r"`.
     #[inline]
-    pub fn get(&self, index: usize) -> Option<&&'a str> {
-        self.0.get(index)
+    pub fn get(&self, index: usize) -> Option<&'a str> {
+        self.0.get(index).map_or(None, |inner| Some(*inner))
     }
     /// Returns the *layer name* part of the channel at `index`.
     ///
     /// For example, if the *channel name* is `"albedo.000.r"`, this
     /// will return `"albedo"`
     #[inline]
-    pub fn layer_name(&self, index: usize) -> &'a str {
-        if self.0[index].as_bytes().contains(&b'.') {
-            let (layer_name, _) = self.0[index].split_once('.').unwrap();
-            layer_name
-        } else {
-            // There is no channel name
-            ""
+    pub fn layer_name(&self, index: usize) -> Option<&str> {
+        #[cfg(feature = "nightly")]
+        {
+            self.0[index]
+                .split_once('.')
+                .map_or(None, |(layer_name, _)| Some(layer_name))
+        }
+        #[cfg(not(feature = "nightly"))]
+        {
+            let mut split = self.0[index].splitn(2, '.');
+            let name = split.next().unwrap();
+            if None == split.next() {
+                None
+            } else {
+                Some(name)
+            }
         }
     }
     /// Returns the *channel id* part of the name of the channel at
@@ -511,23 +676,33 @@ impl<'a> PixelFormat<'a> {
     /// will return `"r"`.
     #[inline]
     pub fn channel_id(&self, index: usize) -> &'a str {
-        if self.0[index].as_bytes().contains(&b'.') {
-            let (_, channel_id) = self.unique_layer_name_and_channel_id(index);
-            channel_id
-        } else {
-            self.0[index]
-        }
+        let (_, channel_id) = self.unique_layer_name_and_channel_id(index);
+        channel_id
     }
     /// Returns a tuple of *layer name* and *channel id* at `index`.
     ///
     /// For example, if the *channel name* is `"albedo.000.r"`, this will
     /// return `("albedo.000", "r")`.
     #[inline]
-    pub fn unique_layer_name_and_channel_id(&self, index: usize) -> (&'a str, &'a str) {
-        if self.0[index].as_bytes().contains(&b'.') {
-            self.0[index].rsplit_once('.').unwrap()
-        } else {
-            ("", self.0[index])
+    pub fn unique_layer_name_and_channel_id(
+        &self,
+        index: usize,
+    ) -> (&'a str, &'a str) {
+        #[cfg(feature = "nightly")]
+        {
+            self.0[index]
+                .rsplit_once('.')
+                .unwrap_or(("", self.0[index]))
+        }
+        #[cfg(not(feature = "nightly"))]
+        {
+            let mut split = self.0[index].rsplitn(2, '.');
+            let suffix = split.next().unwrap();
+            if let Some(prefix) = split.next() {
+                (prefix, suffix)
+            } else {
+                ("", suffix)
+            }
         }
     }
     /// Returns the number of channels in a pixel.
@@ -553,7 +728,7 @@ impl<'a> PixelFormat<'a> {
         }
         // do nothing - element is already at the start.
     }
-    /// Swaps the names at `index_a` and `index_b`.
+    /// Swaps the channels at `index_a` and `index_b`.
     #[inline]
     pub fn swap(&mut self, index_a: usize, index_b: usize) {
         self.0.swap(index_a, index_b);
@@ -563,8 +738,8 @@ impl<'a> PixelFormat<'a> {
 impl<'a> Index<usize> for PixelFormat<'a> {
     type Output = str;
     #[inline]
-    fn index(&self, index: usize) -> &'a str {
-        self.0.get(index).expect("Out of bounds access")
+    fn index(&self, index: usize) -> &str {
+        self.0[index]
     }
 }
 
@@ -577,9 +752,14 @@ fn get_parameter_triple_box<T: ?Sized>(
     for p in parameters.iter() {
         let p_name = unsafe { CStr::from_ptr(p.name) }.to_str().unwrap();
 
-        if name == p_name && type_ == p.valueType as _ && len == p.valueCount as _ {
+        if name == p_name
+            && type_ == p.valueType as _
+            && len == p.valueCount as _
+        {
             if p.value != ptr::null_mut() {
-                return Some(unsafe { Box::from_raw(p.value as *mut Box<Box<T>>) });
+                return Some(unsafe {
+                    Box::from_raw(p.value as *mut Box<Box<T>>)
+                });
             } else {
                 // Parameter exists but value is missing –
                 // exit quietly.
@@ -604,14 +784,19 @@ pub(crate) extern "C" fn image_open(
     flag_stuff: *mut ndspy_sys::PtFlagStuff,
 ) -> ndspy_sys::PtDspyError {
     // FIXME: check that driver_name is "ferris".
-    if (image_handle_ptr == ptr::null_mut()) || (output_filename == ptr::null_mut()) {
+    if (image_handle_ptr == ptr::null_mut())
+        || (output_filename == ptr::null_mut())
+    {
         return Error::BadParameters.into();
     }
 
     let parameters = unsafe {
         // We need to const->mut transmute() here because we need
         // pointers to FnMut below.
-        std::slice::from_raw_parts_mut(std::mem::transmute(parameters), parameters_count as _)
+        std::slice::from_raw_parts_mut(
+            std::mem::transmute(parameters),
+            parameters_count as _,
+        )
     };
 
     let mut display_data = Box::new(DisplayData {
@@ -620,17 +805,38 @@ pub(crate) extern "C" fn image_open(
         height: height as _,
         pixel_format: Vec::new(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
-        fn_open: get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters),
-        fn_write: get_parameter_triple_box::<dyn FnWrite>("callback.write", b'p', 1, parameters),
+        fn_open: get_parameter_triple_box::<dyn FnOpen>(
+            "callback.open",
+            b'p',
+            1,
+            parameters,
+        ),
+        fn_write: get_parameter_triple_box::<dyn FnWrite>(
+            "callback.write",
+            b'p',
+            1,
+            parameters,
+        ),
         fn_query: None, // get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1, parameters),
-        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
+        fn_finish: get_parameter_triple_box::<dyn FnFinish>(
+            "callback.finish",
+            b'p',
+            1,
+            parameters,
+        ),
     });
 
-    let mut format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
+    let mut format =
+        unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
     let mut format_vec = PixelFormat::new(&format);
 
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        let error = fn_open(display_data.name, width as _, height as _, &mut format_vec);
+        let error = fn_open(
+            display_data.name,
+            width as _,
+            height as _,
+            &mut format_vec,
+        );
         // Update possibly re-ordered format array.
         format_vec.update_dspy_dev_format(&mut format);
         error
@@ -661,12 +867,16 @@ pub(crate) extern "C" fn image_query(
 ) -> ndspy_sys::PtDspyError {
     match query_type {
         ndspy_sys::PtDspyQueryType_PkRenderProgress => {
-            if (data_len as usize) < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
+            if (data_len as usize)
+                < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
             {
                 Error::BadParameters
             } else {
                 *unsafe {
-                    &mut std::mem::transmute::<_, ndspy_sys::PtDspyRenderProgressFuncPtr>(data)
+                    &mut std::mem::transmute::<
+                        _,
+                        ndspy_sys::PtDspyRenderProgressFuncPtr,
+                    >(data)
                 } = Some(image_progress);
                 Error::None
             }
@@ -694,7 +904,9 @@ pub(crate) extern "C" fn image_write(
     let pixel_data = unsafe {
         std::slice::from_raw_parts(
             pixel_data as *const f32,
-            pixel_length * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min)) as usize,
+            pixel_length
+                * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min))
+                    as usize,
         )
     };
 
@@ -702,11 +914,14 @@ pub(crate) extern "C" fn image_write(
 
     let mut source_index = 0;
     for y in y_min as usize..y_max_plus_one as _ {
-        let dest_index = (y * display_data.width + x_min as usize) * pixel_length;
+        let dest_index =
+            (y * display_data.width + x_min as usize) * pixel_length;
 
         // We memcpy() each scanline.
         (&mut display_data.pixel_data[dest_index..dest_index + bucket_width])
-            .copy_from_slice(&(pixel_data[source_index..source_index + bucket_width]));
+            .copy_from_slice(
+                &(pixel_data[source_index..source_index + bucket_width]),
+            );
 
         source_index += bucket_width;
     }
@@ -735,7 +950,8 @@ pub(crate) extern "C" fn image_write(
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    let display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
+    let display_data =
+        unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
         DisplayData::boxed_into_tuple(display_data);
@@ -758,29 +974,4 @@ extern "C" fn image_progress(
 ) -> ndspy_sys::PtDspyError {
     println!("\rProgress: {}", progress * 100.0);
     Error::None.into()
-}
-
-pub use color::*;
-
-pub mod color {
-    use core::ops::Mul;
-    use num_traits::float::Float;
-    use oorandom;
-
-    pub fn quantize<T>(
-        value: T,
-        one: T,
-        min: T,
-        max: T,
-        dither_amplitude: T,
-        rng: &mut oorandom::Rand32,
-    ) -> T
-    where
-        T: Float + Mul<f32, Output = T>,
-    {
-        use clamped::Clamp;
-        (one * value + dither_amplitude * rng.rand_float())
-            .round()
-            .clamped(min, max)
-    }
 }

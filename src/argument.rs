@@ -7,7 +7,9 @@ use std::{ffi::CString, marker::PhantomData};
 use crate::*;
 
 #[inline]
-pub(crate) fn get_c_param_vec(args_in: &ArgSlice) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
+pub(crate) fn get_c_param_vec(
+    args_in: &ArgSlice,
+) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
     let mut args_out = Vec::<NSIParam_t>::with_capacity(args_in.len());
     for arg_in in args_in {
         args_out.push(NSIParam_t {
@@ -439,7 +441,8 @@ impl<'a> References<'a> {
     pub fn new<T>(data: &'a [Option<&'a T>]) -> Self {
         debug_assert!(data.len() % Type::Pointer.element_size() == 0);
 
-        let mut c_data = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
+        let mut c_data =
+            Vec::<*const core::ffi::c_void>::with_capacity(data.len());
 
         for e in data {
             c_data.push(
@@ -516,7 +519,8 @@ pub struct Strings {
 impl Strings {
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
         let mut _data = Vec::<CString>::with_capacity(data.len());
-        let mut pointer = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
+        let mut pointer =
+            Vec::<*const core::ffi::c_void>::with_capacity(data.len());
 
         data.iter().for_each(|s| {
             _data.push(CString::new(*s).unwrap());
@@ -775,7 +779,10 @@ macro_rules! double_matrix {
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrices::new($value)))
+        nsi::Arg::new(
+            $name,
+            nsi::ArgData::from(nsi::DoubleMatrices::new($value)),
+        )
     };
 }
 
