@@ -40,7 +40,7 @@ dlopen_derive = { version = "0.1.4", optional = true }
 ndspy-sys = { version = "0.1.6", optional = true }
 num_enum = { version = "0.5.1", optional = true }
 nsi-sys = "0.1.12"
-rand = { version = "*", features = [ "small_rng" ], optional = true }
+rand = { version = "0.7.3", features = [ "small_rng" ], optional = true }
 snafu = { version ="0.6.9", optional = true }
 ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
 
