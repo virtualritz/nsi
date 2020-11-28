@@ -259,6 +259,7 @@ trait Api {
         object: NSIHandle_t,
         name: *const ::std::os::raw::c_char,
     );
+    #[allow(clippy::too_many_arguments)]
     fn NSIConnect(
         &self,
         ctx: NSIContext_t,

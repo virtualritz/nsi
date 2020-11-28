@@ -355,7 +355,7 @@ impl<'a> ArgDataMethods for Callback<'a> {
 /// eventually send this to. This is your responsibility.
 ///
 /// If you need to send pointers a better alternative
-/// is the [`References`] type that allows the compiler
+/// is the [`Reference`] type that allows the compiler
 /// to check that the the referenced data outlives the
 /// [`Context`](context::Context).
 pub struct Pointer {
@@ -363,6 +363,12 @@ pub struct Pointer {
 }
 
 impl Pointer {
+    /// # Safety
+    /// This is marked unsafe because the responsibility
+    /// to ensure the pointer can be safely dereferenced
+    /// after the function has returned lies with the user.
+    ///
+    /// [`Reference`] is a *safe* alternative.
     pub unsafe fn new(data: *const core::ffi::c_void) -> Self {
         Self { data }
     }
@@ -487,6 +493,7 @@ pub struct Pointers<'a> {
 }
 
 impl<'a> Pointers<'a> {
+    /// # Safety
     /// This is marked unsafe because the responsibility
     /// to ensure the pointer can be safely dereferenced
     /// after the function has returned lies with the user.
