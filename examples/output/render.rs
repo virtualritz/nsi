@@ -1,9 +1,9 @@
 use crate::p_ops;
+use nsi_3delight as nsi_3dl;
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
     name: &str,
-    samples: u32,
     open: nsi::output::OpenCallback,
     write: nsi::output::WriteCallback,
     finish: nsi::output::FinishCallback,
@@ -160,6 +160,7 @@ fn nsi_material(c: &nsi::Context, name: &str) {
 }
 
 pub(crate) fn nsi_render<'a>(
+    samples: u32,
     polyhedron: &p_ops::Polyhedron,
     open: nsi::output::OpenCallback,
     write: nsi::output::WriteCallback,
@@ -178,21 +179,25 @@ pub(crate) fn nsi_render<'a>(
         ],
     );
 
-    nsi_camera(&ctx, &polyhedron.name(), 1, open, write, finish);
+    nsi_camera(&ctx, &polyhedron.name(), open, write, finish);
 
     ctx.append(
-        &ctx.environment_texture(
-            None,
-            None,
+        ".root",
+        None,
+        &nsi_3dl::environment_texture(
+            &ctx,
             None,
             "assets/wooden_lounge_1k.tdl",
-            false,
-        ),
-        None,
-        None,
+            None,
+            None,
+            Some(false),
+            &[],
+        )
+        .0,
     );
 
-    let name = polyhedron.to_nsi(&ctx, Some(".root"), None, None);
+    let name = polyhedron.to_nsi(&ctx, None, None, None, None);
+    ctx.append(".root", None, &name);
 
     nsi_material(&ctx, &name);
 

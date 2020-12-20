@@ -1,17 +1,23 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "jupyter")))]
 //! # Jupyter Notebook Support
 //!
-//! This module adds a [`as_jupyter()`](crate::Context::as_jupyter())
+//! This module adds an
+//! [`as_jupyter_notebook()`](crate::Context::as_jupyter_notebook())
 //! method to a [`Context`](crate::Context).
 //!
-//! This allows visualizing a camera inside a notebook.
+//! This allows visualizing a
+//! [`Screen`](crate::context::NodeType::Screen) inside a notebook.
+//!
+//! Documentation on how to use Rust with Jupyter Notebooks is
+//! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
 use crate as nsi;
-use crate::{output::PixelFormat, ArgSlice};
+use crate::output::PixelFormat;
 use evcxr_runtime;
 use image;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
+/* FIXME: implement this as a trait.
 pub trait Jupyter<'a> {
     fn camera_as_jupyter(camera: &str, args: &ArgSlice<'_, 'a>);
     fn screen_as_jupyter(screen: &str, args: &ArgSlice<'_, 'a>);
@@ -22,34 +28,38 @@ impl<'a> Jupyter<'a> for nsi::Context<'a> {
     fn camera_as_jupyter(_camera: &str, _args: &ArgSlice<'_, 'a>) {}
     fn screen_as_jupyter(_screen: &str, _args: &ArgSlice<'_, 'a>) {}
     fn output_layer_as_jupyter(_output_layer: &str, _args: &ArgSlice<'_, 'a>) {}
-}
+}*/
 
 impl<'a> nsi::Context<'a> {
-    /// Render the image `camera` sees into the current Jupyter Notebook.
+    /// Render a [`Screen`](crate::context::NodeType::Screen) inside a
+    /// Jupyter Notebook.
+    ///
+    /// Essentially this dumps a 16bit PNG as a BASE64 encoded binary
+    /// blob to `stdout`.
     ///
     /// The [`Context`](crate::Context) is unchanged after this returns.
-    ///
     /// # Example
-    /// ```
+    /// ```no_run
     /// // Setup a screen.
+    /// # let ctx = nsi::Context::new(&[]).unwrap();
     /// ctx.create("screen", nsi::NodeType::Screen, &[]);
-    /// ctx.connect("screen", "", "camera", "screens", &[]);
+    /// ctx.connect("screen", "", "my_camera", "screens", &[]);
     /// ctx.set_attribute(
     ///     "screen",
     ///     &[
     ///         // Some 2:1 wide angle view.
     ///         nsi::integers!("resolution", &[1280, 640]).array_len(2),
-    ///         nsi::integer!("oversampling", 32),
+    ///         // 20 antialiasing samples per pixel.
+    ///         nsi::integer!("oversampling", 20),
     ///     ],
     /// );
     ///
-    /// // Put a mini 16:9 image of what "camera" sees into our notebook.
-    /// ctx.as_jupyter("screen");
+    /// // Put an image of what "my_camera" sees into our notebook.
+    /// ctx.as_jupyter_notebook("screen");
     /// ```
     /// # Arguments
-    /// * `camera` – A [`PerspectiveCamera`](crate::context::NodeType::PerspectiveCamera)
-    /// * `width`, `height` – Iage dimensions.
-    pub fn as_jupyter(&self, screen: &str) {
+    /// * `screen` – A [`Screen`](crate::context::NodeType::Screen).
+    pub fn as_jupyter_notebook(&self, screen: &str) {
         // RGB layer.
         self.create("jupyter_beauty", nsi::NodeType::OutputLayer, &[]);
         self.set_attribute(
@@ -68,25 +78,25 @@ impl<'a> nsi::Context<'a> {
         let pixel_data_width = Arc::new(Mutex::new(0usize));
         let pixel_data_height = Arc::new(Mutex::new(0usize));
 
-        // Our callback to collect pixels.
+        // Callback to collect our pixels.
         let finish = nsi::output::FinishCallback::new(
             |_name: &str,
              width: usize,
              height: usize,
              pixel_format: PixelFormat,
              pixel_data: Vec<f32>| {
-                // FIXME
-                // 1. Find unique formats + no. of channels for each
-                // 2. for each unique format generate an image and
-                //    put in some vec<Image>
-                // 3. Image can be F Fa RGB RGBa or FFFF
-
                 assert!(4 <= pixel_format.len());
-                {
-                    let mut quantized_pixel_data =
-                        quantized_pixel_data.lock().unwrap();
-                    *quantized_pixel_data = vec![0u16; width * height * 4];
-                }
+
+                // FIXME
+                // 1. For each Layer in a PixelFormat, generate an
+                //    image and put in some Vec<Image>.
+                // 2. Afterwards, send all images as a matrix of
+                //    PNGs to Jupyter.
+                // 3. Image can be F Fa RGB RGBa or FFFF
+                let mut quantized_pixel_data_unlocked =
+                    quantized_pixel_data.lock().unwrap();
+                *quantized_pixel_data_unlocked = vec![0u16; width * height * 4];
+
                 buffer_rgba_f32_to_rgba_u16_be(
                     width,
                     height,
@@ -94,10 +104,12 @@ impl<'a> nsi::Context<'a> {
                     &pixel_data,
                     &quantized_pixel_data,
                 );
+
                 let mut pixel_data_width = pixel_data_width.lock().unwrap();
                 *pixel_data_width = width;
                 let mut pixel_data_height = pixel_data_height.lock().unwrap();
                 *pixel_data_height = height;
+
                 nsi::output::Error::None
             },
         );
@@ -154,7 +166,7 @@ impl<'a> nsi::Context<'a> {
 
 /// Linear to (0..1 clamped) sRGB conversion – bad choice but cheap.
 #[inline]
-pub fn linear_to_srgb(x: f32) -> f32 {
+fn linear_to_srgb(x: f32) -> f32 {
     if x <= 0.0 {
         0.0
     } else if x >= 1.0 {

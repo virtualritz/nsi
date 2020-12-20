@@ -58,12 +58,12 @@ ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
 [[example]]
 path = "examples/output/main.rs"
 name = "output"
-required-features = [ "output" ]
+required-features = [ "output", "toolbelt" ]
 
-[[example]]
-path = "examples/volume/main.rs"
-name = "volume"
-required-features = [ "toolbelt" ]
+#[[example]]
+#path = "examples/volume/main.rs"
+#name = "volume"
+#required-features = [ "toolbelt" ]
 
 [package.metadata.docs.rs]
 features = ["output", "toolbelt", "nightly"]

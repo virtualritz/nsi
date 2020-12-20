@@ -487,6 +487,7 @@ impl<'a> Drop for Context<'a> {
 /// This will just convert into a `Vec<u8>` of the string representing
 /// the node type when you use it.
 pub enum NodeType {
+    /// Wildcard node that references all existing nodes at once.
     All,
     /// The scene’s root (`".root"`).
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
@@ -497,7 +498,8 @@ pub enum NodeType {
     /// Expresses relationships of groups of nodes.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-set).
     Set,
-    /// [ᴏsʟ](http://opensource.imageworks.com/?p=osl) shader or layer in a shader group.
+    /// [ᴏsʟ](http://opensource.imageworks.com/osl.html) shader or
+    /// layer in a shader group.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-shader).
     Shader,
     /// Container for generic attributes (e.g. visibility).
@@ -527,7 +529,8 @@ pub enum NodeType {
     /// Geometry to be loaded or generated in delayed fashion.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
     Procedural,
-    /// A volume loaded from an [OpenVDB](https://www.openvdb.org) file.
+    /// A volume loaded from an [OpenVDB](https://www.openvdb.org)
+    /// file.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-volume).
     Volume,
     // Geometry type to define environment lighting.

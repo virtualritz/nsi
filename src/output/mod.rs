@@ -20,14 +20,15 @@
 //!
 //! As a user you can choose how to use this API.
 //!
-//! * To get a single blob of pixel data when rendering is finished it
-//!   is enough to only implement an [`FnFinish`] closure.
+//! * To get a single buffer of pixel data when rendering is finished
+//!   it is enough to only implement an [`FnFinish`] closure.
 //!
-//!   The [`Vec<f32>`] buffer that was used to accumulate the data is
-//!   passed back to this closure.
+//! * To get the pixel buffer updated while the renderer is working
+//!   implemet an [`FnWrite`] closure.
 //!
-//! * To get an updated buffer while the renderer is working implement
-//!   an [`FnWrite`] closure.
+//! The format of the [`Vec<f32>`] buffer is described by the
+//! [`PixelFormat`] parameter which is passed to both of these
+//! closures.
 //!
 //! ## Example
 //! ```
@@ -72,7 +73,7 @@
 //!      width: usize,
 //!      // Passed from the screen node, above.
 //!      height: usize,
-//!      pixel_format: PixelFormat,
+//!      pixel_format: nsi::output::PixelFormat,
 //!      pixel_data: Vec<f32>| {
 //!         // Call some function to write our image to an OpenEXR file.
 //!         write_exr(
@@ -126,6 +127,7 @@
 //! [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
 //!
 //! ```
+//! # let ctx = nsi::Context::new(&[]).unwrap();
 //! ctx.create("beauty", nsi::NodeType::OutputLayer, &[]);
 //! ctx.set_attribute(
 //!     "beauty",
@@ -173,15 +175,22 @@ pub mod jupyter;
 
 pub static FERRIS: &str = "ferris";
 
+/// An error type the callbacks return to communicate with the
+/// renderer.
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, IntoPrimitive)]
 pub enum Error {
+    /// Everyhing is dandy.
     None = ndspy_sys::PtDspyError_PkDspyErrorNone as _,
+    /// We ran out of memory.
     NoMemory = ndspy_sys::PtDspyError_PkDspyErrorNoMemory as _,
+    /// We do no support this request.
     Unsupported = ndspy_sys::PtDspyError_PkDspyErrorUnsupported as _,
     BadParameters = ndspy_sys::PtDspyError_PkDspyErrorBadParams as _,
     NoResource = ndspy_sys::PtDspyError_PkDspyErrorNoResource as _,
+    /// Something else went wrong.
     Undefined = ndspy_sys::PtDspyError_PkDspyErrorUndefined as _,
+    /// Stop the render.
     Stop = ndspy_sys::PtDspyError_PkDspyErrorStop as _,
 }
 
@@ -209,7 +218,7 @@ pub enum Error {
 ///     |name: &str,
 ///      width: usize,
 ///      height: usize,
-///      pixel_format: &mut PixelFormat| {
+///      pixel_format: &nsi::output::PixelFormat| {
 ///         println!(
 ///             "Resolution: {}×{}\nPixel Format:\n{:?}",
 ///             width,
@@ -272,7 +281,7 @@ trait FnOpen<'a> = FnMut(
 ///      x_max_plus_one: usize,
 ///      y_min: usize,
 ///      y_max_plus_one: usize,
-///      pixel_format: &[String],
+///      pixel_format: &nsi::output::PixelFormat,
 ///      pixel_data: &[f32]| {
 ///         /// Send our pixels to some texture for realtime display.
 ///         nsi::output::Error::None
@@ -371,11 +380,11 @@ pub trait FnWrite<'a> = FnMut(
 ///     |name: &str,
 ///      width: usize,
 ///      height: usize,
-///      pixel_format: Vec<String>,
+///      pixel_format: nsi::output::PixelFormat,
 ///      pixel_data: Vec<f32>| {
 ///         println!(
-///             "The '{}' channel of the top, left pixel has the value {}.",
-///             pixel_format[0],
+///             "The top, left pixel the first channel in the {:?} layer has the value {}.",
+///             pixel_format[0].name(),
 ///             pixel_data[0],
 ///         );
 ///         nsi::output::Error::None
@@ -571,13 +580,37 @@ impl Layer {
 /// composed of.
 #[derive(Debug, Clone, Copy)]
 pub enum LayerType {
+    /// A single channel. Obtained when setting `"layertype"`
+    /// `"scalar"` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     OneChannel,
+    /// A single channel with alpha. Obtained when setting
+    ///  `"layertype"` `"scalar"` and `"withalpha"` `1` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     OneChannelAndAlpha,
+    /// An `rgb` color triplet. Obtained when setting `"layertype"`
+    /// `"color"` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     Color,
+    /// An `rgb` color triplet with alpha. Obtained when setting
+    /// `"layertype"` `"color"` and `"withalpha"` `1` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     ColorAndAlpha,
+    /// An `xyz` triplet. Obtained when setting `"layertype"`
+    /// `"vector"` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     Vector,
+    /// An `xyz` triplet with alpha. Obtained when setting
+    /// `"layertype"` `"vector"` and `"withalpha"` `1` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     VectorAndAlpha,
+    /// An quadruple of values. Obtained when setting
+    /// `"layertype"` `"quad"` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     FourChannels,
+    /// An quadruple of values with alpha. Obtained when setting
+    /// `"layertype"` `"quad"` and `"withalpha"` `1` on an
+    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     FourChannelsAndAlpha,
 }
 
@@ -602,8 +635,6 @@ impl LayerType {
         }
     }
 }
-
-/// # Pixel Format
 /// Accessor for the pixel format the renderer sends in [`FnOpen`],
 /// [`FnWrite`] and [`FnFinish`].
 ///
@@ -611,14 +642,26 @@ impl LayerType {
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer)
 /// descriptions.
 ///
-/// A typical pixel format for a pixel containing two
-/// such layers, an *RGBA* **color** + **alpha** output layer and a
-/// world space **normal**, will look like this:
+/// # Example
 ///
-/// | [`name`](Layer::name()) | [`layer_type`](Layer::layer_type())         | [`offset`](Layer::offset()) |
-/// |-------------------------|---------------------------------------------|-----------------------------|
-/// | `Ci`                    | [`ColorAndAlpha`](LayerType::ColorAndAlpha) | `0`                         |
-/// | `N_world`               | [`Vector`](LayerType::Vector)               | `4`                         |
+/// A typical format for a pixel containing two such layers, an *RGBA*
+/// **color** + **alpha** output layer and a world space **normal**,
+/// will look like this:
+///
+/// [`name`](Layer::name()) | [`layer_type`](Layer::layer_type())                  | [`offset`](Layer::offset())
+/// ------------------------|------------------------------------------------------|----------------------------
+/// `Ci`                    | [`ColorAndAlpha`](LayerType::ColorAndAlpha) (`rgba`) | `0`
+/// `N_world`               | [`Vector`](LayerType::Vector) (`xyz`)                | `4`
+///
+/// ## RAW Layout
+///
+/// The resp. callbacks deliver pixels as a flat [`f32`] buffer.
+/// For the above example the actual layout of a single pixel in the
+/// buffer is:
+///
+/// Value  | `r`ed   | `g`reen | `b`lue  | `a`lpha | `x` | `y` | `z`
+/// -------|---------|---------|---------|---------|-----|-----|----
+/// Offset | `0`     | `1`     | `2`     | `3`     | `4` | `5` | `6`
 ///
 /// The offset is the offset into the pixel buffer. For example, the
 /// **y** coordinate of the the normal will be stored in channel at
@@ -697,9 +740,7 @@ impl PixelFormat {
                                     LayerType::OneChannelAndAlpha
                                 }
                                 LayerType::Color => LayerType::ColorAndAlpha,
-                                LayerType::Vector => {
-                                    LayerType::VectorAndAlpha
-                                }
+                                LayerType::Vector => LayerType::VectorAndAlpha,
                                 LayerType::FourChannels => {
                                     LayerType::FourChannelsAndAlpha
                                 }
@@ -811,6 +852,7 @@ fn get_parameter_triple_box<T: ?Sized>(
     None
 }
 
+/// Trampoline function for the FnOpen callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_open(
     image_handle_ptr: *mut ndspy_sys::PtDspyImageHandle,
@@ -870,21 +912,24 @@ pub(crate) extern "C" fn image_open(
     let format =
         unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
 
+    // We want f32/channel data.
     format
         .iter_mut()
         .for_each(|format| format.type_ = ndspy_sys::PkDspyFloat32);
 
-    let pixel_format = PixelFormat::new(format);
+    display_data.pixel_format = PixelFormat::new(format);
 
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        let error =
-            fn_open(display_data.name, width as _, height as _, &pixel_format);
+        let error = fn_open(
+            display_data.name,
+            width as _,
+            height as _,
+            &display_data.pixel_format,
+        );
         error
     } else {
         Error::None
     };
-
-    display_data.pixel_format = pixel_format;
 
     unsafe {
         *image_handle_ptr = Box::into_raw(display_data) as _;
@@ -898,6 +943,7 @@ pub(crate) extern "C" fn image_open(
     error.into()
 }
 
+/// FIXME: this will be used for a FnProgress callback later.
 #[no_mangle]
 pub(crate) extern "C" fn image_query(
     _image_handle_ptr: ndspy_sys::PtDspyImageHandle,
@@ -926,6 +972,7 @@ pub(crate) extern "C" fn image_query(
     .into()
 }
 
+/// Trampoline function for the FnWrite callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_write(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
@@ -967,7 +1014,7 @@ pub(crate) extern "C" fn image_write(
     }
 
     // Call the closure.
-    let error = if let Some(ref mut fn_write) = display_data.fn_write {
+    if let Some(ref mut fn_write) = display_data.fn_write {
         fn_write(
             display_data.name,
             display_data.width,
@@ -981,11 +1028,11 @@ pub(crate) extern "C" fn image_write(
         )
     } else {
         Error::None
-    };
-
-    error.into()
+    }
+    .into()
 }
 
+/// Trampoline function for the FnFinish callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
@@ -996,15 +1043,14 @@ pub(crate) extern "C" fn image_close(
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
         DisplayData::boxed_into_tuple(display_data);
 
-    let error = if let Some(mut fn_finish) = fn_finish {
+    if let Some(mut fn_finish) = fn_finish {
         let error = fn_finish(name, width, height, pixel_format, pixel_data);
         Box::into_raw(fn_finish);
         error
     } else {
         Error::None
-    };
-
-    error.into()
+    }
+    .into()
 }
 
 #[no_mangle]

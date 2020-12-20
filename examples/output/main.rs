@@ -21,7 +21,7 @@ pub fn main() {
         |_name: &str,
          width: usize,
          height: usize,
-         format: &mut nsi::output::PixelFormat| {
+         format: &nsi::output::PixelFormat| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
             // Create a properly size buffer to receive our pixel data.
             *quantized_pixel_data = vec![0u8; width * height * format.len()];
@@ -44,42 +44,34 @@ pub fn main() {
          x_max_plus_one: usize,
          y_min: usize,
          y_max_plus_one: usize,
-         pixel_format: &[String],
+         pixel_format: &nsi::output::PixelFormat,
          pixel_data: &[f32]| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
 
             for scanline in y_min..y_max_plus_one {
                 let y_offset = scanline * width;
+
                 for index in y_offset + x_min..y_offset + x_max_plus_one {
                     let index = index * pixel_format.len();
-
                     let alpha = pixel_data[index + 3];
+
                     // Ignore pixels with zero alpha.
                     if 0.0 != alpha {
-                        let mut color = [cs::rgb::RGBf::new(0f32, 0., 0.)];
-                        cs::rgb_to_rgb(
-                            model_aces_cg,
-                            model_srgb,
-                            // Unpremultiply the color – this is needed
-                            // or else the color profile transform will
-                            // yield wrong results for pixels with
-                            // non-opaque alpha. Furthermore PNG wants
-                            // unpremultiplied pixels and that is what
-                            // we will write the 8bit data to, at the end.
-                            &[cs::rgb::RGBf::new(
-                                pixel_data[index + 0] / alpha,
-                                pixel_data[index + 1] / alpha,
-                                pixel_data[index + 2] / alpha,
-                            )],
-                            &mut color,
-                        );
-
+                        // Unpremultiply the color – this is needed
+                        // or else the color profile transform will
+                        // yield wrong results for pixels with
+                        // non-opaque alpha. Furthermore PNG wants
+                        // unpremultiplied pixels and that is what
+                        // we will write the 8bit data to, at the end.
                         quantized_pixel_data[index + 0] =
-                            nsi::output::linear_to_srgb(color.r);
+                            (linear_to_srgb(pixel_data[index + 0] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 1] =
-                            nsi::output::linear_to_srgb(color.g);
+                            (linear_to_srgb(pixel_data[index + 1] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 2] =
-                            nsi::output::linear_to_srgb(color.b);
+                            (linear_to_srgb(pixel_data[index + 2] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
                     }
                 }
@@ -99,7 +91,7 @@ pub fn main() {
         |_name: &str,
          width: usize,
          height: usize,
-         pixel_format: Vec<String>,
+         pixel_format: nsi::output::PixelFormat,
          pixel_data: Vec<f32>| {
             // We write the raw f32 data out as an OpenEXR.
             write_exr(
@@ -124,7 +116,7 @@ pub fn main() {
     polyhedron.normalize();
 
     // The nsi_render() call blocks until the render has finished.
-    nsi_render(&polyhedron, open, write, finish);
+    nsi_render(32, &polyhedron, open, write, finish);
 
     // We can shed the Arc and the Mutex now that nsi_render() is done.
     let quantized_pixel_data = Arc::<_>::try_unwrap(quantized_pixel_data)
@@ -179,4 +171,18 @@ fn write_exr(
             &sample,
         )
         .unwrap();
+}
+
+/// Linear to (0..1 clamped) sRGB conversion – bad choice but cheap.
+#[inline]
+fn linear_to_srgb(x: f32) -> f32 {
+    if x <= 0.0 {
+        0.0
+    } else if x >= 1.0 {
+        1.0
+    } else if x < 0.0031308 {
+        x * 12.92
+    } else {
+        x.powf(1.0 / 2.4) * 1.055 - 0.055
+    }
 }

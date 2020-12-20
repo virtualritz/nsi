@@ -11,7 +11,7 @@ use crate::ArgSlice;
 use ultraviolet as uv;
 
 #[inline]
-fn default_node_root<'a>(node: Option<&'a str>) -> &'a str {
+fn _default_node_root<'a>(node: Option<&'a str>) -> &'a str {
     match node {
         Some(node) => node,
         None => ".root",
@@ -60,32 +60,39 @@ impl<'a> nsi::Context<'a> {
     ///
     /// * `handle` – Handle of node to append.
     ///
-    /// Returns `handle` for convenience.
+    /// Returns (`to`, `handle`).
     /// # Example
     /// ```
     /// # let ctx = nsi::Context::new(&[]).unwrap();
     /// // Create a scaling transform node and append to the scene root.
     /// let scale = ctx.append(
+    ///     ".root",
+    ///     // Use "objects" slot.
     ///     None,
-    ///     None,
-    ///     Some(&ctx.scaling(None, &[10., 10., 10.])),
+    ///     // Append the node "tetrahedron", which we created earlier,
+    ///     // to the scale node.
+    ///     &ctx.append(
+    ///         &ctx.scaling(None, &[10., 10., 10.]),
+    ///         // Use "objects" slot.
+    ///         None,
+    ///         "tetrahedron",
+    ///     ).0,
     /// );
-    /// // Append the node "tetrahedron", which we created earlier,
-    /// // to the scale node.
-    /// ctx.append(Some("tetrahedron"), Some(&scale), None);
     /// ```
     #[inline]
-    pub fn append(
+    pub fn append<'b, 'c>(
         &self,
-        to: Option<&str>,
+        to: &'b str,
         slot: Option<&str>,
-        handle: &str,
-    ) -> String {
-        let to = default_node_root(to);
-
+        handle: &'c str,
+    ) -> (&'b str, &'c str)
+    where
+        'a: 'b,
+        'a: 'c,
+    {
         self.connect(handle, "", to, default_slot_objects(slot), &[]);
 
-        to.to_string()
+        (to, handle)
     }
 
     /// **Convenience method; not part of the official ɴsɪ API.**
@@ -101,35 +108,39 @@ impl<'a> nsi::Context<'a> {
     ///
     /// * `handle` – Handle of node to insert.
     ///
-    /// * `from` – Node to connect tp upstream.
-    ///
-    /// * `from_slot` – Slot on `from` node to connect to.
+    /// * `handle_slot` – Slot on `handle` node to connect to.
     ///     If [`None`], `"objects"` is used.
     ///
-    /// Returns the `to` handle.
+    /// * `from` – Node to connect tp upstream.
+    ///
+    /// Returns (`to`, `handle`).
     /// # Example
     /// ```
     /// # let ctx = nsi::Context::new(&[]).unwrap();
     /// // Insert the node "tetrahedron" between the ".root" and
     /// // "terahedron_attrib" nodes.
     /// ctx.insert(
+    ///     ".root",
     ///     None,
-    ///     None,
-    ///     Some("tetrahedron"),
-    ///     "terahedron_attrib",
+    ///     "tetrahedron",
     ///     Some("geometryattributes"),
+    ///     "terahedron_attrib",
     /// );
     /// ```
     #[inline]
-    pub fn insert(
+    pub fn insert<'b, 'c>(
         &self,
-        to: Option<&str>,
+        to: &'b str,
         to_slot: Option<&str>,
-        handle: &str,
+        handle: &'c str,
+        handle_slot: Option<&str>,
         from: &str,
-        from_slot: Option<&str>,
-    ) -> String {
-        self.append(Some(from), from_slot, handle);
+    ) -> (&'b str, &'c str)
+    where
+        'a: 'b,
+        'a: 'c,
+    {
+        self.append(handle, handle_slot, from);
         self.append(to, to_slot, handle)
     }
 
