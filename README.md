@@ -152,13 +152,13 @@ By default the lib is loaded at runtime. This has several
 advantages:
 1. If you ship your application or library you can ship it without
    the library. It can still run and will print an informative error
-   if the library cannot be loaded.
+   if the library can not be loaded.
 2. A user can install an updated version of the renderer and stuff
    will ‘just work’.
 
 * Load `lib3deligh` at runtime (default).
 * Dynamically link against `lib3delight`.
-  * `lib3delight` becomes a depdency. If it cannot't be found your
+  * `lib3delight` becomes a dependency. If it can not be found your
     lib/app will not load/start.
   * The feature is called `link_lib3delight`.
   * You should disable default features (they are not needed/used)

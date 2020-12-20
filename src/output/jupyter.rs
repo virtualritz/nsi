@@ -6,9 +6,11 @@
 //!
 //! This allows visualizing a camera inside a notebook.
 use crate as nsi;
-use crate::ArgSlice;
+use crate::{output::PixelFormat, ArgSlice};
+use evcxr_runtime;
 use image;
 use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 pub trait Jupyter<'a> {
     fn camera_as_jupyter(camera: &str, args: &ArgSlice<'_, 'a>);
@@ -71,14 +73,21 @@ impl<'a> nsi::Context<'a> {
             |_name: &str,
              width: usize,
              height: usize,
-             pixel_format: Vec<String>,
+             pixel_format: PixelFormat,
              pixel_data: Vec<f32>| {
+                // FIXME
+                // 1. Find unique formats + no. of channels for each
+                // 2. for each unique format generate an image and
+                //    put in some vec<Image>
+                // 3. Image can be F Fa RGB RGBa or FFFF
+
                 assert!(4 <= pixel_format.len());
                 {
-                    let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
-                    *quantized_pixel_data = vec![0u8; width * height * 4];
+                    let mut quantized_pixel_data =
+                        quantized_pixel_data.lock().unwrap();
+                    *quantized_pixel_data = vec![0u16; width * height * 4];
                 }
-                buffer_rgba_f32_to_rgba_u8(
+                buffer_rgba_f32_to_rgba_u16_be(
                     width,
                     height,
                     pixel_format.len(),
@@ -120,44 +129,53 @@ impl<'a> nsi::Context<'a> {
         self.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
 
         let mut buffer = Vec::new();
+        let quantized_pixel_data = quantized_pixel_data.lock().unwrap();
         image::png::PngEncoder::new(&mut buffer)
             .encode(
-                quantized_pixel_data.lock().unwrap().as_slice(),
+                unsafe {
+                    &*core::ptr::slice_from_raw_parts(
+                        quantized_pixel_data.as_ptr() as *const u8,
+                        2 * quantized_pixel_data.len(),
+                    )
+                },
                 *pixel_data_width.lock().unwrap() as _,
                 *pixel_data_height.lock().unwrap() as _,
-                image::ColorType::Rgba8,
+                image::ColorType::Rgba16,
             )
             .unwrap();
 
-        println!("EVCXR_BEGIN_CONTENT image/png");
-        println!("{}", base64::encode(&buffer));
-        println!("EVCXR_END_CONTENT");
+        //evcxr_runtime::mime_type("image/png").bytes(&buffer);
+        evcxr_runtime::mime_type("image/png").text(&base64::encode(&buffer));
+        //println!("EVCXR_BEGIN_CONTENT image/png");
+        //println!("{}", base64::encode(&buffer));
+        //println!("EVCXR_END_CONTENT");
     }
 }
 
-
-fn linear_to_srgb(x: f32) -> f32 {
-	if x <= 0.0 {
-		0.0
+/// Linear to (0..1 clamped) sRGB conversion – bad choice but cheap.
+#[inline]
+pub fn linear_to_srgb(x: f32) -> f32 {
+    if x <= 0.0 {
+        0.0
     } else if x >= 1.0 {
-		1.0
+        1.0
     } else if x < 0.0031308 {
-		x * 12.92
+        x * 12.92
     } else {
         x.powf(1.0 / 2.4) * 1.055 - 0.055
     }
 }
 
-
-use std::sync::{Arc, Mutex};
 /// Multi-threaded color profile application & quantization to 8bit.
-fn buffer_rgba_f32_to_rgba_u8(
+fn buffer_rgba_f32_to_rgba_u16_be(
     width: usize,
     height: usize,
     pixel_size: usize,
     pixel_data: &[f32],
-    quantized_pixel_data: &Arc<Mutex<Vec<u8>>>,
+    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
 ) {
+    let one = std::u16::MAX as f32;
+
     (0..height).into_par_iter().for_each(|scanline| {
         let y_offset = scanline * width * pixel_size;
         for index in
@@ -166,19 +184,142 @@ fn buffer_rgba_f32_to_rgba_u8(
             let alpha = pixel_data[index + 3];
             // We ignore pixels with zero alpha.
             if 0.0 != alpha {
-
-                let r: u8 = (linear_to_srgb(pixel_data[index + 0] / alpha) * 255.0) as _;
-                let g: u8 = (linear_to_srgb(pixel_data[index + 1] / alpha) * 255.0) as _;
-                let b: u8 = (linear_to_srgb(pixel_data[index + 2] / alpha) * 255.0) as _;
-                let a: u8 = (alpha * 255.0) as _;
+                // FIXME: add dithering.
+                let r: u16 =
+                    (linear_to_srgb(pixel_data[index + 0] / alpha) * one) as _;
+                let g: u16 =
+                    (linear_to_srgb(pixel_data[index + 1] / alpha) * one) as _;
+                let b: u16 =
+                    (linear_to_srgb(pixel_data[index + 2] / alpha) * one) as _;
+                let a: u16 = (alpha * one) as _;
 
                 let mut quantized_pixel_data =
                     quantized_pixel_data.lock().unwrap();
 
+                #[cfg(target_endian = "little")]
+                {
+                    quantized_pixel_data[index + 0] = r.to_be();
+                    quantized_pixel_data[index + 1] = g.to_be();
+                    quantized_pixel_data[index + 2] = b.to_be();
+                    quantized_pixel_data[index + 3] = a.to_be();
+                }
+                #[cfg(target_endian = "big")]
+                {
+                    quantized_pixel_data[index + 0] = r;
+                    quantized_pixel_data[index + 1] = g;
+                    quantized_pixel_data[index + 2] = b;
+                    quantized_pixel_data[index + 3] = a;
+                }
+            }
+        }
+    });
+}
+
+/// Multi-threaded color profile application & quantization to 16bit.
+fn buffer_rgb_f32_to_rgb_u16_be(
+    width: usize,
+    height: usize,
+    pixel_size: usize,
+    pixel_data: &[f32],
+    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
+) {
+    let one = std::u16::MAX as f32;
+
+    (0..height).into_par_iter().for_each(|scanline| {
+        let y_offset = scanline * width * pixel_size;
+        for index in
+            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
+        {
+            // FIXME: add dithering.
+            let r: u16 = (linear_to_srgb(pixel_data[index + 0]) * one) as _;
+            let g: u16 = (linear_to_srgb(pixel_data[index + 1]) * one) as _;
+            let b: u16 = (linear_to_srgb(pixel_data[index + 2]) * one) as _;
+
+            let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
+
+            #[cfg(target_endian = "little")]
+            {
+                quantized_pixel_data[index + 0] = r.to_be();
+                quantized_pixel_data[index + 1] = g.to_be();
+                quantized_pixel_data[index + 2] = b.to_be();
+            }
+            #[cfg(target_endian = "big")]
+            {
                 quantized_pixel_data[index + 0] = r;
                 quantized_pixel_data[index + 1] = g;
                 quantized_pixel_data[index + 2] = b;
-                quantized_pixel_data[index + 3] = a;
+            }
+        }
+    });
+}
+
+/// Multi-threaded color profile application & quantization to 16bit.
+fn buffer_fa_f32_to_fa_u16_be(
+    width: usize,
+    height: usize,
+    pixel_size: usize,
+    pixel_data: &[f32],
+    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
+) {
+    let one = std::u16::MAX as f32;
+
+    (0..height).into_par_iter().for_each(|scanline| {
+        let y_offset = scanline * width * pixel_size;
+        for index in
+            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
+        {
+            let alpha = pixel_data[index + 1];
+            // We ignore pixels with zero alpha.
+            if 0.0 != alpha {
+                // FIXME: add dithering.
+                let f: u16 = ((pixel_data[index + 0] / alpha) * one) as _;
+                let a: u16 = (alpha * one) as _;
+
+                let mut quantized_pixel_data =
+                    quantized_pixel_data.lock().unwrap();
+
+                #[cfg(target_endian = "little")]
+                {
+                    quantized_pixel_data[index + 0] = f.to_be();
+                    quantized_pixel_data[index + 3] = a.to_be();
+                }
+                #[cfg(target_endian = "big")]
+                {
+                    quantized_pixel_data[index + 0] = r;
+                    quantized_pixel_data[index + 3] = a;
+                }
+            }
+        }
+    });
+}
+
+/// Multi-threaded color profile application & quantization to 16bit.
+fn buffer_f32_to_u16_be(
+    width: usize,
+    height: usize,
+    pixel_size: usize,
+    pixel_data: &[f32],
+    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
+) {
+    let one = std::u16::MAX as f32;
+
+    (0..height).into_par_iter().for_each(|scanline| {
+        let y_offset = scanline * width * pixel_size;
+        for index in
+            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
+        {
+            // FIXME: add dithering.
+            let f: u16 = (pixel_data[index + 0] * one) as _;
+
+            let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
+
+            #[cfg(target_endian = "little")]
+            {
+                quantized_pixel_data[index + 0] = f.to_be();
+            }
+            #[cfg(target_endian = "big")]
+            {
+                quantized_pixel_data[index + 0] = f;
             }
         }
     });

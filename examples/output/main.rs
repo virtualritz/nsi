@@ -1,4 +1,3 @@
-use colorspace as cs;
 use exr::prelude::rgba_image::*;
 use png;
 use polyhedron_ops as p_ops;
@@ -13,23 +12,30 @@ use render::*;
 pub fn main() {
     let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
-    // Open callback.
+    // Open closure.
+    // Called before the renderer will send any pixels via
+    // WriteCallback.
+    // If you decide to write data directly into a file in
+    // WriteCallback.
     let open = nsi::output::OpenCallback::new(
         |_name: &str,
          width: usize,
          height: usize,
          format: &mut nsi::output::PixelFormat| {
-            // Reserve out
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
+            // Create a properly size buffer to receive our pixel data.
             *quantized_pixel_data = vec![0u8; width * height * format.len()];
             nsi::output::Error::None
         },
     );
 
-    // Source and target spaces.
-    let model_aces_cg = &cs::color_space_rgb::model_f32::ACES_CG;
-    let model_srgb = &cs::color_space_rgb::model_f32::SRGB;
-
+    // Write closure.
+    // Called for each bucket or scanline of pixels that have been
+    // rendered.
+    // Bucket size is commonly 16x16 pixels but this is not guaranteed
+    // by the API.
+    // The pixel_data will contain a full buffer of all the pixel that
+    // were finished so far.
     let write = nsi::output::WriteCallback::new(
         |_name: &str,
          width: usize,
@@ -48,19 +54,19 @@ pub fn main() {
                     let index = index * pixel_format.len();
 
                     let alpha = pixel_data[index + 3];
-                    // We ignore pixels with zero alpha.
+                    // Ignore pixels with zero alpha.
                     if 0.0 != alpha {
                         let mut color = [cs::rgb::RGBf::new(0f32, 0., 0.)];
                         cs::rgb_to_rgb(
                             model_aces_cg,
                             model_srgb,
+                            // Unpremultiply the color – this is needed
+                            // or else the color profile transform will
+                            // yield wrong results for pixels with
+                            // non-opaque alpha. Furthermore PNG wants
+                            // unpremultiplied pixels and that is what
+                            // we will write the 8bit data to, at the end.
                             &[cs::rgb::RGBf::new(
-                                // Unpremultiply the color – this is needed
-                                // or else the  color profile transform will
-                                // yield wrong results for pixels with
-                                // non-opaque alpha. Furthermore PNG wants
-                                // unpremultiplied pixels and that is what
-                                // we will write the 8bit data to, as the end.
                                 pixel_data[index + 0] / alpha,
                                 pixel_data[index + 1] / alpha,
                                 pixel_data[index + 2] / alpha,
@@ -68,15 +74,12 @@ pub fn main() {
                             &mut color,
                         );
 
-                        let color: cs::rgb::RGBu8 = model_srgb
-                            .encode(cs::rgb::RGBf::new(
-                                color[0].r, color[0].g, color[0].b,
-                            ))
-                            .into();
-
-                        quantized_pixel_data[index + 0] = color.r;
-                        quantized_pixel_data[index + 1] = color.g;
-                        quantized_pixel_data[index + 2] = color.b;
+                        quantized_pixel_data[index + 0] =
+                            nsi::output::linear_to_srgb(color.r);
+                        quantized_pixel_data[index + 1] =
+                            nsi::output::linear_to_srgb(color.g);
+                        quantized_pixel_data[index + 2] =
+                            nsi::output::linear_to_srgb(color.b);
                         quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
                     }
                 }
@@ -90,6 +93,8 @@ pub fn main() {
     // PNG out below.
     let mut dimensions = (0u32, 0u32);
 
+    // Finish closure.
+    // Called when the all the pixels have been sent via WriteCallback.
     let finish = nsi::output::FinishCallback::new(
         |_name: &str,
          width: usize,
@@ -118,6 +123,7 @@ pub fn main() {
     polyhedron.kis(Some(-0.2), None, true, true);
     polyhedron.normalize();
 
+    // The nsi_render() call blocks until the render has finished.
     nsi_render(&polyhedron, open, write, finish);
 
     // We can shed the Arc and the Mutex now that nsi_render() is done.
@@ -142,8 +148,8 @@ pub fn main() {
         .expect("Error writing PNG.");
 }
 
-// Poor man's OpenEXR writer. Writes an RGBA only, i.e. ignores data
-// past the 4th channel.
+// Poor man's OpenEXR writer. Writes RGBA only, i.e. ignores data past
+// the 4th channel.
 fn write_exr(
     name: &str,
     width: usize,

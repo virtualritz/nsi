@@ -4,6 +4,8 @@
 )]
 #![cfg_attr(feature = "nightly", feature(str_split_once))]
 #![cfg_attr(feature = "nightly", feature(doc_cfg))]
+//#![warn(missing_docs)]
+//#![warn(missing_doc_code_examples)]
 //! # Nodal Scene Interface – ɴsɪ
 //! A flexible, modern API for offline 3D renderers
 //!

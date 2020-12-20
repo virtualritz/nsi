@@ -65,6 +65,7 @@ fn nsi_camera<'a>(
 
     c.create("driver2", nsi::NodeType::OutputDriver, &[]);
     c.connect("driver2", "", "beauty", "outputdrivers", &[]);
+
     c.set_attribute(
         "driver2",
         &[
@@ -179,13 +180,12 @@ pub(crate) fn nsi_render<'a>(
 
     nsi_camera(&ctx, &polyhedron.name(), 1, open, write, finish);
 
-    //nsi_environment(&ctx);
     ctx.append(
-        &ctx.environment(
+        &ctx.environment_texture(
+            None,
+            None,
             None,
             "assets/wooden_lounge_1k.tdl",
-            None,
-            None,
             false,
         ),
         None,

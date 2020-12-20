@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "output")))]
 //! # Output Driver Callbacks
-//! This module declares several closure types that can passed via
+//! This module declares several closure types. These can be passed via
 //! [`Callback`](crate::argument::Callback)s to an
 //! [`OutputDriver`](crate::context::NodeType::OutputDriver) node to
 //! stream pixels during and/or after a render, in-memory.
@@ -72,7 +72,7 @@
 //!      width: usize,
 //!      // Passed from the screen node, above.
 //!      height: usize,
-//!      pixel_format: Vec<String>,
+//!      pixel_format: PixelFormat,
 //!      pixel_data: Vec<f32>| {
 //!         // Call some function to write our image to an OpenEXR file.
 //!         write_exr(
@@ -163,7 +163,6 @@ use core::{ops::Index, ptr};
 use ndspy_sys;
 use num_enum::IntoPrimitive;
 use std::{
-    collections::VecDeque,
     ffi::CStr,
     os::raw::{c_char, c_int, c_void},
 };
@@ -230,11 +229,11 @@ pub trait FnOpen<'a>: FnMut(
     // Height.
     usize,
     // Pixel format.
-    &mut PixelFormat,
+    &PixelFormat,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, &mut PixelFormat) -> Error + 'a>
-    FnOpen<'a> for T
+impl<'a, T: FnMut(&str, usize, usize, &PixelFormat) -> Error + 'a> FnOpen<'a>
+    for T
 {
 }
 
@@ -248,7 +247,7 @@ trait FnOpen<'a> = FnMut(
         // Height.
         usize,
         // Pixel format.
-        &mut PixelFormat,
+        &PixelFormat,
     ) -> Error
     + 'a
 */
@@ -306,7 +305,7 @@ pub trait FnWrite<'a>: FnMut(
         // y_max_plus_one,
         usize,
         // Pixel format.
-        &[String],
+        &PixelFormat,
         // Pixel data.
         &[f32],
     ) -> Error
@@ -314,16 +313,16 @@ pub trait FnWrite<'a>: FnMut(
 impl<
         'a,
         T: FnMut(
-                &str,
-                usize,
-                usize,
-                usize,
-                usize,
-                usize,
-                usize,
-                &[String],
-                &[f32],
-            ) -> Error
+            &str,
+            usize,
+            usize,
+            usize,
+            usize,
+            usize,
+            usize,
+            &PixelFormat,
+            &[f32],
+        ) -> Error
             + 'a,
     > FnWrite<'a> for T
 {
@@ -347,7 +346,7 @@ pub trait FnWrite<'a> = FnMut(
     // y_max_plus_one,
     usize,
     // Pixel format.
-    &[String],
+    &PixelFormat,
     // Pixel data.
     &mut [f32],
 ) -> Error
@@ -401,12 +400,12 @@ pub trait FnFinish<'a>: FnMut(
     // Height.
     usize,
     // Pixel format.
-    Vec<String>,
+    PixelFormat,
     // Pixel data.
     Vec<f32>,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, Vec<String>, Vec<f32>) -> Error + 'a>
+impl<'a, T: FnMut(&str, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a>
     FnFinish<'a> for T
 {
 }
@@ -421,7 +420,7 @@ pub trait FnFinish<'a> = dyn FnMut(
         // Height.
         usize,
         // Pixel format.
-        Vec<String>,
+        PixelFormat,
         // Pixel data.
         Vec<f32>,
     ) -> Error
@@ -438,6 +437,9 @@ impl<'a, T: FnMut(Query) -> Error + 'a> FnQuery<'a> for T {}
 pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 */
 
+// Why do we need a triple Box here? No idea and neither had anyone
+// from the Rust community. But omitting a single Box wrapper layer
+// leads to an instant crash.
 pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
 
 impl<'a> OpenCallback<'a> {
@@ -496,7 +498,7 @@ struct DisplayData<'a> {
     name: &'a str,
     width: usize,
     height: usize,
-    pixel_format: Vec<String>,
+    pixel_format: PixelFormat,
     pixel_data: Vec<f32>,
     fn_open: Option<Box<Box<Box<dyn FnOpen<'a>>>>>,
     fn_write: Option<Box<Box<Box<dyn FnWrite<'a>>>>>,
@@ -506,7 +508,7 @@ struct DisplayData<'a> {
 }
 
 impl<'a> DisplayData<'a> {
-    /// Used to disect DisplayData into its components
+    /// Used to dissect DisplayData into its components
     /// before being dropped.
     fn boxed_into_tuple(
         display_data: Box<Self>,
@@ -514,12 +516,12 @@ impl<'a> DisplayData<'a> {
         &'a str,
         usize,
         usize,
-        Vec<String>,
+        PixelFormat,
         Vec<f32>,
         Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
     ) {
         // FIXME: These boxes somehow get deallocated twice if we
-        // don't suppress this here. No fucking idea why.
+        // don't suppress this here. No f*cking idea why.
         if let Some(fn_open) = display_data.fn_open {
             Box::into_raw(fn_open);
         }
@@ -541,205 +543,244 @@ impl<'a> DisplayData<'a> {
     }
 }
 
+/// Description of an
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer)
+/// inside a flat, raw pixel.
+#[derive(Debug, Clone, Default)]
+pub struct Layer {
+    name: String,
+    layer_type: LayerType,
+    offset: usize,
+}
+
+impl Layer {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn layer_type(&self) -> &LayerType {
+        &self.layer_type
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}
+
+/// The depth (number and type of channels) a pixel in a [`Layer`] is
+/// composed of.
+#[derive(Debug, Clone, Copy)]
+pub enum LayerType {
+    OneChannel,
+    OneChannelAndAlpha,
+    Color,
+    ColorAndAlpha,
+    Vector,
+    VectorAndAlpha,
+    FourChannels,
+    FourChannelsAndAlpha,
+}
+
+impl Default for LayerType {
+    fn default() -> Self {
+        LayerType::OneChannel
+    }
+}
+
+impl LayerType {
+    /// Returns the number of channels this layer type consists of.
+    pub fn channels(&self) -> usize {
+        match self {
+            LayerType::OneChannel => 1,
+            LayerType::OneChannelAndAlpha => 2,
+            LayerType::Color => 3,
+            LayerType::Vector => 3,
+            LayerType::ColorAndAlpha => 4,
+            LayerType::VectorAndAlpha => 4,
+            LayerType::FourChannels => 4,
+            LayerType::FourChannelsAndAlpha => 5,
+        }
+    }
+}
+
 /// # Pixel Format
-/// Accessor for the pixel format the renderer sends in [`FnOpen`].
+/// Accessor for the pixel format the renderer sends in [`FnOpen`],
+/// [`FnWrite`] and [`FnFinish`].
 ///
-/// This is a list of channel names.
+/// This is a stack of
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer)
+/// descriptions.
 ///
 /// A typical pixel format for a pixel containing two
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s,
-/// an *RGBA* **color** output layer and a world space **normal**, will look
-/// like this:
-/// ```text
-/// r
-/// g
-/// b
-/// a
-/// N_world.000.x
-/// N_world.001.y
-/// N_world.002.z
-/// ```
-/// ## On-Demand Reordering
-/// The type allows reordering of the pixel format to fit your needs.
-/// This is mainly meant for convenience so that any code in
-/// [`FnWrite`] or [`FnFinish`] (or after) does not have to deal with
-/// explicit indexing.
+/// such layers, an *RGBA* **color** + **alpha** output layer and a
+/// world space **normal**, will look like this:
 ///
-/// By default the pixel format is in the order in which
+/// | [`name`](Layer::name()) | [`layer_type`](Layer::layer_type())         | [`offset`](Layer::offset()) |
+/// |-------------------------|---------------------------------------------|-----------------------------|
+/// | `Ci`                    | [`ColorAndAlpha`](LayerType::ColorAndAlpha) | `0`                         |
+/// | `N_world`               | [`Vector`](LayerType::Vector)               | `4`                         |
+///
+/// The offset is the offset into the pixel buffer. For example, the
+/// **y** coordinate of the the normal will be stored in channel at
+/// offset `5`.
+///
+/// The pixel format is in the order in which
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were
 /// defined in the [ɴsɪ
 /// scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
-///
-/// Use the methods in [`PixelFormat`] to re-order the pixel format
-/// while in [`FnOpen`].
-///
-/// E.g. to request pixels to be delivered as `ABGR` instead of
-/// `RGBA`.
-///
-/// ## Channel Name Format
-/// The channel name format is:
-/// ```text
-/// [<output layer name>.<###>.]<channel id>
-/// ```
-/// * `output layer name` – The name of the
-///     [`OutputLayer`](crate::context::NodeType::OutputLayer).
-/// * `###` - Zero padded number starting from `000` that is appended
-///     to ensure unique naming if the same output layer was requested
-///     more than once.
-///
-///     *For most practical purposes this can be ignored.*
-/// * `channel id` – Identifier of the channel. Typically single
-///     letters like `r`, `g`, `b`, `a` for color AOVs or `x`, `y`
-///     & `z` for point, normal and vector AOVs.
-///
-/// The first part, `<output layer name>.<###>.` may be missing if the
-/// output layer is the final color (`Ci`). In this case the channel
-/// name contains *only* the`channel id`.
-///
-/// There are convenience methods,
-/// [`layer_name()`](PixelFormat::layer_name()),
-/// [`channel_id()`](PixelFormat::channel_id()) and
-/// [`unique_layer_name_and_channel_id()`](PixelFormat::unique_layer_name_and_channel_id())
-/// to obtain the resp. substrings from a channel entry.
-#[derive(Debug)]
-pub struct PixelFormat<'a>(VecDeque<&'a str>);
+#[derive(Debug, Default)]
+pub struct PixelFormat(Vec<Layer>);
 
-impl<'a> PixelFormat<'a> {
+impl PixelFormat {
     #[inline]
     fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
-        // Collect format names as &str and force format to f32.
+        let (mut previous_layer_name, mut previous_channel_id) =
+            Self::split_into_layer_name_and_channel_id(
+                unsafe { CStr::from_ptr(format[0].name) }.to_str().unwrap(),
+            );
+
+        let mut layer_type = LayerType::OneChannel;
+        let mut offset = 0;
+
         PixelFormat(
+            // This loops through each format (channel), r, g, b, a etc.
             format
                 .iter()
-                .map(|format| unsafe {
-                    CStr::from_ptr(format.name).to_str().unwrap()
+                .enumerate()
+                .cycle()
+                .take(format.len() + 1)
+                .filter_map(|format| {
+                    // FIXME: add support for specifying AOV and detect type
+                    // for indexing (.r vs .x)
+                    let name = unsafe { CStr::from_ptr(format.1.name) }
+                        .to_str()
+                        .unwrap();
+
+                    let (layer_name, channel_id) =
+                        Self::split_into_layer_name_and_channel_id(name);
+                    println!(
+                        "{} => {} - {}",
+                        layer_name, previous_layer_name, channel_id
+                    );
+
+                    // A boundary between two layers will be when the postfix
+                    // is a combination of those above.
+                    if ["b", "z", "s", "a"].contains(&previous_channel_id)
+                        && ["r", "x", "s"].contains(&channel_id)
+                    {
+                        let tmp_layer_name = if previous_layer_name.is_empty() {
+                            "Ci"
+                        } else {
+                            previous_layer_name
+                        };
+                        previous_layer_name = layer_name;
+
+                        previous_channel_id = channel_id;
+
+                        let tmp_layer_type = layer_type;
+                        layer_type = LayerType::OneChannel;
+
+                        let tmp_offset = offset;
+                        offset = format.0;
+
+                        Some(Layer {
+                            name: tmp_layer_name.to_string(),
+                            layer_type: tmp_layer_type,
+                            offset: tmp_offset,
+                        })
+                    } else {
+                        // Do we we have a lonely alpha -> it belongs to the current
+                        // layer.
+                        if layer_name.is_empty() && "a" == channel_id {
+                            layer_type = match &layer_type {
+                                LayerType::OneChannel => {
+                                    LayerType::OneChannelAndAlpha
+                                }
+                                LayerType::Color => LayerType::ColorAndAlpha,
+                                LayerType::Vector => {
+                                    LayerType::VectorAndAlpha
+                                }
+                                LayerType::FourChannels => {
+                                    LayerType::FourChannelsAndAlpha
+                                }
+                                _ => unreachable!(),
+                            };
+                        }
+                        // Are we still on the same layer?
+                        else if layer_name == previous_layer_name {
+                            // We only check for first channel.
+                            match channel_id {
+                                "r" | "g" | "b" => {
+                                    layer_type = LayerType::Color
+                                }
+                                "x" | "y" | "z" => {
+                                    layer_type = LayerType::Vector
+                                }
+                                "a" => {
+                                    if layer_name.is_empty() {
+                                        layer_type = match &layer_type {
+                                            LayerType::OneChannel => {
+                                                LayerType::OneChannelAndAlpha
+                                            }
+                                            LayerType::Color => {
+                                                LayerType::ColorAndAlpha
+                                            }
+                                            LayerType::Vector => {
+                                                LayerType::VectorAndAlpha
+                                            }
+                                            _ => unreachable!(),
+                                        };
+                                    } else {
+                                        layer_type = LayerType::FourChannels;
+                                    }
+                                }
+                                _ => (),
+                            }
+                            previous_layer_name = layer_name;
+                        // We have a new layer.
+                        } else {
+                            previous_layer_name = layer_name;
+                        }
+                        previous_channel_id = channel_id;
+                        None
+                    }
                 })
-                .collect(),
+                .collect::<Vec<_>>(),
         )
     }
-    #[inline]
-    fn update_dspy_dev_format(
-        &self,
-        format: &mut [ndspy_sys::PtDspyDevFormat],
-    ) {
-        format
-            .iter_mut()
-            .zip(self.0.iter())
-            .for_each(|(format, name)| {
-                // Ensure all channels are sent to us as 32bit float.
-                format.type_ = ndspy_sys::PkDspyFloat32;
-                format.name = name.as_ptr() as *const _;
-            });
-    }
-    #[inline]
-    fn into_vec(format_vec: Self) -> Vec<String> {
-        format_vec
-            .0
-            .into_iter()
-            .map(|name| String::from(name))
-            .collect()
-    }
-    /// Returns the name of the channel at `index`.
-    ///
-    /// For example `"albedo.000.r"`.
-    #[inline]
-    pub fn get(&self, index: usize) -> Option<&'a str> {
-        self.0.get(index).map_or(None, |inner| Some(*inner))
-    }
-    /// Returns the *layer name* part of the channel at `index`.
-    ///
-    /// For example, if the *channel name* is `"albedo.000.r"`, this
-    /// will return `"albedo"`
-    #[inline]
-    pub fn layer_name(&self, index: usize) -> Option<&str> {
-        #[cfg(feature = "nightly")]
-        {
-            self.0[index]
-                .split_once('.')
-                .map_or(None, |(layer_name, _)| Some(layer_name))
+
+    fn split_into_layer_name_and_channel_id(name: &str) -> (&str, &str) {
+        let mut split = name.rsplitn(3, '.');
+        // We know we never get an empty string so we can safely unwrap
+        // here.
+        let mut postfix = split.next().unwrap();
+        if "000" == postfix {
+            postfix = "s";
+            // Reset iterator.
+            split = name.rsplitn(2, '.');
         }
-        #[cfg(not(feature = "nightly"))]
-        {
-            let mut split = self.0[index].splitn(2, '.');
-            let name = split.next().unwrap();
-            if None == split.next() {
-                None
-            } else {
-                Some(name)
-            }
+        // Skip the middle part.
+        if let Some(_) = split.next() {
+            // We know that if there is middle part we always have a prefix
+            // so we can safely unwrap here.
+            (split.next().unwrap(), postfix)
+        } else {
+            ("", postfix)
         }
     }
-    /// Returns the *channel id* part of the name of the channel at
-    /// `index`.
-    ///
-    /// For example, if the *channel name* is `"albedo.000.r"`, this
-    /// will return `"r"`.
-    #[inline]
-    pub fn channel_id(&self, index: usize) -> &'a str {
-        let (_, channel_id) = self.unique_layer_name_and_channel_id(index);
-        channel_id
-    }
-    /// Returns a tuple of *layer name* and *channel id* at `index`.
-    ///
-    /// For example, if the *channel name* is `"albedo.000.r"`, this will
-    /// return `("albedo.000", "r")`.
-    #[inline]
-    pub fn unique_layer_name_and_channel_id(
-        &self,
-        index: usize,
-    ) -> (&'a str, &'a str) {
-        #[cfg(feature = "nightly")]
-        {
-            self.0[index]
-                .rsplit_once('.')
-                .unwrap_or(("", self.0[index]))
-        }
-        #[cfg(not(feature = "nightly"))]
-        {
-            let mut split = self.0[index].rsplitn(2, '.');
-            let suffix = split.next().unwrap();
-            if let Some(prefix) = split.next() {
-                (prefix, suffix)
-            } else {
-                ("", suffix)
-            }
-        }
-    }
-    /// Returns the number of channels in a pixel.
+
+    /// Returns the number of layers in a pixel.
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
-    /// Move channel at `index` to the back of the pixel format.
-    #[inline]
-    pub fn move_back(&mut self, index: usize) {
-        if index < self.len() - 1 {
-            let name = self.0.remove(index).unwrap();
-            self.0.push_back(name);
-        }
-        // do nothing - element is already at the end.
-    }
-    /// Move channel at `index` to the front of the pixel format.
-    #[inline]
-    pub fn move_front(&mut self, index: usize) {
-        if 0 < index {
-            let name = self.0.remove(index).unwrap();
-            self.0.push_front(name);
-        }
-        // do nothing - element is already at the start.
-    }
-    /// Swaps the channels at `index_a` and `index_b`.
-    #[inline]
-    pub fn swap(&mut self, index_a: usize, index_b: usize) {
-        self.0.swap(index_a, index_b);
-    }
 }
 
-impl<'a> Index<usize> for PixelFormat<'a> {
-    type Output = str;
+impl Index<usize> for PixelFormat {
+    type Output = Layer;
     #[inline]
-    fn index(&self, index: usize) -> &str {
-        self.0[index]
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
     }
 }
 
@@ -803,7 +844,7 @@ pub(crate) extern "C" fn image_open(
         name: unsafe { CStr::from_ptr(output_filename).to_str().unwrap() },
         width: width as _,
         height: height as _,
-        pixel_format: Vec::new(),
+        pixel_format: PixelFormat::default(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
         fn_open: get_parameter_triple_box::<dyn FnOpen>(
             "callback.open",
@@ -826,25 +867,24 @@ pub(crate) extern "C" fn image_open(
         ),
     });
 
-    let mut format =
+    let format =
         unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
-    let mut format_vec = PixelFormat::new(&format);
+
+    format
+        .iter_mut()
+        .for_each(|format| format.type_ = ndspy_sys::PkDspyFloat32);
+
+    let pixel_format = PixelFormat::new(format);
 
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        let error = fn_open(
-            display_data.name,
-            width as _,
-            height as _,
-            &mut format_vec,
-        );
-        // Update possibly re-ordered format array.
-        format_vec.update_dspy_dev_format(&mut format);
+        let error =
+            fn_open(display_data.name, width as _, height as _, &pixel_format);
         error
     } else {
         Error::None
     };
 
-    display_data.pixel_format = PixelFormat::into_vec(format_vec);
+    display_data.pixel_format = pixel_format;
 
     unsafe {
         *image_handle_ptr = Box::into_raw(display_data) as _;
@@ -936,7 +976,7 @@ pub(crate) extern "C" fn image_write(
             x_max_plus_one as _,
             y_min as _,
             y_max_plus_one as _,
-            display_data.pixel_format.as_slice(),
+            &display_data.pixel_format,
             display_data.pixel_data.as_mut_slice(),
         )
     } else {

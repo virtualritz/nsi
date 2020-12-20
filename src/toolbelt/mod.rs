@@ -4,26 +4,13 @@
 //! Names of methods that create nodes are nouns. Methods than modify
 //! the node graph afterwards use verbs.
 //!
-//! Where ergonomically advised creation method names carry postfixes
+//! Where ergonomically advised, creation methods names carry postfixes
 //! that specify the type of node being created, such as `shader`.
 use crate as nsi;
 use crate::ArgSlice;
-use snafu::Snafu;
 use ultraviolet as uv;
 
-#[derive(Debug, Snafu)]
-pub enum Error {
-    #[snafu(display("DELIGHT environment variable not set"))]
-    DelightEnvironmentNotSet,
-}
-
-#[test]
-fn test() {
-    let ctx = nsi::Context::new(&[]).unwrap();
-
-    //ctx.append(None);
-}
-
+#[inline]
 fn default_node_root<'a>(node: Option<&'a str>) -> &'a str {
     match node {
         Some(node) => node,
@@ -31,6 +18,7 @@ fn default_node_root<'a>(node: Option<&'a str>) -> &'a str {
     }
 }
 
+#[inline]
 fn default_slot_objects<'a>(slot: Option<&'a str>) -> &'a str {
     match slot {
         Some(slot) => slot,
@@ -38,7 +26,9 @@ fn default_slot_objects<'a>(slot: Option<&'a str>) -> &'a str {
     }
 }
 
-fn generate_or_use_handle(handle: Option<&str>) -> String {
+/// Generates a random handle if `handle` is `None` or falls through,
+/// otherwise.
+pub fn generate_or_use_handle(handle: Option<&str>) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
@@ -62,14 +52,13 @@ impl<'a> nsi::Context<'a> {
     /// Append node `handle` to node `to`.
     ///
     /// # Arguments
-    /// * `handle` – Node handle. If [`None`] a random handle is
-    ///     generated.
-    ///
     /// * `to` – Node to connect to downstream. If [`None`],
-    ///     [`SceneRoot`](crate::context::NodeType::Root) is used.
+    ///     [`Root`](crate::context::NodeType::Root) is used.
     ///
     /// * `slot` – Slot on target node to connect to.
     ///     If [`None`], `"objects"` is used.
+    ///
+    /// * `handle` – Handle of node to append.
     ///
     /// Returns `handle` for convenience.
     /// # Example
@@ -77,9 +66,9 @@ impl<'a> nsi::Context<'a> {
     /// # let ctx = nsi::Context::new(&[]).unwrap();
     /// // Create a scaling transform node and append to the scene root.
     /// let scale = ctx.append(
+    ///     None,
+    ///     None,
     ///     Some(&ctx.scaling(None, &[10., 10., 10.])),
-    ///     None,
-    ///     None,
     /// );
     /// // Append the node "tetrahedron", which we created earlier,
     /// // to the scale node.
@@ -88,18 +77,15 @@ impl<'a> nsi::Context<'a> {
     #[inline]
     pub fn append(
         &self,
-        handle: &str,
         to: Option<&str>,
         slot: Option<&str>,
+        handle: &str,
     ) -> String {
-        self.connect(
-            handle,
-            "",
-            default_node_root(to),
-            default_slot_objects(slot),
-            &[],
-        );
-        handle.to_string()
+        let to = default_node_root(to);
+
+        self.connect(handle, "", to, default_slot_objects(slot), &[]);
+
+        to.to_string()
     }
 
     /// **Convenience method; not part of the official ɴsɪ API.**
@@ -107,30 +93,29 @@ impl<'a> nsi::Context<'a> {
     /// Insert node `handle` in-between `to` and `from`.
     ///
     /// # Arguments
-    /// * `handle` – Node handle. If [`None`] a random handle is
-    ///     generated.
-    ///
     /// * `to` – Node to connect to downstream. If [`None`],
     ///     [`SceneRoot`](crate::context::NodeType::Root) is used.
     ///
     /// * `to_slot` – Slot on `to` node to connect to.
-    ///     If [`None`], `"objects"` is used.
+    ///     If [`None`], `"objects"` is used.    .
+    ///
+    /// * `handle` – Handle of node to insert.
     ///
     /// * `from` – Node to connect tp upstream.
     ///
     /// * `from_slot` – Slot on `from` node to connect to.
     ///     If [`None`], `"objects"` is used.
     ///
-    /// Returns `handle` for convenience.
+    /// Returns the `to` handle.
     /// # Example
     /// ```
     /// # let ctx = nsi::Context::new(&[]).unwrap();
     /// // Insert the node "tetrahedron" between the ".root" and
     /// // "terahedron_attrib" nodes.
     /// ctx.insert(
+    ///     None,
+    ///     None,
     ///     Some("tetrahedron"),
-    ///     None,
-    ///     None,
     ///     "terahedron_attrib",
     ///     Some("geometryattributes"),
     /// );
@@ -138,14 +123,14 @@ impl<'a> nsi::Context<'a> {
     #[inline]
     pub fn insert(
         &self,
-        handle: &str,
         to: Option<&str>,
         to_slot: Option<&str>,
+        handle: &str,
         from: &str,
         from_slot: Option<&str>,
     ) -> String {
-        self.append(handle, to, to_slot);
-        self.append(handle, Some(from), from_slot)
+        self.append(Some(from), from_slot, handle);
+        self.append(to, to_slot, handle)
     }
 
     /// **Convenience method; not part of the official ɴsɪ API.**
@@ -258,72 +243,108 @@ impl<'a> nsi::Context<'a> {
 
     /// **Convenience method; not part of the official ɴsɪ API.**
     ///
-    /// Creates an environment light.
-    ///
-    /// If `handle` is [`None`] a random handle is generated.
-    ///
-    /// The `angle` is specified in radians.
-    ///
-    /// The `exposure` scales the intensity in
-    /// [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
-    ///
-    /// Returns `handle` for convenience or
-    /// [`DelightEnvironmentNotSet`](Error::DelightEnvironmentNotSet)
-    /// if the `DELIGHT` environemt variable is not set to find
-    /// shaders.
-    pub fn environment(
+    pub fn look_at_camera(
         &self,
         handle: Option<&str>,
-        texture: &str,
-        angle: Option<f64>,
-        exposure: Option<f32>,
-        visible: bool,
+        eye: &[f64; 3],
+        to: &[f64; 3],
+        up: &[f64; 3],
+    ) {
+        let handle = generate_or_use_handle(handle);
+        self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+
+        self.set_attribute(
+            handle.as_str(),
+            &[double_matrix!(
+                "transformationmatrix",
+                uv::DMat4::look_at(
+                    uv::DVec3::from(eye),
+                    uv::DVec3::from(to),
+                    uv::DVec3::from(up),
+                )
+                .inversed()
+                .as_array()
+            )],
+        );
+    }
+
+    /// **Convenience method; not part of the official ɴsɪ API.**
+    ///
+    /// Creates a transformation matrix that can be used to position
+    /// a camera. Its view will contains the perspective-projected
+    /// bounding box under the specified field-of-view and aspect ratio
+    /// (*with*÷*height*).
+    /// # Arguments
+    /// * `direction` – The axis the camera should be looking along.
+    ///     Does *not* need to be normalized.
+    /// * `up` – A direction to look
+    /// * `bounding_box` – Axis-aligned bounding box in the form
+    ///     `[x_min, y_min, z_min, x_max, y_max, z_max]`.
+    pub fn look_at_bounding_box_perspective_camera(
+        &self,
+        handle: Option<&str>,
+        direction: &[f64; 3],
+        up: &[f64; 3],
+        vertical_fov: f32,
+        aspect_ratio: Option<f32>,
+        bounding_box: &[f64; 6],
     ) -> String {
-        // Create a rotation transform – this is the handle we return.
-        let rotation =
-            self.rotation(None, angle.unwrap_or(0.0), &[0.0, 1.0, 0.0]);
+        // FIXME with a && chain once https://github.com/rust-lang/rust/issues/53667
+        // arrives in stable.
+        let vertical_fov = if let Some(aspect_ratio) = aspect_ratio {
+            if aspect_ratio < 1.0 {
+                // Portrait.
+                (aspect_ratio
+                    * (vertical_fov * core::f32::consts::PI / 90.0).tan())
+                .atan()
+            } else {
+                vertical_fov * core::f32::consts::TAU / 90.0
+            }
+        } else {
+            vertical_fov * core::f32::consts::TAU / 90.0
+        } as f64;
 
-        let environment = generate_or_use_handle(handle);
+        // Make a cube from the bounds.
+        let cube = [
+            uv::DVec3::new(bounding_box[0], bounding_box[1], bounding_box[2]),
+            uv::DVec3::new(bounding_box[0], bounding_box[4], bounding_box[2]),
+            uv::DVec3::new(bounding_box[0], bounding_box[1], bounding_box[5]),
+            uv::DVec3::new(bounding_box[3], bounding_box[4], bounding_box[5]),
+            uv::DVec3::new(bounding_box[3], bounding_box[1], bounding_box[5]),
+            uv::DVec3::new(bounding_box[3], bounding_box[4], bounding_box[2]),
+        ];
 
-        // Set up an environment light.
-        self.append(
-            &self.node(
-                Some(environment.as_str()),
-                nsi::NodeType::Environment,
-                &[],
-            ),
-            Some(&rotation),
-            None,
-        );
+        let bounding_box_center = 0.5 * (cube[0] + cube[3]);
 
-        let attributes = self.append(
-            &self.node(None, nsi::NodeType::Attributes, &[]),
-            Some(&environment),
-            Some("geometryattributes"),
-        );
+        let bounding_sphere_radius = cube
+            .iter()
+            .fold(0.0f64, |max, point| {
+                max.max((bounding_box_center - *point).mag_sq())
+            })
+            .sqrt();
+
+        let distance =
+            (bounding_sphere_radius * 2.0) / (vertical_fov * 0.5).sin();
+
+        let handle = generate_or_use_handle(handle);
+
+        self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+
         self.set_attribute(
-            attributes.as_str(),
-            &[nsi::integer!("visibility.camera", visible as _)],
+            handle.as_str(),
+            &[double_matrix!(
+                "transformationmatrix",
+                uv::DMat4::look_at(
+                    bounding_box_center
+                        - distance * uv::DVec3::from(direction).normalized(),
+                    bounding_box_center,
+                    uv::DVec3::from(up)
+                )
+                .inversed()
+                .as_array()
+            )],
         );
 
-        let shader = self.append(
-            &self.node(None, nsi::NodeType::Shader, &[]),
-            Some(&attributes),
-            Some("surfaceshader"),
-        );
-        // Environment light attributes.
-        self.set_attribute(
-            shader,
-            &[
-                nsi::string!(
-                    "shaderfilename",
-                    "${DELIGHT}/osl/environmentLight"
-                ),
-                nsi::float!("intensity", 2.0f32.powf(exposure.unwrap_or(0.0))),
-                nsi::string!("image", texture),
-            ],
-        );
-
-        rotation
+        handle
     }
 }
