@@ -39,7 +39,7 @@ pub fn generate_or_use_handle(handle: Option<&str>) -> String {
             let mut rng = SmallRng::from_entropy();
 
             iter::repeat(())
-                .map(|()| rng.sample(Alphanumeric))
+                .map(|()| rng.sample(Alphanumeric) as char)
                 .take(20)
                 .collect()
         }
