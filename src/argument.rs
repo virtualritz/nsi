@@ -8,20 +8,20 @@ use crate::*;
 
 #[inline]
 pub(crate) fn get_c_param_vec(
-    args_in: &ArgSlice,
+    args: &ArgSlice,
 ) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
-    let mut args_out = Vec::<NSIParam_t>::with_capacity(args_in.len());
-    for arg_in in args_in {
-        args_out.push(NSIParam_t {
-            name: arg_in.name.as_ptr(),
-            data: arg_in.data.as_c_ptr(),
-            type_: arg_in.data.type_() as _,
-            arraylength: arg_in.array_length as _,
-            count: (arg_in.data.len() / arg_in.array_length) as _,
-            flags: arg_in.flags as _,
-        });
-    }
-    (args_out.len() as _, args_out.as_ptr(), args_out)
+    let args = args
+        .iter()
+        .map(|arg| NSIParam_t {
+            name: arg.name.as_ptr(),
+            data: arg.data.as_c_ptr(),
+            type_: arg.data.type_() as _,
+            arraylength: arg.array_length as _,
+            count: (arg.data.len() / arg.array_length) as _,
+            flags: arg.flags as _,
+        })
+        .collect::<Vec<_>>();
+    (args.len() as _, args.as_ptr(), args)
 }
 
 /// A slice of (optional) arguments passed to a method of
@@ -389,17 +389,18 @@ impl ArgDataMethods for Pointer {
 }
 
 pub struct String {
-    _data: CString,
+    #[allow(dead_code)]
+    data: CString,
     // The FFI API needs a pointer to a C string
     pointer: *const core::ffi::c_void,
 }
 
 impl String {
     pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
-        let _data = CString::new(data).unwrap();
-        let pointer = _data.as_ptr() as _;
+        let data = CString::new(data).unwrap();
+        let pointer = data.as_ptr() as _;
 
-        String { _data, pointer }
+        String { data, pointer }
     }
 }
 
@@ -519,22 +520,17 @@ impl<'a> ArgDataMethods for Pointers<'a> {
 }
 
 pub struct Strings {
-    _data: Vec<CString>,
+    #[allow(dead_code)]
+    data: Vec<CString>,
     pointer: Vec<*const core::ffi::c_void>,
 }
 
 impl Strings {
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
-        let mut _data = Vec::<CString>::with_capacity(data.len());
-        let mut pointer =
-            Vec::<*const core::ffi::c_void>::with_capacity(data.len());
+        let data = data.iter().map(|s| CString::new(*s).unwrap()).collect::<Vec<_>>();
+        let pointer = data.iter().map(|s| s.as_ptr() as _).collect();
 
-        data.iter().for_each(|s| {
-            _data.push(CString::new(*s).unwrap());
-            pointer.push(_data.last().unwrap().as_ptr() as _);
-        });
-
-        Strings { _data, pointer }
+        Strings { data, pointer }
     }
 }
 
