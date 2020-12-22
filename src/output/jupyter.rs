@@ -5,30 +5,27 @@
 //! [`as_jupyter_notebook()`](crate::Context::as_jupyter_notebook())
 //! method to a [`Context`](crate::Context).
 //!
-//! This allows visualizing a
-//! [`Screen`](crate::context::NodeType::Screen) inside a notebook.
+//! A [`Screen`](crate::context::NodeType::Screen) can be rendered
+//! directly inside a notebook.
 //!
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
 use crate as nsi;
-use crate::output::PixelFormat;
+use crate::{argument::ArgSlice, output::PixelFormat};
 use evcxr_runtime;
 use image;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
-
-/* FIXME: implement this as a trait.
-pub trait Jupyter<'a> {
-    fn camera_as_jupyter(camera: &str, args: &ArgSlice<'_, 'a>);
-    fn screen_as_jupyter(screen: &str, args: &ArgSlice<'_, 'a>);
-    fn output_layer_as_jupyter(output_layer: &str, args: &ArgSlice<'_, 'a>);
+// FIXME: implement this for Context instead of the single method
+// below.
+trait _Jupyter<'a> {
+    fn camera_as_jupyter_notebook(camera: &str, args: &ArgSlice<'_, 'a>);
+    fn screen_as_jupyter_notebook(screen: &str, args: &ArgSlice<'_, 'a>);
+    fn output_layer_as_jupyter_notebook(
+        output_layer: &str,
+        args: &ArgSlice<'_, 'a>,
+    );
 }
-
-impl<'a> Jupyter<'a> for nsi::Context<'a> {
-    fn camera_as_jupyter(_camera: &str, _args: &ArgSlice<'_, 'a>) {}
-    fn screen_as_jupyter(_screen: &str, _args: &ArgSlice<'_, 'a>) {}
-    fn output_layer_as_jupyter(_output_layer: &str, _args: &ArgSlice<'_, 'a>) {}
-}*/
 
 impl<'a> nsi::Context<'a> {
     /// Render a [`Screen`](crate::context::NodeType::Screen) inside a
@@ -140,6 +137,11 @@ impl<'a> nsi::Context<'a> {
         // Make our Context pristine again.
         self.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
 
+        let width = *pixel_data_width.lock().unwrap();
+        let height = *pixel_data_height.lock().unwrap();
+
+        assert!(0 != width && 0 != height);
+
         let mut buffer = Vec::new();
         let quantized_pixel_data = quantized_pixel_data.lock().unwrap();
         image::png::PngEncoder::new(&mut buffer)
@@ -150,17 +152,13 @@ impl<'a> nsi::Context<'a> {
                         2 * quantized_pixel_data.len(),
                     )
                 },
-                *pixel_data_width.lock().unwrap() as _,
-                *pixel_data_height.lock().unwrap() as _,
+                width as _,
+                height as _,
                 image::ColorType::Rgba16,
             )
             .unwrap();
 
-        //evcxr_runtime::mime_type("image/png").bytes(&buffer);
         evcxr_runtime::mime_type("image/png").text(&base64::encode(&buffer));
-        //println!("EVCXR_BEGIN_CONTENT image/png");
-        //println!("{}", base64::encode(&buffer));
-        //println!("EVCXR_END_CONTENT");
     }
 }
 
@@ -228,7 +226,7 @@ fn buffer_rgba_f32_to_rgba_u16_be(
 }
 
 /// Multi-threaded color profile application & quantization to 16bit.
-fn buffer_rgb_f32_to_rgb_u16_be(
+fn _buffer_rgb_f32_to_rgb_u16_be(
     width: usize,
     height: usize,
     pixel_size: usize,
@@ -266,7 +264,7 @@ fn buffer_rgb_f32_to_rgb_u16_be(
 }
 
 /// Multi-threaded color profile application & quantization to 16bit.
-fn buffer_fa_f32_to_fa_u16_be(
+fn _buffer_fa_f32_to_fa_u16_be(
     width: usize,
     height: usize,
     pixel_size: usize,
@@ -306,7 +304,7 @@ fn buffer_fa_f32_to_fa_u16_be(
 }
 
 /// Multi-threaded color profile application & quantization to 16bit.
-fn buffer_f32_to_u16_be(
+fn _buffer_f32_to_u16_be(
     width: usize,
     height: usize,
     pixel_size: usize,
