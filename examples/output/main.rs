@@ -108,11 +108,11 @@ pub fn main() {
     );
 
     let mut polyhedron = p_ops::Polyhedron::tetrahedron();
-    polyhedron.meta(None, None, None, false, true);
+    polyhedron.meta(None, None, None, None, true);
     polyhedron.normalize();
     polyhedron.gyro(Some(1. / 3.), Some(0.1), true);
     polyhedron.normalize();
-    polyhedron.kis(Some(-0.2), None, true, true);
+    polyhedron.kis(Some(-0.2), None, None, true);
     polyhedron.normalize();
 
     // The nsi_render() call blocks until the render has finished.
