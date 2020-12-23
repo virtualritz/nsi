@@ -2,7 +2,7 @@
 //! # Jupyter Notebook Support
 //!
 //! This module adds an
-//! [`as_jupyter_notebook()`](crate::Context::as_jupyter_notebook())
+//! [`as_jupyter()`](crate::Context::as_jupyter())
 //! method to a [`Context`](crate::Context).
 //!
 //! A [`Screen`](crate::context::NodeType::Screen) can be rendered
@@ -12,19 +12,15 @@
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
 use crate as nsi;
 use crate::{argument::ArgSlice, output::PixelFormat};
-use evcxr_runtime;
-use image;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 // FIXME: implement this for Context instead of the single method
 // below.
 trait _Jupyter<'a> {
-    fn camera_as_jupyter_notebook(camera: &str, args: &ArgSlice<'_, 'a>);
-    fn screen_as_jupyter_notebook(screen: &str, args: &ArgSlice<'_, 'a>);
-    fn output_layer_as_jupyter_notebook(
-        output_layer: &str,
-        args: &ArgSlice<'_, 'a>,
-    );
+    fn camera_as_jupyter(camera: &str, args: &ArgSlice<'_, 'a>);
+    fn screen_as_jupyter(screen: &str, args: &ArgSlice<'_, 'a>);
+    fn output_layer_as_jupyter(output_layer: &str, args: &ArgSlice<'_, 'a>);
 }
 
 impl<'a> nsi::Context<'a> {
@@ -52,11 +48,11 @@ impl<'a> nsi::Context<'a> {
     /// );
     ///
     /// // Put an image of what "my_camera" sees into our notebook.
-    /// ctx.as_jupyter_notebook("screen");
+    /// ctx.as_jupyter("screen");
     /// ```
     /// # Arguments
     /// * `screen` – A [`Screen`](crate::context::NodeType::Screen).
-    pub fn as_jupyter_notebook(&self, screen: &str) {
+    pub fn as_jupyter(&self, screen: &str) {
         // RGB layer.
         self.create("jupyter_beauty", nsi::NodeType::OutputLayer, &[]);
         self.set_attribute(
@@ -72,8 +68,8 @@ impl<'a> nsi::Context<'a> {
         // Our buffer to hold quantized u8 pixel data.
         let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
-        let pixel_data_width = Arc::new(Mutex::new(0usize));
-        let pixel_data_height = Arc::new(Mutex::new(0usize));
+        let mut pixel_data_width = AtomicUsize::new(0); //Arc::new(Mutex::new(0usize));
+        let mut pixel_data_height = AtomicUsize::new(0); //Arc::new(Mutex::new(0usize));
 
         // Callback to collect our pixels.
         let finish = nsi::output::FinishCallback::new(
@@ -82,7 +78,11 @@ impl<'a> nsi::Context<'a> {
              height: usize,
              pixel_format: PixelFormat,
              pixel_data: Vec<f32>| {
-                assert!(4 <= pixel_format.len());
+                assert!(
+                    !pixel_format.is_empty()
+                        && nsi::output::LayerType::ColorAndAlpha
+                            == pixel_format[0].layer_type()
+                );
 
                 // FIXME
                 // 1. For each Layer in a PixelFormat, generate an
@@ -97,15 +97,15 @@ impl<'a> nsi::Context<'a> {
                 buffer_rgba_f32_to_rgba_u16_be(
                     width,
                     height,
-                    pixel_format.len(),
+                    pixel_format[0].layer_type().channels(),
                     &pixel_data,
                     &quantized_pixel_data,
                 );
 
-                let mut pixel_data_width = pixel_data_width.lock().unwrap();
-                *pixel_data_width = width;
-                let mut pixel_data_height = pixel_data_height.lock().unwrap();
-                *pixel_data_height = height;
+                //let mut pixel_data_width = pixel_data_width.lock().unwrap();
+                *pixel_data_width.get_mut() = width;
+                //let mut pixel_data_height = pixel_data_height.lock().unwrap();
+                *pixel_data_height.get_mut() = height;
 
                 nsi::output::Error::None
             },
@@ -137,8 +137,8 @@ impl<'a> nsi::Context<'a> {
         // Make our Context pristine again.
         self.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
 
-        let width = *pixel_data_width.lock().unwrap();
-        let height = *pixel_data_height.lock().unwrap();
+        let width = pixel_data_width.load(Ordering::Relaxed);
+        let height = pixel_data_height.load(Ordering::Relaxed);
 
         assert!(0 != width && 0 != height);
 
@@ -196,7 +196,7 @@ fn buffer_rgba_f32_to_rgba_u16_be(
             if 0.0 != alpha {
                 // FIXME: add dithering.
                 let r: u16 =
-                    (linear_to_srgb(pixel_data[index + 0] / alpha) * one) as _;
+                    (linear_to_srgb(pixel_data[index] / alpha) * one) as _;
                 let g: u16 =
                     (linear_to_srgb(pixel_data[index + 1] / alpha) * one) as _;
                 let b: u16 =
@@ -208,14 +208,14 @@ fn buffer_rgba_f32_to_rgba_u16_be(
 
                 #[cfg(target_endian = "little")]
                 {
-                    quantized_pixel_data[index + 0] = r.to_be();
+                    quantized_pixel_data[index] = r.to_be();
                     quantized_pixel_data[index + 1] = g.to_be();
                     quantized_pixel_data[index + 2] = b.to_be();
                     quantized_pixel_data[index + 3] = a.to_be();
                 }
                 #[cfg(target_endian = "big")]
                 {
-                    quantized_pixel_data[index + 0] = r;
+                    quantized_pixel_data[index] = r;
                     quantized_pixel_data[index + 1] = g;
                     quantized_pixel_data[index + 2] = b;
                     quantized_pixel_data[index + 3] = a;
@@ -241,7 +241,7 @@ fn _buffer_rgb_f32_to_rgb_u16_be(
             (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
         {
             // FIXME: add dithering.
-            let r: u16 = (linear_to_srgb(pixel_data[index + 0]) * one) as _;
+            let r: u16 = (linear_to_srgb(pixel_data[index]) * one) as _;
             let g: u16 = (linear_to_srgb(pixel_data[index + 1]) * one) as _;
             let b: u16 = (linear_to_srgb(pixel_data[index + 2]) * one) as _;
 
@@ -249,13 +249,13 @@ fn _buffer_rgb_f32_to_rgb_u16_be(
 
             #[cfg(target_endian = "little")]
             {
-                quantized_pixel_data[index + 0] = r.to_be();
+                quantized_pixel_data[index] = r.to_be();
                 quantized_pixel_data[index + 1] = g.to_be();
                 quantized_pixel_data[index + 2] = b.to_be();
             }
             #[cfg(target_endian = "big")]
             {
-                quantized_pixel_data[index + 0] = r;
+                quantized_pixel_data[index] = r;
                 quantized_pixel_data[index + 1] = g;
                 quantized_pixel_data[index + 2] = b;
             }
@@ -282,7 +282,7 @@ fn _buffer_fa_f32_to_fa_u16_be(
             // We ignore pixels with zero alpha.
             if 0.0 != alpha {
                 // FIXME: add dithering.
-                let f: u16 = ((pixel_data[index + 0] / alpha) * one) as _;
+                let f: u16 = ((pixel_data[index] / alpha) * one) as _;
                 let a: u16 = (alpha * one) as _;
 
                 let mut quantized_pixel_data =
@@ -290,12 +290,12 @@ fn _buffer_fa_f32_to_fa_u16_be(
 
                 #[cfg(target_endian = "little")]
                 {
-                    quantized_pixel_data[index + 0] = f.to_be();
+                    quantized_pixel_data[index] = f.to_be();
                     quantized_pixel_data[index + 3] = a.to_be();
                 }
                 #[cfg(target_endian = "big")]
                 {
-                    quantized_pixel_data[index + 0] = r;
+                    quantized_pixel_data[index] = r;
                     quantized_pixel_data[index + 3] = a;
                 }
             }
@@ -319,17 +319,17 @@ fn _buffer_f32_to_u16_be(
             (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
         {
             // FIXME: add dithering.
-            let f: u16 = (pixel_data[index + 0] * one) as _;
+            let f: u16 = (pixel_data[index] * one) as _;
 
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
 
             #[cfg(target_endian = "little")]
             {
-                quantized_pixel_data[index + 0] = f.to_be();
+                quantized_pixel_data[index] = f.to_be();
             }
             #[cfg(target_endian = "big")]
             {
-                quantized_pixel_data[index + 0] = f;
+                quantized_pixel_data[index] = f;
             }
         }
     });

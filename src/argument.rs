@@ -318,6 +318,7 @@ impl<'a> ArgDataMethods for Reference<'a> {
 
 pub trait CallbackPtr {
     #[doc(hidden)]
+    #[allow(clippy::wrong_self_convention)]
     fn to_ptr(self) -> *const core::ffi::c_void;
 }
 
@@ -527,7 +528,10 @@ pub struct Strings {
 
 impl Strings {
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
-        let data = data.iter().map(|s| CString::new(*s).unwrap()).collect::<Vec<_>>();
+        let data = data
+            .iter()
+            .map(|s| CString::new(*s).unwrap())
+            .collect::<Vec<_>>();
         let pointer = data.iter().map(|s| s.as_ptr() as _).collect();
 
         Strings { data, pointer }

@@ -161,9 +161,7 @@
 //! See the `output` example on how to do this using the
 //! [`colorspace`](https://crates.io/crates/colorspace) crate.
 use crate::argument::CallbackPtr;
-use core::{ops::Index, ptr};
-use ndspy_sys;
-use num_enum::IntoPrimitive;
+use core::ops::Index;
 use std::{
     ffi::CStr,
     os::raw::{c_char, c_int, c_void},
@@ -178,7 +176,7 @@ pub static FERRIS: &str = "ferris";
 /// An error type the callbacks return to communicate with the
 /// renderer.
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, num_enum::IntoPrimitive)]
 pub enum Error {
     /// Everyhing is dandy.
     None = ndspy_sys::PtDspyError_PkDspyErrorNone as _,
@@ -519,8 +517,9 @@ struct DisplayData<'a> {
 impl<'a> DisplayData<'a> {
     /// Used to dissect DisplayData into its components
     /// before being dropped.
+    #[allow(clippy::type_complexity)]
     fn boxed_into_tuple(
-        display_data: Box<Self>,
+        display_data: Self,
     ) -> (
         &'a str,
         usize,
@@ -567,8 +566,8 @@ impl Layer {
         self.name.as_str()
     }
 
-    pub fn layer_type(&self) -> &LayerType {
-        &self.layer_type
+    pub fn layer_type(&self) -> LayerType {
+        self.layer_type
     }
 
     pub fn offset(&self) -> usize {
@@ -578,7 +577,7 @@ impl Layer {
 
 /// The depth (number and type of channels) a pixel in a [`Layer`] is
 /// composed of.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayerType {
     /// A single channel. Obtained when setting `"layertype"`
     /// `"scalar"` on an
@@ -701,10 +700,6 @@ impl PixelFormat {
 
                     let (layer_name, channel_id) =
                         Self::split_into_layer_name_and_channel_id(name);
-                    println!(
-                        "{} => {} - {}",
-                        layer_name, previous_layer_name, channel_id
-                    );
 
                     // A boundary between two layers will be when the postfix
                     // is a combination of those above.
@@ -801,7 +796,7 @@ impl PixelFormat {
             split = name.rsplitn(2, '.');
         }
         // Skip the middle part.
-        if let Some(_) = split.next() {
+        if split.next().is_some() {
             // We know that if there is middle part we always have a prefix
             // so we can safely unwrap here.
             (split.next().unwrap(), postfix)
@@ -814,6 +809,11 @@ impl PixelFormat {
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -838,7 +838,7 @@ fn get_parameter_triple_box<T: ?Sized>(
             && type_ == p.valueType as _
             && len == p.valueCount as _
         {
-            if p.value != ptr::null_mut() {
+            if !p.value.is_null() {
                 return Some(unsafe {
                     Box::from_raw(p.value as *mut Box<Box<T>>)
                 });
@@ -867,9 +867,7 @@ pub(crate) extern "C" fn image_open(
     flag_stuff: *mut ndspy_sys::PtFlagStuff,
 ) -> ndspy_sys::PtDspyError {
     // FIXME: check that driver_name is "ferris".
-    if (image_handle_ptr == ptr::null_mut())
-        || (output_filename == ptr::null_mut())
-    {
+    if (image_handle_ptr.is_null()) || (output_filename.is_null()) {
         return Error::BadParameters.into();
     }
 
@@ -877,7 +875,7 @@ pub(crate) extern "C" fn image_open(
         // We need to const->mut transmute() here because we need
         // pointers to FnMut below.
         std::slice::from_raw_parts_mut(
-            std::mem::transmute(parameters),
+            parameters as *mut ndspy_sys::UserParameter,
             parameters_count as _,
         )
     };
@@ -920,13 +918,12 @@ pub(crate) extern "C" fn image_open(
     display_data.pixel_format = PixelFormat::new(format);
 
     let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        let error = fn_open(
+        fn_open(
             display_data.name,
             width as _,
             height as _,
             &display_data.pixel_format,
-        );
-        error
+        )
     } else {
         Error::None
     };
@@ -1041,7 +1038,7 @@ pub(crate) extern "C" fn image_close(
         unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
-        DisplayData::boxed_into_tuple(display_data);
+        DisplayData::boxed_into_tuple(*display_data);
 
     if let Some(mut fn_finish) = fn_finish {
         let error = fn_finish(name, width, height, pixel_format, pixel_data);
