@@ -8,27 +8,38 @@
 //! that specify the type of node being created, such as `shader`.
 use crate as nsi;
 use crate::ArgSlice;
+#[cfg(debug_assertions)]
 use ultraviolet as uv;
 
 #[inline]
-fn _default_node_root<'a>(node: Option<&'a str>) -> &'a str {
-    match node {
-        Some(node) => node,
-        None => ".root",
-    }
-}
-
-#[inline]
-fn default_slot_objects<'a>(slot: Option<&'a str>) -> &'a str {
-    match slot {
-        Some(slot) => slot,
-        None => "objects",
-    }
+fn default_slot_objects(slot: Option<&str>) -> &str {
+    slot.unwrap_or("objects")
 }
 
 /// Generates a random handle if `handle` is `None` or falls through,
 /// otherwise.
-pub fn generate_or_use_handle(handle: Option<&str>) -> String {
+#[cfg(debug_assertions)]
+pub fn generate_or_use_handle(
+    handle: Option<&str>,
+    prefix: Option<&str>,
+) -> String {
+    match handle {
+        Some(handle) => handle.to_string(),
+        None => {
+            if let Some(prefix) = prefix {
+                String::from(prefix) + "_" + &petname::petname(3, "_")
+            } else {
+                petname::petname(3, "_")
+            }
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+pub fn generate_or_use_handle(
+    handle: Option<&str>,
+    _prefix: Option<&str>,
+) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
@@ -159,8 +170,17 @@ impl<'a> nsi::Context<'a> {
         node_type: impl Into<Vec<u8>>,
         args: &ArgSlice<'_, 'a>,
     ) -> String {
-        let handle = generate_or_use_handle(handle);
-        self.create(handle.as_str(), node_type, args);
+        let node_type_copy: Vec<u8> = node_type.into();
+        let handle = generate_or_use_handle(
+            handle,
+            Some(unsafe { std::str::from_utf8_unchecked(&node_type_copy) }),
+        );
+
+        self.create(handle.as_str(), node_type_copy, &[]);
+
+        if !args.is_empty() {
+            self.set_attribute(handle.as_str(), args);
+        }
 
         handle
     }
@@ -174,7 +194,7 @@ impl<'a> nsi::Context<'a> {
     /// Returns `handle` for convenience.
     #[inline]
     pub fn scaling(&self, handle: Option<&str>, scale: &[f64; 3]) -> String {
-        let handle = generate_or_use_handle(handle);
+        let handle = generate_or_use_handle(handle, Some("scaling"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
         self.set_attribute(
@@ -202,7 +222,7 @@ impl<'a> nsi::Context<'a> {
         handle: Option<&str>,
         translate: &[f64; 3],
     ) -> String {
-        let handle = generate_or_use_handle(handle);
+        let handle = generate_or_use_handle(handle, Some("translation"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
         self.set_attribute(
@@ -232,7 +252,7 @@ impl<'a> nsi::Context<'a> {
         angle: f64,
         axis: &[f64; 3],
     ) -> String {
-        let handle = generate_or_use_handle(handle);
+        let handle = generate_or_use_handle(handle, Some("rotation"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
         self.set_attribute(
@@ -261,7 +281,7 @@ impl<'a> nsi::Context<'a> {
         to: &[f64; 3],
         up: &[f64; 3],
     ) {
-        let handle = generate_or_use_handle(handle);
+        let handle = generate_or_use_handle(handle, Some("look_at"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
         self.set_attribute(
@@ -337,7 +357,7 @@ impl<'a> nsi::Context<'a> {
         let distance =
             (bounding_sphere_radius * 2.0) / (vertical_fov * 0.5).sin();
 
-        let handle = generate_or_use_handle(handle);
+        let handle = generate_or_use_handle(handle, Some("look_at"));
 
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
