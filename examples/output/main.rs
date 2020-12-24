@@ -1,4 +1,4 @@
-use exr::prelude::rgba_image::*;
+use exr::prelude::*;
 use png;
 use polyhedron_ops as p_ops;
 use std::fs::File;
@@ -24,7 +24,7 @@ pub fn main() {
          format: &nsi::output::PixelFormat| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
             // Create a properly size buffer to receive our pixel data.
-            *quantized_pixel_data = vec![0u8; width * height * format.len()];
+            *quantized_pixel_data = vec![0u8; width * height * format.channels()];
             nsi::output::Error::None
         },
     );
@@ -52,7 +52,7 @@ pub fn main() {
                 let y_offset = scanline * width;
 
                 for index in y_offset + x_min..y_offset + x_max_plus_one {
-                    let index = index * pixel_format.len();
+                    let index = index * pixel_format.channels();
                     let alpha = pixel_data[index + 3];
 
                     // Ignore pixels with zero alpha.
@@ -93,20 +93,32 @@ pub fn main() {
          height: usize,
          pixel_format: nsi::output::PixelFormat,
          pixel_data: Vec<f32>| {
+            let sample = |x: usize, y: usize| {
+                let index = pixel_format.channels() * (x + y * width);
+                // We justa assume the 1st four channels are rgba as we set
+                // this up like so above. In a real world code you would
+                // probably branch depending on pixel_format[n].depth().
+                (
+                    pixel_data[index + 0],
+                    pixel_data[index + 1],
+                    pixel_data[index + 2],
+                    pixel_data[index + 3],
+                )
+            };
+
             // We write the raw f32 data out as an OpenEXR.
-            write_exr(
-                "test.exr",
-                width,
-                height,
-                pixel_format.len(),
-                &pixel_data,
-            );
+            write_rgba_f32_file(name,
+                Vec2(width, height),
+                &sample
+            ).unwrap();
+
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);
             nsi::output::Error::None
         },
     );
 
+    // Create some geometry.
     let mut polyhedron = p_ops::Polyhedron::tetrahedron();
     polyhedron.meta(None, None, None, None, true);
     polyhedron.normalize();
@@ -115,7 +127,7 @@ pub fn main() {
     polyhedron.kis(Some(-0.2), None, None, true);
     polyhedron.normalize();
 
-    // The nsi_render() call blocks until the render has finished.
+    // The next call blocks until the render has finished.
     nsi_render(32, &polyhedron, open, write, finish);
 
     // We can shed the Arc and the Mutex now that nsi_render() is done.
@@ -138,39 +150,6 @@ pub fn main() {
     writer
         .write_image_data(&quantized_pixel_data)
         .expect("Error writing PNG.");
-}
-
-// Poor man's OpenEXR writer. Writes RGBA only, i.e. ignores data past
-// the 4th channel.
-fn write_exr(
-    name: &str,
-    width: usize,
-    height: usize,
-    pixel_length: usize,
-    pixel_data: &[f32],
-) {
-    let sample = |position: Vec2<usize>| {
-        let index = pixel_length * (position.x() + position.y() * width);
-
-        Pixel::rgba(
-            pixel_data[index + 0],
-            pixel_data[index + 1],
-            pixel_data[index + 2],
-            pixel_data[index + 3],
-        )
-    };
-
-    let image_info = ImageInfo::rgba((width, height), SampleType::F32);
-
-    image_info
-        .write_pixels_to_file(
-            name.clone(),
-            // This will actually suck the pixels from our buffer in
-            // parallel on all cores.
-            write_options::high(),
-            &sample,
-        )
-        .unwrap();
 }
 
 /// Linear to (0..1 clamped) sRGB conversion – bad choice but cheap.

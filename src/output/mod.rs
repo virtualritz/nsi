@@ -158,8 +158,8 @@
 //! above) the data is linear and needs to be made display referred
 //! before is will look good on screen.
 //!
-//! See the `output` example on how to do this using the
-//! [`colorspace`](https://crates.io/crates/colorspace) crate.
+//! See the `output` example on how to do this with a simple,
+//! display-referred sRGB curve.
 use crate::argument::CallbackPtr;
 use core::ops::Index;
 use std::{
@@ -557,28 +557,41 @@ impl<'a> DisplayData<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct Layer {
     name: String,
-    layer_type: LayerType,
+    depth: LayerDepth,
     offset: usize,
 }
 
 impl Layer {
+    /// The name of the layer.
+    #[inline]
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
 
-    pub fn layer_type(&self) -> LayerType {
-        self.layer_type
+    /// The [depth](LayerDepth) of this layer.
+    #[inline]
+    pub fn depth(&self) -> LayerDepth {
+        self.depth
     }
 
+    /// The channel offset of the layer inside the [`PixelFormat`].
+    #[inline]
     pub fn offset(&self) -> usize {
         self.offset
+    }
+
+    /// The number of channels in this layer.
+    /// This is a shortcut for calling `depth().channels()`.
+    #[inline]
+    pub fn channels(&self) -> usize {
+        self.depth.channels()
     }
 }
 
 /// The depth (number and type of channels) a pixel in a [`Layer`] is
 /// composed of.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum LayerType {
+pub enum LayerDepth {
     /// A single channel. Obtained when setting `"layertype"`
     /// `"scalar"` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
@@ -613,27 +626,28 @@ pub enum LayerType {
     FourChannelsAndAlpha,
 }
 
-impl Default for LayerType {
+impl Default for LayerDepth {
     fn default() -> Self {
-        LayerType::OneChannel
+        LayerDepth::OneChannel
     }
 }
 
-impl LayerType {
+impl LayerDepth {
     /// Returns the number of channels this layer type consists of.
     pub fn channels(&self) -> usize {
         match self {
-            LayerType::OneChannel => 1,
-            LayerType::OneChannelAndAlpha => 2,
-            LayerType::Color => 3,
-            LayerType::Vector => 3,
-            LayerType::ColorAndAlpha => 4,
-            LayerType::VectorAndAlpha => 4,
-            LayerType::FourChannels => 4,
-            LayerType::FourChannelsAndAlpha => 5,
+            LayerDepth::OneChannel => 1,
+            LayerDepth::OneChannelAndAlpha => 2,
+            LayerDepth::Color => 3,
+            LayerDepth::Vector => 3,
+            LayerDepth::ColorAndAlpha => 4,
+            LayerDepth::VectorAndAlpha => 4,
+            LayerDepth::FourChannels => 4,
+            LayerDepth::FourChannelsAndAlpha => 5,
         }
     }
 }
+
 /// Accessor for the pixel format the renderer sends in [`FnOpen`],
 /// [`FnWrite`] and [`FnFinish`].
 ///
@@ -647,10 +661,10 @@ impl LayerType {
 /// **color** + **alpha** output layer and a world space **normal**,
 /// will look like this:
 ///
-/// [`name`](Layer::name()) | [`layer_type`](Layer::layer_type())                  | [`offset`](Layer::offset())
+/// [`name`](Layer::name()) | [`depth`](Layer::depth())                  | [`offset`](Layer::offset())
 /// ------------------------|------------------------------------------------------|----------------------------
-/// `Ci`                    | [`ColorAndAlpha`](LayerType::ColorAndAlpha) (`rgba`) | `0`
-/// `N_world`               | [`Vector`](LayerType::Vector) (`xyz`)                | `4`
+/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha) (`rgba`) | `0`
+/// `N_world`               | [`Vector`](LayerDepth::Vector) (`xyz`)                | `4`
 ///
 /// ## RAW Layout
 ///
@@ -681,7 +695,7 @@ impl PixelFormat {
                 unsafe { CStr::from_ptr(format[0].name) }.to_str().unwrap(),
             );
 
-        let mut layer_type = LayerType::OneChannel;
+        let mut depth = LayerDepth::OneChannel;
         let mut offset = 0;
 
         PixelFormat(
@@ -715,29 +729,31 @@ impl PixelFormat {
 
                         previous_channel_id = channel_id;
 
-                        let tmp_layer_type = layer_type;
-                        layer_type = LayerType::OneChannel;
+                        let tmp_depth = depth;
+                        depth = LayerDepth::OneChannel;
 
                         let tmp_offset = offset;
                         offset = format.0;
 
                         Some(Layer {
                             name: tmp_layer_name.to_string(),
-                            layer_type: tmp_layer_type,
+                            depth: tmp_depth,
                             offset: tmp_offset,
                         })
                     } else {
                         // Do we we have a lonely alpha -> it belongs to the current
                         // layer.
                         if layer_name.is_empty() && "a" == channel_id {
-                            layer_type = match &layer_type {
-                                LayerType::OneChannel => {
-                                    LayerType::OneChannelAndAlpha
+                            depth = match &depth {
+                                LayerDepth::OneChannel => {
+                                    LayerDepth::OneChannelAndAlpha
                                 }
-                                LayerType::Color => LayerType::ColorAndAlpha,
-                                LayerType::Vector => LayerType::VectorAndAlpha,
-                                LayerType::FourChannels => {
-                                    LayerType::FourChannelsAndAlpha
+                                LayerDepth::Color => LayerDepth::ColorAndAlpha,
+                                LayerDepth::Vector => {
+                                    LayerDepth::VectorAndAlpha
+                                }
+                                LayerDepth::FourChannels => {
+                                    LayerDepth::FourChannelsAndAlpha
                                 }
                                 _ => unreachable!(),
                             };
@@ -746,28 +762,24 @@ impl PixelFormat {
                         else if layer_name == previous_layer_name {
                             // We only check for first channel.
                             match channel_id {
-                                "r" | "g" | "b" => {
-                                    layer_type = LayerType::Color
-                                }
-                                "x" | "y" | "z" => {
-                                    layer_type = LayerType::Vector
-                                }
+                                "r" | "g" | "b" => depth = LayerDepth::Color,
+                                "x" | "y" | "z" => depth = LayerDepth::Vector,
                                 "a" => {
                                     if layer_name.is_empty() {
-                                        layer_type = match &layer_type {
-                                            LayerType::OneChannel => {
-                                                LayerType::OneChannelAndAlpha
+                                        depth = match &depth {
+                                            LayerDepth::OneChannel => {
+                                                LayerDepth::OneChannelAndAlpha
                                             }
-                                            LayerType::Color => {
-                                                LayerType::ColorAndAlpha
+                                            LayerDepth::Color => {
+                                                LayerDepth::ColorAndAlpha
                                             }
-                                            LayerType::Vector => {
-                                                LayerType::VectorAndAlpha
+                                            LayerDepth::Vector => {
+                                                LayerDepth::VectorAndAlpha
                                             }
                                             _ => unreachable!(),
                                         };
                                     } else {
-                                        layer_type = LayerType::FourChannels;
+                                        depth = LayerDepth::FourChannels;
                                     }
                                 }
                                 _ => (),
@@ -811,9 +823,19 @@ impl PixelFormat {
         self.0.len()
     }
 
+    /// Checks is pixel contains any data at all.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Returns the total number of channels in a pixel.
+    /// This is the sum of the number of channels in all layers.
+    #[inline]
+    pub fn channels(&self) -> usize {
+        self.0
+            .iter()
+            .fold(0, |total, layer| total + layer.channels())
     }
 }
 
@@ -983,7 +1005,7 @@ pub(crate) extern "C" fn image_write(
     let display_data = unsafe { &mut *(image_handle_ptr as *mut DisplayData) };
 
     // _entry_size is pixel_length in u8s, we need pixel length in f32s.
-    let pixel_length = display_data.pixel_format.len();
+    let pixel_length = display_data.pixel_format.channels();
 
     let pixel_data = unsafe {
         std::slice::from_raw_parts(

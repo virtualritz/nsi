@@ -11,10 +11,13 @@
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
 use crate as nsi;
-use crate::{argument::ArgSlice, output::PixelFormat};
-use core::sync::atomic::{AtomicUsize, Ordering};
+use nsi::{
+    argument::ArgSlice,
+    output::{Layer, LayerDepth, PixelFormat},
+};
 use rayon::prelude::*;
-use std::sync::{Arc, Mutex};
+use std::io::Write;
+
 // FIXME: implement this for Context instead of the single method
 // below.
 trait _Jupyter<'a> {
@@ -65,12 +68,6 @@ impl<'a> nsi::Context<'a> {
         );
         self.connect("jupyter_beauty", "", screen, "outputlayers", &[]);
 
-        // Our buffer to hold quantized u8 pixel data.
-        let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
-
-        let mut pixel_data_width = AtomicUsize::new(0); //Arc::new(Mutex::new(0usize));
-        let mut pixel_data_height = AtomicUsize::new(0); //Arc::new(Mutex::new(0usize));
-
         // Callback to collect our pixels.
         let finish = nsi::output::FinishCallback::new(
             |_name: &str,
@@ -78,34 +75,15 @@ impl<'a> nsi::Context<'a> {
              height: usize,
              pixel_format: PixelFormat,
              pixel_data: Vec<f32>| {
-                assert!(
-                    !pixel_format.is_empty()
-                        && nsi::output::LayerType::ColorAndAlpha
-                            == pixel_format[0].layer_type()
-                );
-
-                // FIXME
-                // 1. For each Layer in a PixelFormat, generate an
-                //    image and put in some Vec<Image>.
-                // 2. Afterwards, send all images as a matrix of
-                //    PNGs to Jupyter.
-                // 3. Image can be F Fa RGB RGBa or FFFF
-                let mut quantized_pixel_data_unlocked =
-                    quantized_pixel_data.lock().unwrap();
-                *quantized_pixel_data_unlocked = vec![0u16; width * height * 4];
-
-                buffer_rgba_f32_to_rgba_u16_be(
-                    width,
-                    height,
-                    pixel_format[0].layer_type().channels(),
-                    &pixel_data,
-                    &quantized_pixel_data,
-                );
-
-                //let mut pixel_data_width = pixel_data_width.lock().unwrap();
-                *pixel_data_width.get_mut() = width;
-                //let mut pixel_data_height = pixel_data_height.lock().unwrap();
-                *pixel_data_height.get_mut() = height;
+                pixel_format.0.iter().for_each(|layer| {
+                    pixel_data_to_jupyter(
+                        width,
+                        height,
+                        &layer,
+                        pixel_format.channels(),
+                        &pixel_data,
+                    )
+                });
 
                 nsi::output::Error::None
             },
@@ -132,37 +110,221 @@ impl<'a> nsi::Context<'a> {
 
         // And now, render it!
         self.render_control(&[nsi::string!("action", "start")]);
+        // Block until render is finished.
         self.render_control(&[nsi::string!("action", "wait")]);
 
         // Make our Context pristine again.
         self.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
-
-        let width = pixel_data_width.load(Ordering::Relaxed);
-        let height = pixel_data_height.load(Ordering::Relaxed);
-
-        assert!(0 != width && 0 != height);
-
-        let mut buffer = Vec::new();
-        let quantized_pixel_data = quantized_pixel_data.lock().unwrap();
-        image::png::PngEncoder::new(&mut buffer)
-            .encode(
-                unsafe {
-                    &*core::ptr::slice_from_raw_parts(
-                        quantized_pixel_data.as_ptr() as *const u8,
-                        2 * quantized_pixel_data.len(),
-                    )
-                },
-                width as _,
-                height as _,
-                image::ColorType::Rgba16,
-            )
-            .unwrap();
-
-        evcxr_runtime::mime_type("image/png").text(&base64::encode(&buffer));
     }
 }
 
-/// Linear to (0..1 clamped) sRGB conversion – bad choice but cheap.
+/// Multi-threaded color profile application & quantization to 8bit.
+fn pixel_data_to_jupyter(
+    width: usize,
+    height: usize,
+    layer: &Layer,
+    channels: usize,
+    pixel_data: &[f32],
+) {
+    let one = std::u16::MAX as f32;
+    let offset = layer.offset();
+
+    png_to_jupyter(
+        width,
+        height,
+        layer,
+        bytemuck::cast_slice(
+            &(match layer.depth() {
+                LayerDepth::OneChannel => {
+                    (0..width * height * channels)
+                        .into_par_iter()
+                        .step_by(channels)
+                        .map(|index| {
+                            // FIXME: add dithering.
+                            let v: u16 =
+                                (pixel_data[index + offset] * one) as _;
+
+                            #[cfg(target_endian = "little")]
+                            {
+                                v.to_be()
+                            }
+                            #[cfg(target_endian = "big")]
+                            {
+                                v
+                            }
+                        })
+                        .collect()
+                }
+                LayerDepth::OneChannelAndAlpha => (0..width
+                    * height
+                    * channels)
+                    .into_par_iter()
+                    .step_by(channels)
+                    .flat_map(|index| {
+                        let index = index + offset;
+
+                        let alpha = pixel_data[index + 1];
+
+                        let v: u16 = (pixel_data[index] / alpha * one) as _;
+                        let a: u16 = (alpha * one) as _;
+
+                        #[cfg(target_endian = "little")]
+                        {
+                            vec![v.to_be(), a.to_be()]
+                        }
+                        #[cfg(target_endian = "big")]
+                        {
+                            vec![v, a]
+                        }
+                    })
+                    .collect(),
+                LayerDepth::Color => {
+                    (0..width * height * channels)
+                        .into_par_iter()
+                        .step_by(channels)
+                        .flat_map(|index| {
+                            let index = index + offset;
+                            // FIXME: add dithering.
+                            let r: u16 = (linear_to_srgb(pixel_data[index])
+                                * one)
+                                as _;
+                            let g: u16 = (linear_to_srgb(pixel_data[index + 1])
+                                * one)
+                                as _;
+                            let b: u16 = (linear_to_srgb(pixel_data[index + 2])
+                                * one)
+                                as _;
+
+                            #[cfg(target_endian = "little")]
+                            {
+                                vec![r.to_be(), g.to_be(), b.to_be()]
+                            }
+                            #[cfg(target_endian = "big")]
+                            {
+                                vec![r, g, b]
+                            }
+                        })
+                        .collect()
+                }
+                LayerDepth::Vector => {
+                    (0..width * height * channels)
+                        .into_par_iter()
+                        .step_by(channels)
+                        .flat_map(|index| {
+                            let index = index + offset;
+                            // FIXME: add dithering.
+                            let r: u16 =
+                                (normalize(pixel_data[index]) * one) as _;
+                            let g: u16 =
+                                (normalize(pixel_data[index + 1]) * one) as _;
+                            let b: u16 =
+                                (normalize(pixel_data[index + 2]) * one) as _;
+
+                            #[cfg(target_endian = "little")]
+                            {
+                                vec![r.to_be(), g.to_be(), b.to_be()]
+                            }
+                            #[cfg(target_endian = "big")]
+                            {
+                                vec![r, g, b]
+                            }
+                        })
+                        .collect()
+                }
+                LayerDepth::ColorAndAlpha => {
+                    (0..width * height * channels)
+                        .into_par_iter()
+                        .step_by(channels)
+                        .flat_map(|index| {
+                            let index = index + offset;
+                            let alpha = pixel_data[index + 3];
+                            // We ignore pixels with zero alpha.
+                            if 0.0 != alpha {
+                                // FIXME: add dithering.
+                                let r: u16 = (linear_to_srgb(
+                                    pixel_data[index] / alpha,
+                                ) * one)
+                                    as _;
+                                let g: u16 = (linear_to_srgb(
+                                    pixel_data[index + 1] / alpha,
+                                ) * one)
+                                    as _;
+                                let b: u16 = (linear_to_srgb(
+                                    pixel_data[index + 2] / alpha,
+                                ) * one)
+                                    as _;
+                                let a: u16 = (alpha * one) as _;
+
+                                #[cfg(target_endian = "little")]
+                                {
+                                    vec![
+                                        r.to_be(),
+                                        g.to_be(),
+                                        b.to_be(),
+                                        a.to_be(),
+                                    ]
+                                }
+                                #[cfg(target_endian = "big")]
+                                {
+                                    vec![r, g, b, a]
+                                }
+                            } else {
+                                vec![0; 4]
+                            }
+                        })
+                        .collect()
+                }
+                LayerDepth::VectorAndAlpha => {
+                    (0..width * height * channels)
+                        .into_par_iter()
+                        .step_by(channels)
+                        .flat_map(|index| {
+                            let index = index + offset;
+                            let alpha = pixel_data[index + 3];
+                            // We ignore pixels with zero alpha.
+                            if 0.0 != alpha {
+                                // FIXME: add dithering.
+                                let r: u16 =
+                                    (normalize(pixel_data[index] / alpha)
+                                        * one)
+                                        as _;
+                                let g: u16 =
+                                    (normalize(pixel_data[index + 1] / alpha)
+                                        * one)
+                                        as _;
+                                let b: u16 =
+                                    (normalize(pixel_data[index + 2] / alpha)
+                                        * one)
+                                        as _;
+                                let a: u16 = (alpha * one) as _;
+
+                                #[cfg(target_endian = "little")]
+                                {
+                                    vec![
+                                        r.to_be(),
+                                        g.to_be(),
+                                        b.to_be(),
+                                        a.to_be(),
+                                    ]
+                                }
+                                #[cfg(target_endian = "big")]
+                                {
+                                    vec![r, g, b, a]
+                                }
+                            } else {
+                                vec![0; 4]
+                            }
+                        })
+                        .collect()
+                }
+                _ => Vec::new(),
+            }),
+        ),
+    );
+}
+
+// Linear to (0..1 clamped) sRGB conversion – cheesy but cheap.
+// FIXME: implement a proper 'filmic' tonemapper instead.
 #[inline]
 fn linear_to_srgb(x: f32) -> f32 {
     if x <= 0.0 {
@@ -176,161 +338,41 @@ fn linear_to_srgb(x: f32) -> f32 {
     }
 }
 
-/// Multi-threaded color profile application & quantization to 8bit.
-fn buffer_rgba_f32_to_rgba_u16_be(
-    width: usize,
-    height: usize,
-    pixel_size: usize,
-    pixel_data: &[f32],
-    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
-) {
-    let one = std::u16::MAX as f32;
-
-    (0..height).into_par_iter().for_each(|scanline| {
-        let y_offset = scanline * width * pixel_size;
-        for index in
-            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
-        {
-            let alpha = pixel_data[index + 3];
-            // We ignore pixels with zero alpha.
-            if 0.0 != alpha {
-                // FIXME: add dithering.
-                let r: u16 =
-                    (linear_to_srgb(pixel_data[index] / alpha) * one) as _;
-                let g: u16 =
-                    (linear_to_srgb(pixel_data[index + 1] / alpha) * one) as _;
-                let b: u16 =
-                    (linear_to_srgb(pixel_data[index + 2] / alpha) * one) as _;
-                let a: u16 = (alpha * one) as _;
-
-                let mut quantized_pixel_data =
-                    quantized_pixel_data.lock().unwrap();
-
-                #[cfg(target_endian = "little")]
-                {
-                    quantized_pixel_data[index] = r.to_be();
-                    quantized_pixel_data[index + 1] = g.to_be();
-                    quantized_pixel_data[index + 2] = b.to_be();
-                    quantized_pixel_data[index + 3] = a.to_be();
-                }
-                #[cfg(target_endian = "big")]
-                {
-                    quantized_pixel_data[index] = r;
-                    quantized_pixel_data[index + 1] = g;
-                    quantized_pixel_data[index + 2] = b;
-                    quantized_pixel_data[index + 3] = a;
-                }
-            }
-        }
-    });
+// Normalize a value from -1..1 to 0..1.
+// Used to map vector data to colors.
+fn normalize(x: f32) -> f32 {
+    0.5 + x * 0.5
 }
 
-/// Multi-threaded color profile application & quantization to 16bit.
-fn _buffer_rgb_f32_to_rgb_u16_be(
-    width: usize,
-    height: usize,
-    pixel_size: usize,
-    pixel_data: &[f32],
-    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
-) {
-    let one = std::u16::MAX as f32;
+fn png_to_jupyter(width: usize, height: usize, layer: &Layer, data: &[u8]) {
+    if LayerDepth::FourChannels == layer.depth()
+        || LayerDepth::FourChannelsAndAlpha == layer.depth()
+    {
+        return;
+    }
 
-    (0..height).into_par_iter().for_each(|scanline| {
-        let y_offset = scanline * width * pixel_size;
-        for index in
-            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
-        {
-            // FIXME: add dithering.
-            let r: u16 = (linear_to_srgb(pixel_data[index]) * one) as _;
-            let g: u16 = (linear_to_srgb(pixel_data[index + 1]) * one) as _;
-            let b: u16 = (linear_to_srgb(pixel_data[index + 2]) * one) as _;
-
-            let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
-
-            #[cfg(target_endian = "little")]
-            {
-                quantized_pixel_data[index] = r.to_be();
-                quantized_pixel_data[index + 1] = g.to_be();
-                quantized_pixel_data[index + 2] = b.to_be();
-            }
-            #[cfg(target_endian = "big")]
-            {
-                quantized_pixel_data[index] = r;
-                quantized_pixel_data[index + 1] = g;
-                quantized_pixel_data[index + 2] = b;
-            }
+    let mut buffer = Vec::new();
+    let mut png_encoder =
+        png::Encoder::new(&mut buffer, width as _, height as _);
+    png_encoder.set_color(match layer.depth() {
+        LayerDepth::OneChannel => png::ColorType::Grayscale,
+        LayerDepth::OneChannelAndAlpha => png::ColorType::GrayscaleAlpha,
+        LayerDepth::Color | LayerDepth::Vector => png::ColorType::RGB,
+        LayerDepth::ColorAndAlpha | LayerDepth::VectorAndAlpha => {
+            png::ColorType::RGBA
         }
+        _ => unreachable!(),
     });
-}
+    png_encoder.set_depth(png::BitDepth::Sixteen);
+    png_encoder
+        .write_header()
+        .unwrap()
+        .write_image_data(data)
+        .unwrap();
 
-/// Multi-threaded color profile application & quantization to 16bit.
-fn _buffer_fa_f32_to_fa_u16_be(
-    width: usize,
-    height: usize,
-    pixel_size: usize,
-    pixel_data: &[f32],
-    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
-) {
-    let one = std::u16::MAX as f32;
+    let mut temp_png = std::fs::File::create("/tmp/jupyter.png").unwrap();
+    temp_png.write_all(&buffer).unwrap();
 
-    (0..height).into_par_iter().for_each(|scanline| {
-        let y_offset = scanline * width * pixel_size;
-        for index in
-            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
-        {
-            let alpha = pixel_data[index + 1];
-            // We ignore pixels with zero alpha.
-            if 0.0 != alpha {
-                // FIXME: add dithering.
-                let f: u16 = ((pixel_data[index] / alpha) * one) as _;
-                let a: u16 = (alpha * one) as _;
-
-                let mut quantized_pixel_data =
-                    quantized_pixel_data.lock().unwrap();
-
-                #[cfg(target_endian = "little")]
-                {
-                    quantized_pixel_data[index] = f.to_be();
-                    quantized_pixel_data[index + 3] = a.to_be();
-                }
-                #[cfg(target_endian = "big")]
-                {
-                    quantized_pixel_data[index] = r;
-                    quantized_pixel_data[index + 3] = a;
-                }
-            }
-        }
-    });
-}
-
-/// Multi-threaded color profile application & quantization to 16bit.
-fn _buffer_f32_to_u16_be(
-    width: usize,
-    height: usize,
-    pixel_size: usize,
-    pixel_data: &[f32],
-    quantized_pixel_data: &Arc<Mutex<Vec<u16>>>,
-) {
-    let one = std::u16::MAX as f32;
-
-    (0..height).into_par_iter().for_each(|scanline| {
-        let y_offset = scanline * width * pixel_size;
-        for index in
-            (y_offset..y_offset + width * pixel_size).step_by(pixel_size)
-        {
-            // FIXME: add dithering.
-            let f: u16 = (pixel_data[index] * one) as _;
-
-            let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
-
-            #[cfg(target_endian = "little")]
-            {
-                quantized_pixel_data[index] = f.to_be();
-            }
-            #[cfg(target_endian = "big")]
-            {
-                quantized_pixel_data[index] = f;
-            }
-        }
-    });
+    //evcxr_runtime::mime_type("image/png")
+    //  .text(&base64::encode(&buffer));
 }

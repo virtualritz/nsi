@@ -22,7 +22,7 @@ link_lib3delight = ["nsi-sys/link_lib3delight", "ndspy-sys/link_lib3delight"]
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
 # Jupyter notebooks integration.
-jupyter = ["base64", "evcxr_runtime", "image", "ndspy-sys", "num_enum", "rayon"]
+jupyter = ["base64", "bytemuck", "evcxr_runtime", "png", "rayon", "output" ]
 # Pixel streaming support.
 output = ["ndspy-sys", "num_enum"]
 # Scene construction helpers.
@@ -45,10 +45,11 @@ lazy_static = "1.4.0"
 nsi-sys = "0.1.13"
 # Optional deps.
 base64 = { version = "0.13.0", optional = true }
+bytemuck = { version = "1.4.1", optional = true }
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
 evcxr_runtime = { version = "1.0.0", optional = true }
-image = { version = "0.23.12", optional = true }
+png = { version = "0.16.8", optional = true }
 ndspy-sys = { version = "0.1.7", optional = true }
 num_enum = { version = "0.5.1", optional = true }
 rand = { version = "0.8.0", features = [ "small_rng" ], optional = true }
