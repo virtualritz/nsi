@@ -63,8 +63,7 @@ impl<'a> nsi::Context<'a> {
     /// Append node `handle` to node `to`.
     ///
     /// # Arguments
-    /// * `to` – Node to connect to downstream. If [`None`],
-    ///     [`Root`](crate::context::NodeType::Root) is used.
+    /// * `to` – Node to connect to downstream.
     ///
     /// * `slot` – Slot on target node to connect to.
     ///     If [`None`], `"objects"` is used.
@@ -111,8 +110,7 @@ impl<'a> nsi::Context<'a> {
     /// Insert node `handle` in-between `to` and `from`.
     ///
     /// # Arguments
-    /// * `to` – Node to connect to downstream. If [`None`],
-    ///     [`SceneRoot`](crate::context::NodeType::Root) is used.
+    /// * `to` – Node to connect to downstream.
     ///
     /// * `to_slot` – Slot on `to` node to connect to.
     ///     If [`None`], `"objects"` is used.    .
