@@ -34,7 +34,7 @@ nightly = []
 cargo-husky = "1.5.0"
 dl-openvdb-query = "0.1.1"
 exr = "1.0.0"
-nsi-3delight = "0.1.0"
+nsi-3delight = "~0.1"
 png = "0.16.8"
 polyhedron-ops = { version = "0.2.1", features = [ "nsi" ] }
 

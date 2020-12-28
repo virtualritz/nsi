@@ -138,9 +138,12 @@ However, this will download an older version of 3Delight so this is
 not suggested.
 
 ## Cargo Features
-* `toolbelt` – Add convenience methods to `Context`.
+
 * `output` – Add support for streaming pixels from the renderer
     to the calling context via closures.
+* `jupyter` – Add support for rendering to Jupyter notebooks (when
+    using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
+* `toolbelt` – Add convenience methods to `Context`.
 * `nightly` – Enable some unstable features (suggested if you
     build with a `nightly` toolchain).
 
@@ -148,15 +151,15 @@ not suggested.
 
 The 3Delight dynamic library (`lib3delight`) can either be linked to
 during build or loaded at runtime.
-By default the lib is *loaded at runtime*. This has several
-advantages:
-1. If you ship your application or library you can ship it without
-   the library. It can still run and will print an informative error
-   if the library can not be loaded.
-2. A user can install an updated version of the renderer and stuff
-   will ‘just work’.
 
-* Load `lib3deligh` at runtime (default).
+By default the lib is *loaded at runtime*.
+
+* Load `lib3deligh` at runtime (default). This has several advantages:
+  1. If you ship your application or library you can ship it without
+     the library. It can still run and will print an informative error
+     if the library can not be loaded.
+  2. A user can install an updated version of the renderer and stuff
+     will ‘just work’.
 * Dynamically link against `lib3delight`.
   * `lib3delight` becomes a dependency. If it can not be found your
     lib/app will not load/start.

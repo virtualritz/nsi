@@ -129,10 +129,13 @@
 //! feature of the same name (see below).
 //!
 //! ## Cargo Features
-//! * [`toolbelt`] – Add convenience methods to [`Context`].
-//!
 //! * [`output`] – Add support for streaming pixels from the renderer to the calling context via
 //!    closures.
+//!
+//! * [`jupyter`] – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
+//!    kernel](https://github.com/google/evcxr)).
+//!
+//! * [`toolbelt`] – Add convenience methods to [`Context`].
 //!
 //! * `nightly` – Enable some unstable features (suggested if you build with a `nightly` toolchain)
 //!
