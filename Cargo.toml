@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.5.7"
+version = "0.6.0"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
