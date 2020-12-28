@@ -37,7 +37,8 @@
 //! 1.  Methods to create nodes, attributes and their connections.
 //!     These are attached to a rendering [`Context`](context::Context).
 //!
-//! 2.  Nodes of different [`NodeType`](context::NodeType)s understood by the renderer.
+//! 2.  Nodes of different [`NodeType`](context::NodeType)s understood by the
+//! renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -50,8 +51,7 @@
 //!
 //! ```
 //! // Create a context to send the scene to.
-//! let ctx = nsi::Context::new(&[])
-//!     .expect("Could not create NSI context.");
+//! let ctx = nsi::Context::new(&[]).expect("Could not create NSI context.");
 //!
 //! // Create a dodecahedron.
 //! let face_index: [u32; 60] =
@@ -94,17 +94,10 @@
 //!         // 5 vertices per each face.
 //!         nsi::unsigneds!("nvertices", &[5; 12]),
 //!         // Render this as a subdivison surface.
-//!         nsi::string!("subdivision.scheme",
-//!             "catmull-clark"
-//!         ),
+//!         nsi::string!("subdivision.scheme", "catmull-clark"),
 //!         // Crease each of our 30 edges a bit.
-//!         nsi::unsigneds!("subdivision.creasevertices",
-//!             &face_index
-//!         ),
-//!         nsi::floats!(
-//!             "subdivision.creasesharpness",
-//!             &[10.; 30]
-//!         ),
+//!         nsi::unsigneds!("subdivision.creasevertices", &face_index),
+//!         nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
 //!     ],
 //! );
 //! ```
@@ -123,11 +116,11 @@
 //! ## Cargo Features
 //! * `toolbelt` – Add convenience methods to [`Context`].
 //!
-//! * `output` – Add support for streaming pixels from the renderer to
-//!     the calling context via closures.
+//! * `output` – Add support for streaming pixels from the renderer to the
+//!   calling context via closures.
 //!
-//! * `nightly` – Enable some unstable features (suggested if you
-//!     build with a `nightly` toolchain)
+//! * `nightly` – Enable some unstable features (suggested if you build with a
+//!   `nightly` toolchain)
 //! ## Linking Style
 //! The 3Delight dynamic library (`lib3delight`) can either be linked to
 //! during build or loaded at runtime.
@@ -141,20 +134,15 @@
 //!
 //! * Load `lib3deligh` at runtime (default).
 //! * Dynamically link against `lib3delight`.
-//!   * `lib3delight` becomes a depdency. If it cannot't be found your
-//!     lib/app will not load/start.
+//!   * `lib3delight` becomes a depdency. If it cannot't be found your lib/app
+//!     will not load/start.
 //!   * The feature is called `link_lib3delight`.
 //!   * You should disable default features (they are not needed/used)
-//!   * in this case:
-//!     ```toml
-//!     [dependencies.nsi]
-//!     version = "0.5.5"
-//!     features = [ "link_lib3delight" ]
-//!     default-features = false
-//!     ```
+//!   * in this case: ```toml [dependencies.nsi] version = "0.5.5" features = [
+//!     "link_lib3delight" ] default-features = false ```
 //! * Download `lib3delight` during build.
-//!   * `lib3delight` is downloaded during build. Note that this may be
-//!     an outdated version. This feature mainly exists for CI purposes.
+//!   * `lib3delight` is downloaded during build. Note that this may be an
+//!     outdated version. This feature mainly exists for CI purposes.
 //!   * The feature is called `download_lib3delight`.
 #![allow(non_snake_case)]
 //#![warn(missing_docs)]
@@ -187,8 +175,7 @@ use self::linked as api;
 extern crate lazy_static;
 
 lazy_static! {
-    static ref NSI_API: api::ApiImpl =
-        api::ApiImpl::new().expect("Could not load lib3delight.");
+    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight.");
 }
 
 // Default modules ----------------------------------------------------
@@ -209,8 +196,7 @@ pub mod toolbelt;
 
 mod tests;
 
-pub use crate::argument::*;
-pub use crate::context::*;
+pub use crate::{argument::*, context::*};
 
 #[cfg(feature = "toolbelt")]
 pub use crate::toolbelt::*;
@@ -219,11 +205,7 @@ pub use crate::toolbelt::*;
 pub mod prelude {}
 
 trait Api {
-    fn NSIBegin(
-        &self,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    ) -> NSIContext_t;
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
     fn NSIEnd(&self, ctx: NSIContext_t);
     fn NSICreate(
         &self,

@@ -148,7 +148,7 @@ not suggested.
 
 The 3Delight dynamic library (`lib3delight`) can either be linked to
 during build or loaded at runtime.
-By default the lib is loaded at runtime. This has several
+By default the lib is *loaded at runtime*. This has several
 advantages:
 1. If you ship your application or library you can ship it without
    the library. It can still run and will print an informative error

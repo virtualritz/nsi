@@ -16,7 +16,6 @@ use nsi::{
     output::{Layer, LayerDepth, PixelFormat},
 };
 use rayon::prelude::*;
-use std::io::Write;
 
 // FIXME: implement this for Context instead of the single method
 // below.
@@ -91,13 +90,7 @@ impl<'a> nsi::Context<'a> {
 
         // Setup an output driver.
         self.create("jupyter_driver", nsi::NodeType::OutputDriver, &[]);
-        self.connect(
-            "jupyter_driver",
-            "",
-            "jupyter_beauty",
-            "outputdrivers",
-            &[],
-        );
+        self.connect("jupyter_driver", "", "jupyter_beauty", "outputdrivers", &[]);
 
         self.set_attribute(
             "jupyter_driver",
@@ -141,8 +134,7 @@ fn pixel_data_to_jupyter(
                         .step_by(channels)
                         .map(|index| {
                             // FIXME: add dithering.
-                            let v: u16 =
-                                (pixel_data[index + offset] * one) as _;
+                            let v: u16 = (pixel_data[index + offset] * one) as _;
 
                             #[cfg(target_endian = "little")]
                             {
@@ -155,9 +147,7 @@ fn pixel_data_to_jupyter(
                         })
                         .collect()
                 }
-                LayerDepth::OneChannelAndAlpha => (0..width
-                    * height
-                    * channels)
+                LayerDepth::OneChannelAndAlpha => (0..width * height * channels)
                     .into_par_iter()
                     .step_by(channels)
                     .flat_map(|index| {
@@ -185,15 +175,9 @@ fn pixel_data_to_jupyter(
                         .flat_map(|index| {
                             let index = index + offset;
                             // FIXME: add dithering.
-                            let r: u16 = (linear_to_srgb(pixel_data[index])
-                                * one)
-                                as _;
-                            let g: u16 = (linear_to_srgb(pixel_data[index + 1])
-                                * one)
-                                as _;
-                            let b: u16 = (linear_to_srgb(pixel_data[index + 2])
-                                * one)
-                                as _;
+                            let r: u16 = (linear_to_srgb(pixel_data[index]) * one) as _;
+                            let g: u16 = (linear_to_srgb(pixel_data[index + 1]) * one) as _;
+                            let b: u16 = (linear_to_srgb(pixel_data[index + 2]) * one) as _;
 
                             #[cfg(target_endian = "little")]
                             {
@@ -213,12 +197,9 @@ fn pixel_data_to_jupyter(
                         .flat_map(|index| {
                             let index = index + offset;
                             // FIXME: add dithering.
-                            let r: u16 =
-                                (normalize(pixel_data[index]) * one) as _;
-                            let g: u16 =
-                                (normalize(pixel_data[index + 1]) * one) as _;
-                            let b: u16 =
-                                (normalize(pixel_data[index + 2]) * one) as _;
+                            let r: u16 = (normalize(pixel_data[index]) * one) as _;
+                            let g: u16 = (normalize(pixel_data[index + 1]) * one) as _;
+                            let b: u16 = (normalize(pixel_data[index + 2]) * one) as _;
 
                             #[cfg(target_endian = "little")]
                             {
@@ -241,28 +222,16 @@ fn pixel_data_to_jupyter(
                             // We ignore pixels with zero alpha.
                             if 0.0 != alpha {
                                 // FIXME: add dithering.
-                                let r: u16 = (linear_to_srgb(
-                                    pixel_data[index] / alpha,
-                                ) * one)
-                                    as _;
-                                let g: u16 = (linear_to_srgb(
-                                    pixel_data[index + 1] / alpha,
-                                ) * one)
-                                    as _;
-                                let b: u16 = (linear_to_srgb(
-                                    pixel_data[index + 2] / alpha,
-                                ) * one)
-                                    as _;
+                                let r: u16 = (linear_to_srgb(pixel_data[index] / alpha) * one) as _;
+                                let g: u16 =
+                                    (linear_to_srgb(pixel_data[index + 1] / alpha) * one) as _;
+                                let b: u16 =
+                                    (linear_to_srgb(pixel_data[index + 2] / alpha) * one) as _;
                                 let a: u16 = (alpha * one) as _;
 
                                 #[cfg(target_endian = "little")]
                                 {
-                                    vec![
-                                        r.to_be(),
-                                        g.to_be(),
-                                        b.to_be(),
-                                        a.to_be(),
-                                    ]
+                                    vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
                                 }
                                 #[cfg(target_endian = "big")]
                                 {
@@ -284,28 +253,14 @@ fn pixel_data_to_jupyter(
                             // We ignore pixels with zero alpha.
                             if 0.0 != alpha {
                                 // FIXME: add dithering.
-                                let r: u16 =
-                                    (normalize(pixel_data[index] / alpha)
-                                        * one)
-                                        as _;
-                                let g: u16 =
-                                    (normalize(pixel_data[index + 1] / alpha)
-                                        * one)
-                                        as _;
-                                let b: u16 =
-                                    (normalize(pixel_data[index + 2] / alpha)
-                                        * one)
-                                        as _;
+                                let r: u16 = (normalize(pixel_data[index] / alpha) * one) as _;
+                                let g: u16 = (normalize(pixel_data[index + 1] / alpha) * one) as _;
+                                let b: u16 = (normalize(pixel_data[index + 2] / alpha) * one) as _;
                                 let a: u16 = (alpha * one) as _;
 
                                 #[cfg(target_endian = "little")]
                                 {
-                                    vec![
-                                        r.to_be(),
-                                        g.to_be(),
-                                        b.to_be(),
-                                        a.to_be(),
-                                    ]
+                                    vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
                                 }
                                 #[cfg(target_endian = "big")]
                                 {
@@ -352,15 +307,12 @@ fn png_to_jupyter(width: usize, height: usize, layer: &Layer, data: &[u8]) {
     }
 
     let mut buffer = Vec::new();
-    let mut png_encoder =
-        png::Encoder::new(&mut buffer, width as _, height as _);
+    let mut png_encoder = png::Encoder::new(&mut buffer, width as _, height as _);
     png_encoder.set_color(match layer.depth() {
         LayerDepth::OneChannel => png::ColorType::Grayscale,
         LayerDepth::OneChannelAndAlpha => png::ColorType::GrayscaleAlpha,
         LayerDepth::Color | LayerDepth::Vector => png::ColorType::RGB,
-        LayerDepth::ColorAndAlpha | LayerDepth::VectorAndAlpha => {
-            png::ColorType::RGBA
-        }
+        LayerDepth::ColorAndAlpha | LayerDepth::VectorAndAlpha => png::ColorType::RGBA,
         _ => unreachable!(),
     });
     png_encoder.set_depth(png::BitDepth::Sixteen);
@@ -370,9 +322,8 @@ fn png_to_jupyter(width: usize, height: usize, layer: &Layer, data: &[u8]) {
         .write_image_data(data)
         .unwrap();
 
-    let mut temp_png = std::fs::File::create("/tmp/jupyter.png").unwrap();
-    temp_png.write_all(&buffer).unwrap();
+    //let mut temp_png = std::fs::File::create("/tmp/jupyter.png").unwrap();
+    //temp_png.write_all(&buffer).unwrap();
 
-    //evcxr_runtime::mime_type("image/png")
-    //  .text(&base64::encode(&buffer));
+    evcxr_runtime::mime_type("image/png").text(&base64::encode(&buffer));
 }

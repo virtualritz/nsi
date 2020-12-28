@@ -1,13 +1,17 @@
 // Needed for the example dode to build.
 extern crate self as nsi;
-use crate::argument::*;
-use crate::*;
+use crate::{argument::*, *};
 // std::slice is imported so the (doc) examples compile w/o hiccups.
 #[allow(unused_imports)]
-use std::{ffi::CString, marker::PhantomData, ops::Drop, slice, vec::Vec};
+use std::{ffi::{CStr,CString}, marker::PhantomData, ops::Drop, slice, vec::Vec, os::raw::{c_int, c_void}};
 
 /// # Context
 /// An ɴsɪ context.
+///
+/// A context is used to describe a scene to the renderer and
+/// request images to be rendered from it.
+/// ## Thread Safety
+/// A context may be used in multiple threads at once.
 /// ## Lifetime
 /// A context can be used without worrying about its lifetime
 /// until you want to store it somewhere, e.g. in a struct.
@@ -57,10 +61,8 @@ impl<'a> Context<'a> {
     /// # Example
     /// ```
     /// // Create rendering context that dumps to stdout.
-    /// let ctx = nsi::Context::new(&[nsi::string!(
-    ///     "streamfilename",
-    ///     "stdout"
-    /// )]).expect("Could not create ɴsɪ context.");
+    /// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
+    ///     .expect("Could not create ɴsɪ context.");
     /// ```
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
@@ -84,8 +86,8 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` - A node handle. This string will uniquely identify
-    ///   the node in the scene.
+    /// * `handle` - A node handle. This string will uniquely identify the node
+    ///   in the scene.
     ///
     ///   If the supplied handle matches an existing node, the function
     ///   does nothing if all other parameters match the call which
@@ -94,15 +96,14 @@ impl<'a> Context<'a> {
     ///   It is acceptable to reuse the same handle inside different
     ///   [`Context`]s.
     ///
-    /// * `node_type` – The type of node to create. You can use
-    ///   [`NodeType`] to create nodes that are in the official NSI
-    ///   specificaion.
-    ///   As this parameter is just a string you can instance other
-    ///   node types that a particualr implementation may provide and
-    ///   which are not part of the official specification.
+    /// * `node_type` – The type of node to create. You can use [`NodeType`] to
+    ///   create nodes that are in the official NSI specificaion. As this
+    ///   parameter is just a string you can instance other node types that a
+    ///   particualr implementation may provide and which are not part of the
+    ///   official specification.
     ///
-    /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are
-    ///   no optional arguments defined as of now*.
+    /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are no
+    ///   optional arguments defined as of now*.
     ///
     /// ```
     /// // Create a context to send the scene to.
@@ -139,22 +140,22 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     /// * `handle` – A handle to a node previously created with
-    ///              [`create()`](Context::create()).
+    ///   [`create()`](Context::create()).
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     ///
     /// # Optional Arguments
-    /// * `"recursive"` ([`Integer`]) – Specifies whether
-    ///   deletion is recursive. By default, only the specified node is
-    ///   deleted. If a value of `1` is given, then nodes which connect
-    ///   to the specified node are recursively removed. Unless they
-    ///   meet one of the following conditions:
-    ///   * They also have connections which do not eventually lead to
-    ///     the specified node.
-    ///   * Their connection to the node to be deleted was created with
-    ///     a `strength` greater than `0`.
+    /// * `"recursive"` ([`Integer`]) – Specifies whether deletion is recursive.
+    ///   By default, only the specified node is deleted. If a value of `1` is
+    ///   given, then nodes which connect to the specified node are recursively
+    ///   removed. Unless they meet one of the following conditions:
+    ///   * They also have connections which do not eventually lead to the
+    ///     specified node.
+    ///   * Their connection to the node to be deleted was created with a
+    ///     `strength` greater than `0`.
     ///
-    ///   This allows, for example, deletion of an entire shader network in a single call.
+    ///   This allows, for example, deletion of an entire shader network in a
+    /// single call.
     #[inline]
     pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
@@ -179,24 +180,15 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     /// * `handle` – A handle to a node previously created with
-    ///     [`create()`](Context::create()).
+    ///   [`create()`](Context::create()).
     ///
     /// * `args` – A [`slice`] of optional [`Arg`] arguments.
     #[inline]
-    pub fn set_attribute(
-        &self,
-        handle: impl Into<Vec<u8>>,
-        args: &ArgSlice<'_, 'a>,
-    ) {
+    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttribute(
-            self.context,
-            handle.as_ptr(),
-            args_len,
-            args_ptr,
-        );
+        NSI_API.NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
     }
 
     /// This function sets time-varying attributes (i.e. motion blurred).
@@ -216,7 +208,7 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     /// * `handle` – A handle to a node previously created with
-    ///     [`create()`](Context::create()).
+    ///   [`create()`](Context::create()).
     ///
     /// * `time` – The time at which to set the value.
     ///
@@ -231,13 +223,7 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttributeAtTime(
-            self.context,
-            handle.as_ptr(),
-            time,
-            args_len,
-            args_ptr,
-        );
+        NSI_API.NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
     }
 
     /// This function deletes any attribute with a name which matches
@@ -253,23 +239,15 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     /// * `handle` – A handle to a node previously created with
-    ///    [`create()`](Context::create()).
+    ///   [`create()`](Context::create()).
     ///
     /// * `name` – The name of the attribute to be deleted/reset.
     #[inline]
-    pub fn delete_attribute(
-        &self,
-        handle: impl Into<Vec<u8>>,
-        name: impl Into<Vec<u8>>,
-    ) {
+    pub fn delete_attribute(&self, handle: impl Into<Vec<u8>>, name: impl Into<Vec<u8>>) {
         let handle = CString::new(handle).unwrap();
         let name = CString::new(name).unwrap();
 
-        NSI_API.NSIDeleteAttribute(
-            self.context,
-            handle.as_ptr(),
-            name.as_ptr(),
-        );
+        NSI_API.NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
     }
 
     /// Create a connection between two elements.
@@ -279,35 +257,31 @@ impl<'a> Context<'a> {
     /// on which the connection is performed must exist.
     ///
     /// # Arguments
-    /// * `from` – The handle of the node from which the connection
-    ///   is made.
+    /// * `from` – The handle of the node from which the connection is made.
     ///
-    /// * `from_attr` – The name of the attribute from which the
-    ///   connection is made. If this is an empty string then the
-    ///   connection is made from the node instead of from a specific
-    ///   attribute of the node.
+    /// * `from_attr` – The name of the attribute from which the connection is
+    ///   made. If this is an empty string then the connection is made from the
+    ///   node instead of from a specific attribute of the node.
     ///
     /// * `to` – The handle of the node to which the connection is made.
     ///
-    /// * `to_attr` – The name of the attribute to which the connection
-    ///   is made. If this is an empty string then the connection is
-    ///   made to the node instead of to a specific attribute of the
-    ///   node.
+    /// * `to_attr` – The name of the attribute to which the connection is made.
+    ///   If this is an empty string then the connection is made to the node
+    ///   instead of to a specific attribute of the node.
     ///
     /// # Optional Arguments
     ///
-    /// * `"value"` – This can be used to change the value of a node's
-    ///   attribute in some contexts. Refer to guidelines on
-    ///   inter-object visibility for more information about the utility
-    ///   of this parameter.
+    /// * `"value"` – This can be used to change the value of a node's attribute
+    ///   in some contexts. Refer to guidelines on inter-object visibility for
+    ///   more information about the utility of this parameter.
     ///
-    /// * `"priority"` ([`Integer`]) – When connecting
-    ///   attribute nodes, indicates in which order the nodes should be
-    ///   considered when evaluating the value of an attribute.
+    /// * `"priority"` ([`Integer`]) – When connecting attribute nodes,
+    ///   indicates in which order the nodes should be considered when
+    ///   evaluating the value of an attribute.
     ///
-    /// * `"strength"` ([`Integer`]) – A connection with a
-    ///   `strength` greater than `0` will *block* the progression of a
-    ///   recursive [`delete()`](Context::delete()).
+    /// * `"strength"` ([`Integer`]) – A connection with a `strength` greater
+    ///   than `0` will *block* the progression of a recursive
+    ///   [`delete()`](Context::delete()).
     #[inline]
     pub fn connect(
         &self,
@@ -394,14 +368,12 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`String`]) – The type of file which
-    ///   will generate the interface calls. This can be one of:
+    /// * `"type"` ([`String`]) – The type of file which will generate the
+    ///   interface calls. This can be one of:
     ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
-    ///     `"filename"` or `"buffer"`/`"size"` arguments to be
-    ///     specified too.
+    ///     `"filename"` or `"buffer"`/`"size"` arguments to be specified too.
     ///
-    ///   * `"lua"` – Execute a Lua script, either from file or inline.
-    ///     See also
+    ///   * `"lua"` – Execute a Lua script, either from file or inline. See also
     ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
     ///
     ///   * `"dynamiclibrary"` – Execute native compiled code in a
@@ -409,22 +381,21 @@ impl<'a> Context<'a> {
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`String`]) – The name of the
-    ///   file which contains the interface calls to include.
+    /// * `"filename"` ([`String`]) – The name of the file which contains the
+    ///   interface calls to include.
     ///
-    /// * `"script"` ([`String`]) – A valid Lua script to
-    ///   execute when `"type"` is set to `"lua"`.
+    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"`
+    ///   is set to `"lua"`.
     ///
     /// * `"buffer"` ([`Pointer`])
-    /// * `"size"` ([`Integer`]) – These two parameters
-    ///   define a memory block that contain ɴsɪ commands to execute.
+    /// * `"size"` ([`Integer`]) – These two parameters define a memory block
+    ///   that contain ɴsɪ commands to execute.
     ///
-    /// * `"backgroundload"` ([`Integer`]) – If this is
-    ///   nonzero, the object may be loaded in a separate thread, at
-    ///   some later time. This requires that further interface calls
-    ///   not directly reference objects defined in the included file.
-    ///   The only guarantee is that the file will be loaded before
-    ///   rendering begins.
+    /// * `"backgroundload"` ([`Integer`]) – If this is nonzero, the object may
+    ///   be loaded in a separate thread, at some later time. This requires that
+    ///   further interface calls not directly reference objects defined in the
+    ///   included file. The only guarantee is that the file will be loaded
+    ///   before rendering begins.
     #[inline]
     pub fn evaluate(&self, args: &ArgSlice<'_, 'a>) {
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
@@ -439,17 +410,15 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`String`]) – Specifies the
-    ///   operation to be performed, which should be one of the
-    ///   following:
-    ///   * `"start"` – This starts rendering the scene in the provided
-    ///     context. The render starts in parallel and the control flow
-    ///     is not blocked.
+    /// * `"action"` ([`String`]) – Specifies the operation to be performed,
+    ///   which should be one of the following:
+    ///   * `"start"` – This starts rendering the scene in the provided context.
+    ///     The render starts in parallel and the control flow is not blocked.
     ///
     ///   * `"wait"` – Wait for a render to finish.
     ///
-    ///   * `"synchronize"` – For an interactive render, apply all the
-    ///     buffered calls to scene’s state.
+    ///   * `"synchronize"` – For an interactive render, apply all the buffered
+    ///     calls to scene’s state.
     ///
     ///   * `"suspend"` – Suspends render in the provided context.
     ///
@@ -457,21 +426,46 @@ impl<'a> Context<'a> {
     ///
     ///   * `"stop"` – Stops rendering in the provided context without
     ///     destroying the scene
-    /// * `"progressive"` ([`Integer`]) – If set to `1`,
-    ///   render the image in a progressive fashion.
+    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a
+    ///   progressive fashion.
     ///
-    /// * `"interactive"` ([`Integer`]) – If set to `1`,
-    ///   the renderer will accept commands to edit scene’s state while
-    ///   rendering. The difference with a normal render is that the
-    ///   render task will not exit even if rendering is finished.
-    ///   Interactive renders are by definition progressive.
+    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will
+    ///   accept commands to edit scene’s state while rendering. The difference
+    ///   with a normal render is that the render task will not exit even if
+    ///   rendering is finished. Interactive renders are by definition
+    ///   progressive.
     ///
     /// * `"frame"` – Specifies the frame number of this render.
     #[inline]
     pub fn render_control(&self, args: &ArgSlice<'_, 'a>) {
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (_, _, mut args_out) = get_c_param_vec(args);
 
-        NSI_API.NSIRenderControl(self.context, args_len, args_ptr);
+        if let Some(arg) = args.iter().find_map(|arg| {
+            if unsafe { CStr::from_bytes_with_nul_unchecked(b"callback\0") } == arg.name.as_c_str() {
+                Some(arg)
+            } else {
+                None
+            }
+        }) {
+            args_out.push(nsi_sys::NSIParam_t {
+                name: b"stoppedcallback\0" as *const _ as _,
+                data: &render_status as *const _ as _,
+                type_: NSIType_t_NSITypePointer as _,
+                arraylength: 1,
+                count: 1,
+                flags: 0,
+            });
+            args_out.push(nsi_sys::NSIParam_t {
+                name: b"stoppedcallbackdata\0" as *const _ as _,
+                data: arg.data.as_c_ptr(),
+                type_: NSIType_t_NSITypePointer as _,
+                arraylength: 1,
+                count: 1,
+                flags: 0,
+            });
+        }
+
+        NSI_API.NSIRenderControl(self.context, args_out.len() as _, args_out.as_ptr());
     }
 }
 
@@ -532,9 +526,11 @@ pub enum NodeType {
     /// A volume loaded from an [OpenVDB](https://www.openvdb.org)
     /// file.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-volume).
+    ///
+    /// Also see the `volume` example.
     Volume,
-    // Geometry type to define environment lighting.
-    // [Documentation]((https://nsi.readthedocs.io/en/latest/nodes.html#node-environment).
+    /// Geometry type to define environment lighting.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-environment).
     Environment,
     /// Set of nodes to create viewing cameras.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
@@ -589,9 +585,103 @@ impl From<NodeType> for Vec<u8> {
 }
 
 /// The status of a *interactive* render session.
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, num_enum::FromPrimitive)]
 pub enum RenderStatus {
-    Completed = 0,
-    Aborted = 1,
-    Synchronized = 2,
-    Restarted = 3,
+    #[num_enum(default)]
+    Completed = nsi_sys::NSIStoppingStatus_NSIRenderCompleted as _,
+    Aborted = nsi_sys::NSIStoppingStatus_NSIRenderAborted as _,
+    Synchronized = nsi_sys::NSIStoppingStatus_NSIRenderSynchronized as _,
+    Restarted = nsi_sys::NSIStoppingStatus_NSIRenderRestarted as _,
+}
+
+/// A closure which is called once per
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+///
+/// It is passed to NSI via the `"callback.open"` attribute on that
+/// node.
+///
+/// The closure is called once, before the renderer starts sending
+/// pixels to the output driver.
+/// # Arguments
+/// The `pixel_format` parameter is an array of strings that details
+/// the composition of the `f32` data that the renderer will send to
+/// the [`FnWrite`] and/or [`FnFinish`] closures.
+///
+/// # Example
+/// ```
+/// # #[cfg(feature = "output")]
+/// # {
+/// # use nsi::output::PixelFormat;
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// let open = nsi::output::OpenCallback::new(
+///     |name: &str, width: usize, height: usize, pixel_format: &nsi::output::PixelFormat| {
+///         println!(
+///             "Resolution: {}×{}\nPixel Format:\n{:?}",
+///             width, height, pixel_format
+///         );
+///         nsi::output::Error::None
+///     },
+/// );
+/// # }
+/// ```
+pub trait FnStatus<'a>: Fn(
+    // The [`Context`] for which this closure was called.
+    &Context,
+    // Status of interactive render session.
+    RenderStatus,
+)
++ 'a {}
+//impl<'a, T: Fn(RenderStatus) + 'a> FnStatus<'a> for T {}
+
+impl<'a, T: Fn(RenderStatus) + 'a + for<'r, 's> Fn(&'r context::Context<'s>, RenderStatus)>
+    FnStatus<'a> for T
+{
+}
+
+// FIXME once trait aliases are in stable.
+/*
+trait FnStatus<'a> = FnMut(
+    // Status of interactive render session.
+    status: RenderStatus
+    )
+    + 'a
+*/
+
+pub struct StatusCallback<'a>(Box<Box<Box<dyn FnStatus<'a>>>>);
+
+impl<'a> StatusCallback<'a> {
+    pub fn new<F>(fn_status: F) -> Self
+    where
+        F: FnStatus<'a>,
+    {
+        StatusCallback(Box::new(Box::new(Box::new(fn_status))))
+    }
+}
+
+impl CallbackPtr for StatusCallback<'_> {
+    #[doc(hidden)]
+    fn to_ptr(self) -> *const core::ffi::c_void {
+        Box::into_raw(self.0) as *const _ as _
+    }
+}
+
+// Trampoline function for the FnStatus callback.
+#[no_mangle]
+pub(crate) extern "C" fn render_status(
+    payload: *const c_void,
+    context: nsi_sys::NSIContext_t,
+    status: c_int,
+) {
+    if !payload.is_null() {
+        let fn_status = unsafe { Box::from_raw(payload as *mut Box<Box<dyn FnStatus>>) };
+        fn_status(
+            &Context {
+                context,
+                _marker: PhantomData,
+            },
+            status.into(),
+        );
+    }
 }

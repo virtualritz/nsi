@@ -26,17 +26,15 @@ impl LinkedApi {
 
 impl Api for LinkedApi {
     #[inline]
-    fn NSIBegin(
-        &self,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    ) -> NSIContext_t {
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t {
         unsafe { NSIBegin(nparams, params) }
     }
+
     #[inline]
     fn NSIEnd(&self, ctx: NSIContext_t) {
         unsafe { NSIEnd(ctx) };
     }
+
     #[inline]
     fn NSICreate(
         &self,
@@ -48,6 +46,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSICreate(ctx, handle, type_, nparams, params) };
     }
+
     #[inline]
     fn NSIDelete(
         &self,
@@ -58,6 +57,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIDelete(ctx, handle, nparams, params) };
     }
+
     #[inline]
     fn NSISetAttribute(
         &self,
@@ -68,6 +68,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSISetAttribute(ctx, object, nparams, params) };
     }
+
     #[inline]
     fn NSISetAttributeAtTime(
         &self,
@@ -79,6 +80,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSISetAttributeAtTime(ctx, object, time, nparams, params) };
     }
+
     #[inline]
     fn NSIDeleteAttribute(
         &self,
@@ -88,6 +90,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIDeleteAttribute(ctx, object, name) };
     }
+
     #[inline]
     fn NSIConnect(
         &self,
@@ -99,10 +102,9 @@ impl Api for LinkedApi {
         nparams: ::std::os::raw::c_int,
         params: *const NSIParam_t,
     ) {
-        unsafe {
-            NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params)
-        };
+        unsafe { NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params) };
     }
+
     #[inline]
     fn NSIDisconnect(
         &self,
@@ -114,6 +116,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIDisconnect(ctx, from, from_attr, to, to_attr) };
     }
+
     #[inline]
     fn NSIEvaluate(
         &self,
@@ -123,6 +126,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIEvaluate(ctx, nparams, params) };
     }
+
     #[inline]
     fn NSIRenderControl(
         &self,
@@ -132,6 +136,7 @@ impl Api for LinkedApi {
     ) {
         unsafe { NSIRenderControl(ctx, nparams, params) };
     }
+
     #[cfg(any(feature = "output", feature = "jupyter"))]
     #[inline]
     fn DspyRegisterDriver(
@@ -142,14 +147,6 @@ impl Api for LinkedApi {
         p_close: ndspy_sys::PtDspyCloseFuncPtr,
         p_query: ndspy_sys::PtDspyQueryFuncPtr,
     ) -> ndspy_sys::PtDspyError {
-        unsafe {
-            ndspy_sys::DspyRegisterDriver(
-                driver_name,
-                p_open,
-                p_write,
-                p_close,
-                p_query,
-            )
-        }
+        unsafe { ndspy_sys::DspyRegisterDriver(driver_name, p_open, p_write, p_close, p_query) }
     }
 }

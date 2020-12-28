@@ -7,9 +7,7 @@ use std::{ffi::CString, marker::PhantomData};
 use crate::*;
 
 #[inline]
-pub(crate) fn get_c_param_vec(
-    args: &ArgSlice,
-) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
+pub(crate) fn get_c_param_vec(args: &ArgSlice) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
     let args = args
         .iter()
         .map(|arg| NSIParam_t {
@@ -114,10 +112,6 @@ pub enum ArgData<'a, 'b> {
     Integer,
     /// An [[`i32`]] array.
     Integers(Integers<'a>),
-    /// Single [`i32`] value.
-    Unsigned,
-    /// An [[`i32`]] array.
-    Unsigneds(Unsigneds<'a>),
     /// A [`String`].
     String(String),
     /// A [[`String`]] array.
@@ -243,8 +237,6 @@ macro_rules! nsi_tuple_data_def {
 nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
-nsi_data_def!(u32, Unsigned, Type::Integer);
-//nsi_data_def!(*const core::ffi::c_void, Pointer, Type::Pointer);
 
 /// Reference type *with* lifetime guaratees.
 ///
@@ -269,9 +261,7 @@ nsi_data_def!(u32, Unsigned, Type::Integer);
 /// // a payload to it through the FFI boundary
 /// ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
 /// ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
-/// let payload = Payload {
-///     some_data: 42,
-/// };
+/// let payload = Payload { some_data: 42 };
 /// ctx.set_attribute(
 ///     "driver",
 ///     &[
@@ -349,6 +339,7 @@ impl<'a> ArgDataMethods for Callback<'a> {
         self.data
     }
 }
+
 /// Raw pointer type *without* lifetime guaratees.
 ///
 /// This can't guarantee that the data this points to
@@ -422,7 +413,6 @@ impl ArgDataMethods for String {
 nsi_data_array_def!(f32, Floats, Type::Float);
 nsi_data_array_def!(f64, Doubles, Type::Double);
 nsi_data_array_def!(i32, Integers, Type::Integer);
-nsi_data_array_def!(u32, Unsigneds, Type::Integer);
 nsi_data_array_def!(f32, Colors, Type::Color);
 nsi_data_array_def!(f32, Points, Type::Point);
 nsi_data_array_def!(f32, Vectors, Type::Vector);
@@ -449,8 +439,7 @@ impl<'a> References<'a> {
     pub fn new<T>(data: &'a [Option<&'a T>]) -> Self {
         debug_assert!(data.len() % Type::Pointer.element_size() == 0);
 
-        let mut c_data =
-            Vec::<*const core::ffi::c_void>::with_capacity(data.len());
+        let mut c_data = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
 
         for e in data {
             c_data.push(
@@ -660,22 +649,6 @@ macro_rules! integers {
     };
 }
 
-/// Create a [`Unsigned`] integer argument.
-#[macro_export]
-macro_rules! unsigned {
-    ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Unsigned::new($value)))
-    };
-}
-
-/// Create a [`Unsigned`] integer array argument.
-#[macro_export]
-macro_rules! unsigneds {
-    ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Unsigneds::new($value)))
-    };
-}
-
 /// Create a [`Color`] argument.
 #[macro_export]
 macro_rules! color {
@@ -786,10 +759,7 @@ macro_rules! double_matrix {
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new(
-            $name,
-            nsi::ArgData::from(nsi::DoubleMatrices::new($value)),
-        )
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrices::new($value)))
     };
 }
 
@@ -797,11 +767,8 @@ macro_rules! double_matrices {
 /// # Example
 /// ```
 /// // Create rendering context.
-/// let ctx = nsi::Context::new(&[nsi::string!(
-///     "streamfilename",
-///     "stdout"
-/// )])
-/// .expect("Could not create NSI context.");
+/// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
+///     .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
 macro_rules! string {
@@ -815,11 +782,13 @@ macro_rules! string {
 /// ```
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// // One of these is not an actor:
-/// ctx.set_attribute("dummy", &[
-///     nsi::strings!("actors",
+/// ctx.set_attribute(
+///     "dummy",
+///     &[nsi::strings!(
+///         "actors",
 ///         &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt"]
-///     )
-/// ]);
+///     )],
+/// );
 /// ```
 #[macro_export]
 macro_rules! strings {

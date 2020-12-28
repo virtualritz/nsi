@@ -1,10 +1,12 @@
 use exr::prelude::*;
 use png;
 use polyhedron_ops as p_ops;
-use std::fs::File;
-use std::io::BufWriter;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::{
+    fs::File,
+    io::BufWriter,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 mod render;
 use render::*;
@@ -18,10 +20,7 @@ pub fn main() {
     // If you decide to write data directly into a file in
     // WriteCallback.
     let open = nsi::output::OpenCallback::new(
-        |_name: &str,
-         width: usize,
-         height: usize,
-         format: &nsi::output::PixelFormat| {
+        |_name: &str, width: usize, height: usize, format: &nsi::output::PixelFormat| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
             // Create a properly size buffer to receive our pixel data.
             *quantized_pixel_data = vec![0u8; width * height * format.channels()];
@@ -64,14 +63,11 @@ pub fn main() {
                         // unpremultiplied pixels and that is what
                         // we will write the 8bit data to, at the end.
                         quantized_pixel_data[index + 0] =
-                            (linear_to_srgb(pixel_data[index + 0] / alpha)
-                                * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 0] / alpha) * 255.0) as _;
                         quantized_pixel_data[index + 1] =
-                            (linear_to_srgb(pixel_data[index + 1] / alpha)
-                                * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 1] / alpha) * 255.0) as _;
                         quantized_pixel_data[index + 2] =
-                            (linear_to_srgb(pixel_data[index + 2] / alpha)
-                                * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 2] / alpha) * 255.0) as _;
                         quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
                     }
                 }
@@ -88,16 +84,17 @@ pub fn main() {
     // Finish closure.
     // Called when the all the pixels have been sent via WriteCallback.
     let finish = nsi::output::FinishCallback::new(
-        |_name: &str,
+        |name: &str,
          width: usize,
          height: usize,
          pixel_format: nsi::output::PixelFormat,
          pixel_data: Vec<f32>| {
             let sample = |x: usize, y: usize| {
                 let index = pixel_format.channels() * (x + y * width);
-                // We justa assume the 1st four channels are rgba as we set
-                // this up like so above. In a real world code you would
-                // probably branch depending on pixel_format[n].depth().
+                // We just assume the 1st four channels are rgba as we set
+                // this up like so above. In real world code you would
+                // probably branch depending on pixel_format[n].depth()
+                // (and do so outside this closure, ofc).
                 (
                     pixel_data[index + 0],
                     pixel_data[index + 1],
@@ -107,10 +104,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_f32_file(name,
-                Vec2(width, height),
-                &sample
-            ).unwrap();
+            write_rgba_f32_file(name.to_string() + ".exr", Vec2(width, height), &sample).unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);

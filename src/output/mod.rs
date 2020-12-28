@@ -2,33 +2,32 @@
 //! # Output Driver Callbacks
 //! This module declares several closure types. These can be passed via
 //! [`Callback`](crate::argument::Callback)s to an
-//! [`OutputDriver`](crate::context::NodeType::OutputDriver) node to
-//! stream pixels during and/or after a render, in-memory.
+//! [`OutputDriver`](crate::context::NodeType::OutputDriver) node to stream
+//! pixels during and/or after a render, in-memory.
 //!
 //! There are three types of closure:
 //! * [`FnOpen`] is called once when the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is
-//!   *opened* by the renderer.
+//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *opened* by
+//!   the renderer.
 //!
-//! * [`FnWrite`] is called for each bucket of pixel data the renderer
-//!   sends to the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver).
+//! * [`FnWrite`] is called for each bucket of pixel data the renderer sends to
+//!   the [`OutputDriver`](crate::context::NodeType::OutputDriver).
 //!
 //! * [`FnFinish`] is called once when the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is
-//!   *closed* by the renderer.
+//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *closed* by
+//!   the renderer.
 //!
 //! As a user you can choose how to use this API.
 //!
-//! * To get a single buffer of pixel data when rendering is finished
-//!   it is enough to only implement an [`FnFinish`] closure.
+//! * To get a single buffer of pixel data when rendering is finished it is
+//!   enough to only
+//    implement an [`FnFinish`] closure.
 //!
-//! * To get the pixel buffer updated while the renderer is working
-//!   implemet an [`FnWrite`] closure.
+//! * To get the pixel buffer updated while the renderer is working implemet an
+//!   [`FnWrite`] closure.
 //!
-//! The format of the [`Vec<f32>`] buffer is described by the
-//! [`PixelFormat`] parameter which is passed to both of these
-//! closures.
+//! The format of the [`Vec<f32>`] buffer is described by the [`PixelFormat`]
+//! parameter which is passed to both of these closures.
 //!
 //! ## Example
 //! ```
@@ -107,24 +106,21 @@
 //! ```
 //!
 //! ## Color Profiles
-//!
 //! The pixel color data that the renderer generates is linear and
-//! referred by whatever units you used to describe illuminants in your
-//! scene.
+//! scene-referred. I.e. relative to whatever units you used to describe
+//! illuminants in your scene.
 //!
 //! Using the
 //! [`"colorprofile"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you
-//! can ask the renderer to apply an
-//! [Open Color IO](https://opencolorio.org/) (OCIO)
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! renderer to apply an [Open Color IO](https://opencolorio.org/) (OCIO)
 //! [profile/LUT](https://github.com/colour-science/OpenColorIO-Configs/tree/feature/aces-1.2-config/aces_1.2/luts)
 //! before quantizing (see below).
 //!
-//! Once OCIO has a Rust wrapper you can easily choose to do these
-//! color conversions yourself. In the meantime there is the
-//! [`colorspace`](https://crates.io/crates/colorspace) crate which has
-//! some usefule profiles built in, e.g.
-//! [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
+//! Once OCIO has a [Rust wrapper](https://crates.io/crates/opencolorio) you can easily choose to
+//! do these color conversions yourself. In the meantime there is the
+//! [`colorspace`](https://crates.io/crates/colorspace) crate which has some usefule profiles
+//! built in, e.g. [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
 //!
 //! ```
 //! # let ctx = nsi::Context::new(&[]).unwrap();
@@ -134,7 +130,7 @@
 //!     &[
 //!         // The Ci variable comes from Open Shading Language.
 //!         nsi::string!("variablename", "Ci"),
-//!         // We want the pixel data 'display referred' in sRGB and quantized down to 0.0..255.0.
+//!         // We want the pixel data 'display-referred' in sRGB and quantized down to 0.0..255.0.
 //!         nsi::string!("colorprofile", "/home/luts/linear_to_sRGB.spi1d"),
 //!         nsi::string!("scalarformat", "uint8"),
 //!     ],
@@ -145,18 +141,16 @@
 //!
 //! Using the
 //! [`"scalarformat"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you
-//! can ask the renderer to quantize data down to a suitable range. For
-//! example, setting this to `"uint16"` will get you valid `u16` values
-//! from `0.0..65535.0`, but stored in the `f32`s of the `pixel_data`
-//! buffer.
-//! The value of `1.0` will map to `65535.0` and everything above will
-//! be clipped.
-//! You can just convert these value straight via `f32 as u16`.
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! renderer to quantize data down to a suitable range. For example, setting
+//! this to `"uint16"` will get you valid `u16` values from `0.0..65535.0`, but
+//! stored in the `f32`s of the `pixel_data` buffer. The value of `1.0` will map
+//! to `65535.0` and everything above will be clipped. You can just convert
+//! these value straight via `f32 as u16`.
 //!
-//! Unless you asked the renderer to also apply some color profile (see
-//! above) the data is linear and needs to be made display referred
-//! before is will look good on screen.
+//! Unless you asked the renderer to also apply some color profile (see above)
+//! the data is linear and needs to be made display-referred before is will look
+//! good on screen.
 //!
 //! See the `output` example on how to do this with a simple,
 //! display-referred sRGB curve.
@@ -195,15 +189,13 @@ pub enum Error {
 /// A closure which is called once per
 /// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
 ///
-/// It is passed to NSI via the `"callback.open"` attribute on that
-/// node.
+/// It is passed to NSI via the `"callback.open"` attribute on that node.
 ///
-/// The closure is called once, before the renderer starts sending
-/// pixels to the output driver.
-/// # Arguments
-/// The `pixel_format` parameter is an array of strings that details
-/// the composition of the `f32` data that the renderer will send to
-/// the [`FnWrite`] and/or [`FnFinish`] closures.
+/// The closure is called once, before the renderer starts sending pixels to the
+/// output driver. # Arguments
+/// The `pixel_format` parameter is an array of strings that details the
+/// composition of the `f32` data that the renderer will send to the [`FnWrite`]
+/// and/or [`FnFinish`] closures.
 ///
 /// # Example
 /// ```
@@ -213,15 +205,10 @@ pub enum Error {
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
 /// let open = nsi::output::OpenCallback::new(
-///     |name: &str,
-///      width: usize,
-///      height: usize,
-///      pixel_format: &nsi::output::PixelFormat| {
+///     |name: &str, width: usize, height: usize, pixel_format: &nsi::output::PixelFormat| {
 ///         println!(
 ///             "Resolution: {}×{}\nPixel Format:\n{:?}",
-///             width,
-///             height,
-///             pixel_format
+///             width, height, pixel_format
 ///         );
 ///         nsi::output::Error::None
 ///     },
@@ -239,10 +226,7 @@ pub trait FnOpen<'a>: FnMut(
     &PixelFormat,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, &PixelFormat) -> Error + 'a> FnOpen<'a>
-    for T
-{
-}
+impl<'a, T: FnMut(&str, usize, usize, &PixelFormat) -> Error + 'a> FnOpen<'a> for T {}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -260,11 +244,10 @@ trait FnOpen<'a> = FnMut(
 */
 
 /// A closure which is called for each bucket of pixels the
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance
-/// sends during rendering.
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance sends
+/// during rendering.
 ///
-/// It is passed to NSI via the `"callback.write"` attribute on that
-/// node.
+/// It is passed to NSI via the `"callback.write"` attribute on that node.
 /// # Example
 /// ```
 /// # #[cfg(feature = "output")]
@@ -319,18 +302,7 @@ pub trait FnWrite<'a>: FnMut(
     + 'a {}
 impl<
         'a,
-        T: FnMut(
-            &str,
-            usize,
-            usize,
-            usize,
-            usize,
-            usize,
-            usize,
-            &PixelFormat,
-            &[f32],
-        ) -> Error
-            + 'a,
+        T: FnMut(&str, usize, usize, usize, usize, usize, usize, &PixelFormat, &[f32]) -> Error + 'a,
     > FnWrite<'a> for T
 {
 }
@@ -363,11 +335,10 @@ pub trait FnWrite<'a> = FnMut(
 /// A closure which is called once per
 /// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
 ///
-/// It is passed to NSI via the `"callback.finish"` attribute on that
-/// node.
+/// It is passed to NSI via the `"callback.finish"` attribute on that node.
 ///
-/// The closure is called once, before after renderer has finished
-/// sending pixels to the output driver.
+/// The closure is called once, before after renderer has finished sending
+/// pixels to the output driver.
 /// # Example
 /// ```
 /// # #[cfg(feature = "output")]
@@ -412,10 +383,7 @@ pub trait FnFinish<'a>: FnMut(
     Vec<f32>,
 ) -> Error
 + 'a {}
-impl<'a, T: FnMut(&str, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a>
-    FnFinish<'a> for T
-{
-}
+impl<'a, T: FnMut(&str, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -509,14 +477,13 @@ struct DisplayData<'a> {
     pixel_data: Vec<f32>,
     fn_open: Option<Box<Box<Box<dyn FnOpen<'a>>>>>,
     fn_write: Option<Box<Box<Box<dyn FnWrite<'a>>>>>,
+    fn_finish: Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
     // Unused atm.
     fn_query: Option<Box<Box<Box<dyn FnQuery<'a>>>>>,
-    fn_finish: Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
 }
 
 impl<'a> DisplayData<'a> {
-    /// Used to dissect DisplayData into its components
-    /// before being dropped.
+    /// Used to dissect DisplayData into its components before being dropped.
     #[allow(clippy::type_complexity)]
     fn boxed_into_tuple(
         display_data: Self,
@@ -528,8 +495,8 @@ impl<'a> DisplayData<'a> {
         Vec<f32>,
         Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
     ) {
-        // FIXME: These boxes somehow get deallocated twice if we
-        // don't suppress this here. No f*cking idea why.
+        // FIXME: These boxes somehow get deallocated twice if we don't suppress this
+        // here. No f*cking idea why.
         if let Some(fn_open) = display_data.fn_open {
             Box::into_raw(fn_open);
         }
@@ -551,8 +518,7 @@ impl<'a> DisplayData<'a> {
     }
 }
 
-/// Description of an
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)
+/// Description of an [`OutputLayer`](crate::context::NodeType::OutputLayer)
 /// inside a flat, raw pixel.
 #[derive(Debug, Clone, Default)]
 pub struct Layer {
@@ -580,8 +546,8 @@ impl Layer {
         self.offset
     }
 
-    /// The number of channels in this layer.
-    /// This is a shortcut for calling `depth().channels()`.
+    /// The number of channels in this layer. This is a shortcut for calling
+    /// `depth().channels()`.
     #[inline]
     pub fn channels(&self) -> usize {
         self.depth.channels()
@@ -592,36 +558,32 @@ impl Layer {
 /// composed of.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayerDepth {
-    /// A single channel. Obtained when setting `"layertype"`
-    /// `"scalar"` on an
+    /// A single channel. Obtained when setting `"layertype"` `"scalar"` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     OneChannel,
-    /// A single channel with alpha. Obtained when setting
-    ///  `"layertype"` `"scalar"` and `"withalpha"` `1` on an
+    /// A single channel with alpha. Obtained when setting `"layertype"`
+    /// `"scalar"` and `"withalpha"` `1` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     OneChannelAndAlpha,
-    /// An `rgb` color triplet. Obtained when setting `"layertype"`
-    /// `"color"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// An `rgb` color triplet. Obtained when setting `"layertype"` `"color"` on
+    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
     Color,
-    /// An `rgb` color triplet with alpha. Obtained when setting
-    /// `"layertype"` `"color"` and `"withalpha"` `1` on an
+    /// An `rgb` color triplet with alpha. Obtained when setting `"layertype"`
+    /// `"color"` and `"withalpha"` `1` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     ColorAndAlpha,
-    /// An `xyz` triplet. Obtained when setting `"layertype"`
-    /// `"vector"` on an
+    /// An `xyz` triplet. Obtained when setting `"layertype"` `"vector"` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     Vector,
-    /// An `xyz` triplet with alpha. Obtained when setting
-    /// `"layertype"` `"vector"` and `"withalpha"` `1` on an
+    /// An `xyz` triplet with alpha. Obtained when setting `"layertype"`
+    /// `"vector"` and `"withalpha"` `1` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     VectorAndAlpha,
-    /// An quadruple of values. Obtained when setting
-    /// `"layertype"` `"quad"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// An quadruple of values. Obtained when setting `"layertype"` `"quad"` on
+    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
     FourChannels,
-    /// An quadruple of values with alpha. Obtained when setting
-    /// `"layertype"` `"quad"` and `"withalpha"` `1` on an
+    /// An quadruple of values with alpha. Obtained when setting `"layertype"`
+    /// `"quad"` and `"withalpha"` `1` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     FourChannelsAndAlpha,
 }
@@ -648,23 +610,21 @@ impl LayerDepth {
     }
 }
 
-/// Accessor for the pixel format the renderer sends in [`FnOpen`],
-/// [`FnWrite`] and [`FnFinish`].
+/// Accessor for the pixel format the renderer sends in [`FnOpen`], [`FnWrite`]
+/// and [`FnFinish`].
 ///
-/// This is a stack of
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)
+/// This is a stack of [`OutputLayer`](crate::context::NodeType::OutputLayer)
 /// descriptions.
 ///
 /// # Example
 ///
-/// A typical format for a pixel containing two such layers, an *RGBA*
-/// **color** + **alpha** output layer and a world space **normal**,
-/// will look like this:
+/// A typical format for a pixel containing two such layers, an *RGBA* **color**
+/// + **alpha** output layer and a world space **normal**, will look like this:
 ///
-/// [`name`](Layer::name()) | [`depth`](Layer::depth())                  | [`offset`](Layer::offset())
+/// [`name`](Layer::name()) | [`layer_type`](Layer::layer_type())                  | [`offset`](Layer::offset())
 /// ------------------------|------------------------------------------------------|----------------------------
-/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha) (`rgba`) | `0`
-/// `N_world`               | [`Vector`](LayerDepth::Vector) (`xyz`)                | `4`
+/// `Ci`                    | [`ColorAndAlpha`](LayerType::ColorAndAlpha) (`rgba`) | `0`
+/// `N_world`               | [`Vector`](LayerType::Vector) (`xyz`)                | `4`
 ///
 /// ## RAW Layout
 ///
@@ -676,14 +636,13 @@ impl LayerDepth {
 /// -------|---------|---------|---------|---------|-----|-----|----
 /// Offset | `0`     | `1`     | `2`     | `3`     | `4` | `5` | `6`
 ///
-/// The offset is the offset into the pixel buffer. For example, the
-/// **y** coordinate of the the normal will be stored in channel at
-/// offset `5`.
+/// The `offset` is the offset into the pixel buffer to obtain the 1st element.
+/// For example, the **y** coordinate of the the normal will be stored in
+/// channel at offset `5` (`4` + `1`).
 ///
 /// The pixel format is in the order in which
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were
-/// defined in the [ɴsɪ
-/// scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were defined in the
+/// [ɴsɪ scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
 #[derive(Debug, Default)]
 pub struct PixelFormat(Vec<Layer>);
 
@@ -708,12 +667,9 @@ impl PixelFormat {
                 .filter_map(|format| {
                     // FIXME: add support for specifying AOV and detect type
                     // for indexing (.r vs .x)
-                    let name = unsafe { CStr::from_ptr(format.1.name) }
-                        .to_str()
-                        .unwrap();
+                    let name = unsafe { CStr::from_ptr(format.1.name) }.to_str().unwrap();
 
-                    let (layer_name, channel_id) =
-                        Self::split_into_layer_name_and_channel_id(name);
+                    let (layer_name, channel_id) = Self::split_into_layer_name_and_channel_id(name);
 
                     // A boundary between two layers will be when the postfix
                     // is a combination of those above.
@@ -745,16 +701,10 @@ impl PixelFormat {
                         // layer.
                         if layer_name.is_empty() && "a" == channel_id {
                             depth = match &depth {
-                                LayerDepth::OneChannel => {
-                                    LayerDepth::OneChannelAndAlpha
-                                }
+                                LayerDepth::OneChannel => LayerDepth::OneChannelAndAlpha,
                                 LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                LayerDepth::Vector => {
-                                    LayerDepth::VectorAndAlpha
-                                }
-                                LayerDepth::FourChannels => {
-                                    LayerDepth::FourChannelsAndAlpha
-                                }
+                                LayerDepth::Vector => LayerDepth::VectorAndAlpha,
+                                LayerDepth::FourChannels => LayerDepth::FourChannelsAndAlpha,
                                 _ => unreachable!(),
                             };
                         }
@@ -770,12 +720,8 @@ impl PixelFormat {
                                             LayerDepth::OneChannel => {
                                                 LayerDepth::OneChannelAndAlpha
                                             }
-                                            LayerDepth::Color => {
-                                                LayerDepth::ColorAndAlpha
-                                            }
-                                            LayerDepth::Vector => {
-                                                LayerDepth::VectorAndAlpha
-                                            }
+                                            LayerDepth::Color => LayerDepth::ColorAndAlpha,
+                                            LayerDepth::Vector => LayerDepth::VectorAndAlpha,
                                             _ => unreachable!(),
                                         };
                                     } else {
@@ -841,6 +787,7 @@ impl PixelFormat {
 
 impl Index<usize> for PixelFormat {
     type Output = Layer;
+
     #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
@@ -856,14 +803,9 @@ fn get_parameter_triple_box<T: ?Sized>(
     for p in parameters.iter() {
         let p_name = unsafe { CStr::from_ptr(p.name) }.to_str().unwrap();
 
-        if name == p_name
-            && type_ == p.valueType as _
-            && len == p.valueCount as _
-        {
+        if name == p_name && type_ == p.valueType as _ && len == p.valueCount as _ {
             if !p.value.is_null() {
-                return Some(unsafe {
-                    Box::from_raw(p.value as *mut Box<Box<T>>)
-                });
+                return Some(unsafe { Box::from_raw(p.value as *mut Box<Box<T>>) });
             } else {
                 // Parameter exists but value is missing –
                 // exit quietly.
@@ -908,29 +850,14 @@ pub(crate) extern "C" fn image_open(
         height: height as _,
         pixel_format: PixelFormat::default(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
-        fn_open: get_parameter_triple_box::<dyn FnOpen>(
-            "callback.open",
-            b'p',
-            1,
-            parameters,
-        ),
-        fn_write: get_parameter_triple_box::<dyn FnWrite>(
-            "callback.write",
-            b'p',
-            1,
-            parameters,
-        ),
-        fn_query: None, // get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1, parameters),
-        fn_finish: get_parameter_triple_box::<dyn FnFinish>(
-            "callback.finish",
-            b'p',
-            1,
-            parameters,
-        ),
+        fn_open: get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters),
+        fn_write: get_parameter_triple_box::<dyn FnWrite>("callback.write", b'p', 1, parameters),
+        fn_query: None, /* get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1,
+                         * parameters), */
+        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
     });
 
-    let format =
-        unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
+    let format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
 
     // We want f32/channel data.
     format
@@ -972,16 +899,12 @@ pub(crate) extern "C" fn image_query(
 ) -> ndspy_sys::PtDspyError {
     match query_type {
         ndspy_sys::PtDspyQueryType_PkRenderProgress => {
-            if (data_len as usize)
-                < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
+            if (data_len as usize) < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
             {
                 Error::BadParameters
             } else {
                 *unsafe {
-                    &mut std::mem::transmute::<
-                        _,
-                        ndspy_sys::PtDspyRenderProgressFuncPtr,
-                    >(data)
+                    &mut std::mem::transmute::<_, ndspy_sys::PtDspyRenderProgressFuncPtr>(data)
                 } = Some(image_progress);
                 Error::None
             }
@@ -1010,9 +933,7 @@ pub(crate) extern "C" fn image_write(
     let pixel_data = unsafe {
         std::slice::from_raw_parts(
             pixel_data as *const f32,
-            pixel_length
-                * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min))
-                    as usize,
+            pixel_length * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min)) as usize,
         )
     };
 
@@ -1020,14 +941,11 @@ pub(crate) extern "C" fn image_write(
 
     let mut source_index = 0;
     for y in y_min as usize..y_max_plus_one as _ {
-        let dest_index =
-            (y * display_data.width + x_min as usize) * pixel_length;
+        let dest_index = (y * display_data.width + x_min as usize) * pixel_length;
 
         // We memcpy() each scanline.
         (&mut display_data.pixel_data[dest_index..dest_index + bucket_width])
-            .copy_from_slice(
-                &(pixel_data[source_index..source_index + bucket_width]),
-            );
+            .copy_from_slice(&(pixel_data[source_index..source_index + bucket_width]));
 
         source_index += bucket_width;
     }
@@ -1056,8 +974,7 @@ pub(crate) extern "C" fn image_write(
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    let display_data =
-        unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
+    let display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let (name, width, height, pixel_format, pixel_data, fn_finish) =
         DisplayData::boxed_into_tuple(*display_data);

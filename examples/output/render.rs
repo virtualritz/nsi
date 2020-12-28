@@ -83,10 +83,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
         "ground_xform_0",
         &[nsi::double_matrix!(
             "transformationmatrix",
-            &[
-                1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0.,
-                1.,
-            ]
+            &[1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0., 1.,]
         )],
     );
 
@@ -96,7 +93,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
     c.create("ground_attrib", nsi::NodeType::Attributes, &[]);
     c.set_attribute(
         "ground_attrib",
-        &[nsi::unsigned!("visibility.camera", false as _)],
+        &[nsi::integer!("visibility.camera", false as _)],
     );
     c.connect("ground_attrib", "", "ground_0", "geometryattributes", &[]);
 
@@ -174,7 +171,7 @@ pub(crate) fn nsi_render<'a>(
         &[
             nsi::integer!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "spiral"),
-            nsi::unsigned!("quality.shadingsamples", samples),
+            nsi::integer!("quality.shadingsamples", samples as _),
             nsi::integer!("maximumraydepth.reflection", 6),
         ],
     );

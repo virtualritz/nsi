@@ -19,10 +19,7 @@ fn default_slot_objects(slot: Option<&str>) -> &str {
 /// Generates a random handle if `handle` is `None` or falls through,
 /// otherwise.
 #[cfg(debug_assertions)]
-pub fn generate_or_use_handle(
-    handle: Option<&str>,
-    prefix: Option<&str>,
-) -> String {
+pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
@@ -36,16 +33,11 @@ pub fn generate_or_use_handle(
 }
 
 #[cfg(not(debug_assertions))]
-pub fn generate_or_use_handle(
-    handle: Option<&str>,
-    _prefix: Option<&str>,
-) -> String {
+pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
-            use rand::{
-                distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng,
-            };
+            use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
             use std::iter;
             let mut rng = SmallRng::from_entropy();
 
@@ -65,8 +57,8 @@ impl<'a> nsi::Context<'a> {
     /// # Arguments
     /// * `to` – Node to connect to downstream.
     ///
-    /// * `slot` – Slot on target node to connect to.
-    ///     If [`None`], `"objects"` is used.
+    /// * `slot` – Slot on target node to connect to. If [`None`], `"objects"`
+    ///   is used.
     ///
     /// * `handle` – Handle of node to append.
     ///
@@ -86,7 +78,8 @@ impl<'a> nsi::Context<'a> {
     ///         // Use "objects" slot.
     ///         None,
     ///         "tetrahedron",
-    ///     ).0,
+    ///     )
+    ///     .0,
     /// );
     /// ```
     #[inline]
@@ -112,13 +105,13 @@ impl<'a> nsi::Context<'a> {
     /// # Arguments
     /// * `to` – Node to connect to downstream.
     ///
-    /// * `to_slot` – Slot on `to` node to connect to.
-    ///     If [`None`], `"objects"` is used.    .
+    /// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"`
+    ///   is used.    .
     ///
     /// * `handle` – Handle of node to insert.
     ///
-    /// * `handle_slot` – Slot on `handle` node to connect to.
-    ///     If [`None`], `"objects"` is used.
+    /// * `handle_slot` – Slot on `handle` node to connect to. If [`None`],
+    ///   `"objects"` is used.
     ///
     /// * `from` – Node to connect tp upstream.
     ///
@@ -199,8 +192,7 @@ impl<'a> nsi::Context<'a> {
             handle.as_str(),
             &[double_matrix!(
                 "transformationmatrix",
-                uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale))
-                    .as_array()
+                uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale)).as_array()
             )],
         );
 
@@ -215,11 +207,7 @@ impl<'a> nsi::Context<'a> {
     ///
     /// Returns `handle` for convenience.
     #[inline]
-    pub fn translation(
-        &self,
-        handle: Option<&str>,
-        translate: &[f64; 3],
-    ) -> String {
+    pub fn translation(&self, handle: Option<&str>, translate: &[f64; 3]) -> String {
         let handle = generate_or_use_handle(handle, Some("translation"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
@@ -227,8 +215,7 @@ impl<'a> nsi::Context<'a> {
             handle.as_str(),
             &[double_matrix!(
                 "transformationmatrix",
-                uv::DMat4::from_translation(uv::DVec3::from(translate))
-                    .as_array()
+                uv::DMat4::from_translation(uv::DVec3::from(translate)).as_array()
             )],
         );
 
@@ -241,15 +228,10 @@ impl<'a> nsi::Context<'a> {
     ///
     /// If `handle` is [`None`] a random handle is generated.
     ///
-    /// The `angle` is specified in radians.
+    /// The `angle` is specified in degrees.
     ///
     /// Returns `handle` for convenience.
-    pub fn rotation(
-        &self,
-        handle: Option<&str>,
-        angle: f64,
-        axis: &[f64; 3],
-    ) -> String {
+    pub fn rotation(&self, handle: Option<&str>, angle: f64, axis: &[f64; 3]) -> String {
         let handle = generate_or_use_handle(handle, Some("rotation"));
         self.create(handle.as_str(), nsi::NodeType::Transform, &[]);
 
@@ -258,10 +240,8 @@ impl<'a> nsi::Context<'a> {
             &[double_matrix!(
                 "transformationmatrix",
                 uv::DMat4::from_angle_plane(
-                    angle as _,
-                    uv::DBivec3::from_normalized_axis(
-                        uv::DVec3::from(axis).normalized()
-                    )
+                    (angle * core::f64::consts::TAU / 90.0) as _,
+                    uv::DBivec3::from_normalized_axis(uv::DVec3::from(axis).normalized())
                 )
                 .as_array()
             )],
@@ -271,7 +251,6 @@ impl<'a> nsi::Context<'a> {
     }
 
     /// **Convenience method; not part of the official ɴsɪ API.**
-    ///
     pub fn look_at_camera(
         &self,
         handle: Option<&str>,
@@ -304,11 +283,11 @@ impl<'a> nsi::Context<'a> {
     /// bounding box under the specified field-of-view and aspect ratio
     /// (*with*÷*height*).
     /// # Arguments
-    /// * `direction` – The axis the camera should be looking along.
-    ///     Does *not* need to be normalized.
+    /// * `direction` – The axis the camera should be looking along. Does *not*
+    ///   need to be normalized.
     /// * `up` – A direction to look
-    /// * `bounding_box` – Axis-aligned bounding box in the form
-    ///     `[x_min, y_min, z_min, x_max, y_max, z_max]`.
+    /// * `bounding_box` – Axis-aligned bounding box in the form `[x_min, y_min,
+    ///   z_min, x_max, y_max, z_max]`.
     pub fn look_at_bounding_box_perspective_camera(
         &self,
         handle: Option<&str>,
@@ -323,9 +302,7 @@ impl<'a> nsi::Context<'a> {
         let vertical_fov = if let Some(aspect_ratio) = aspect_ratio {
             if aspect_ratio < 1.0 {
                 // Portrait.
-                (aspect_ratio
-                    * (vertical_fov * core::f32::consts::PI / 90.0).tan())
-                .atan()
+                (aspect_ratio * (vertical_fov * core::f32::consts::PI / 90.0).tan()).atan()
             } else {
                 vertical_fov * core::f32::consts::TAU / 90.0
             }
@@ -352,8 +329,7 @@ impl<'a> nsi::Context<'a> {
             })
             .sqrt();
 
-        let distance =
-            (bounding_sphere_radius * 2.0) / (vertical_fov * 0.5).sin();
+        let distance = (bounding_sphere_radius * 2.0) / (vertical_fov * 0.5).sin();
 
         let handle = generate_or_use_handle(handle, Some("look_at"));
 
@@ -364,8 +340,7 @@ impl<'a> nsi::Context<'a> {
             &[double_matrix!(
                 "transformationmatrix",
                 uv::DMat4::look_at(
-                    bounding_box_center
-                        - distance * uv::DVec3::from(direction).normalized(),
+                    bounding_box_center - distance * uv::DVec3::from(direction).normalized(),
                     bounding_box_center,
                     uv::DVec3::from(up)
                 )

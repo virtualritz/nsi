@@ -22,9 +22,9 @@ link_lib3delight = ["nsi-sys/link_lib3delight", "ndspy-sys/link_lib3delight"]
 # running the tests).
 download_lib3delight = ["nsi-sys/download_lib3delight"]
 # Jupyter notebooks integration.
-jupyter = ["base64", "bytemuck", "evcxr_runtime", "png", "rayon", "output" ]
+jupyter = ["base64", "bytemuck", "evcxr_runtime", "png", "rayon", "output"]
 # Pixel streaming support.
-output = ["ndspy-sys", "num_enum"]
+output = ["ndspy-sys"]
 # Scene construction helpers.
 toolbelt = ["petname", "rand", "ultraviolet"]
 # Nightly/unstable features.
@@ -35,37 +35,37 @@ cargo-husky = "1.5.0"
 dl-openvdb-query = "0.1.1"
 exr = "1.0.0"
 png = "0.16.8"
-#polyhedron-ops = { version = "0.2.0", features = [ "nsi" ] }
-polyhedron-ops = { path = "../polyhedron-ops", features = [ "nsi" ] }
+#polyhedron-ops = { version = "0.2.1", features = [ "nsi" ] }
+polyhedron-ops = { path = "../polyhedron-ops", features = ["nsi"] }
 nsi-3delight = { path = "../nsi-3delight" }
 
 [dependencies]
 enum_dispatch = "0.3.4"
 lazy_static = "1.4.0"
+num_enum = "0.5.1"
 nsi-sys = "0.1.13"
 # Optional deps.
 base64 = { version = "0.13.0", optional = true }
 bytemuck = { version = "1.4.1", optional = true }
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
-evcxr_runtime = { version = "1.0.0", optional = true }
+evcxr_runtime = { version = "1.1.0", optional = true }
 png = { version = "0.16.8", optional = true }
 ndspy-sys = { version = "0.1.7", optional = true }
-num_enum = { version = "0.5.1", optional = true }
-rand = { version = "0.8.0", features = [ "small_rng" ], optional = true }
+rand = { version = "0.8.0", features = ["small_rng"], optional = true }
 rayon = { version = "1.5.0", optional = true }
-ultraviolet = { version = "0.7.5", features = [ "f64" ], optional = true }
-petname = { version = "1.0.12", optional = true }
+ultraviolet = { version = "0.7.5", features = ["f64"], optional = true }
+petname = { version = "1.0.13", optional = true }
 
 [[example]]
 path = "examples/output/main.rs"
 name = "output"
-required-features = [ "output", "toolbelt" ]
+required-features = ["output", "toolbelt"]
 
 [[example]]
 path = "examples/volume/main.rs"
 name = "volume"
-required-features = [ "toolbelt" ]
+required-features = ["toolbelt"]
 
 [package.metadata.docs.rs]
 features = ["output", "toolbelt", "nightly"]
