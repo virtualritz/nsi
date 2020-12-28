@@ -3,10 +3,16 @@ extern crate self as nsi;
 use crate::{argument::*, *};
 // std::slice is imported so the (doc) examples compile w/o hiccups.
 #[allow(unused_imports)]
-use std::{ffi::{CStr,CString}, marker::PhantomData, ops::Drop, slice, vec::Vec, os::raw::{c_int, c_void}};
+use std::{
+    ffi::{CStr, CString},
+    marker::PhantomData,
+    ops::Drop,
+    os::raw::{c_int, c_void},
+    slice,
+    vec::Vec,
+};
 
-/// # Context
-/// An ɴsɪ context.
+/// # An ɴsɪ Context.
 ///
 /// A context is used to describe a scene to the renderer and
 /// request images to be rendered from it.
@@ -344,52 +350,47 @@ impl<'a> Context<'a> {
         );
     }
 
-    /// This function includes a block of interface calls from an
-    /// external source into the current scene. It blends together the
-    /// concepts of a file include, commonly known as an  *archive*,
-    /// with that of procedural include which is traditionally a
-    /// compiled executable. Both are the same idea expressed in a
-    /// different language.
+    /// This function includes a block of interface calls from an external source into the current
+    /// scene. It blends together the concepts of a file include, commonly known as an *archive*,
+    /// with that of procedural include which is traditionally a compiled executable. Both are the
+    /// same idea expressed in a different language.
     ///
     /// Note that for delayed procedural evaluation you should use a
     /// [`Procedural`](NodeType::Procedural) node.
     ///
     /// The ɴsɪ adds a third option which sits in-between — [Lua
-    /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html).
-    /// They are more powerful than a simple included file yet they are
-    /// also easier to generate as they do not require compilation
+    /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html). They are more powerful than a
+    /// simple included file yet they are also easier to generate as they do not require
+    /// compilation.
     ///
-    /// For example, it is realistic to export a whole new script for
-    /// every frame of an animation. It could also be done for every
-    /// character in a frame. This gives great flexibility in how
+    /// For example, it is realistic to export a whole new script for every frame of an animation.
+    /// It could also be done for every character in a frame. This gives great flexibility in how
     /// components of a scene are put together.
     ///
     /// The ability to load ɴsɪ commands from memory is also provided.
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`String`]) – The type of file which will generate the
-    ///   interface calls. This can be one of:
-    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
-    ///     `"filename"` or `"buffer"`/`"size"` arguments to be specified too.
+    /// * `"type"` ([`String`]) – The type of file which will generate the interface calls. This
+    ///   can be one of:
+    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either `"filename"` or
+    ///     `"buffer"`/`"size"` arguments to be specified too.
     ///
     ///   * `"lua"` – Execute a Lua script, either from file or inline. See also
     ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
     ///
-    ///   * `"dynamiclibrary"` – Execute native compiled code in a
-    ///     loadable library. See
+    ///   * `"dynamiclibrary"` – Execute native compiled code in a loadable library. See
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`String`]) – The name of the file which contains the
-    ///   interface calls to include.
+    /// * `"filename"` ([`String`]) – The name of the file which contains the interface calls to
+    ///   include.
     ///
-    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"`
-    ///   is set to `"lua"`.
+    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"` is set to `"lua"`.
     ///
     /// * `"buffer"` ([`Pointer`])
-    /// * `"size"` ([`Integer`]) – These two parameters define a memory block
-    ///   that contain ɴsɪ commands to execute.
+    /// * `"size"` ([`Integer`]) – These two parameters define a memory block that contain ɴsɪ
+    ///   commands to execute.
     ///
     /// * `"backgroundload"` ([`Integer`]) – If this is nonzero, the object may
     ///   be loaded in a separate thread, at some later time. This requires that
@@ -403,36 +404,33 @@ impl<'a> Context<'a> {
         NSI_API.NSIEvaluate(self.context, args_len, args_ptr);
     }
 
-    /// This function is the only control function of the api. It is
-    /// responsible of starting, suspending and stopping the render.
-    /// It also allows for synchronizing the render with interactive
-    /// calls that might have been issued.
+    /// This function is the only control function of the API.
+    ///
+    /// It is responsible of starting, suspending and stopping the render. It also allows for
+    /// synchronizing the render with interactive calls that might have been issued.
     ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`String`]) – Specifies the operation to be performed,
-    ///   which should be one of the following:
-    ///   * `"start"` – This starts rendering the scene in the provided context.
-    ///     The render starts in parallel and the control flow is not blocked.
+    /// * `"action"` ([`String`]) – Specifies the operation to be performed, which should be one
+    ///   of the following:
+    ///   * `"start"` – This starts rendering the scene in the provided context. The render starts
+    ///     in parallel and the control flow is not blocked.
     ///
     ///   * `"wait"` – Wait for a render to finish.
     ///
-    ///   * `"synchronize"` – For an interactive render, apply all the buffered
-    ///     calls to scene’s state.
+    ///   * `"synchronize"` – For an interactive render, apply all the buffered calls to scene’s
+    ///     state.
     ///
     ///   * `"suspend"` – Suspends render in the provided context.
     ///
     ///   * `"resume"` – Resumes a previously suspended render.
     ///
-    ///   * `"stop"` – Stops rendering in the provided context without
-    ///     destroying the scene
-    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a
-    ///   progressive fashion.
+    ///   * `"stop"` – Stops rendering in the provided context without destroying the scene.
+    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a progressive fashion.
     ///
-    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will
-    ///   accept commands to edit scene’s state while rendering. The difference
-    ///   with a normal render is that the render task will not exit even if
-    ///   rendering is finished. Interactive renders are by definition
+    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will accept commands to edit
+    ///   scene’s state while rendering. The difference with a normal render is that the render
+    ///   task will not exit even if rendering is finished. Interactive renders are by definition
     ///   progressive.
     ///
     /// * `"frame"` – Specifies the frame number of this render.
@@ -440,8 +438,12 @@ impl<'a> Context<'a> {
     pub fn render_control(&self, args: &ArgSlice<'_, 'a>) {
         let (_, _, mut args_out) = get_c_param_vec(args);
 
+        let fn_pointer: nsi_sys::NSIRenderStopped_t =
+            Some(render_status as extern "C" fn(*mut c_void, i32, i32));
+
         if let Some(arg) = args.iter().find_map(|arg| {
-            if unsafe { CStr::from_bytes_with_nul_unchecked(b"callback\0") } == arg.name.as_c_str() {
+            if unsafe { CStr::from_bytes_with_nul_unchecked(b"callback\0") } == arg.name.as_c_str()
+            {
                 Some(arg)
             } else {
                 None
@@ -449,15 +451,15 @@ impl<'a> Context<'a> {
         }) {
             args_out.push(nsi_sys::NSIParam_t {
                 name: b"stoppedcallback\0" as *const _ as _,
-                data: &render_status as *const _ as _,
+                data: &fn_pointer as *const _ as _,
                 type_: NSIType_t_NSITypePointer as _,
-                arraylength: 1,
+                arraylength: 0,
                 count: 1,
                 flags: 0,
             });
             args_out.push(nsi_sys::NSIParam_t {
                 name: b"stoppedcallbackdata\0" as *const _ as _,
-                data: arg.data.as_c_ptr(),
+                data: &arg.data.as_c_ptr() as *const _ as _,
                 type_: NSIType_t_NSITypePointer as _,
                 arraylength: 1,
                 count: 1,
@@ -492,8 +494,7 @@ pub enum NodeType {
     /// Expresses relationships of groups of nodes.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-set).
     Set,
-    /// [ᴏsʟ](http://opensource.imageworks.com/osl.html) shader or
-    /// layer in a shader group.
+    /// [ᴏsʟ](http://opensource.imageworks.com/osl.html) shader or layer in a shader group.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-shader).
     Shader,
     /// Container for generic attributes (e.g. visibility).
@@ -523,8 +524,7 @@ pub enum NodeType {
     /// Geometry to be loaded or generated in delayed fashion.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
     Procedural,
-    /// A volume loaded from an [OpenVDB](https://www.openvdb.org)
-    /// file.
+    /// A volume loaded from an [OpenVDB](https://www.openvdb.org) file.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-volume).
     ///
     /// Also see the `volume` example.
@@ -543,11 +543,11 @@ pub enum NodeType {
     /// A target where to output rendered pixels.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
     OutputDriver,
-    /// Describes one render layer to be connected to an `outputdriver`
-    /// node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
+    /// Describes one render layer to be connected to an `outputdriver` node.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
     OutputLayer,
-    /// Describes how the view from a camera node will be rasterized
-    /// into an `outputlayer` node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
+    /// Describes how the view from a camera node will be rasterized into an `outputlayer` node.
+    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
 }
 
@@ -595,36 +595,23 @@ pub enum RenderStatus {
     Restarted = nsi_sys::NSIStoppingStatus_NSIRenderRestarted as _,
 }
 
-/// A closure which is called once per
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+/// A closure which is called to inform about the status of an ongoing render.
 ///
-/// It is passed to NSI via the `"callback.open"` attribute on that
-/// node.
-///
-/// The closure is called once, before the renderer starts sending
-/// pixels to the output driver.
-/// # Arguments
-/// The `pixel_format` parameter is an array of strings that details
-/// the composition of the `f32` data that the renderer will send to
-/// the [`FnWrite`] and/or [`FnFinish`] closures.
+/// It is passed to ɴsɪ via [`render_control()`](Context::render_control())’s the `"callback"` argument.
 ///
 /// # Example
 /// ```
-/// # #[cfg(feature = "output")]
-/// # {
-/// # use nsi::output::PixelFormat;
 /// # let ctx = nsi::Context::new(&[]).unwrap();
-/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
-/// let open = nsi::output::OpenCallback::new(
-///     |name: &str, width: usize, height: usize, pixel_format: &nsi::output::PixelFormat| {
-///         println!(
-///             "Resolution: {}×{}\nPixel Format:\n{:?}",
-///             width, height, pixel_format
-///         );
-///         nsi::output::Error::None
+/// let status_callback = nsi::context::StatusCallback::new(
+///     |_ctx: &nsi::context::Context, status: nsi::context::RenderStatus| {
+///         println!("Status: {:?}", status);
 ///     },
 /// );
-/// # }
+///
+/// ctx.render_control(&[
+///     nsi::string!("action", "start"),
+///     nsi::callback!("callback", status_callback),
+/// ]);
 /// ```
 pub trait FnStatus<'a>: Fn(
     // The [`Context`] for which this closure was called.
@@ -633,10 +620,12 @@ pub trait FnStatus<'a>: Fn(
     RenderStatus,
 )
 + 'a {}
-//impl<'a, T: Fn(RenderStatus) + 'a> FnStatus<'a> for T {}
 
-impl<'a, T: Fn(RenderStatus) + 'a + for<'r, 's> Fn(&'r context::Context<'s>, RenderStatus)>
-    FnStatus<'a> for T
+#[doc(hidden)]
+impl<
+        'a,
+        T: Fn(&Context, RenderStatus) + 'a + for<'r, 's> Fn(&'r context::Context<'s>, RenderStatus),
+    > FnStatus<'a> for T
 {
 }
 
@@ -649,14 +638,15 @@ trait FnStatus<'a> = FnMut(
     + 'a
 */
 
-pub struct StatusCallback<'a>(Box<Box<Box<dyn FnStatus<'a>>>>);
+/// Wrapper to pass a [`FnStatus`] closure to a [`Context`].
+pub struct StatusCallback<'a>(Box<Box<dyn FnStatus<'a>>>);
 
 impl<'a> StatusCallback<'a> {
     pub fn new<F>(fn_status: F) -> Self
     where
         F: FnStatus<'a>,
     {
-        StatusCallback(Box::new(Box::new(Box::new(fn_status))))
+        StatusCallback(Box::new(Box::new(fn_status)))
     }
 }
 
@@ -670,18 +660,21 @@ impl CallbackPtr for StatusCallback<'_> {
 // Trampoline function for the FnStatus callback.
 #[no_mangle]
 pub(crate) extern "C" fn render_status(
-    payload: *const c_void,
+    payload: *mut c_void,
     context: nsi_sys::NSIContext_t,
     status: c_int,
 ) {
     if !payload.is_null() {
-        let fn_status = unsafe { Box::from_raw(payload as *mut Box<Box<dyn FnStatus>>) };
-        fn_status(
-            &Context {
-                context,
-                _marker: PhantomData,
-            },
-            status.into(),
-        );
+        let fn_status = unsafe { Box::from_raw(payload as *mut Box<dyn FnStatus>) };
+        let ctx = Context {
+            context,
+            _marker: PhantomData,
+        };
+
+        fn_status(&ctx, status.into());
+
+        // We must not call drop() on this context.
+        // This is safe as Context doesn't allocate and this one is on the stack anyway.
+        std::mem::forget(ctx);
     }
 }

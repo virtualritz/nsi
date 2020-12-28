@@ -11,7 +11,7 @@
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
 use crate as nsi;
-use nsi::{
+use crate::{
     argument::ArgSlice,
     output::{Layer, LayerDepth, PixelFormat},
 };

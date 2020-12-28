@@ -32,6 +32,7 @@ pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
 /// An (optional) argument passed to a method of
 /// [`Context`](context::Context).
+#[derive(Debug)]
 pub struct Arg<'a, 'b> {
     pub(crate) name: CString,
     pub(crate) data: ArgData<'a, 'b>,
@@ -101,6 +102,7 @@ pub(crate) trait ArgDataMethods {
 /// pegged to the lifetime of the [`Context`](crate::context::Context).
 /// Use this to pass arbitray Rust data through the FFI boundary.
 #[enum_dispatch]
+#[derive(Debug)]
 pub enum ArgData<'a, 'b> {
     /// Single [`f32`) value.
     Float,
@@ -151,6 +153,7 @@ pub enum ArgData<'a, 'b> {
 
 macro_rules! nsi_data_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
+        #[derive(Debug)]
         pub struct $name {
             data: $type,
         }
@@ -179,6 +182,7 @@ macro_rules! nsi_data_def {
 
 macro_rules! nsi_data_array_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
+        #[derive(Debug)]
         pub struct $name<'a> {
             data: &'a [$type],
         }
@@ -208,6 +212,7 @@ macro_rules! nsi_data_array_def {
 
 macro_rules! nsi_tuple_data_def {
     ($type: tt, $len: expr, $name: ident, $nsi_type: expr) => {
+        #[derive(Debug)]
         pub struct $name<'a> {
             data: &'a [$type; $len],
         }
@@ -276,6 +281,7 @@ nsi_data_def!(i32, Integer, Type::Integer);
 /// // ctx's lifetime is pegged to that of payload.
 /// drop(ctx);
 /// ```
+#[derive(Debug)]
 pub struct Reference<'a> {
     data: *const core::ffi::c_void,
     _marker: PhantomData<&'a ()>,
@@ -312,6 +318,7 @@ pub trait CallbackPtr {
     fn to_ptr(self) -> *const core::ffi::c_void;
 }
 
+#[derive(Debug)]
 pub struct Callback<'a> {
     data: *const core::ffi::c_void,
     _marker: PhantomData<&'a mut ()>,
@@ -350,6 +357,7 @@ impl<'a> ArgDataMethods for Callback<'a> {
 /// is the [`Reference`] type that allows the compiler
 /// to check that the the referenced data outlives the
 /// [`Context`](context::Context).
+#[derive(Debug)]
 pub struct Pointer {
     data: *const core::ffi::c_void,
 }
@@ -380,6 +388,7 @@ impl ArgDataMethods for Pointer {
     }
 }
 
+#[derive(Debug)]
 pub struct String {
     #[allow(dead_code)]
     data: CString,
@@ -430,6 +439,7 @@ nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 ///
 /// This gets converted to an array of raw pointers when
 /// passed through the FFI boundary.
+#[derive(Debug)]
 pub struct References<'a> {
     data: Vec<*const core::ffi::c_void>,
     _marker: PhantomData<&'a ()>,
@@ -479,6 +489,7 @@ impl<'a> ArgDataMethods for References<'a> {
 /// is the [`References`] type that allows the compiler
 /// to check that the the referenced data outlives the
 /// [`Context`](context::Context).
+#[derive(Debug)]
 pub struct Pointers<'a> {
     data: &'a [*const core::ffi::c_void],
 }
@@ -509,6 +520,7 @@ impl<'a> ArgDataMethods for Pointers<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct Strings {
     #[allow(dead_code)]
     data: Vec<CString>,

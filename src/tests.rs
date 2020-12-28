@@ -7,7 +7,7 @@ fn test_dodecahedron() {
     let ctx = nsi::Context::new(&[]).expect("Could not create NSI context.");
 
     // Create a dodecahedron.
-    let face_index: [u32; 60] =
+    let face_index: [i32; 60] =
     // 12 regular pentagon faces.
     [
          0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
@@ -42,13 +42,13 @@ fn test_dodecahedron() {
         "dodecahedron",
         &[
             nsi::points!("P", &positions),
-            nsi::unsigneds!("P.indices", &face_index),
+            nsi::integers!("P.indices", &face_index),
             // 5 vertices per each face.
-            nsi::unsigneds!("nvertices", &[5; 12]),
+            nsi::integers!("nvertices", &[5; 12]),
             // Render this as a subdivison surface.
             nsi::string!("subdivision.scheme", "catmull-clark"),
             // Crease each of our 30 edges a bit.
-            nsi::unsigneds!("subdivision.creasevertices", &face_index),
+            nsi::integers!("subdivision.creasevertices", &face_index),
             nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
         ],
     );

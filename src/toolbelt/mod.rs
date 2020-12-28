@@ -18,6 +18,7 @@ fn default_slot_objects(slot: Option<&str>) -> &str {
 
 /// Generates a random handle if `handle` is `None` or falls through,
 /// otherwise.
+#[doc(hidden)]
 #[cfg(debug_assertions)]
 pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> String {
     match handle {
@@ -32,6 +33,7 @@ pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> Str
     }
 }
 
+#[doc(hidden)]
 #[cfg(not(debug_assertions))]
 pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> String {
     match handle {

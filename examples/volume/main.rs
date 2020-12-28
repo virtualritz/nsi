@@ -1,13 +1,11 @@
 use dl_openvdb_query as vdbq;
 use nsi_3delight as nsi_3dl;
 
-static VDB_ASSET: &str = "assets/explosion.vdb";
+static VDB_ASSET: &str = "assets/fireball.vdb";
+static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
-    let ctx = nsi::Context::new(
-        &[nsi::string!("streamfilename", "stdout")], //& []
-    )
-    .unwrap();
+    let ctx = nsi::Context::new(&[]).unwrap();
 
     ctx.append(
         ".root",
@@ -15,7 +13,7 @@ pub fn main() {
         &nsi_3dl::environment_texture(
             &ctx,
             None,
-            "assets/solitude_night_1k.tdl",
+            ENVMAP_HDR,
             Some(90.0),
             Some(1.),
             Some(false),

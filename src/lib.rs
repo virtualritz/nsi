@@ -2,7 +2,6 @@
     all(debug_assertions, feature = "nightly"),
     feature(cstring_from_vec_with_nul)
 )]
-#![cfg_attr(feature = "nightly", feature(str_split_once))]
 #![cfg_attr(feature = "nightly", feature(doc_cfg))]
 //#![warn(missing_docs)]
 //#![warn(missing_doc_code_examples)]
@@ -54,7 +53,7 @@
 //! let ctx = nsi::Context::new(&[]).expect("Could not create NSI context.");
 //!
 //! // Create a dodecahedron.
-//! let face_index: [u32; 60] =
+//! let face_index: [i32; 60] =
 //!     // 12 regular pentagon faces.
 //!    [
 //!          0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
@@ -90,59 +89,82 @@
 //!     "dodecahedron",
 //!     &[
 //!         nsi::points!("P", &positions),
-//!         nsi::unsigneds!("P.indices", &face_index),
+//!         nsi::integers!("P.indices", &face_index),
 //!         // 5 vertices per each face.
-//!         nsi::unsigneds!("nvertices", &[5; 12]),
+//!         nsi::integers!("nvertices", &[5; 12]),
 //!         // Render this as a subdivison surface.
 //!         nsi::string!("subdivision.scheme", "catmull-clark"),
 //!         // Crease each of our 30 edges a bit.
-//!         nsi::unsigneds!("subdivision.creasevertices", &face_index),
+//!         nsi::integers!("subdivision.creasevertices", &face_index),
 //!         nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
 //!     ],
 //! );
 //! ```
 //! ## More Examples
+//! All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
+//! installation to run.
+//!
+//! ### Interactive
+//! Demonstrates using the [`FnStatus`](crate::context::FnStatus) callback closure during
+//! rendering.
+//!
+//! ### Jupyter
+//! Render directly into a Jupyter notebook.
+//!
+//! Follow
+//! [these instructions](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md) to
+//! get a Rust Jupyter kernel up and running first.
+//!
 //! ### Output
-//! This is a full output example showing color conversion and writing
-//! data out to 8bit/channel PNG and 32bit/channel (float) OpenEXR
-//! formats.
+//! This is a full [`output`] example showing color conversion and writing data out to 8bit/channel PNG
+//! and 32bit/channel (float) OpenEXR formats.
+//!
+//! ### Volume
+//! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly through the
+//! [`toolbelt`] helpers.
 //!
 //! ## Getting Pixels
-//! The crate has support for streaming pixels from the renderer, via
-//! callbacks (i.e. closures) during and/or after rendering via the
-//! `output` module. This module is enabled through the feature of the
-//! same name (see below).
+//! The crate has support for streaming pixels from the renderer, via callbacks (i.e. closures)
+//! during and/or after rendering via the [`output`] module. This module is enabled through the
+//! feature of the same name (see below).
 //!
 //! ## Cargo Features
-//! * `toolbelt` – Add convenience methods to [`Context`].
+//! * [`toolbelt`] – Add convenience methods to [`Context`].
 //!
-//! * `output` – Add support for streaming pixels from the renderer to the
-//!   calling context via closures.
+//! * [`output`] – Add support for streaming pixels from the renderer to the calling context via
+//!    closures.
 //!
-//! * `nightly` – Enable some unstable features (suggested if you build with a
-//!   `nightly` toolchain)
+//! * `nightly` – Enable some unstable features (suggested if you build with a `nightly` toolchain)
+//!
 //! ## Linking Style
-//! The 3Delight dynamic library (`lib3delight`) can either be linked to
-//! during build or loaded at runtime.
-//! By default the lib is loaded at runtime. This has several
-//! advantages:
-//! 1. If you ship your application or library you can ship it without
-//!    the library. It can still run and will print an informative error
-//!    if the library cannot be loaded.
-//! 2. A user can install an updated version of the renderer and stuff
-//!    will ‘just work’.
+//! The 3Delight dynamic library (`lib3delight`) can either be linked to during build or loaded at
+//! runtime.
 //!
-//! * Load `lib3deligh` at runtime (default).
+//! By default the lib is loaded at runtime.
+//!
+//! * Load `lib3deligh` at runtime (default). This has several advantages:
+//!   1. If you ship your application or library you can ship it without the library. It can still
+//!      run and will print an informative error if the library cannot be loaded.
+//!
+//!   2. A user can install an updated version of the renderer and stuff will ‘just work’.
 //! * Dynamically link against `lib3delight`.
-//!   * `lib3delight` becomes a depdency. If it cannot't be found your lib/app
-//!     will not load/start.
+//!   * `lib3delight` becomes a depdency. If it cannot't be found your lib/app will not load/start.
+//!
 //!   * The feature is called `link_lib3delight`.
-//!   * You should disable default features (they are not needed/used)
-//!   * in this case: ```toml [dependencies.nsi] version = "0.5.5" features = [
-//!     "link_lib3delight" ] default-features = false ```
+//!
+//!   * You should disable default features (they are not needed/used) in this case:
+//!
+//!     ```toml
+//!     [dependencies.nsi]
+//!     version = "0.5.5"
+//!     features = [ "link_lib3delight" ]
+//!     default-features = false
+//!     ```
+//!
 //! * Download `lib3delight` during build.
-//!   * `lib3delight` is downloaded during build. Note that this may be an
-//!     outdated version. This feature mainly exists for CI purposes.
+//!   * `lib3delight` is downloaded during build. Note that this may be an outdated version. This
+//!     feature mainly exists for CI purposes.
+//!
 //!   * The feature is called `download_lib3delight`.
 #![allow(non_snake_case)]
 //#![warn(missing_docs)]
@@ -183,7 +205,7 @@ lazy_static! {
 #[macro_use]
 pub mod argument;
 // Context should be in the crate root so we keep the module private.`
-mod context;
+pub mod context;
 
 // Optional modules ---------------------------------------------------
 
@@ -196,7 +218,10 @@ pub mod toolbelt;
 
 mod tests;
 
-pub use crate::{argument::*, context::*};
+pub use crate::{
+    argument::*,
+    context::{Context, NodeType},
+};
 
 #[cfg(feature = "toolbelt")]
 pub use crate::toolbelt::*;
