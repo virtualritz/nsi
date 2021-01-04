@@ -64,7 +64,7 @@
 //! // Our FnFinish callback. We will be called once.
 //! let finish = nsi::output::FinishCallback::new(
 //!     |// Passed from the output driver node, below.
-//!      image_filename: &str,
+//!      image_filename: String,
 //!      // Passed from the screen node, above.
 //!      width: usize,
 //!      // Passed from the screen node, above.
@@ -135,28 +135,30 @@
 //!
 //! ## Quantization
 //!
-//! Using the
-//! [`"scalarformat"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
+//! Using the [`"scalarformat"`
+//! attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
 //! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the renderer to
 //! quantize data down to a suitable range. For example, setting this to `"uint16"` will get you
 //! valid `u16` values from `0.0..65535.0`, but stored in the `f32`s of the `pixel_data` buffer.
 //! The value of `1.0` will map to `65535.0` and everything above will be clipped. You can convert
-//! these value straight via `f32 as u16`.
+//! such a value straight via `f32 as u16`.
 //!
 //! Unless you asked the renderer to also apply some color profile (see above) the data is linear.
 //! To look good on a screen it needs to be made display-referred.
 //!
 //! See the `output` example on how to do this with a simple, display-referred `sRGB` curve.
 use crate::argument::CallbackPtr;
-use core::ops::Index;
 use std::{
-    ffi::CStr,
+    ffi::{CStr, CString},
     os::raw::{c_char, c_int, c_void},
 };
 
 // Juypiter notebook support ------------------------------------------
 #[cfg(feature = "jupyter")]
 pub mod jupyter;
+
+pub mod pixel_format;
+pub use pixel_format::*;
 
 /// This is the name of the crate’s built-in output driver that understands the "closure.*"
 /// attributes.
@@ -370,7 +372,7 @@ pub trait FnWrite<'a> = FnMut(
 /// ```
 pub trait FnFinish<'a>: FnMut(
     // Filename.
-    &str,
+    String,
     // Width.
     usize,
     // Height.
@@ -383,7 +385,7 @@ pub trait FnFinish<'a>: FnMut(
 + 'a {}
 
 #[doc(hidden)]
-impl<'a, T: FnMut(&str, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
+impl<'a, T: FnMut(String, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -473,329 +475,26 @@ impl CallbackPtr for FinishCallback<'_> {
     }
 }
 
+/*struct Dummy {
+    boxy: Box<u32>,
+}
+
+impl Drop for Dummy {
+    fn drop(&mut self) {
+        println!("Dropping Dummy");
+    }
+}*/
+
 struct DisplayData<'a> {
-    name: &'a str,
+    name: String,
     width: usize,
     height: usize,
     pixel_format: PixelFormat,
     pixel_data: Vec<f32>,
-    fn_open: Option<Box<Box<Box<dyn FnOpen<'a>>>>>,
     fn_write: Option<Box<Box<Box<dyn FnWrite<'a>>>>>,
     fn_finish: Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
-    // Unused atm.
+    // FIXME: unused atm.
     fn_query: Option<Box<Box<Box<dyn FnQuery<'a>>>>>,
-}
-
-impl<'a> DisplayData<'a> {
-    /// Used to dissect DisplayData into its components before being dropped.
-    #[allow(clippy::type_complexity)]
-    fn boxed_into_tuple(
-        display_data: Self,
-    ) -> (
-        &'a str,
-        usize,
-        usize,
-        PixelFormat,
-        Vec<f32>,
-        Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
-    ) {
-        // FIXME: These boxes somehow get deallocated twice if we don't suppress this
-        // here. No f*cking idea why.
-        if let Some(fn_open) = display_data.fn_open {
-            Box::into_raw(fn_open);
-        }
-        if let Some(fn_write) = display_data.fn_write {
-            Box::into_raw(fn_write);
-        }
-        if let Some(fn_query) = display_data.fn_query {
-            Box::into_raw(fn_query);
-        }
-
-        (
-            display_data.name,
-            display_data.width,
-            display_data.height,
-            display_data.pixel_format,
-            display_data.pixel_data,
-            display_data.fn_finish,
-        )
-    }
-}
-
-/// Description of an [`OutputLayer`](crate::context::NodeType::OutputLayer)
-/// inside a flat, raw pixel.
-#[derive(Debug, Clone, Default)]
-pub struct Layer {
-    name: String,
-    depth: LayerDepth,
-    offset: usize,
-}
-
-impl Layer {
-    /// The name of the layer.
-    #[inline]
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    /// The [depth](LayerDepth) of this layer.
-    #[inline]
-    pub fn depth(&self) -> LayerDepth {
-        self.depth
-    }
-
-    /// The channel offset of the layer inside the [`PixelFormat`].
-    #[inline]
-    pub fn offset(&self) -> usize {
-        self.offset
-    }
-
-    /// The number of channels in this layer. This is a shortcut for calling
-    /// `depth().channels()`.
-    #[inline]
-    pub fn channels(&self) -> usize {
-        self.depth.channels()
-    }
-}
-
-/// The depth (number and type of channels) a pixel in a [`Layer`] is
-/// composed of.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum LayerDepth {
-    /// A single channel. Obtained when setting `"layertype"` `"scalar"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    OneChannel,
-    /// A single channel with alpha. Obtained when setting `"layertype"`
-    /// `"scalar"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    OneChannelAndAlpha,
-    /// An `rgb` color triplet. Obtained when setting `"layertype"` `"color"` on
-    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    Color,
-    /// An `rgb` color triplet with alpha. Obtained when setting `"layertype"`
-    /// `"color"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    ColorAndAlpha,
-    /// An `xyz` triplet. Obtained when setting `"layertype"` `"vector"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    Vector,
-    /// An `xyz` triplet with alpha. Obtained when setting `"layertype"`
-    /// `"vector"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    VectorAndAlpha,
-    /// An quadruple of values. Obtained when setting `"layertype"` `"quad"` on
-    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    FourChannels,
-    /// An quadruple of values with alpha. Obtained when setting `"layertype"`
-    /// `"quad"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
-    FourChannelsAndAlpha,
-}
-
-impl Default for LayerDepth {
-    fn default() -> Self {
-        LayerDepth::OneChannel
-    }
-}
-
-impl LayerDepth {
-    /// Returns the number of channels this layer type consists of.
-    pub fn channels(&self) -> usize {
-        match self {
-            LayerDepth::OneChannel => 1,
-            LayerDepth::OneChannelAndAlpha => 2,
-            LayerDepth::Color => 3,
-            LayerDepth::Vector => 3,
-            LayerDepth::ColorAndAlpha => 4,
-            LayerDepth::VectorAndAlpha => 4,
-            LayerDepth::FourChannels => 4,
-            LayerDepth::FourChannelsAndAlpha => 5,
-        }
-    }
-}
-
-/// Accessor for the pixel format the renderer sends in [`FnOpen`], [`FnWrite`]
-/// and [`FnFinish`].
-///
-/// This is a stack of [`OutputLayer`](crate::context::NodeType::OutputLayer)
-/// descriptions.
-///
-/// # Example
-///
-/// A typical format for a pixel containing two such layers, an *RGBA* **color**
-/// + **alpha** output layer and a world space **normal**, will look like this:
-///
-/// [`name`](Layer::name()) | [`depth`](Layer::depth())                             | [`offset`](Layer::offset())
-/// ------------------------|-------------------------------------------------------|----------------------------
-/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha) (`rgba`) | `0`
-/// `N_world`               | [`Vector`](LayerDepth::Vector) (`xyz`)                | `4`
-///
-/// ## RAW Layout
-///
-/// The resp. callbacks deliver pixels as a flat [`f32`] buffer.
-/// For the above example the actual layout of a single pixel in the
-/// buffer is:
-///
-/// Value  | `r`ed   | `g`reen | `b`lue  | `a`lpha | `x` | `y` | `z`
-/// -------|---------|---------|---------|---------|-----|-----|----
-/// Offset | `0`     | `1`     | `2`     | `3`     | `4` | `5` | `6`
-///
-/// The `offset` is the offset into the pixel buffer to obtain the 1st element.
-/// For example, the **y** coordinate of the the normal will be stored in
-/// channel at offset `5` (`4` + `1`).
-///
-/// The pixel format is in the order in which
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were defined in the
-/// [ɴsɪ scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
-#[derive(Debug, Default)]
-pub struct PixelFormat(Vec<Layer>);
-
-impl PixelFormat {
-    #[inline]
-    fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
-        let (mut previous_layer_name, mut previous_channel_id) =
-            Self::split_into_layer_name_and_channel_id(
-                unsafe { CStr::from_ptr(format[0].name) }.to_str().unwrap(),
-            );
-
-        let mut depth = LayerDepth::OneChannel;
-        let mut offset = 0;
-
-        PixelFormat(
-            // This loops through each format (channel), r, g, b, a etc.
-            format
-                .iter()
-                .enumerate()
-                .cycle()
-                .take(format.len() + 1)
-                .filter_map(|format| {
-                    // FIXME: add support for specifying AOV and detect type
-                    // for indexing (.r vs .x)
-                    let name = unsafe { CStr::from_ptr(format.1.name) }.to_str().unwrap();
-
-                    let (layer_name, channel_id) = Self::split_into_layer_name_and_channel_id(name);
-
-                    // A boundary between two layers will be when the postfix
-                    // is a combination of those above.
-                    if ["b", "z", "s", "a"].contains(&previous_channel_id)
-                        && ["r", "x", "s"].contains(&channel_id)
-                    {
-                        let tmp_layer_name = if previous_layer_name.is_empty() {
-                            "Ci"
-                        } else {
-                            previous_layer_name
-                        };
-                        previous_layer_name = layer_name;
-
-                        previous_channel_id = channel_id;
-
-                        let tmp_depth = depth;
-                        depth = LayerDepth::OneChannel;
-
-                        let tmp_offset = offset;
-                        offset = format.0;
-
-                        Some(Layer {
-                            name: tmp_layer_name.to_string(),
-                            depth: tmp_depth,
-                            offset: tmp_offset,
-                        })
-                    } else {
-                        // Do we we have a lonely alpha -> it belongs to the current
-                        // layer.
-                        if layer_name.is_empty() && "a" == channel_id {
-                            depth = match &depth {
-                                LayerDepth::OneChannel => LayerDepth::OneChannelAndAlpha,
-                                LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                LayerDepth::Vector => LayerDepth::VectorAndAlpha,
-                                LayerDepth::FourChannels => LayerDepth::FourChannelsAndAlpha,
-                                _ => unreachable!(),
-                            };
-                        }
-                        // Are we still on the same layer?
-                        else if layer_name == previous_layer_name {
-                            // We only check for first channel.
-                            match channel_id {
-                                "r" | "g" | "b" => depth = LayerDepth::Color,
-                                "x" | "y" | "z" => depth = LayerDepth::Vector,
-                                "a" => {
-                                    if layer_name.is_empty() {
-                                        depth = match &depth {
-                                            LayerDepth::OneChannel => {
-                                                LayerDepth::OneChannelAndAlpha
-                                            }
-                                            LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                            LayerDepth::Vector => LayerDepth::VectorAndAlpha,
-                                            _ => unreachable!(),
-                                        };
-                                    } else {
-                                        depth = LayerDepth::FourChannels;
-                                    }
-                                }
-                                _ => (),
-                            }
-                            previous_layer_name = layer_name;
-                        // We have a new layer.
-                        } else {
-                            previous_layer_name = layer_name;
-                        }
-                        previous_channel_id = channel_id;
-                        None
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )
-    }
-
-    fn split_into_layer_name_and_channel_id(name: &str) -> (&str, &str) {
-        let mut split = name.rsplitn(3, '.');
-        // We know we never get an empty string so we can safely unwrap
-        // here.
-        let mut postfix = split.next().unwrap();
-        if "000" == postfix {
-            postfix = "s";
-            // Reset iterator.
-            split = name.rsplitn(2, '.');
-        }
-        // Skip the middle part.
-        if split.next().is_some() {
-            // We know that if there is middle part we always have a prefix
-            // so we can safely unwrap here.
-            (split.next().unwrap(), postfix)
-        } else {
-            ("", postfix)
-        }
-    }
-
-    /// Returns the number of layers in a pixel.
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Checks is pixel contains any data at all.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// Returns the total number of channels in a pixel.
-    /// This is the sum of the number of channels in all layers.
-    #[inline]
-    pub fn channels(&self) -> usize {
-        self.0
-            .iter()
-            .fold(0, |total, layer| total + layer.channels())
-    }
-}
-
-impl Index<usize> for PixelFormat {
-    type Output = Layer;
-
-    #[inline]
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
 }
 
 fn get_parameter_triple_box<T: ?Sized>(
@@ -849,16 +548,19 @@ pub(crate) extern "C" fn image_open(
     };
 
     let mut display_data = Box::new(DisplayData {
-        name: unsafe { CStr::from_ptr(output_filename).to_str().unwrap() },
+        name: unsafe {
+            CString::from(CStr::from_ptr(output_filename))
+                .into_string()
+                .unwrap()
+        },
         width: width as _,
         height: height as _,
         pixel_format: PixelFormat::default(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
-        fn_open: get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters),
         fn_write: get_parameter_triple_box::<dyn FnWrite>("callback.write", b'p', 1, parameters),
+        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
         fn_query: None, /* get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1,
                          * parameters), */
-        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
     });
 
     let format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
@@ -870,23 +572,26 @@ pub(crate) extern "C" fn image_open(
 
     display_data.pixel_format = PixelFormat::new(format);
 
-    let error = if let Some(ref mut fn_open) = display_data.fn_open {
-        fn_open(
-            display_data.name,
+    let error = if let Some(mut fn_open) =
+        get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters)
+    {
+        let error = fn_open(
+            &display_data.name,
             width as _,
             height as _,
             &display_data.pixel_format,
-        )
+        );
+        // wtf?
+        Box::leak(fn_open);
+
+        error
     } else {
         Error::None
     };
 
     unsafe {
         *image_handle_ptr = Box::into_raw(display_data) as _;
-    }
-
-    // We want to be called for all buckets.
-    unsafe {
+        // We want to be called for all buckets.
         (*flag_stuff).flags = ndspy_sys::PkDspyFlagsWantsEmptyBuckets as _;
     }
 
@@ -926,12 +631,13 @@ pub(crate) extern "C" fn image_write(
     x_max_plus_one: c_int,
     y_min: c_int,
     y_max_plus_one: c_int,
-    _entry_size: c_int,
+    entry_size: c_int,
     pixel_data: *const u8,
 ) -> ndspy_sys::PtDspyError {
     let display_data = unsafe { &mut *(image_handle_ptr as *mut DisplayData) };
 
-    // _entry_size is pixel_length in u8s, we need pixel length in f32s.
+    // entry_size is pixel_length in u8s, we need pixel length in f32s.
+    debug_assert!(entry_size >> 2 == display_data.pixel_format.channels() as _);
     let pixel_length = display_data.pixel_format.channels();
 
     let pixel_data = unsafe {
@@ -957,7 +663,7 @@ pub(crate) extern "C" fn image_write(
     // Call the closure.
     if let Some(ref mut fn_write) = display_data.fn_write {
         fn_write(
-            display_data.name,
+            &display_data.name,
             display_data.width,
             display_data.height,
             x_min as _,
@@ -978,19 +684,33 @@ pub(crate) extern "C" fn image_write(
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    let display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
+    let mut display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
-    let (name, width, height, pixel_format, pixel_data, fn_finish) =
-        DisplayData::boxed_into_tuple(*display_data);
-
-    if let Some(mut fn_finish) = fn_finish {
-        let error = fn_finish(name, width, height, pixel_format, pixel_data);
-        Box::into_raw(fn_finish);
-        error
+    let error = if let Some(ref mut fn_finish) = display_data.fn_finish {
+        fn_finish(
+            display_data.name,
+            display_data.width,
+            display_data.height,
+            display_data.pixel_format,
+            display_data.pixel_data,
+        )
     } else {
         Error::None
+    };
+
+    // FIXME: These boxes somehow get deallocated twice if we don't suppress this
+    // here. No f*cking idea why.
+    if let Some(fn_write) = display_data.fn_write {
+        Box::leak(fn_write);
     }
-    .into()
+    if let Some(fn_query) = display_data.fn_query {
+        Box::leak(fn_query);
+    }
+    if let Some(fn_finish) = display_data.fn_finish {
+        Box::leak(fn_finish);
+    }
+
+    error.into()
 }
 
 #[no_mangle]

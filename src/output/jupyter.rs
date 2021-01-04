@@ -69,12 +69,12 @@ impl<'a> nsi::Context<'a> {
 
         // Callback to collect our pixels.
         let finish = nsi::output::FinishCallback::new(
-            |_name: &str,
+            |_name: String,
              width: usize,
              height: usize,
              pixel_format: PixelFormat,
              pixel_data: Vec<f32>| {
-                pixel_format.0.iter().for_each(|layer| {
+                pixel_format.iter().for_each(|layer| {
                     pixel_data_to_jupyter(
                         width,
                         height,

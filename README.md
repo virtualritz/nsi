@@ -125,13 +125,12 @@ scene description.
 
 Before you start it is suggested that you [download a 3Delight
 package](https://www.3delight.com/download) for your platform & install
-it (supported: Linux, macOS, Windows). This will set the `DELIGHT`
-environment variable that the build script is looking for to find
-headers and the library to load/link against.
+it (supported: Linux, macOS, Windows). This will allow you to create
+pretty pictures with the examples straight away.
 
-It will also install 3Delight Display which you can render to,
-progressively, as an alternative to writing images to disk. When working
-with this crate this is quite handy.
+It will also install 3Delight Display which you can render to as an
+alternative to writing images to disk. When working with this crate
+this is quite handy.
 
 You can skip this step and build with the `download_3delight` feature.
 However, this will download an older version of 3Delight so this is
