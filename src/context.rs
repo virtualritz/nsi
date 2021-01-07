@@ -1,3 +1,5 @@
+//! # An ɴsɪ Context.
+
 // Needed for the example dode to build.
 extern crate self as nsi;
 use crate::{argument::*, *};
@@ -8,7 +10,7 @@ use std::{
     marker::PhantomData,
     ops::Drop,
     os::raw::{c_int, c_void},
-    slice,
+    //slice,
     vec::Vec,
 };
 
@@ -92,23 +94,19 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` - A node handle. This string will uniquely identify the node
-    ///   in the scene.
+    /// * `handle` - A node handle. This string will uniquely identify the node in the scene.
     ///
-    ///   If the supplied handle matches an existing node, the function
-    ///   does nothing if all other parameters match the call which
-    ///   created that node. Otherwise, it emits an error. Note that
-    ///   handles need only be unique within a given [`Context`].
-    ///   It is acceptable to reuse the same handle inside different
-    ///   [`Context`]s.
+    ///   If the supplied handle matches an existing node, the function does nothing if all other
+    ///   parameters match the call which created that node. Otherwise, it emits an error. Note
+    ///   that handles need only be unique within a given [`Context`].
+    ///   It is ok to reuse the same handle inside different [`Context`]s.
     ///
-    /// * `node_type` – The type of node to create. You can use [`NodeType`] to
-    ///   create nodes that are in the official NSI specificaion. As this
-    ///   parameter is just a string you can instance other node types that a
-    ///   particualr implementation may provide and which are not part of the
-    ///   official specification.
+    /// * `node_type` – The type of node to create. You can use [`NodeType`] to create nodes that
+    ///   are in the official NSI specificaion. As this parameter is just a string you can instance
+    ///   other node types that a particualr implementation may provide and which are not part of
+    ///   the official specification.
     ///
-    /// * `args` – A [`slice`] of optional [`Arg`] arguments. *There are no
+    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments. *There are no
     ///   optional arguments defined as of now*.
     ///
     /// ```
@@ -148,7 +146,7 @@ impl<'a> Context<'a> {
     /// * `handle` – A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
+    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
     ///
     /// # Optional Arguments
     /// * `"recursive"` ([`Integer`]) – Specifies whether deletion is recursive.
@@ -188,7 +186,7 @@ impl<'a> Context<'a> {
     /// * `handle` – A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
+    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
         let handle = CString::new(handle).unwrap();
@@ -218,7 +216,7 @@ impl<'a> Context<'a> {
     ///
     /// * `time` – The time at which to set the value.
     ///
-    /// * `args` – A [`slice`] of optional [`Arg`] arguments.
+    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute_at_time(
         &self,
@@ -597,13 +595,14 @@ pub enum RenderStatus {
 
 /// A closure which is called to inform about the status of an ongoing render.
 ///
-/// It is passed to ɴsɪ via [`render_control()`](Context::render_control())’s the `"callback"` argument.
+/// It is passed to ɴsɪ via [`render_control()`](Context::render_control())’s `"callback"`
+/// argument.
 ///
 /// # Example
 /// ```
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// let status_callback = nsi::context::StatusCallback::new(
-///     |_ctx: &nsi::context::Context, status: nsi::context::RenderStatus| {
+///     |_: &nsi::context::Context, status: nsi::context::RenderStatus| {
 ///         println!("Status: {:?}", status);
 ///     },
 /// );

@@ -102,13 +102,14 @@ impl LayerDepth {
             LayerDepth::OneChannelAndAlpha,
             LayerDepth::ColorAndAlpha,
             LayerDepth::VectorAndAlpha,
-            LayerDepth::FourChannelsAndAlpha
-        ].contains(self)
+            LayerDepth::FourChannelsAndAlpha,
+        ]
+        .contains(self)
     }
 }
 
-/// Accessor for the pixel format the renderer sends in [`FnOpen`], [`FnWrite`]
-/// and [`FnFinish`].
+/// Accessor for the pixel format the renderer sends in [`FnOpen`](crate::output::FnOpen),
+/// [`FnWrite`](crate::output::FnWrite) and [`FnFinish`](crate::output::FnFinish)
 ///
 /// This is a stack of [`OutputLayer`](crate::context::NodeType::OutputLayer)
 /// descriptions.

@@ -132,7 +132,7 @@
 //! * [`output`] – Add support for streaming pixels from the renderer to the calling context via
 //!    closures.
 //!
-//! * [`jupyter`] – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
+//! * [`jupyter`](output::jupyter) – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
 //!    kernel](https://github.com/google/evcxr)).
 //!
 //! * [`toolbelt`] – Add convenience methods to [`Context`].

@@ -1,3 +1,4 @@
+//! # Optional Arguments Passed to Methods of an ɴsɪ Context.
 use enum_dispatch::enum_dispatch;
 use nsi_sys::*;
 use std::{ffi::CString, marker::PhantomData};

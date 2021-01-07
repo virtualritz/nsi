@@ -30,7 +30,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "screen",
         &[
-            nsi::integers!("resolution", &[128, 128]).array_len(2),
+            nsi::integers!("resolution", &[32, 32]).array_len(2),
             nsi::integer!("oversampling", 32),
         ],
     );

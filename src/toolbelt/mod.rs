@@ -304,13 +304,16 @@ impl<'a> nsi::Context<'a> {
         let vertical_fov = if let Some(aspect_ratio) = aspect_ratio {
             if aspect_ratio < 1.0 {
                 // Portrait.
-                (aspect_ratio * (vertical_fov * core::f32::consts::PI / 90.0).tan()).atan()
+                2.0 * (aspect_ratio * (0.5 * vertical_fov * core::f32::consts::PI / 180.0).tan())
+                    .atan()
             } else {
-                vertical_fov * core::f32::consts::TAU / 90.0
+                vertical_fov * core::f32::consts::PI / 180.0
             }
         } else {
-            vertical_fov * core::f32::consts::TAU / 90.0
+            vertical_fov * core::f32::consts::PI / 180.0
         } as f64;
+
+        println!("{}", vertical_fov);
 
         // Make a cube from the bounds.
         let cube = [
@@ -324,6 +327,8 @@ impl<'a> nsi::Context<'a> {
 
         let bounding_box_center = 0.5 * (cube[0] + cube[3]);
 
+        println!("{:?}", bounding_box_center);
+
         let bounding_sphere_radius = cube
             .iter()
             .fold(0.0f64, |max, point| {
@@ -331,7 +336,9 @@ impl<'a> nsi::Context<'a> {
             })
             .sqrt();
 
-        let distance = (bounding_sphere_radius * 2.0) / (vertical_fov * 0.5).sin();
+        let distance = bounding_sphere_radius / (vertical_fov * 0.5).sin();
+
+        println!("{}", distance);
 
         let handle = generate_or_use_handle(handle, Some("look_at"));
 

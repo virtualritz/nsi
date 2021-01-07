@@ -84,7 +84,7 @@ pub fn main() {
     // Finish closure.
     // Called when the all the pixels have been sent via WriteCallback.
     let finish = nsi::output::FinishCallback::new(
-        |name: &str,
+        |name: String,
          width: usize,
          height: usize,
          pixel_format: nsi::output::PixelFormat,
@@ -104,7 +104,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_f32_file(name.to_string() + ".exr", Vec2(width, height), &sample).unwrap();
+            write_rgba_f32_file(name + ".exr", Vec2(width, height), &sample).unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);

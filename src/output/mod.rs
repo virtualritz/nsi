@@ -346,13 +346,13 @@ pub trait FnWrite<'a> = FnMut(
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
 /// let finish = nsi::output::FinishCallback::new(
-///     |name: &str,
+///     |name: String,
 ///      width: usize,
 ///      height: usize,
 ///      pixel_format: nsi::output::PixelFormat,
 ///      pixel_data: Vec<f32>| {
 ///         println!(
-///             "The top, left pixel the first channel in the {:?} layer has the value {}.",
+///             "The top, left pixel of the first channel in the {:?} layer has the value {}.",
 ///             pixel_format[0].name(),
 ///             pixel_data[0],
 ///         );
