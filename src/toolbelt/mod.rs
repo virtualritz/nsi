@@ -8,8 +8,8 @@
 //! that specify the type of node being created, such as `shader`.
 use crate as nsi;
 use crate::ArgSlice;
-#[cfg(debug_assertions)]
 use ultraviolet as uv;
+//use uv::{DVec3, DMat4};
 
 #[inline]
 fn default_slot_objects(slot: Option<&str>) -> &str {
@@ -244,7 +244,7 @@ impl<'a> nsi::Context<'a> {
                 uv::DMat4::from_angle_plane(
                     (angle * core::f64::consts::TAU / 90.0) as _,
                     uv::DBivec3::from_normalized_axis(uv::DVec3::from(axis).normalized())
-                )
+                ).transposed()
                 .as_array()
             )],
         );

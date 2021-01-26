@@ -135,15 +135,7 @@ fn pixel_data_to_jupyter(
                         .map(|index| {
                             // FIXME: add dithering.
                             let v: u16 = (pixel_data[index + offset] * one) as _;
-
-                            #[cfg(target_endian = "little")]
-                            {
-                                v.to_be()
-                            }
-                            #[cfg(target_endian = "big")]
-                            {
-                                v
-                            }
+                            v.to_be()
                         })
                         .collect()
                 }
@@ -158,14 +150,7 @@ fn pixel_data_to_jupyter(
                         let v: u16 = (pixel_data[index] / alpha * one) as _;
                         let a: u16 = (alpha * one) as _;
 
-                        #[cfg(target_endian = "little")]
-                        {
-                            vec![v.to_be(), a.to_be()]
-                        }
-                        #[cfg(target_endian = "big")]
-                        {
-                            vec![v, a]
-                        }
+                        vec![v.to_be(), a.to_be()]
                     })
                     .collect(),
                 LayerDepth::Color => {
@@ -179,14 +164,7 @@ fn pixel_data_to_jupyter(
                             let g: u16 = (linear_to_srgb(pixel_data[index + 1]) * one) as _;
                             let b: u16 = (linear_to_srgb(pixel_data[index + 2]) * one) as _;
 
-                            #[cfg(target_endian = "little")]
-                            {
-                                vec![r.to_be(), g.to_be(), b.to_be()]
-                            }
-                            #[cfg(target_endian = "big")]
-                            {
-                                vec![r, g, b]
-                            }
+                            vec![r.to_be(), g.to_be(), b.to_be()]
                         })
                         .collect()
                 }
@@ -201,14 +179,7 @@ fn pixel_data_to_jupyter(
                             let g: u16 = (normalize(pixel_data[index + 1]) * one) as _;
                             let b: u16 = (normalize(pixel_data[index + 2]) * one) as _;
 
-                            #[cfg(target_endian = "little")]
-                            {
-                                vec![r.to_be(), g.to_be(), b.to_be()]
-                            }
-                            #[cfg(target_endian = "big")]
-                            {
-                                vec![r, g, b]
-                            }
+                            vec![r.to_be(), g.to_be(), b.to_be()]
                         })
                         .collect()
                 }
@@ -229,14 +200,7 @@ fn pixel_data_to_jupyter(
                                     (linear_to_srgb(pixel_data[index + 2] / alpha) * one) as _;
                                 let a: u16 = (alpha * one) as _;
 
-                                #[cfg(target_endian = "little")]
-                                {
-                                    vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
-                                }
-                                #[cfg(target_endian = "big")]
-                                {
-                                    vec![r, g, b, a]
-                                }
+                                vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
                             } else {
                                 vec![0; 4]
                             }
@@ -258,14 +222,7 @@ fn pixel_data_to_jupyter(
                                 let b: u16 = (normalize(pixel_data[index + 2] / alpha) * one) as _;
                                 let a: u16 = (alpha * one) as _;
 
-                                #[cfg(target_endian = "little")]
-                                {
-                                    vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
-                                }
-                                #[cfg(target_endian = "big")]
-                                {
-                                    vec![r, g, b, a]
-                                }
+                                vec![r.to_be(), g.to_be(), b.to_be(), a.to_be()]
                             } else {
                                 vec![0; 4]
                             }

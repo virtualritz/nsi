@@ -111,8 +111,8 @@ impl LayerDepth {
 /// Accessor for the pixel format the renderer sends in [`FnOpen`](crate::output::FnOpen),
 /// [`FnWrite`](crate::output::FnWrite) and [`FnFinish`](crate::output::FnFinish)
 ///
-/// This is a stack of [`OutputLayer`](crate::context::NodeType::OutputLayer)
-/// descriptions.
+/// This is a stack of [`Layer`]s. Where each layer describes an
+/// [`OutputLayer`](crate::context::NodeType::OutputLayer).
 ///
 /// # Example
 ///
@@ -141,6 +141,31 @@ impl LayerDepth {
 /// The pixel format is in the order in which
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were defined in the
 /// [ɴsɪ scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
+///
+/// # Accessing Layers
+///
+/// To access the [`Layer`]s inside a `PixelFormat` use the [`Deref`] operator to obtain the
+/// underlying [`Vec`]<`Layer`>.
+///
+/// ```
+/// # #[cfg(feature = "output")]
+/// # {
+/// let finish = nsi::output::FinishCallback::new(
+///    |_: String,
+///     _: usize,
+///     _: usize,
+///     pixel_format: nsi::output::PixelFormat,
+///     _: Vec<f32>| {
+///         // Dump all layer descriptions to stdout.
+///         for layer in *pixel_format {
+///             println!("{:?}", layer);
+///         }
+///
+///         nsi::output::Error::None
+///     },
+/// );
+/// # }
+/// ```
 #[derive(Debug, Default)]
 pub struct PixelFormat(Vec<Layer>);
 
@@ -262,7 +287,7 @@ impl PixelFormat {
     }
 
     /// Returns the total number of channels in a pixel.
-    /// This is the sum of the number of channels in all layers.
+    /// This is the sum of the number of channels in all [`Layer`]s.
     #[inline]
     pub fn channels(&self) -> usize {
         self.0

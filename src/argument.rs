@@ -113,11 +113,11 @@ pub enum ArgData<'a, 'b> {
     Doubles(Doubles<'a>),
     /// Single [`i32`] value.
     Integer,
-    /// An [[`i32`]] array.
+    /// An [`i32`] array.
     Integers(Integers<'a>),
     /// A [`String`].
     String(String),
-    /// A [[`String`]] array.
+    /// A [`String`] array.
     Strings(Strings),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
@@ -131,15 +131,12 @@ pub enum ArgData<'a, 'b> {
     Vector(Vector<'a>),
     Vectors(Vectors<'a>),
     /// Normal vector, given as three [`f32`] values.
-    /// values.
     Normal(Normal<'a>),
     Normasl(Normals<'a>),
-    /// Transformation matrix, given as 16 [`f32`] floating
-    /// point datas.
+    /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
     Matrix(Matrix<'a>),
     Matrices(Matrices<'a>),
-    /// Transformation matrix, given as 16 [`f64`] floating
-    /// point datas.
+    /// Row-major, 4×4 transformation matrix, given as 16 [`f64`] values.
     DoubleMatrix(DoubleMatrix<'a>),
     DoubleMatrices(DoubleMatrices<'a>),
     /// Reference to arbitrary data.
@@ -565,30 +562,27 @@ nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(i32)]
 pub(crate) enum Type {
-    /// A single 32-bit ([`f32`]) floating point value.
+    /// A single [`f32`] value.
     Float = NSIType_t_NSITypeFloat as _,
-    /// A single 64-bit ([`f64`]) floating point value.
+    /// A single [`f64`] value.
     Double = NSIType_t_NSITypeDouble as _,
-    /// Single 32-bit ([`i32`]) integer data.
+    /// Single [`i32`] value.
     Integer = NSIType_t_NSITypeInteger as _,
     /// A [`String`].
     String = NSIType_t_NSITypeString as _,
-    /// Color, given as three 32-bit ([`i32`]) floating point datas,
+    /// Color, given as three [`f32`] values,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
-    /// 0.0]`
+    /// 0.0]. Assumed to be in a linear color space.`
     Color = NSIType_t_NSITypeColor as _,
-    /// Point, given as three 32-bit ([`f32`])floating point datas.
+    /// Point, given as three [`f32`] values.
     Point = NSIType_t_NSITypePoint as _,
-    /// Vector, given as three 32-bit ([`f32`]) floating point datas.
+    /// Vector, given as three [`f32`] values.
     Vector = NSIType_t_NSITypeVector as _,
-    /// Normal vector, given as three 32-bit ([`f32`]) floating point
-    /// datas.
+    /// Normal vector, given as three [`f32`] values.
     Normal = NSIType_t_NSITypeNormal as _,
-    /// Transformation matrix, given as 16 32-bit ([`f32`]) floating
-    /// point datas.
+    /// Transformation matrix, given as 16 [`f32`] values.
     Matrix = NSIType_t_NSITypeMatrix as _,
-    /// Transformation matrix, given as 16 64-bit ([`f64`]) floating
-    /// point datas.
+    /// Transformation matrix, given as 16 [`f64`] values.
     DoubleMatrix = NSIType_t_NSITypeDoubleMatrix as _,
     /// Raw (`*const T`) pointer.
     Pointer = NSIType_t_NSITypePointer as _,
@@ -726,7 +720,8 @@ macro_rules! normals {
     };
 }
 
-/// Create a [`Matrices`] single precision 4×4 matrix argument.
+/// Create a [`Matrix`] row-major, 4×4 transformation matrix argument.
+/// The matrix is given as 16 [`f32`] values.
 #[macro_export]
 macro_rules! matrix {
     ($name: tt, $value: expr) => {
@@ -734,8 +729,8 @@ macro_rules! matrix {
     };
 }
 
-/// Create a [`Matrices`] single precision 4×4 matrix array
-/// argument.
+/// Create a [`Matrices`] row-major, 4×4 transformation matrices argument.
+/// Each matrix is given as 16 [`f32`] values.
 #[macro_export]
 macro_rules! matrices {
     ($name: tt, $value: expr) => {
@@ -743,7 +738,8 @@ macro_rules! matrices {
     };
 }
 
-/// Create a [`DoubleMatrix`] double precision 4×4 matrix argument.
+/// Create a [`DoubleMatrix`] row-major, 4×4 transformation matrix argument.
+/// The matrix is given as 16 [`f64`] values.
 /// # Example
 /// ```
 /// # let ctx = nsi::Context::new(&[]).unwrap();
@@ -767,8 +763,8 @@ macro_rules! double_matrix {
     };
 }
 
-/// Create a [`DoubleMatrices`] double precision 4×4 matrix
-/// array argument.
+/// Create a [`DoubleMatrices`] row-major, 4×4 transformation matrices argument.
+/// Each matrix is given as 16 [`f64`] values.
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
