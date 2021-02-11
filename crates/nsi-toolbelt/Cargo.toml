@@ -1,0 +1,19 @@
+[package]
+name = "nsi-toolbelt"
+version = "0.6.1"
+authors = ["Moritz Moeller <virtualritz@gmail.com>"]
+edition = "2018"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[dependencies]
+nsi-core = { path = "../nsi-core" }
+rand = { version = "0.8.3", features = ["small_rng"] }
+ultraviolet = { version = "0.7.5", features = ["f64"] }
+petname = "1.1.0"

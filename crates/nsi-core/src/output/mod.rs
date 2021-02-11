@@ -153,10 +153,6 @@ use std::{
     os::raw::{c_char, c_int, c_void},
 };
 
-// Juypiter notebook support ------------------------------------------
-#[cfg(feature = "jupyter")]
-pub mod jupyter;
-
 pub mod pixel_format;
 pub use pixel_format::*;
 

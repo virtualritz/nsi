@@ -1,7 +1,7 @@
 use dl_openvdb_query as vdbq;
 use nsi_3delight as nsi_3dl;
 
-static VDB_ASSET: &str = "assets/fireball.vdb";
+static VDB_ASSET: &str = "assets/fireball_hi.vdb";
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
@@ -22,6 +22,7 @@ pub fn main() {
         .0,
     );
 
+    /*
     ctx.append(
         ".root",
         None,
@@ -85,6 +86,43 @@ pub fn main() {
             .0,
         )
         .0,
+    );*/
+
+    use polyhedron_ops::Polyhedron;
+
+    let polyhedron = Polyhedron::dodecahedron();
+
+    ctx.append(
+        ".root",
+        None,
+        &ctx.append(
+            &polyhedron.to_nsi(&ctx, None, None, None, None),
+            Some("geometryattributes"),
+            &ctx.append(
+                &ctx.node(None, nsi::NodeType::Attributes, &[]),
+                Some("surfaceshader"),
+                &ctx.node(
+                    None,
+                    nsi::NodeType::Shader,
+                    &[
+                        nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
+                        nsi::color!("i_color", &[1., 0.6, 0.3]),
+                        //nsi::arg!("coating_thickness", 0.1),
+                        nsi::float!("roughness", 0.1),
+                        nsi::float!("specular_level", 1.0),
+                        nsi::float!("metallic", 1.),
+                        nsi::float!("anisotropy", 0.),
+                        nsi::float!("sss_weight", 0.),
+                        nsi::color!("sss_color", &[0.5, 0.5, 0.5]),
+                        nsi::float!("sss_scale", 0.),
+                        nsi::color!("incandescence", &[0., 0., 0.]),
+                        nsi::float!("incandescence_intensity", 0.),
+                    ],
+                ),
+            )
+            .0,
+        )
+        .0,
     );
 
     let field_of_view = 50.0;
@@ -103,12 +141,12 @@ pub fn main() {
                 // Up.
                 &[0.0, 1.0, 0.0],
                 field_of_view,
-                Some(1.0 / 2.0),
+                Some(2.0),
                 // Bounding box to frame.
-                &vdbq::DlOpenVdbQuery::new(VDB_ASSET)
-                    .unwrap()
-                    .bounding_box()
-                    .unwrap(),
+                &polyhedron.bounding_box(), /*&vdbq::DlOpenVdbQuery::new(VDB_ASSET)
+                                            .unwrap()
+                                            .bounding_box()
+                                            .unwrap(),*/
             ),
             None,
             // Attach screen to our camera
@@ -118,8 +156,8 @@ pub fn main() {
                     nsi::NodeType::PerspectiveCamera,
                     &[
                         nsi::float!("fov", field_of_view),
-                        nsi::doubles!("shutterrange", &[-0.01042, 0.01042]),
-                        nsi::doubles!("shutteropening", &[0.333, 0.666]),
+                        /*nsi::doubles!("shutterrange", &[-0.01042, 0.01042]),
+                         *nsi::doubles!("shutteropening", &[0.333, 0.666]), */
                     ],
                 ),
                 Some("screens"),
@@ -128,7 +166,7 @@ pub fn main() {
                         None,
                         nsi::NodeType::Screen,
                         &[
-                            nsi::integers!("resolution", &[512, 1024]).array_len(2),
+                            nsi::integers!("resolution", &[1024, 512]).array_len(2),
                             nsi::integer!("oversampling", 64),
                         ],
                     ),
@@ -164,7 +202,6 @@ pub fn main() {
         &[
             nsi::integer!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "spiral"),
-            //nsi::unsigned!("quality.shadingsamples", 64),
             nsi::integer!("quality.volumesamples", 16),
         ],
     );
@@ -173,42 +210,3 @@ pub fn main() {
     ctx.render_control(&[nsi::string!("action", "start")]);
     ctx.render_control(&[nsi::string!("action", "wait")]);
 }
-
-/*
-let polyhedron = p_ops::Polyhedron::dodecahedron();
-
-ctx.append(
-    ".root",
-    None,
-    &ctx.append(
-        &polyhedron.to_nsi(&ctx, None, None, None, None),
-        Some("geometryattributes"),
-        &ctx.append(
-            &ctx.node(None, nsi::NodeType::Attributes, &[]),
-            Some("surfaceshader"),
-            &ctx.node(
-                None,
-                nsi::NodeType::Shader,
-                &[
-                    nsi::string!(
-                        "shaderfilename",
-                        "${DELIGHT}/osl/dlPrincipled"
-                    ),
-                    nsi::color!("i_color", &[1., 0.6, 0.3]),
-                    //nsi::arg!("coating_thickness", 0.1),
-                    nsi::float!("roughness", 0.1),
-                    nsi::float!("specular_level", 1.0),
-                    nsi::float!("metallic", 1.),
-                    nsi::float!("anisotropy", 0.),
-                    nsi::float!("sss_weight", 0.),
-                    nsi::color!("sss_color", &[0.5, 0.5, 0.5]),
-                    nsi::float!("sss_scale", 0.),
-                    nsi::color!("incandescence", &[0., 0., 0.]),
-                    nsi::float!("incandescence_intensity", 0.),
-                ],
-            ),
-        )
-        .0,
-    )
-    .0,
-);*/

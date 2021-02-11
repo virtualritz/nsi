@@ -1,8 +1,3 @@
-#![cfg_attr(
-    all(debug_assertions, feature = "nightly"),
-    feature(cstring_from_vec_with_nul)
-)]
-#![cfg_attr(feature = "nightly", feature(doc_cfg))]
 //#![warn(missing_docs)]
 //#![warn(missing_doc_code_examples)]
 //! # Nodal Scene Interface – ɴsɪ
@@ -10,7 +5,7 @@
 //!
 //! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
 //! nodes. Each node has a *unique handle* to identify it. It also has
-//! a [type](context::NodeType) which describes its intended function
+//! a [type](nsi_core::context::NodeType) which describes its intended function
 //! in the scene.
 //!
 //! Nodes are abstract containers for data. The interpretation depends
@@ -34,9 +29,9 @@
 //! What we refer to as the ɴsɪ has two major components:
 //!
 //! 1.  Methods to create nodes, attributes and their connections.
-//!     These are attached to a rendering [`Context`](context::Context).
+//!     These are attached to a rendering [`Context`](nsi_core::context::Context).
 //!
-//! 2.  Nodes of different [`NodeType`](context::NodeType)s understood by the
+//! 2.  Nodes of different [`NodeType`](nsi_core::context::NodeType)s understood by the
 //! renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
@@ -105,7 +100,7 @@
 //! installation to run.
 //!
 //! ### Interactive
-//! Demonstrates using the [`FnStatus`](crate::context::FnStatus) callback closure during
+//! Demonstrates using the [`FnStatus`](nsi_core::context::FnStatus) callback closure during
 //! rendering.
 //!
 //! ### Jupyter
@@ -116,26 +111,26 @@
 //! get a Rust Jupyter kernel up and running first.
 //!
 //! ### Output
-//! This is a full [`output`] example showing color conversion and writing data out to 8bit/channel PNG
+//! This is a full [`output`](nsi_core::output) example showing color conversion and writing data out to 8bit/channel PNG
 //! and 32bit/channel (float) OpenEXR formats.
 //!
 //! ### Volume
 //! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly through the
-//! [`toolbelt`] helpers.
+//! [`toolbelt`](crate::toolbelt) helpers.
 //!
 //! ## Getting Pixels
 //! The crate has support for streaming pixels from the renderer, via callbacks (i.e. closures)
-//! during and/or after rendering via the [`output`] module. This module is enabled through the
+//! during and/or after rendering via the [`output`](nsi_core::output) module. This module is enabled through the
 //! feature of the same name (see below).
 //!
 //! ## Cargo Features
-//! * [`output`] – Add support for streaming pixels from the renderer to the calling context via
+//! * [`output`](nsi_core::output) – Add support for streaming pixels from the renderer to the calling context via
 //!    closures.
 //!
-//! * [`jupyter`](output::jupyter) – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
+//! * [`jupyter`](crate::jupyter) – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
 //!    kernel](https://github.com/google/evcxr)).
 //!
-//! * [`toolbelt`] – Add convenience methods to [`Context`].
+//! * [`toolbelt`](crate::toolbelt) – Add convenience methods that work with a [`Context`](nsi_core::context::Context).
 //!
 //! * `nightly` – Enable some unstable features (suggested if you build with a `nightly` toolchain)
 //!
@@ -169,147 +164,6 @@
 //!     feature mainly exists for CI purposes.
 //!
 //!   * The feature is called `download_lib3delight`.
-#![allow(non_snake_case)]
-//#![warn(missing_docs)]
-//#![warn(missing_doc_code_examples)]
 
-#[cfg(not(feature = "link_lib3delight"))]
-#[macro_use]
-extern crate dlopen_derive;
-
-use nsi_sys::*;
-
-// Crate features -----------------------------------------------------
-
-#[cfg(not(feature = "link_lib3delight"))]
-mod dynamic;
-#[cfg(feature = "link_lib3delight")]
-mod linked;
-
-#[cfg(not(feature = "link_lib3delight"))]
-use self::dynamic as api;
-#[cfg(feature = "link_lib3delight")]
-use self::linked as api;
-
-//#[cfg(any(feature = "output", feature = "jupyter"))]
-//use ndspy_sys;
-
-// API initalization/on-demand loading of lib3delight -----------------
-
-#[macro_use]
-extern crate lazy_static;
-
-lazy_static! {
-    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight.");
-}
-
-// Default modules ----------------------------------------------------
-
-#[macro_use]
-pub mod argument;
-// Context should be in the crate root so we keep the module private.`
-pub mod context;
-
-// Optional modules ---------------------------------------------------
-
-#[cfg(any(feature = "output", feature = "jupyter"))]
-pub mod output;
-
-// Add a bunch of utility methods to [`Context`].
-#[cfg(feature = "toolbelt")]
-pub mod toolbelt;
-
-mod tests;
-
-pub use crate::{
-    argument::*,
-    context::{Context, NodeType},
-};
-
-#[cfg(feature = "toolbelt")]
-pub use crate::toolbelt::*;
-
-#[deprecated]
-pub mod prelude {}
-
-trait Api {
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
-    fn NSIEnd(&self, ctx: NSIContext_t);
-    fn NSICreate(
-        &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
-        type_: *const ::std::os::raw::c_char,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSIDelete(
-        &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSISetAttribute(
-        &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSISetAttributeAtTime(
-        &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
-        time: f64,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSIDeleteAttribute(
-        &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
-        name: *const ::std::os::raw::c_char,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn NSIConnect(
-        &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
-        from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
-        to_attr: *const ::std::os::raw::c_char,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSIDisconnect(
-        &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
-        from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
-        to_attr: *const ::std::os::raw::c_char,
-    );
-    fn NSIEvaluate(
-        &self,
-        ctx: NSIContext_t,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-    fn NSIRenderControl(
-        &self,
-        ctx: NSIContext_t,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
-
-    #[cfg(any(feature = "output", feature = "jupyter"))]
-    fn DspyRegisterDriver(
-        &self,
-        driver_name: *const ::std::os::raw::c_char,
-        p_open: ndspy_sys::PtDspyOpenFuncPtr,
-        p_write: ndspy_sys::PtDspyWriteFuncPtr,
-        p_close: ndspy_sys::PtDspyCloseFuncPtr,
-        p_query: ndspy_sys::PtDspyQueryFuncPtr,
-    ) -> ndspy_sys::PtDspyError;
-}
+pub use nsi_core::*;
+pub use nsi_internal::*;

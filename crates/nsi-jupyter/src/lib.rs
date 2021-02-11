@@ -1,20 +1,17 @@
-#![cfg_attr(feature = "nightly", doc(cfg(feature = "jupyter")))]
 //! # Jupyter Notebook Support
 //!
-//! This module adds an
-//! [`as_jupyter()`](crate::Context::as_jupyter())
-//! method to a [`Context`](crate::Context).
+//! This module adds an [`as_jupyter()`] function that takes a [`Context`](nsi::Context).
 //!
-//! A [`Screen`](crate::context::NodeType::Screen) can be rendered
+//! A [`Screen`](nsi::context::NodeType::Screen) can be rendered
 //! directly inside a notebook.
 //!
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
-use crate as nsi;
-use crate::{
+use nsi::{
     argument::ArgSlice,
     output::{Layer, LayerDepth, PixelFormat},
 };
+use nsi_core as nsi;
 use rayon::prelude::*;
 
 // FIXME: implement this for Context instead of the single method
@@ -25,90 +22,82 @@ trait _Jupyter<'a> {
     fn output_layer_as_jupyter(output_layer: &str, args: &ArgSlice<'_, 'a>);
 }
 
-impl<'a> nsi::Context<'a> {
-    /// Render a [`Screen`](crate::context::NodeType::Screen) inside a
-    /// Jupyter Notebook.
-    ///
-    /// Essentially this dumps a 16bit PNG as a BASE64 encoded binary
-    /// blob to `stdout`.
-    ///
-    /// The [`Context`](crate::Context) is unchanged after this returns.
-    /// # Example
-    /// ```no_run
-    /// // Setup a screen.
-    /// # let ctx = nsi::Context::new(&[]).unwrap();
-    /// ctx.create("screen", nsi::NodeType::Screen, &[]);
-    /// ctx.connect("screen", "", "my_camera", "screens", &[]);
-    /// ctx.set_attribute(
-    ///     "screen",
-    ///     &[
-    ///         // Some 2:1 wide angle view.
-    ///         nsi::integers!("resolution", &[1280, 640]).array_len(2),
-    ///         // 20 antialiasing samples per pixel.
-    ///         nsi::integer!("oversampling", 20),
-    ///     ],
-    /// );
-    ///
-    /// // Put an image of what "my_camera" sees into our notebook.
-    /// ctx.as_jupyter("screen");
-    /// ```
-    /// # Arguments
-    /// * `screen` – A [`Screen`](crate::context::NodeType::Screen).
-    pub fn as_jupyter(&self, screen: &str) {
-        // RGB layer.
-        self.create("jupyter_beauty", nsi::NodeType::OutputLayer, &[]);
-        self.set_attribute(
-            "jupyter_beauty",
-            &[
-                nsi::string!("variablename", "Ci"),
-                nsi::integer!("withalpha", 1),
-                nsi::string!("scalarformat", "float"),
-            ],
-        );
-        self.connect("jupyter_beauty", "", screen, "outputlayers", &[]);
+/// Render a [`Screen`](nsi::context::NodeType::Screen) inside a
+/// Jupyter Notebook.
+///
+/// Essentially this dumps a 16bit PNG as a BASE64 encoded binary
+/// blob to `stdout`.
+///
+/// The [`Context`](nsi::Context) is unchanged after this returns.
+/// # Example
+/// ```no_run
+/// // Setup a screen.
+/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// ctx.create("screen", nsi::NodeType::Screen, &[]);
+/// ctx.connect("screen", "", "my_camera", "screens", &[]);
+/// ctx.set_attribute(
+///     "screen",
+///     &[
+///         // Some 2:1 wide angle view.
+///         nsi::integers!("resolution", &[1280, 640]).array_len(2),
+///         // 20 antialiasing samples per pixel.
+///         nsi::integer!("oversampling", 20),
+///     ],
+/// );
+///
+/// // Put an image of what "my_camera" sees into our notebook.
+/// as_jupyter(ctx, "screen");
+/// ```
+/// # Arguments
+/// * `screen` – A [`Screen`](nsi::context::NodeType::Screen).
+pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
+    // RGB layer.
+    ctx.create("jupyter_beauty", nsi::NodeType::OutputLayer, &[]);
+    ctx.set_attribute(
+        "jupyter_beauty",
+        &[
+            nsi::string!("variablename", "Ci"),
+            nsi::integer!("withalpha", 1),
+            nsi::string!("scalarformat", "float"),
+        ],
+    );
+    ctx.connect("jupyter_beauty", "", screen, "outputlayers", &[]);
 
-        // Callback to collect our pixels.
-        let finish = nsi::output::FinishCallback::new(
-            |_name: String,
-             width: usize,
-             height: usize,
-             pixel_format: PixelFormat,
-             pixel_data: Vec<f32>| {
-                pixel_format.iter().for_each(|layer| {
-                    pixel_data_to_jupyter(
-                        width,
-                        height,
-                        &layer,
-                        pixel_format.channels(),
-                        &pixel_data,
-                    )
-                });
+    // Callback to collect our pixels.
+    let finish = nsi::output::FinishCallback::new(
+        |_name: String,
+         width: usize,
+         height: usize,
+         pixel_format: PixelFormat,
+         pixel_data: Vec<f32>| {
+            pixel_format.iter().for_each(|layer| {
+                pixel_data_to_jupyter(width, height, &layer, pixel_format.channels(), &pixel_data)
+            });
 
-                nsi::output::Error::None
-            },
-        );
+            nsi::output::Error::None
+        },
+    );
 
-        // Setup an output driver.
-        self.create("jupyter_driver", nsi::NodeType::OutputDriver, &[]);
-        self.connect("jupyter_driver", "", "jupyter_beauty", "outputdrivers", &[]);
+    // Setup an output driver.
+    ctx.create("jupyter_driver", nsi::NodeType::OutputDriver, &[]);
+    ctx.connect("jupyter_driver", "", "jupyter_beauty", "outputdrivers", &[]);
 
-        self.set_attribute(
-            "jupyter_driver",
-            &[
-                nsi::string!("drivername", nsi::output::FERRIS),
-                nsi::string!("imagefilename", "jupyter"),
-                nsi::callback!("callback.finish", finish),
-            ],
-        );
+    ctx.set_attribute(
+        "jupyter_driver",
+        &[
+            nsi::string!("drivername", nsi::output::FERRIS),
+            nsi::string!("imagefilename", "jupyter"),
+            nsi::callback!("callback.finish", finish),
+        ],
+    );
 
-        // And now, render it!
-        self.render_control(&[nsi::string!("action", "start")]);
-        // Block until render is finished.
-        self.render_control(&[nsi::string!("action", "wait")]);
+    // And now, render it!
+    ctx.render_control(&[nsi::string!("action", "start")]);
+    // Block until render is finished.
+    ctx.render_control(&[nsi::string!("action", "wait")]);
 
-        // Make our Context pristine again.
-        self.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
-    }
+    // Make our Context pristine again.
+    ctx.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
 }
 
 /// Multi-threaded color profile application & quantization to 8bit.

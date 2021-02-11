@@ -7,54 +7,38 @@ keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
+exclude = [".github/**/*", "crates/**/*"]
 readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
+[workspace]
+members = ["crates/*"]
+
 [features]
-default = ["dlopen_derive", "dlopen"]
+default = []
 # Specify this to link agains lib3delight
-link_lib3delight = ["nsi-sys/link_lib3delight", "ndspy-sys/link_lib3delight"]
+link_lib3delight = ["nsi-core/link_lib3delight"]
 # Whether to download a dynamic library version of 3Delight
 # if the renderer can't be found locally. The renderer is
 # needed as soon as the crate is linked against (e.g. for
 # running the tests).
-download_lib3delight = ["nsi-sys/download_lib3delight"]
-# Jupyter notebooks integration.
-jupyter = ["base64", "bytemuck", "evcxr_runtime", "png", "rayon", "output"]
+download_lib3delight = ["nsi-core/download_lib3delight"]
 # Pixel streaming support.
-output = ["ndspy-sys"]
+output = ["nsi-core/output"]
+# Jupyter notebooks integration.
+jupyter = ["nsi-internal/nsi-jupyter"]
 # Scene construction helpers.
-toolbelt = ["petname", "rand", "ultraviolet"]
+toolbelt = ["nsi-internal/nsi-toolbelt"]
+# 3Delight support.
+delight = ["nsi-internal/nsi-3delight"]
 # Nightly/unstable features.
-nightly = []
-
-[dev-dependencies]
-cargo-husky = "1.5.0"
-dl-openvdb-query = "0.1.1"
-exr = "1.0.0"
-nsi-3delight = { path = "../nsi-3delight" }
-png = "0.16.8"
-polyhedron-ops = { path = "../polyhedron-ops", features = [ "nsi" ] }
+nightly = ["nsi-core/nightly"]
 
 [dependencies]
-enum_dispatch = "0.3.5"
-lazy_static = "1.4.0"
-num_enum = "0.5.1"
-nsi-sys = "0.1.13"
-# Optional deps.
-base64 = { version = "0.13.0", optional = true }
-bytemuck = { version = "1.5.0", optional = true }
-dlopen = { version = "0.1.8", optional = true }
-dlopen_derive = { version = "0.1.4", optional = true }
-evcxr_runtime = { version = "1.1.0", optional = true }
-png = { version = "0.16.8", optional = true }
-ndspy-sys = { version = "0.1.7", optional = true }
-rand = { version = "0.8.3", features = ["small_rng"], optional = true }
-rayon = { version = "1.5.0", optional = true }
-ultraviolet = { version = "0.7.5", features = ["f64"], optional = true }
-petname = { version = "1.1.0", optional = true }
+nsi-core = { path = "crates/nsi-core" }
+nsi-internal = { path = "crates/nsi-internal" }
 
 [[example]]
 path = "examples/interactive/main.rs"
@@ -65,10 +49,5 @@ path = "examples/output/main.rs"
 name = "output"
 required-features = ["output", "toolbelt"]
 
-[[example]]
-path = "examples/volume/main.rs"
-name = "volume"
-required-features = ["toolbelt"]
-
 [package.metadata.docs.rs]
-features = ["output", "toolbelt", "nightly"]
+features = ["nsi-jupyter", "nsi-output", "nsi-toolbelt", "nsi-3delight", "nightly"]

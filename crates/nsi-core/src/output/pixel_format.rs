@@ -151,11 +151,7 @@ impl LayerDepth {
 /// # #[cfg(feature = "output")]
 /// # {
 /// let finish = nsi::output::FinishCallback::new(
-///    |_: String,
-///     _: usize,
-///     _: usize,
-///     pixel_format: nsi::output::PixelFormat,
-///     _: Vec<f32>| {
+///     |_: String, _: usize, _: usize, pixel_format: nsi::output::PixelFormat, _: Vec<f32>| {
 ///         // Dump all layer descriptions to stdout.
 ///         for layer in *pixel_format {
 ///             println!("{:?}", layer);

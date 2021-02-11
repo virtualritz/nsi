@@ -1,0 +1,17 @@
+[package]
+name = "nsi-3delight"
+version = "0.1.1"
+authors = ["Moritz Moeller <virtualritz@gmail.com>"]
+edition = "2018"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Nodal Scene Interface (ɴsɪ) helpers for the 3Delight renderer."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-3delight/"
+repository = "https://github.com/virtualritz/nsi-3delight/"
+
+[dependencies]
+nsi-core = { path = "../nsi-core" }
+nsi-toolbelt = { path = "../nsi-toolbelt" }
