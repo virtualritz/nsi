@@ -1,5 +1,7 @@
 use dl_openvdb_query as vdbq;
-use nsi_3delight as nsi_3dl;
+use nsi_3delight::*;
+use nsi_core as nsi;
+use nsi_toolbelt::*;
 
 static VDB_ASSET: &str = "assets/fireball_hi.vdb";
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
@@ -7,10 +9,11 @@ static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 pub fn main() {
     let ctx = nsi::Context::new(&[]).unwrap();
 
-    ctx.append(
+    append(
+        &ctx,
         ".root",
         None,
-        &nsi_3dl::environment_texture(
+        &environment_texture(
             &ctx,
             None,
             ENVMAP_HDR,
@@ -23,14 +26,14 @@ pub fn main() {
     );
 
     /*
-    ctx.append(
+    append(&ctx,
         ".root",
         None,
-        ctx.append(
-            &ctx.rotation(None, 135.0, &[0.0, 1.0, 0.0]),
+        append(&ctx,
+            &rotation(ctx, None, 135.0, &[0.0, 1.0, 0.0]),
             None,
-            &ctx.append(
-                &ctx.node(
+            &append(&ctx.,
+                &node(&ctx,
                     None,
                     nsi::NodeType::Volume,
                     &[
@@ -42,10 +45,10 @@ pub fn main() {
                     ],
                 ),
                 Some("geometryattributes"),
-                &ctx.append(
-                    &ctx.node(None, nsi::NodeType::Attributes, &[]),
+                &append(&ctx,
+                    &node(&ctx, None, nsi::NodeType::Attributes, &[]),
                     Some("volumeshader"),
-                    &ctx.node(
+                    &node(&ctx,
                         None,
                         nsi::NodeType::Shader,
                         &[
@@ -92,16 +95,20 @@ pub fn main() {
 
     let polyhedron = Polyhedron::dodecahedron();
 
-    ctx.append(
+    append(
+        &ctx,
         ".root",
         None,
-        &ctx.append(
+        &append(
+            &ctx,
             &polyhedron.to_nsi(&ctx, None, None, None, None),
             Some("geometryattributes"),
-            &ctx.append(
-                &ctx.node(None, nsi::NodeType::Attributes, &[]),
+            &append(
+                &ctx,
+                &node(&ctx, None, nsi::NodeType::Attributes, &[]),
                 Some("surfaceshader"),
-                &ctx.node(
+                &node(
+                    &ctx,
                     None,
                     nsi::NodeType::Shader,
                     &[
@@ -129,12 +136,15 @@ pub fn main() {
 
     // Build our scene graph.
     // Attach our camera to a look-at xform.
-    ctx.append(
+    append(
+        &ctx,
         ".root",
         // None – use "objects"
         None,
-        &ctx.append(
-            &ctx.look_at_bounding_box_perspective_camera(
+        &append(
+            &ctx,
+            &look_at_bounding_box_perspective_camera(
+                &ctx,
                 None,
                 // Direction.
                 &[0.0, -0.1, -1.0],
@@ -150,8 +160,10 @@ pub fn main() {
             ),
             None,
             // Attach screen to our camera
-            &ctx.append(
-                &ctx.node(
+            &append(
+                &ctx,
+                &node(
+                    &ctx,
                     None,
                     nsi::NodeType::PerspectiveCamera,
                     &[
@@ -161,8 +173,10 @@ pub fn main() {
                     ],
                 ),
                 Some("screens"),
-                &ctx.append(
-                    &ctx.node(
+                &append(
+                    &ctx,
+                    &node(
+                        &ctx,
                         None,
                         nsi::NodeType::Screen,
                         &[
@@ -171,8 +185,10 @@ pub fn main() {
                         ],
                     ),
                     Some("outputlayers"),
-                    &ctx.append(
-                        &ctx.node(
+                    &append(
+                        &ctx,
+                        &node(
+                            &ctx,
                             None,
                             nsi::NodeType::OutputLayer,
                             &[
@@ -182,7 +198,8 @@ pub fn main() {
                             ],
                         ),
                         Some("outputdrivers"),
-                        &ctx.node(
+                        &node(
+                            &ctx,
                             Some("driver"),
                             nsi::NodeType::OutputDriver,
                             &[nsi::string!("drivername", "idisplay")],

@@ -1,4 +1,5 @@
 use exr::prelude::*;
+use nsi_core as nsi;
 use png;
 use polyhedron_ops as p_ops;
 use std::{

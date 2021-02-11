@@ -1,5 +1,6 @@
-// Demonstrates using the render_control() "callback" parameter to have the renderer call a
-// closure when it is done.
+//! Demonstrates using the render_control() "callback" parameter to have the renderer call a
+//! closure when it is done.
+use nsi_core as nsi;
 
 fn main() {
     let ctx = nsi::Context::new(&[]).unwrap();

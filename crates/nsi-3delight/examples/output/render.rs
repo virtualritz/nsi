@@ -1,5 +1,7 @@
 use crate::p_ops;
 use nsi_3delight as nsi_3dl;
+use nsi_core as nsi;
+use nsi_toolbelt as nsi_tb;
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
@@ -178,7 +180,8 @@ pub(crate) fn nsi_render<'a>(
 
     nsi_camera(&ctx, &polyhedron.name(), open, write, finish);
 
-    ctx.append(
+    nsi_tb::append(
+        &ctx,
         ".root",
         None,
         &nsi_3dl::environment_texture(
@@ -194,7 +197,7 @@ pub(crate) fn nsi_render<'a>(
     );
 
     let name = polyhedron.to_nsi(&ctx, None, None, None, None);
-    ctx.append(".root", None, &name);
+    nsi_tb::append(&ctx, ".root", None, &name);
 
     nsi_material(&ctx, &name);
 
