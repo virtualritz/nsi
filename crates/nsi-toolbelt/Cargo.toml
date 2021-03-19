@@ -15,5 +15,5 @@ repository = "https://github.com/virtualritz/nsi/"
 [dependencies]
 nsi-core = { path = "../nsi-core" }
 rand = { version = "0.8.3", features = ["small_rng"] }
-ultraviolet = { version = "0.7.5", features = ["f64"] }
+ultraviolet = { version = "0.8.0", features = ["f64"] }
 petname = "1.1.0"
