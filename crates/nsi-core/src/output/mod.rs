@@ -187,7 +187,7 @@ pub enum Error {
 /// The closure is called once, before the renderer starts sending pixels to the output driver.
 ///
 /// # Arguments
-/// The `pixel_format` parameter is an array of strings that details the composition of the `f32`
+/// The [`PixelFormat`] parameter is an array of strings that details the composition of the `f32`
 /// data that the renderer will send to the [`FnWrite`] and/or [`FnFinish`] closures.
 ///
 /// # Example

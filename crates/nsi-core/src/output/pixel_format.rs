@@ -1,8 +1,8 @@
-use core::ops::Deref;
+use derive_more::Deref;
 use std::ffi::CStr;
 /// Description of an [`OutputLayer`](crate::context::NodeType::OutputLayer)
 /// inside a flat, raw pixel.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Layer {
     name: String,
     depth: LayerDepth,
@@ -162,8 +162,8 @@ impl LayerDepth {
 /// );
 /// # }
 /// ```
-#[derive(Debug, Default)]
-pub struct PixelFormat(Vec<Layer>);
+#[derive(Debug, Default, Deref)]
+pub struct PixelFormat(#[deref] Vec<Layer>);
 
 impl PixelFormat {
     #[inline]
@@ -289,13 +289,5 @@ impl PixelFormat {
         self.0
             .iter()
             .fold(0, |total, layer| total + layer.channels())
-    }
-}
-
-impl Deref for PixelFormat {
-    type Target = Vec<Layer>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }

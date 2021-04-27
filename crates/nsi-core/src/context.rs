@@ -440,7 +440,10 @@ impl<'a> Context<'a> {
             Some(render_status as extern "C" fn(*mut c_void, i32, i32));
 
         if let Some(arg) = args.iter().find_map(|arg| {
-            if unsafe { CStr::from_bytes_with_nul_unchecked(b"callback\0") } == arg.name.as_c_str()
+            if b"callback\0"
+                .iter()
+                .zip(arg.name.as_bytes_with_nul().iter())
+                .all(|(a, b)| a == b)
             {
                 Some(arg)
             } else {
