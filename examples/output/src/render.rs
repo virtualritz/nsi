@@ -1,5 +1,6 @@
 use crate::p_ops;
-use nsi_3delight as nsi_3dl;
+
+//use nsi::toolbelt as nsi_tb;
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
@@ -178,10 +179,10 @@ pub(crate) fn nsi_render<'a>(
 
     nsi_camera(&ctx, &polyhedron.name(), open, write, finish);
 
-    ctx.append(
+    nsi::append(
+        &ctx,
         ".root",
-        None,
-        &nsi_3dl::environment_texture(
+        &nsi::environment_texture(
             &ctx,
             None,
             "assets/wooden_lounge_1k.tdl",
@@ -191,10 +192,11 @@ pub(crate) fn nsi_render<'a>(
             &[],
         )
         .0,
+        None,
     );
 
     let name = polyhedron.to_nsi(&ctx, None, None, None, None);
-    ctx.append(".root", None, &name);
+    nsi::append(&ctx, ".root", &name, None);
 
     nsi_material(&ctx, &name);
 

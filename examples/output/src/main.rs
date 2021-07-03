@@ -15,26 +15,22 @@ pub fn main() {
     let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
     // Open closure.
-    // Called before the renderer will send any pixels via
-    // WriteCallback.
-    // If you decide to write data directly into a file in
-    // WriteCallback.
+    // Called before the renderer will send any pixels via WriteCallback.
+    // If you decide to write data directly into a file in WriteCallback.
     let open = nsi::output::OpenCallback::new(
         |_name: &str, width: usize, height: usize, format: &nsi::output::PixelFormat| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
-            // Create a properly size buffer to receive our pixel data.
+            // Create a properly sized buffer to receive our pixel data.
             *quantized_pixel_data = vec![0u8; width * height * format.channels()];
             nsi::output::Error::None
         },
     );
 
     // Write closure.
-    // Called for each bucket or scanline of pixels that have been
-    // rendered.
-    // Bucket size is commonly 16x16 pixels but this is not guaranteed
-    // by the API.
-    // The pixel_data will contain a full buffer of all the pixel that
-    // were finished so far.
+    // Called for each bucket or scanline of pixels that have been rendered.
+    // Bucket size is commonly 16x16 pixels but this is not guaranteed by the API.
+    // The pixel_data will contain a full buffer of all the pixel that were finished
+    // so far.
     let write = nsi::output::WriteCallback::new(
         |_name: &str,
          width: usize,
@@ -56,12 +52,10 @@ pub fn main() {
 
                     // Ignore pixels with zero alpha.
                     if 0.0 != alpha {
-                        // Unpremultiply the color – this is needed
-                        // or else the color profile transform will
-                        // yield wrong results for pixels with
-                        // non-opaque alpha. Furthermore PNG wants
-                        // unpremultiplied pixels and that is what
-                        // we will write the 8bit data to, at the end.
+                        // Unpremultiply the color – this is needed or else the color profile
+                        // transform will yield wrong results for pixels with non-opaque alpha.
+                        // Furthermore PNG wants unpremultiplied pixels and that is what we will
+                        // write the 8bit data to, at the end.
                         quantized_pixel_data[index + 0] =
                             (linear_to_srgb(pixel_data[index + 0] / alpha) * 255.0) as _;
                         quantized_pixel_data[index + 1] =
@@ -91,10 +85,9 @@ pub fn main() {
          pixel_data: Vec<f32>| {
             let sample = |x: usize, y: usize| {
                 let index = pixel_format.channels() * (x + y * width);
-                // We just assume the 1st four channels are rgba as we set
-                // this up like so above. In real world code you would
-                // probably branch depending on pixel_format[n].depth()
-                // (and do so outside this closure, ofc).
+                // We just assume the 1st four channels are rgba as we set this up like so
+                // above. In real world code you would probably branch depending on
+                // pixel_format[n].depth() (and do so outside this closure, ofc).
                 (
                     pixel_data[index + 0],
                     pixel_data[index + 1],
@@ -104,7 +97,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_f32_file(name + ".exr", Vec2(width, height), &sample).unwrap();
+            write_rgba_file(name + ".exr", width, height, &sample).unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);
@@ -130,8 +123,8 @@ pub fn main() {
         .into_inner()
         .unwrap();
 
-    // Write out the display-referred, u8 quantized data we prepared
-    // in the write closure above as a PNG.
+    // Write out the display-referred, u8 quantized data we prepared in the write
+    // closure above as a PNG.
     let path = Path::new("test.png");
     let file = File::create(path).unwrap();
     let ref mut writer = BufWriter::new(file);

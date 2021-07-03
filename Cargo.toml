@@ -5,7 +5,7 @@ authors = ["Moritz Moeller <virtualritz@gmail.com>"]
 edition = "2018"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
-license = "MIT OR Apache-2.0 OR Zlib"
+license = "Apache-2.0 OR BSD-3-Clause OR MIT OR Zlib"
 description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
 exclude = [".github/**/*", "crates/**/*"]
 readme = "README.md"
@@ -14,7 +14,10 @@ documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [workspace]
-members = ["crates/*"]
+members = [
+    "crates/*",
+    "examples/output"
+]
 
 [features]
 default = []
@@ -40,14 +43,13 @@ nightly = ["nsi-core/nightly"]
 nsi-core = { path = "crates/nsi-core" }
 nsi-internal = { path = "crates/nsi-internal" }
 
+[profile.dev]
+split-debuginfo = "unpacked"
+opt-level = 3
+
 [[example]]
 path = "examples/interactive/main.rs"
 name = "interactive"
-
-[[example]]
-path = "examples/output/main.rs"
-name = "output"
-required-features = ["output", "toolbelt"]
 
 [package.metadata.docs.rs]
 features = ["nsi-jupyter", "nsi-output", "nsi-toolbelt", "nsi-3delight", "nightly"]

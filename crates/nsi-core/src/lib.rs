@@ -38,6 +38,7 @@ lazy_static! {
 
 #[macro_use]
 pub mod argument;
+
 // Context should be in the crate root so we keep the module private.`
 pub mod context;
 
@@ -48,7 +49,7 @@ mod tests;
 
 pub use crate::{
     argument::*,
-    context::{Context, NodeType},
+    context::{Context, NodeType, RenderStatus, StatusCallback},
 };
 
 trait Api {

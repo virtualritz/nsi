@@ -1,6 +1,8 @@
-//! # An ɴsɪ Context.
+//! An ɴsɪ context.
 
-// Needed for the example dode to build.
+use std::sync::Arc;
+
+// Needed for the example code to build.
 extern crate self as nsi;
 use crate::{argument::*, *};
 // std::slice is imported so the (doc) examples compile w/o hiccups.
@@ -14,28 +16,13 @@ use std::{
     vec::Vec,
 };
 
-/// # An ɴsɪ Context.
+/// The actual context and a marker to hold on to callbacks/references passed
+/// via set_attribute() or the like.
 ///
-/// A context is used to describe a scene to the renderer and
-/// request images to be rendered from it.
-/// ## Thread Safety
-/// A context may be used in multiple threads at once.
-/// ## Lifetime
-/// A context can be used without worrying about its lifetime
-/// until you want to store it somewhere, e.g. in a struct.
-///
-/// The reason a context has an explicit lifetime is so that it can
-/// take [`Reference`]s. These references must be valid until the
-/// context is dropped and this guarantee requires explicit lifetimes.
-/// When you use a context directly this is not an issue
-/// but when you want to reference it somewhere the same rules
-/// as with all references apply.
-///
-/// ## Further Reading
-/// See the [ɴsɪ docmentation on context
-/// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
-#[derive(Debug, Hash, PartialEq)]
-pub struct Context<'a> {
+/// We wrap this in an [`Arc`] in [`Context`] to make sure drop is only called
+/// when the last clone ceases existing.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct InnerContext<'a> {
     context: NSIContext_t,
     // _marker needs to be invariant in 'a.
     // See "Making a struct outlive a parameter given to a method of
@@ -43,50 +30,74 @@ pub struct Context<'a> {
     _marker: PhantomData<*mut &'a ()>,
 }
 
-/*
-impl<'a> From<NSIContext_t> for Context<'a> {
+impl<'a> Drop for InnerContext<'a> {
     #[inline]
-    fn from(context: NSIContext_t) -> Self {
-        Self {
-            context,
-            _marker: PhantomData,
-        }
+    fn drop(&mut self) {
+        NSI_API.NSIEnd(self.context);
     }
-}*/
+}
+
+/// # An ɴsɪ Context.
+///
+/// A `Context` is used to describe a scene to the renderer and request images
+/// to be rendered from it.
+///
+/// ## Safety
+/// A `Context` may be used in multiple threads at once.
+///
+/// ## Lifetime
+/// A `Context` can be used without worrying about its lifetime until you want
+/// to store it somewhere, e.g. in a struct.
+///
+/// The reason `Context` has an explicit lifetime is so that it can take
+/// [`Reference`]s and [`Callback`]s (closures). These must be valid until the
+/// context is dropped and this guarantee requires explicit lifetimes. When you
+/// use a context directly this is not an issue but when you want to reference
+/// it somewhere the same rules as with all references apply.
+///
+/// ## Further Reading
+/// See the [ɴsɪ documentation on context
+/// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Context<'a>(Arc<InnerContext<'a>>);
+
+unsafe impl<'a> Send for Context<'a> {}
+unsafe impl<'a> Sync for Context<'a> {}
 
 impl<'a> From<Context<'a>> for NSIContext_t {
     #[inline]
     fn from(context: Context<'a>) -> Self {
-        context.context
+        context.0.context
     }
 }
 
 impl<'a> Context<'a> {
     /// Creates an ɴsɪ context.
     ///
-    /// Contexts may be used in multiple threads at once.
+    /// A `Context` may be used in multiple threads at once.
     ///
     /// # Example
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create rendering context that dumps to stdout.
-    /// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
+    /// let ctx = nsi::Context::new(Some(&[nsi::string!("streamfilename", "stdout")]))
     ///     .expect("Could not create ɴsɪ context.");
     /// ```
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
-    pub fn new(args: &ArgSlice<'_, 'a>) -> Option<Self> {
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+    pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args.unwrap_or(&[]));
 
         let context = NSI_API.NSIBegin(args_len, args_ptr);
 
         if 0 == context {
             None
         } else {
-            Some(Self {
+            Some(Self(Arc::new(InnerContext {
                 context,
                 _marker: PhantomData,
-            })
+            })))
         }
     }
 
@@ -94,41 +105,45 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` - A node handle. This string will uniquely identify the node in the scene.
+    /// * `handle` – A node handle. This string will uniquely identify the node
+    ///   in the scene.
     ///
-    ///   If the supplied handle matches an existing node, the function does nothing if all other
-    ///   parameters match the call which created that node. Otherwise, it emits an error. Note
-    ///   that handles need only be unique within a given [`Context`].
-    ///   It is ok to reuse the same handle inside different [`Context`]s.
+    ///   If the supplied handle matches an existing node, the function does
+    /// nothing if all other   parameters match the call which created that
+    /// node. Otherwise, it emits an error. Note   that handles need only be
+    /// unique within a given [`Context`].   It is ok to reuse the same
+    /// handle inside different [`Context`]s.
     ///
-    /// * `node_type` – The type of node to create. You can use [`NodeType`] to create nodes that
-    ///   are in the official NSI specificaion. As this parameter is just a string you can instance
-    ///   other node types that a particualr implementation may provide and which are not part of
-    ///   the official specification.
+    /// * `node_type` – The type of node to create. You can use [`NodeType`] to
+    ///   create nodes that are in the official NSI specification. As this
+    ///   parameter is just a string you can instance other node types that a
+    ///   particular implementation may provide and which are not part of the
+    ///   official specification.
     ///
-    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments. *There are no
-    ///   optional arguments defined as of now*.
+    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments. *There
+    ///   are no optional arguments defined as of now*.
     ///
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create a context to send the scene to.
-    /// let ctx = nsi::Context::new(&[]).unwrap();
+    /// let ctx = nsi::Context::new(None).unwrap();
     ///
     /// // Create an infinte plane.
-    /// ctx.create("ground", nsi::NodeType::Plane, &[]);
+    /// ctx.create("ground", nsi::NodeType::Plane, None);
     /// ```
     #[inline]
     pub fn create(
         &self,
         handle: impl Into<Vec<u8>>,
         node_type: impl Into<Vec<u8>>,
-        args: &ArgSlice<'_, 'a>,
+        args: Option<&ArgSlice<'_, 'a>>,
     ) {
         let handle = CString::new(handle).unwrap();
         let node_type = CString::new(node_type).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args.unwrap_or(&[]));
 
         NSI_API.NSICreate(
-            self.context,
+            self.0.context,
             handle.as_ptr(),
             node_type.as_ptr(),
             args_len,
@@ -161,11 +176,11 @@ impl<'a> Context<'a> {
     ///   This allows, for example, deletion of an entire shader network in a
     /// single call.
     #[inline]
-    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
+    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: Option<&ArgSlice<'_, 'a>>) {
         let handle = CString::new(handle).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args.unwrap_or(&[]));
 
-        NSI_API.NSIDelete(self.context, handle.as_ptr(), args_len, args_ptr);
+        NSI_API.NSIDelete(self.0.context, handle.as_ptr(), args_len, args_ptr);
     }
 
     /// This functions sets attributes on a previously node.
@@ -192,7 +207,7 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttribute(self.context, handle.as_ptr(), args_len, args_ptr);
+        NSI_API.NSISetAttribute(self.0.context, handle.as_ptr(), args_len, args_ptr);
     }
 
     /// This function sets time-varying attributes (i.e. motion blurred).
@@ -227,7 +242,7 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSISetAttributeAtTime(self.context, handle.as_ptr(), time, args_len, args_ptr);
+        NSI_API.NSISetAttributeAtTime(self.0.context, handle.as_ptr(), time, args_len, args_ptr);
     }
 
     /// This function deletes any attribute with a name which matches
@@ -251,7 +266,7 @@ impl<'a> Context<'a> {
         let handle = CString::new(handle).unwrap();
         let name = CString::new(name).unwrap();
 
-        NSI_API.NSIDeleteAttribute(self.context, handle.as_ptr(), name.as_ptr());
+        NSI_API.NSIDeleteAttribute(self.0.context, handle.as_ptr(), name.as_ptr());
     }
 
     /// Create a connection between two elements.
@@ -293,16 +308,16 @@ impl<'a> Context<'a> {
         from_attr: impl Into<Vec<u8>>,
         to: impl Into<Vec<u8>>,
         to_attr: impl Into<Vec<u8>>,
-        args: &ArgSlice<'_, 'a>,
+        args: Option<&ArgSlice<'_, 'a>>,
     ) {
         let from = CString::new(from).unwrap();
         let from_attr = CString::new(from_attr).unwrap();
         let to = CString::new(to).unwrap();
         let to_attr = CString::new(to_attr).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args.unwrap_or(&[]));
 
         NSI_API.NSIConnect(
-            self.context,
+            self.0.context,
             from.as_ptr(),
             from_attr.as_ptr(),
             to.as_ptr(),
@@ -320,8 +335,9 @@ impl<'a> Context<'a> {
     ///
     /// # Example
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create a rendering context.
-    /// let ctx = nsi::Context::new(&[]).unwrap();
+    /// let ctx = nsi::Context::new(None).unwrap();
     /// // [...]
     /// // Disconnect everything from the scene's root.
     /// ctx.disconnect(".all", "", ".root", "");
@@ -340,7 +356,7 @@ impl<'a> Context<'a> {
         let to_attr = CString::new(to_attr).unwrap();
 
         NSI_API.NSIDisconnect(
-            self.context,
+            self.0.context,
             from.as_ptr(),
             from_attr.as_ptr(),
             to.as_ptr(),
@@ -348,31 +364,33 @@ impl<'a> Context<'a> {
         );
     }
 
-    /// This function includes a block of interface calls from an external source into the current
-    /// scene. It blends together the concepts of a file include, commonly known as an *archive*,
-    /// with that of procedural include which is traditionally a compiled executable. Both are the
-    /// same idea expressed in a different language.
+    /// This function includes a block of interface calls from an external
+    /// source into the current scene. It blends together the concepts of a
+    /// file include, commonly known as an *archive*, with that of
+    /// procedural include which is traditionally a compiled executable. Both
+    /// are the same idea expressed in a different language.
     ///
     /// Note that for delayed procedural evaluation you should use a
     /// [`Procedural`](NodeType::Procedural) node.
     ///
     /// The ɴsɪ adds a third option which sits in-between — [Lua
     /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html). They are more powerful than a
-    /// simple included file yet they are also easier to generate as they do not require
-    /// compilation.
+    /// simple included file yet they are also easier to generate as they do not
+    /// require compilation.
     ///
-    /// For example, it is realistic to export a whole new script for every frame of an animation.
-    /// It could also be done for every character in a frame. This gives great flexibility in how
-    /// components of a scene are put together.
+    /// For example, it is realistic to export a whole new script for every
+    /// frame of an animation. It could also be done for every character in
+    /// a frame. This gives great flexibility in how components of a scene
+    /// are put together.
     ///
     /// The ability to load ɴsɪ commands from memory is also provided.
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`String`]) – The type of file which will generate the interface calls. This
-    ///   can be one of:
-    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either `"filename"` or
-    ///     `"buffer"`/`"size"` arguments to be specified too.
+    /// * `"type"` ([`String`]) – The type of file which will generate the
+    ///   interface calls. This can be one of:
+    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
+    ///     `"filename"` or `"buffer"`/`"size"` arguments to be specified too.
     ///
     ///   * `"lua"` – Execute a Lua script, either from file or inline. See also
     ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
@@ -381,14 +399,15 @@ impl<'a> Context<'a> {
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`String`]) – The name of the file which contains the interface calls to
-    ///   include.
+    /// * `"filename"` ([`String`]) – The name of the file which contains the
+    ///   interface calls to include.
     ///
-    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"` is set to `"lua"`.
+    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"`
+    ///   is set to `"lua"`.
     ///
     /// * `"buffer"` ([`Pointer`])
-    /// * `"size"` ([`Integer`]) – These two parameters define a memory block that contain ɴsɪ
-    ///   commands to execute.
+    /// * `"size"` ([`Integer`]) – These two parameters define a memory block
+    ///   that contain ɴsɪ commands to execute.
     ///
     /// * `"backgroundload"` ([`Integer`]) – If this is nonzero, the object may
     ///   be loaded in a separate thread, at some later time. This requires that
@@ -399,36 +418,40 @@ impl<'a> Context<'a> {
     pub fn evaluate(&self, args: &ArgSlice<'_, 'a>) {
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        NSI_API.NSIEvaluate(self.context, args_len, args_ptr);
+        NSI_API.NSIEvaluate(self.0.context, args_len, args_ptr);
     }
 
     /// This function is the only control function of the API.
     ///
-    /// It is responsible of starting, suspending and stopping the render. It also allows for
-    /// synchronizing the render with interactive calls that might have been issued.
+    /// It is responsible of starting, suspending and stopping the render. It
+    /// also allows for synchronizing the render with interactive calls that
+    /// might have been issued.
     ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`String`]) – Specifies the operation to be performed, which should be one
-    ///   of the following:
-    ///   * `"start"` – This starts rendering the scene in the provided context. The render starts
-    ///     in parallel and the control flow is not blocked.
+    /// * `"action"` ([`String`]) – Specifies the operation to be performed,
+    ///   which should be one of the following:
+    ///   * `"start"` – This starts rendering the scene in the provided context.
+    ///     The render starts in parallel and the control flow is not blocked.
     ///
     ///   * `"wait"` – Wait for a render to finish.
     ///
-    ///   * `"synchronize"` – For an interactive render, apply all the buffered calls to scene’s
-    ///     state.
+    ///   * `"synchronize"` – For an interactive render, apply all the buffered
+    ///     calls to scene’s state.
     ///
     ///   * `"suspend"` – Suspends render in the provided context.
     ///
     ///   * `"resume"` – Resumes a previously suspended render.
     ///
-    ///   * `"stop"` – Stops rendering in the provided context without destroying the scene.
-    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a progressive fashion.
+    ///   * `"stop"` – Stops rendering in the provided context without
+    ///     destroying the scene.
+    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a
+    ///   progressive fashion.
     ///
-    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will accept commands to edit
-    ///   scene’s state while rendering. The difference with a normal render is that the render
-    ///   task will not exit even if rendering is finished. Interactive renders are by definition
+    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will
+    ///   accept commands to edit scene’s state while rendering. The difference
+    ///   with a normal render is that the render task will not exit even if
+    ///   rendering is finished. Interactive renders are by definition
     ///   progressive.
     ///
     /// * `"frame"` – Specifies the frame number of this render.
@@ -468,14 +491,7 @@ impl<'a> Context<'a> {
             });
         }
 
-        NSI_API.NSIRenderControl(self.context, args_out.len() as _, args_out.as_ptr());
-    }
-}
-
-impl<'a> Drop for Context<'a> {
-    #[inline]
-    fn drop(&mut self) {
-        NSI_API.NSIEnd(self.context);
+        NSI_API.NSIRenderControl(self.0.context, args_out.len() as _, args_out.as_ptr());
     }
 }
 
@@ -484,7 +500,7 @@ impl<'a> Drop for Context<'a> {
 /// This will just convert into a `Vec<u8>` of the string representing
 /// the node type when you use it.
 pub enum NodeType {
-    /// Wildcard node that references all existing nodes at once.
+    /// Wild-card node that references all existing nodes at once.
     All,
     /// The scene’s root (`".root"`).
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
@@ -513,7 +529,7 @@ pub enum NodeType {
     /// Polygonal mesh or subdivision surface.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-mesh).
     Mesh,
-    /// Assign attributes to part of a mesh, curves or paticles.
+    /// Assign attributes to part of a mesh, curves or particles.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-faceset).
     FaceSet,
     /// Linear, b-spline and Catmull-Rom curves.
@@ -547,8 +563,8 @@ pub enum NodeType {
     /// Describes one render layer to be connected to an `outputdriver` node.
     /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
     OutputLayer,
-    /// Describes how the view from a camera node will be rasterized into an `outputlayer` node.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
+    /// Describes how the view from a camera node will be rasterized into an
+    /// `outputlayer` node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
     Screen,
 }
 
@@ -598,17 +614,17 @@ pub enum RenderStatus {
 
 /// A closure which is called to inform about the status of an ongoing render.
 ///
-/// It is passed to ɴsɪ via [`render_control()`](Context::render_control())’s `"callback"`
-/// argument.
+/// It is passed to ɴsɪ via [`render_control()`](Context::render_control())’s
+/// `"callback"` argument.
 ///
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// let status_callback = nsi::context::StatusCallback::new(
-///     |_: &nsi::context::Context, status: nsi::context::RenderStatus| {
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
+/// let status_callback =
+///     nsi::StatusCallback::new(|_: &nsi::Context, status: nsi::RenderStatus| {
 ///         println!("Status: {:?}", status);
-///     },
-/// );
+///     });
 ///
 /// ctx.render_control(&[
 ///     nsi::string!("action", "start"),
@@ -668,10 +684,10 @@ pub(crate) extern "C" fn render_status(
 ) {
     if !payload.is_null() {
         let fn_status = unsafe { Box::from_raw(payload as *mut Box<dyn FnStatus>) };
-        let ctx = Context {
+        let ctx = Context(Arc::new(InnerContext {
             context,
             _marker: PhantomData,
-        };
+        }));
 
         fn_status(&ctx, status.into());
 

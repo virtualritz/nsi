@@ -1,4 +1,4 @@
-//! # Optional Arguments Passed to Methods of an ɴsɪ Context.
+//! Optional arguments passed to methods of an ɴsɪ [`Context`].
 use enum_dispatch::enum_dispatch;
 use nsi_sys::*;
 use std::{ffi::CString, marker::PhantomData};
@@ -100,12 +100,12 @@ pub(crate) trait ArgDataMethods {
 /// function call where they get passed.
 ///
 /// Lifetime `'b` is for the arbitrary reference type. This is
-/// pegged to the lifetime of the [`Context`](crate::context::Context).
-/// Use this to pass arbitray Rust data through the FFI boundary.
+/// pegged to the lifetime of the [`Context`](crate::Context).
+/// Use this to pass arbitrary Rust data through the FFI boundary.
 #[enum_dispatch]
 #[derive(Debug)]
 pub enum ArgData<'a, 'b> {
-    /// Single [`f32`) value.
+    /// Single [`f32`] value.
     Float,
     Floats(Floats<'a>),
     /// Single [`f64`] value.
@@ -122,7 +122,7 @@ pub enum ArgData<'a, 'b> {
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
-    /// An arry of colors.
+    /// An array of colors.
     Colors(Colors<'a>),
     /// Point, given as three [`f32`] values.
     Point(Point<'a>),
@@ -241,7 +241,7 @@ nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
 
-/// Reference type *with* lifetime guaratees.
+/// Reference type *with* lifetime guarantees.
 ///
 /// Prefer this over using a raw [`Pointer`]
 /// as it allows the compiler to check that
@@ -252,18 +252,19 @@ nsi_data_def!(i32, Integer, Type::Integer);
 /// This gets converted to a raw pointer when passed
 /// through the FFI boundary.
 /// ```
+/// # use nsi_core as nsi;
 /// struct Payload {
 ///     some_data: u32,
 /// }
 ///
-/// let ctx = nsi::Context::new(&[]).unwrap();
+/// let ctx = nsi::Context::new(None).unwrap();
 ///
 /// // Lots of scene setup omitted ...
 ///
 /// // Setup a custom output driver and send
 /// // a payload to it through the FFI boundary
-/// ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
-/// ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
+/// ctx.create("driver", nsi::NodeType::OutputDriver, None);
+/// ctx.connect("driver", "", "beauty", "outputdrivers", None);
 /// let payload = Payload { some_data: 42 };
 /// ctx.set_attribute(
 ///     "driver",
@@ -345,7 +346,7 @@ impl<'a> ArgDataMethods for Callback<'a> {
     }
 }
 
-/// Raw pointer type *without* lifetime guaratees.
+/// Raw pointer type *without* lifetime guarantees.
 ///
 /// This can't guarantee that the data this points to
 /// outlives the [`Context`](context::Context) you
@@ -558,7 +559,7 @@ nsi_tuple_data_def!(f32, 3, Normal, Type::Normal);
 nsi_tuple_data_def!(f32, 16, Matrix, Type::Matrix);
 nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 
-/// Identifies an [`Arg`]’s data type.
+/// Identifies an [`Arg`]'s data type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(i32)]
 pub(crate) enum Type {
@@ -742,10 +743,11 @@ macro_rules! matrices {
 /// The matrix is given as 16 [`f64`] values.
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Setup a transform node.
-/// ctx.create("xform", nsi::NodeType::Transform, &[]);
-/// ctx.connect("xform", "", ".root", "objects", &[]);
+/// ctx.create("xform", nsi::NodeType::Transform, None);
+/// ctx.connect("xform", "", ".root", "objects", None);
 ///
 /// // Translate 5 units along z-axis.
 /// ctx.set_attribute(
@@ -775,8 +777,9 @@ macro_rules! double_matrices {
 /// Create a [`String`] argument.
 /// # Example
 /// ```
+/// # use nsi_core as nsi;
 /// // Create rendering context.
-/// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
+/// let ctx = nsi::Context::new(Some(&[nsi::string!("streamfilename", "stdout")]))
 ///     .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
@@ -789,7 +792,8 @@ macro_rules! string {
 /// Create a [`String`] array argument.
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // One of these is not an actor:
 /// ctx.set_attribute(
 ///     "dummy",
