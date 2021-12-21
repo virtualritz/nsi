@@ -132,7 +132,7 @@ pub enum ArgData<'a, 'b> {
     Vectors(Vectors<'a>),
     /// Normal vector, given as three [`f32`] values.
     Normal(Normal<'a>),
-    Normasl(Normals<'a>),
+    Normals(Normals<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
     Matrix(Matrix<'a>),
     Matrices(Matrices<'a>),
