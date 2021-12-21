@@ -7,6 +7,7 @@ pub type ApiImpl = DynamicApi;
 
 use crate::*;
 
+#[allow(clippy::too_many_arguments)]
 #[derive(WrapperApi)]
 struct CApi {
     NSIBegin:

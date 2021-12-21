@@ -1,7 +1,3 @@
-#![cfg_attr(
-    all(debug_assertions, feature = "nightly"),
-    feature(cstring_from_vec_with_nul)
-)]
 #![cfg_attr(feature = "nightly", feature(doc_cfg))]
 #![allow(non_snake_case)]
 //#![warn(missing_docs)]
