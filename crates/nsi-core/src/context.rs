@@ -30,6 +30,9 @@ struct InnerContext<'a> {
     _marker: PhantomData<*mut &'a ()>,
 }
 
+unsafe impl<'a> Send for InnerContext<'a> {}
+unsafe impl<'a> Sync for InnerContext<'a> {}
+
 impl<'a> Drop for InnerContext<'a> {
     #[inline]
     fn drop(&mut self) {
