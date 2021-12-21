@@ -25,11 +25,10 @@ than two minutes (wall time) using
 
 ```rust
 // Create a context to send the scene to.
-let ctx = nsi::Context::new(&[])
-    .expect("Could not create NSI context.");
+let ctx = nsi::Context::new(None)?;
 
 // Create a dodecahedron.
-let face_index: [u32; 60] =
+let face_index: [i32; 60] =
     // 12 regular pentagon faces.
     [
          0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
@@ -55,25 +54,25 @@ let positions: [f32; 60] =
     ];
 
 // Create a new mesh node and call it 'dodecahedron'.
-ctx.create("dodecahedron", nsi::NodeType::Mesh, &[]);
+ctx.create("dodecahedron", nsi::NodeType::Mesh, None);
 
 // Connect the 'dodecahedron' node to the scene's root.
-ctx.connect("dodecahedron", "", ".root", "objects", &[]);
+ctx.connect("dodecahedron", "", ".root", "objects", None);
 
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
     "dodecahedron",
     &[
         nsi::points!("P", &positions),
-        nsi::unsigneds!("P.indices", &face_index),
+        nsi::integers!("P.indices", &face_index),
         // 5 vertices per each face.
-        nsi::unsigneds!("nvertices", &[5; 12]),
+        nsi::integers!("nvertices", &[5; 12]),
         // Render this as a subdivison surface.
         nsi::string!("subdivision.scheme",
             "catmull-clark"
         ),
         // Crease each of our 30 edges a bit.
-        nsi::unsigneds!("subdivision.creasevertices",
+        nsi::integers!("subdivision.creasevertices",
             &face_index
         ),
         nsi::floats!(
@@ -83,6 +82,7 @@ ctx.set_attribute(
     ],
 );
 ```
+
 Also check out my
 [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation)
 or
@@ -164,7 +164,7 @@ By default the lib is *loaded at runtime*.
     lib/app will not load/start.
   * The feature is called `link_lib3delight`.
   * You should disable default features (they are not needed/used)
-  * in this case:
+    in this case:
     ```toml
     [dependencies.nsi]
     version = "0.5.5"
@@ -185,7 +185,7 @@ and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
 
 ## Getting Help
 
-I hang out on the [3Delight Discord server](https://discord.gg/MGtJx4q)
+I hang out on the [3Delight Discord server](https://discord.gg/EdTBtFRs)
 (I have the same user name as on GitHub). Look for me in the
 `#3delight-lobby` channel.
 
