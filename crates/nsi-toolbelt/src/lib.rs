@@ -1,27 +1,47 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "toolbelt")))]
-//! # Convenience Methods for an ɴsɪ [`Context`](nsi::Context).
+//! Convenience methods for an ɴsɪ [`Context`](nsi::context::Context).
 //!
-//! Names of methods that create nodes are nouns. Methods than modify
-//! the node graph afterwards use verbs.
-//!
-//! Where ergonomically advised, creation methods names carry postfixes
-//! that specify the type of node being created, such as `shader`.
+//! Names of methods that create nodes are *nouns*. All other methods use
+//! *verbs*.
+
+// Where ergonomically suggestible, creation methods names carry postfixes that
+// specify the type of node being created, such as `shader`.
+
 use nsi_core as nsi;
 use ultraviolet as uv;
-//use uv::{DVec3, DMat4};
 
 #[inline]
 fn default_slot_objects(slot: Option<&str>) -> &str {
     slot.unwrap_or("objects")
 }
 
+/// Generates a random handle.
+pub fn generate_handle() -> String {
+    use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
+    use std::iter;
+    let mut rng = SmallRng::from_entropy();
+
+    iter::repeat(())
+        .map(|()| rng.sample(Alphanumeric) as char)
+        .take(20)
+        .collect()
+}
+
 /// Generates a random handle if `handle` is `None` or falls through,
-/// otherwise.
+/// returning `"prefix_handle"`, otherwise.
+///
+/// The `prefix` is ignoed if `handle` is *not* `None`.
 #[doc(hidden)]
 #[cfg(debug_assertions)]
 pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> String {
     match handle {
-        Some(handle) => handle.to_string(),
+        Some(handle) => {
+            if let Some(prefix) = prefix {
+                String::from(prefix) + "_" + handle
+            } else {
+                handle.to_string()
+            }
+        }
         None => {
             if let Some(prefix) = prefix {
                 String::from(prefix) + "_" + &petname::petname(3, "_")
@@ -36,17 +56,14 @@ pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> Str
 #[cfg(not(debug_assertions))]
 pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> String {
     match handle {
-        Some(handle) => handle.to_string(),
-        None => {
-            use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
-            use std::iter;
-            let mut rng = SmallRng::from_entropy();
-
-            iter::repeat(())
-                .map(|()| rng.sample(Alphanumeric) as char)
-                .take(20)
-                .collect()
+        Some(handle) => {
+            if let Some(prefix) = prefix {
+                String::from(prefix) + "_" + handle.to_string()
+            } else {
+                handle.to_string()
+            }
         }
+        None => generate_handle(),
     }
 }
 
@@ -55,43 +72,43 @@ pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> St
 /// # Arguments
 /// * `to` – Node to connect to downstream.
 ///
-/// * `slot` – Slot on target node to connect to. If [`None`], `"objects"`
-///   is used.
+/// * `slot` – Slot on target node to connect to. If [`None`], `"objects"` is
+///   used.
 ///
 /// * `handle` – Handle of node to append.
 ///
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Create a scaling transform node and append to the scene root.
 /// let scale = ctx.append(
 ///     ".root",
-///     // Use "objects" slot.
-///     None,
 ///     // Append the node "tetrahedron", which we created earlier,
 ///     // to the scale node.
 ///     &ctx.append(
 ///         &ctx.scaling(None, &[10., 10., 10.]),
+///         "tetrahedron",
 ///         // Use "objects" slot.
 ///         None,
-///         "tetrahedron",
 ///     )
 ///     .0,
+///     // Use "objects" slot.
+///     None,
 /// );
 /// ```
 #[inline]
 pub fn append<'a, 'b, 'c>(
     ctx: &'a nsi::Context,
     to: &'b str,
-    slot: Option<&str>,
     handle: &'c str,
+    slot: Option<&str>,
 ) -> (&'b str, &'c str)
 where
     'a: 'b,
     'a: 'c,
 {
-    ctx.connect(handle, "", to, default_slot_objects(slot), &[]);
+    ctx.connect(handle, "", to, default_slot_objects(slot), None);
 
     (to, handle)
 }
@@ -101,8 +118,8 @@ where
 /// # Arguments
 /// * `to` – Node to connect to downstream.
 ///
-/// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"`
-///   is used.    .
+/// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"` is
+///   used.    .
 ///
 /// * `handle` – Handle of node to insert.
 ///
@@ -114,7 +131,7 @@ where
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Insert the node "tetrahedron" between the ".root" and
 /// // "terahedron_attrib" nodes.
 /// ctx.insert(
@@ -138,12 +155,12 @@ where
     'a: 'b,
     'a: 'c,
 {
-    append(ctx, handle, handle_slot, from);
-    append(ctx, to, to_slot, handle)
+    append(ctx, handle, from, handle_slot);
+    append(ctx, to, handle, to_slot)
 }
 
-/// The same as [`create()`](nsi::context::Context::create()) but
-/// with support for autmatic handle generation.
+/// The same as [`create()`](nsi::context::Context::create()) but with support
+/// for automatic handle generation.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
@@ -161,32 +178,11 @@ pub fn node<'a>(
         Some(unsafe { std::str::from_utf8_unchecked(&node_type_copy) }),
     );
 
-    ctx.create(handle.as_str(), node_type_copy, &[]);
+    ctx.create(handle.as_str(), node_type_copy, None);
 
     if !args.is_empty() {
         ctx.set_attribute(handle.as_str(), args);
     }
-
-    handle
-}
-
-/// Create a scaling transform node.
-///
-/// If `handle` is [`None`] a random handle is generated.
-///
-/// Returns `handle` for convenience.
-#[inline]
-pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> String {
-    let handle = generate_or_use_handle(handle, Some("scaling"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
-
-    ctx.set_attribute(
-        handle.as_str(),
-        &[nsi::double_matrix!(
-            "transformationmatrix",
-            uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale)).as_array()
-        )],
-    );
 
     handle
 }
@@ -199,7 +195,7 @@ pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> St
 #[inline]
 pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3]) -> String {
     let handle = generate_or_use_handle(handle, Some("translation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -212,16 +208,24 @@ pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3
     handle
 }
 
-/// Create a traslation transform node.
+/// Create a rotation transform node.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
-/// The `angle` is specified in degrees.
-///
 /// Returns `handle` for convenience.
-pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f64; 3]) -> String {
+///
+/// # Arguments
+/// * `angle` – Counter-clockwise rotation in degrees.
+/// * `up` – A direction defining the up axis (default `[0.0, 1.0, 0.0]`). Does
+///   *not* need to be normalized.
+pub fn rotation(
+    ctx: &nsi::Context,
+    handle: Option<&str>,
+    angle: f64,
+    axis: Option<&[f64; 3]>,
+) -> String {
     let handle = generate_or_use_handle(handle, Some("rotation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -229,7 +233,9 @@ pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f6
             "transformationmatrix",
             uv::DMat4::from_angle_plane(
                 (angle * core::f64::consts::TAU / 90.0) as _,
-                uv::DBivec3::from_normalized_axis(uv::DVec3::from(axis).normalized())
+                uv::DBivec3::from_normalized_axis(
+                    uv::DVec3::from(axis.unwrap_or(&[0.0, 1.0, 0.0])).normalized()
+                )
             )
             .transposed()
             .as_array()
@@ -239,25 +245,57 @@ pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f6
     handle
 }
 
-/// **Convenience method; not part of the official ɴsɪ API.**
-pub fn look_at_camera(
+/// Create a scaling transform node.
+///
+/// If `handle` is [`None`] a random handle is generated.
+///
+/// Returns `handle` for convenience.
+#[inline]
+pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> String {
+    let handle = generate_or_use_handle(handle, Some("scaling"));
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+
+    ctx.set_attribute(
+        handle.as_str(),
+        &[nsi::double_matrix!(
+            "transformationmatrix",
+            uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale)).as_array()
+        )],
+    );
+
+    handle
+}
+
+/// Creates a transformation matrix based on a direction that can be used to
+/// position a camera or light.
+///
+/// If `handle` is [`None`] a random handle is generated.
+///
+/// Returns `handle` for convenience.
+///
+/// # Arguments
+/// * `from` – The position of the eye/sensor/film plate/light source..
+/// * `to` – The position the object is 'looking at'.
+/// * `up` – A direction defining the up axis (default `[0.0, 1.0, 0.0]`). Does
+///   *not* need to be normalized.
+pub fn look_at(
     ctx: &nsi::Context,
     handle: Option<&str>,
-    eye: &[f64; 3],
+    from: &[f64; 3],
     to: &[f64; 3],
-    up: &[f64; 3],
+    up: Option<&[f64; 3]>,
 ) {
     let handle = generate_or_use_handle(handle, Some("look_at"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::double_matrix!(
             "transformationmatrix",
             uv::DMat4::look_at(
-                uv::DVec3::from(eye),
+                uv::DVec3::from(from),
                 uv::DVec3::from(to),
-                uv::DVec3::from(up),
+                uv::DVec3::from(up.unwrap_or(&[0.0, 1.0, 0.0])),
             )
             .inversed()
             .as_array()
@@ -265,34 +303,39 @@ pub fn look_at_camera(
     );
 }
 
-/// Creates a transformation matrix that can be used to position
-/// a camera. Its view will contains the perspective-projected
-/// bounding box under the specified field-of-view and aspect ratio
-/// (*with*÷*height*).
+/// Creates a transformation node based on a bounding box that can be used to
+/// position a camera.
+///
+/// A connected perspective camera with the same *field of view* with a screen
+/// node with the same *aspect ratio* will contain the specified bounding box.
+///
+/// If `handle` is [`None`] a random handle is generated.
+///
+/// Returns `handle` for convenience.
+///
 /// # Arguments
-/// * `direction` – The axis the camera should be looking along. Does *not*
-///   need to be normalized.
-/// * `up` – A direction to look
-/// * `bounding_box` – Axis-aligned bounding box in the form `[x_min, y_min,
-///   z_min, x_max, y_max, z_max]`.
-pub fn look_at_bounding_box_perspective_camera(
+/// * `direction` – The axis the camera should be looking along. Does *not* need
+///   to be normalized.
+/// * `vertical_fov` – The vertical *field of view* in degrees.
+/// * `bounds` – Axis-aligned bounding box in the form `[x_min, y_min, z_min,
+///   x_max, y_max, z_max]`.
+/// * `up` – A direction defining the up axis (default `[0.0, 1.0, 0.0]`). Does
+///   *not* need to be normalized.
+/// * `aspect_ratio` – The ratio of  *with* ÷ *height* of the camera's
+///   sensor/film plate.
+pub fn look_at_bounds_perspective_camera(
     ctx: &nsi::Context,
     handle: Option<&str>,
     direction: &[f64; 3],
-    up: &[f64; 3],
     vertical_fov: f32,
+    bounds: &[f64; 6],
+    up: Option<&[f64; 3]>,
     aspect_ratio: Option<f32>,
-    bounding_box: &[f64; 6],
 ) -> String {
-    // FIXME with a && chain once https://github.com/rust-lang/rust/issues/53667
-    // arrives in stable.
-    let vertical_fov = if let Some(aspect_ratio) = aspect_ratio {
-        if aspect_ratio < 1.0 {
-            // Portrait.
-            2.0 * (aspect_ratio * (0.5 * vertical_fov * core::f32::consts::PI / 180.0).tan()).atan()
-        } else {
-            vertical_fov * core::f32::consts::PI / 180.0
-        }
+    let aspect_ratio = aspect_ratio.unwrap_or(1.0);
+    let vertical_fov = if aspect_ratio < 1.0 {
+        // Portrait.
+        2.0 * (aspect_ratio * (0.5 * vertical_fov * core::f32::consts::PI / 180.0).tan()).atan()
     } else {
         vertical_fov * core::f32::consts::PI / 180.0
     } as f64;
@@ -301,22 +344,22 @@ pub fn look_at_bounding_box_perspective_camera(
 
     // Make a cube from the bounds.
     let cube = [
-        uv::DVec3::new(bounding_box[0], bounding_box[1], bounding_box[2]),
-        uv::DVec3::new(bounding_box[0], bounding_box[4], bounding_box[2]),
-        uv::DVec3::new(bounding_box[0], bounding_box[1], bounding_box[5]),
-        uv::DVec3::new(bounding_box[3], bounding_box[4], bounding_box[5]),
-        uv::DVec3::new(bounding_box[3], bounding_box[1], bounding_box[5]),
-        uv::DVec3::new(bounding_box[3], bounding_box[4], bounding_box[2]),
+        uv::DVec3::new(bounds[0], bounds[1], bounds[2]),
+        uv::DVec3::new(bounds[0], bounds[4], bounds[2]),
+        uv::DVec3::new(bounds[0], bounds[1], bounds[5]),
+        uv::DVec3::new(bounds[3], bounds[4], bounds[5]),
+        uv::DVec3::new(bounds[3], bounds[1], bounds[5]),
+        uv::DVec3::new(bounds[3], bounds[4], bounds[2]),
     ];
 
-    let bounding_box_center = 0.5 * (cube[0] + cube[3]);
+    let bounds_center = 0.5 * (cube[0] + cube[3]);
 
-    println!("{:?}", bounding_box_center);
+    println!("{:?}", bounds_center);
 
     let bounding_sphere_radius = cube
         .iter()
         .fold(0.0f64, |max, point| {
-            max.max((bounding_box_center - *point).mag_sq())
+            max.max((bounds_center - *point).mag_sq())
         })
         .sqrt();
 
@@ -326,16 +369,16 @@ pub fn look_at_bounding_box_perspective_camera(
 
     let handle = generate_or_use_handle(handle, Some("look_at"));
 
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::double_matrix!(
             "transformationmatrix",
             uv::DMat4::look_at(
-                bounding_box_center - distance * uv::DVec3::from(direction).normalized(),
-                bounding_box_center,
-                uv::DVec3::from(up)
+                bounds_center - distance * uv::DVec3::from(direction).normalized(),
+                bounds_center,
+                uv::DVec3::from(up.unwrap_or(&[0.0, 1.0, 0.0]))
             )
             .inversed()
             .as_array()

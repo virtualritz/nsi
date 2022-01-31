@@ -1,6 +1,7 @@
 //! # Jupyter Notebook Support
 //!
-//! This module adds an [`as_jupyter()`] function that takes a [`Context`](nsi::Context).
+//! This module adds an [`as_jupyter()`] function that takes a
+//! [`Context`](nsi::Context).
 //!
 //! A [`Screen`](nsi::context::NodeType::Screen) can be rendered
 //! directly inside a notebook.
@@ -32,9 +33,9 @@ trait _Jupyter<'a> {
 /// # Example
 /// ```no_run
 /// // Setup a screen.
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// ctx.create("screen", nsi::NodeType::Screen, &[]);
-/// ctx.connect("screen", "", "my_camera", "screens", &[]);
+/// # let ctx = nsi::Context::new(None).unwrap();
+/// ctx.create("screen", nsi::NodeType::Screen, None);
+/// ctx.connect("screen", "", "my_camera", "screens", None);
 /// ctx.set_attribute(
 ///     "screen",
 ///     &[
@@ -52,7 +53,7 @@ trait _Jupyter<'a> {
 /// * `screen` – A [`Screen`](nsi::context::NodeType::Screen).
 pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     // RGB layer.
-    ctx.create("jupyter_beauty", nsi::NodeType::OutputLayer, &[]);
+    ctx.create("jupyter_beauty", nsi::NodeType::OutputLayer, None);
     ctx.set_attribute(
         "jupyter_beauty",
         &[
@@ -61,7 +62,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
             nsi::string!("scalarformat", "float"),
         ],
     );
-    ctx.connect("jupyter_beauty", "", screen, "outputlayers", &[]);
+    ctx.connect("jupyter_beauty", "", screen, "outputlayers", None);
 
     // Callback to collect our pixels.
     let finish = nsi::output::FinishCallback::new(
@@ -79,8 +80,14 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     );
 
     // Setup an output driver.
-    ctx.create("jupyter_driver", nsi::NodeType::OutputDriver, &[]);
-    ctx.connect("jupyter_driver", "", "jupyter_beauty", "outputdrivers", &[]);
+    ctx.create("jupyter_driver", nsi::NodeType::OutputDriver, None);
+    ctx.connect(
+        "jupyter_driver",
+        "",
+        "jupyter_beauty",
+        "outputdrivers",
+        None,
+    );
 
     ctx.set_attribute(
         "jupyter_driver",
@@ -97,7 +104,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     ctx.render_control(&[nsi::string!("action", "wait")]);
 
     // Make our Context pristine again.
-    ctx.delete("jupyter_beauty", &[nsi::integer!("recursive", 1)]);
+    ctx.delete("jupyter_beauty", Some(&[nsi::integer!("recursive", 1)]));
 }
 
 /// Multi-threaded color profile application & quantization to 8bit.
@@ -257,8 +264,8 @@ fn png_to_jupyter(width: usize, height: usize, layer: &Layer, data: &[u8]) {
     png_encoder.set_color(match layer.depth() {
         LayerDepth::OneChannel => png::ColorType::Grayscale,
         LayerDepth::OneChannelAndAlpha => png::ColorType::GrayscaleAlpha,
-        LayerDepth::Color | LayerDepth::Vector => png::ColorType::RGB,
-        LayerDepth::ColorAndAlpha | LayerDepth::VectorAndAlpha => png::ColorType::RGBA,
+        LayerDepth::Color | LayerDepth::Vector => png::ColorType::Rgb,
+        LayerDepth::ColorAndAlpha | LayerDepth::VectorAndAlpha => png::ColorType::Rgba,
         _ => unreachable!(),
     });
     png_encoder.set_depth(png::BitDepth::Sixteen);

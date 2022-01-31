@@ -5,14 +5,14 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 
 /// Creates a typical environment node.
 ///
-/// A latitutde-lungitude environment map will be aligned as-shot
-/// with the horizon along the X-Z plane at infinity.
+/// A latitutde-lungitude environment map will be aligned as-shot with the
+/// horizon along the *X-Z* plane at infinity.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specicfies how much to rotate the environment around
+///   the Y (up) axis.
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///
@@ -28,7 +28,7 @@ pub fn environment<'a>(
     visible: Option<bool>,
 ) -> (String, String) {
     // Create a rotation transform – this is the handle we return.
-    let rotation = rotation(ctx, None, angle.unwrap_or(0.0), &[0.0, 1.0, 0.0]);
+    let rotation = rotation(ctx, None, angle.unwrap_or(0.0), None);
 
     let environment = generate_or_use_handle(handle, Some("environment"));
 
@@ -36,13 +36,13 @@ pub fn environment<'a>(
     append(
         ctx,
         &rotation,
-        None,
         &node(
             ctx,
             Some(environment.as_str()),
             nsi::NodeType::Environment,
             &[],
         ),
+        None,
     );
 
     let shader = node(ctx, None, nsi::NodeType::Shader, &[]);
@@ -50,7 +50,6 @@ pub fn environment<'a>(
     append(
         ctx,
         &environment,
-        Some("geometryattributes"),
         append(
             ctx,
             &node(
@@ -62,10 +61,11 @@ pub fn environment<'a>(
                     visible.unwrap_or(true) as _
                 )],
             ),
-            Some("surfaceshader"),
             shader.as_str(),
+            Some("surfaceshader"),
         )
         .0,
+        Some("geometryattributes"),
     );
 
     (rotation, shader)
@@ -76,8 +76,7 @@ pub fn environment<'a>(
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `texture – A latitude-longitude texture map in one of these
-///     formats:
+/// * `texture` – A latitude-longitude texture map in one of these formats:
 ///     * TIFF
 ///     * JPEG
 ///     * Radiance
@@ -89,19 +88,17 @@ pub fn environment<'a>(
 ///     * Photoshop PSD
 ///     * TGA
 ///
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specicfies how much to rotate the environment around
+///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in
-///     [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///
 /// Returns `handle` and the handle of the created `shader`.
 ///
-/// Note that the `shader` node is empty. It is up to the user
-/// to set the resp. attributes on the node or hook up an OSL
-/// network below it.
+/// Note that the `shader` node is empty. It is up to the user to set the resp.
+/// attributes on the node or hook up an OSL network below it.
 pub fn environment_texture<'a, 'b>(
     ctx: &'a nsi::Context<'a>,
     handle: Option<&str>,
@@ -138,11 +135,10 @@ pub fn environment_texture<'a, 'b>(
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specicfies how much to rotate the environment around
+///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in
-///     [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///

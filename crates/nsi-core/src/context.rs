@@ -16,8 +16,8 @@ use std::{
     vec::Vec,
 };
 
-/// The actual context and a marker to hold on to callbacks/references passed
-/// via set_attribute() or the like.
+/// The actual context and a marker to hold on to callbacks
+/// (closures)/references passed via [`set_attribute()`] or the like.
 ///
 /// We wrap this in an [`Arc`] in [`Context`] to make sure drop is only called
 /// when the last clone ceases existing.
