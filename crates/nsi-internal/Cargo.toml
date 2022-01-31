@@ -2,14 +2,14 @@
 name = "nsi-internal"
 version = "0.6.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
-edition = "2018"
+edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description", "nsi"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
-license = "MIT OR Apache-2.0 OR Zlib"
-description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
-exclude = [".github/**/*", "crates/**/*"]
+license = "Apache-2.0 OR BSD-3-Clause OR MIT OR Zlib"
+description = "Meta crate wrapping all optional helper crates for the ɴsɪ ecosystem."
+exclude = [".github/**/*"]
 readme = "README.md"
-homepage = "https://www.3delight.com/"
+homepage = "https://nsi.readthedocs.io/"
 documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 

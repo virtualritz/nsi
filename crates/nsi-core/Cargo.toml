@@ -2,7 +2,7 @@
 name = "nsi-core"
 version = "0.6.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
-edition = "2018"
+edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -28,12 +28,12 @@ nightly = []
 
 [dependencies]
 enum_dispatch = "0.3.7"
-derive_more = "0.99.14"
+derive_more = "0.99.17"
 lazy_static = "1.4.0"
-num_enum = "0.5.1"
+num_enum = "0.5.6"
 nsi-sys = "0.1.14"
 # Optional (feature) deps.
-bytemuck = { version = "1.7.0", optional = true }
+bytemuck = { version = "1.7.3", optional = true }
 dlopen = { version = "0.1.8", optional = true }
 dlopen_derive = { version = "0.1.4", optional = true }
 ndspy-sys = { version = "0.1.7", optional = true }

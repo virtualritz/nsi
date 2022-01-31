@@ -2,7 +2,7 @@
 name = "nsi-3delight"
 version = "0.1.1"
 authors = ["Moritz Moeller <virtualritz@gmail.com>"]
-edition = "2018"
+edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"

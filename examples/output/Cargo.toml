@@ -1,0 +1,10 @@
+[package]
+name = "output"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+nsi = { path = "../..", features = ["delight", "output", "toolbelt"] }
+exr = "1.4.1"
+png = "0.17.2"
+polyhedron-ops = { version = "0.2.3", features = ["nsi"] }
