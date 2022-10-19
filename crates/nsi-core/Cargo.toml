@@ -30,7 +30,7 @@ nightly = []
 enum_dispatch = "0.3.5"
 lazy_static = "1.4.0"
 num_enum = "0.5.1"
-nsi-sys = "0.1.13"
+nsi-sys = "0.2.1"
 # Optional (feature) deps.
 bytemuck = { version = "1.5.0", optional = true }
 dlopen = { version = "0.1.8", optional = true }
