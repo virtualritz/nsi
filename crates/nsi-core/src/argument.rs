@@ -1,17 +1,20 @@
 //! # Optional Arguments Passed to Methods of an ɴsɪ Context.
 use enum_dispatch::enum_dispatch;
 use nsi_sys::*;
-use std::{ffi::CString, marker::PhantomData};
+use std::{
+    ffi::{c_void, CString},
+    marker::PhantomData,
+};
 
 // Needed for docs.
 #[allow(unused_imports)]
 use crate::*;
 
 #[inline]
-pub(crate) fn get_c_param_vec(args: &ArgSlice) -> (i32, *const NSIParam_t, Vec<NSIParam_t>) {
+pub(crate) fn get_c_param_vec(args: &ArgSlice) -> (i32, *const NSIParam, Vec<NSIParam>) {
     let args = args
         .iter()
-        .map(|arg| NSIParam_t {
+        .map(|arg| NSIParam {
             name: arg.name.as_ptr(),
             data: arg.data.as_c_ptr(),
             type_: arg.data.type_() as _,
@@ -40,7 +43,7 @@ pub struct Arg<'a, 'b> {
     // length of each element if an array type
     pub(crate) array_length: usize,
     // number of elements
-    pub(crate) flags: u32,
+    pub(crate) flags: i32,
 }
 
 impl<'a, 'b> Arg<'a, 'b> {
@@ -58,28 +61,28 @@ impl<'a, 'b> Arg<'a, 'b> {
     #[inline]
     pub fn array_len(mut self, length: usize) -> Self {
         self.array_length = length;
-        self.flags |= NSIParamIsArray;
+        self.flags |= NSIParamFlags::IsArray.bits();
         self
     }
 
     /// Marks this argument as having per-face granularity.
     #[inline]
     pub fn per_face(mut self) -> Self {
-        self.flags |= NSIParamPerFace;
+        self.flags |= NSIParamFlags::PerFace.bits();
         self
     }
 
     /// Marks this argument as having per-vertex granularity.
     #[inline]
     pub fn per_vertex(mut self) -> Self {
-        self.flags |= NSIParamPerVertex;
+        self.flags |= NSIParamFlags::PerVertex.bits();
         self
     }
 
     /// Marks this argument as to be interpolated linearly.
     #[inline]
     pub fn linear_interpolation(mut self) -> Self {
-        self.flags |= NSIParamInterpolateLinear;
+        self.flags |= NSIParamFlags::InterpolateLinear.bits();
         self
     }
 }
@@ -89,7 +92,7 @@ pub(crate) trait ArgDataMethods {
     //const TYPE: Type;
     fn type_(&self) -> Type;
     fn len(&self) -> usize;
-    fn as_c_ptr(&self) -> *const core::ffi::c_void;
+    fn as_c_ptr(&self) -> *const c_void;
 }
 
 /// A variant describing data passed to the renderer.
@@ -101,7 +104,7 @@ pub(crate) trait ArgDataMethods {
 ///
 /// Lifetime `'b` is for the arbitrary reference type. This is
 /// pegged to the lifetime of the [`Context`](crate::context::Context).
-/// Use this to pass arbitray Rust data through the FFI boundary.
+/// Use this to pass arbitrary Rust data through the FFI boundary.
 #[enum_dispatch]
 #[derive(Debug)]
 pub enum ArgData<'a, 'b> {
@@ -122,7 +125,7 @@ pub enum ArgData<'a, 'b> {
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
-    /// An arry of colors.
+    /// An array of colors.
     Colors(Colors<'a>),
     /// Point, given as three [`f32`] values.
     Point(Point<'a>),
@@ -171,7 +174,7 @@ macro_rules! nsi_data_def {
                 1
             }
 
-            fn as_c_ptr(&self) -> *const core::ffi::c_void {
+            fn as_c_ptr(&self) -> *const c_void {
                 &self.data as *const $type as _
             }
         }
@@ -187,7 +190,7 @@ macro_rules! nsi_data_array_def {
 
         impl<'a> $name<'a> {
             pub fn new(data: &'a [$type]) -> Self {
-                debug_assert!(data.len() % $nsi_type.element_size() == 0);
+                debug_assert!(data.len() % $nsi_type.elemensize() == 0);
                 Self { data }
             }
         }
@@ -198,10 +201,10 @@ macro_rules! nsi_data_array_def {
             }
 
             fn len(&self) -> usize {
-                self.data.len() / $nsi_type.element_size()
+                self.data.len() / $nsi_type.elemensize()
             }
 
-            fn as_c_ptr(&self) -> *const core::ffi::c_void {
+            fn as_c_ptr(&self) -> *const c_void {
                 self.data.as_ptr() as _
             }
         }
@@ -230,7 +233,7 @@ macro_rules! nsi_tuple_data_def {
                 1
             }
 
-            fn as_c_ptr(&self) -> *const core::ffi::c_void {
+            fn as_c_ptr(&self) -> *const c_void {
                 self.data.as_ptr() as _
             }
         }
@@ -241,7 +244,7 @@ nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
 
-/// Reference type *with* lifetime guaratees.
+/// Reference type *with* lifetime guarantees.
 ///
 /// Prefer this over using a raw [`Pointer`]
 /// as it allows the compiler to check that
@@ -281,7 +284,7 @@ nsi_data_def!(i32, Integer, Type::Integer);
 /// ```
 #[derive(Debug)]
 pub struct Reference<'a> {
-    data: *const core::ffi::c_void,
+    data: *const c_void,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -305,7 +308,7 @@ impl<'a> ArgDataMethods for Reference<'a> {
         1
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.data
     }
 }
@@ -313,12 +316,12 @@ impl<'a> ArgDataMethods for Reference<'a> {
 pub trait CallbackPtr {
     #[doc(hidden)]
     #[allow(clippy::wrong_self_convention)]
-    fn to_ptr(self) -> *const core::ffi::c_void;
+    fn to_ptr(self) -> *const c_void;
 }
 
 #[derive(Debug)]
 pub struct Callback<'a> {
-    data: *const core::ffi::c_void,
+    data: *const c_void,
     _marker: PhantomData<&'a mut ()>,
 }
 
@@ -340,12 +343,12 @@ impl<'a> ArgDataMethods for Callback<'a> {
         1
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.data
     }
 }
 
-/// Raw pointer type *without* lifetime guaratees.
+/// Raw pointer type *without* lifetime guarantees.
 ///
 /// This can't guarantee that the data this points to
 /// outlives the [`Context`](context::Context) you
@@ -357,17 +360,17 @@ impl<'a> ArgDataMethods for Callback<'a> {
 /// [`Context`](context::Context).
 #[derive(Debug)]
 pub struct Pointer {
-    data: *const core::ffi::c_void,
+    data: *const c_void,
 }
 
 impl Pointer {
     /// # Safety
     /// This is marked unsafe because the responsibility
-    /// to ensure the pointer can be safely dereferenced
+    /// to ensure the pointer can be safely de-referenced
     /// after the function has returned lies with the user.
     ///
     /// [`Reference`] is a *safe* alternative.
-    pub unsafe fn new(data: *const core::ffi::c_void) -> Self {
+    pub unsafe fn new(data: *const c_void) -> Self {
         Self { data }
     }
 }
@@ -381,7 +384,7 @@ impl ArgDataMethods for Pointer {
         1
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.data
     }
 }
@@ -391,7 +394,7 @@ pub struct String {
     #[allow(dead_code)]
     data: CString,
     // The FFI API needs a pointer to a C string
-    pointer: *const core::ffi::c_void,
+    pointer: *const c_void,
 }
 
 impl String {
@@ -412,8 +415,8 @@ impl ArgDataMethods for String {
         1
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
-        unsafe { core::mem::transmute(&self.pointer) }
+    fn as_c_ptr(&self) -> *const std::ffi::c_void {
+        &self.pointer as *const *const std::ffi::c_void as _
     }
 }
 
@@ -439,19 +442,19 @@ nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 /// passed through the FFI boundary.
 #[derive(Debug)]
 pub struct References<'a> {
-    data: Vec<*const core::ffi::c_void>,
+    data: Vec<*const c_void>,
     _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> References<'a> {
     pub fn new<T>(data: &'a [Option<&'a T>]) -> Self {
-        debug_assert!(data.len() % Type::Pointer.element_size() == 0);
+        debug_assert!(data.len() % Type::Pointer.elemensize() == 0);
 
-        let mut c_data = Vec::<*const core::ffi::c_void>::with_capacity(data.len());
+        let mut c_data = Vec::<*const c_void>::with_capacity(data.len());
 
         for e in data {
             c_data.push(
-                e.map(|p| p as *const _ as *const core::ffi::c_void)
+                e.map(|p| p as *const _ as *const c_void)
                     .unwrap_or(core::ptr::null()),
             );
         }
@@ -469,15 +472,15 @@ impl<'a> ArgDataMethods for References<'a> {
     }
 
     fn len(&self) -> usize {
-        self.data.len() / Type::Pointer.element_size()
+        self.data.len() / Type::Pointer.elemensize()
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.data.as_ptr() as _
     }
 }
 
-/// Raw pointer array type *without* lifetime guaratees.
+/// Raw pointer array type *without* lifetime guarantees.
 ///
 /// This can't guarantee that the data this points to
 /// outlives the [`Context`](context::Context) you
@@ -489,17 +492,17 @@ impl<'a> ArgDataMethods for References<'a> {
 /// [`Context`](context::Context).
 #[derive(Debug)]
 pub struct Pointers<'a> {
-    data: &'a [*const core::ffi::c_void],
+    data: &'a [*const c_void],
 }
 
 impl<'a> Pointers<'a> {
     /// # Safety
     /// This is marked unsafe because the responsibility
-    /// to ensure the pointer can be safely dereferenced
+    /// to ensure the pointer can be safely de-referenced
     /// after the function has returned lies with the user.
     ///
     /// [`References`] is a *safe* alternative.
-    pub unsafe fn new(data: &'a [*const core::ffi::c_void]) -> Self {
+    pub unsafe fn new(data: &'a [*const c_void]) -> Self {
         Self { data }
     }
 }
@@ -510,10 +513,10 @@ impl<'a> ArgDataMethods for Pointers<'a> {
     }
 
     fn len(&self) -> usize {
-        self.data.len() / Type::Pointer.element_size()
+        self.data.len() / Type::Pointer.elemensize()
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.data.as_ptr() as _
     }
 }
@@ -522,7 +525,7 @@ impl<'a> ArgDataMethods for Pointers<'a> {
 pub struct Strings {
     #[allow(dead_code)]
     data: Vec<CString>,
-    pointer: Vec<*const core::ffi::c_void>,
+    pointer: Vec<*const c_void>,
 }
 
 impl Strings {
@@ -546,7 +549,7 @@ impl ArgDataMethods for Strings {
         self.pointer.len()
     }
 
-    fn as_c_ptr(&self) -> *const core::ffi::c_void {
+    fn as_c_ptr(&self) -> *const c_void {
         self.pointer.as_ptr() as _
     }
 }
@@ -563,35 +566,35 @@ nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
 #[repr(i32)]
 pub(crate) enum Type {
     /// A single [`f32`] value.
-    Float = NSIType_t_NSITypeFloat as _,
+    Float = NSIType::Float as _,
     /// A single [`f64`] value.
-    Double = NSIType_t_NSITypeDouble as _,
+    Double = NSIType::Double as _,
     /// Single [`i32`] value.
-    Integer = NSIType_t_NSITypeInteger as _,
+    Integer = NSIType::Integer as _,
     /// A [`String`].
-    String = NSIType_t_NSITypeString as _,
+    String = NSIType::String as _,
     /// Color, given as three [`f32`] values,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]. Assumed to be in a linear color space.`
-    Color = NSIType_t_NSITypeColor as _,
+    Color = NSIType::Color as _,
     /// Point, given as three [`f32`] values.
-    Point = NSIType_t_NSITypePoint as _,
+    Point = NSIType::Point as _,
     /// Vector, given as three [`f32`] values.
-    Vector = NSIType_t_NSITypeVector as _,
+    Vector = NSIType::Vector as _,
     /// Normal vector, given as three [`f32`] values.
-    Normal = NSIType_t_NSITypeNormal as _,
+    Normal = NSIType::Normal as _,
     /// Transformation matrix, given as 16 [`f32`] values.
-    Matrix = NSIType_t_NSITypeMatrix as _,
+    Matrix = NSIType::Matrix as _,
     /// Transformation matrix, given as 16 [`f64`] values.
-    DoubleMatrix = NSIType_t_NSITypeDoubleMatrix as _,
+    DoubleMatrix = NSIType::DoubleMatrix as _,
     /// Raw (`*const T`) pointer.
-    Pointer = NSIType_t_NSITypePointer as _,
+    Pointer = NSIType::Pointer as _,
 }
 
 impl Type {
     /// Returns the number of components of the resp. type.
     #[inline]
-    pub(crate) fn element_size(&self) -> usize {
+    pub(crate) fn elemensize(&self) -> usize {
         match self {
             Type::Float => 1,
             Type::Double => 1,
@@ -748,7 +751,7 @@ macro_rules! matrices {
 /// ctx.connect("xform", "", ".root", "objects", &[]);
 ///
 /// // Translate 5 units along z-axis.
-/// ctx.set_attribute(
+/// ctx.seattribute(
 ///     "xform",
 ///     &[nsi::double_matrix!(
 ///         "transformationmatrix",

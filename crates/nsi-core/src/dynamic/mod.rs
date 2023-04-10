@@ -1,6 +1,5 @@
 use crate::Api;
-extern crate dlopen;
-use dlopen::wrapper::{Container, WrapperApi};
+use dlopen2::wrapper::{Container, WrapperApi};
 use std::{env, path::Path};
 
 pub type ApiImpl = DynamicApi;
@@ -9,57 +8,56 @@ use crate::*;
 
 #[derive(WrapperApi)]
 struct CApi {
-    NSIBegin:
-        extern "C" fn(nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t,
-    NSIEnd: extern "C" fn(ctx: NSIContext_t),
+    NSIBegin: extern "C" fn(nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext,
+    NSIEnd: extern "C" fn(ctx: NSIContext),
     NSICreate: extern "C" fn(
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         type_: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ),
     NSIDelete: extern "C" fn(
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ),
     NSISetAttribute: extern "C" fn(
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ),
     NSISetAttributeAtTime: extern "C" fn(
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         time: f64,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ),
     NSIDeleteAttribute:
-        extern "C" fn(ctx: NSIContext_t, object: NSIHandle_t, name: *const ::std::os::raw::c_char),
+        extern "C" fn(ctx: NSIContext, object: NSIHandle, name: *const ::std::os::raw::c_char),
     NSIConnect: extern "C" fn(
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ),
     NSIDisconnect: extern "C" fn(
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     ),
     NSIEvaluate:
-        extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
+        extern "C" fn(ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam),
     NSIRenderControl:
-        extern "C" fn(ctx: NSIContext_t, nparams: ::std::os::raw::c_int, params: *const NSIParam_t),
+        extern "C" fn(ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam),
     #[cfg(feature = "output")]
     DspyRegisterDriver: extern "C" fn(
         driver_name: *const ::std::os::raw::c_char,
@@ -81,7 +79,7 @@ static DELIGHT_APP_PATH: &str = "/usr/local/3delight/lib/lib3delight.so";
 static DELIGHT_APP_PATH: &str = "/Applications/3Delight/lib/lib3delight.dylib";
 
 #[cfg(target_os = "windows")]
-static DELIGHT_APP_PATH: &str = "C:/%ProgramFiles%/3Delight/lib/lib3delight.dll";
+static DELIGHT_APP_PATH: &str = "C:/%ProgramFiles%/3Delight/bin/3Delight.dll";
 
 #[cfg(target_os = "linux")]
 static DELIGHT_LIB: &str = "lib3delight.so";
@@ -90,7 +88,7 @@ static DELIGHT_LIB: &str = "lib3delight.so";
 static DELIGHT_LIB: &str = "lib3delight.dylib";
 
 #[cfg(target_os = "windows")]
-static DELIGHT_LIB: &str = "lib3delight.dll";
+static DELIGHT_LIB: &str = "3Delight.dll";
 
 impl DynamicApi {
     #[inline]
@@ -98,11 +96,16 @@ impl DynamicApi {
         match unsafe { Container::load(DELIGHT_APP_PATH) }
             .or_else(|_| unsafe { Container::load(DELIGHT_LIB) })
             .or_else(|_| match env::var("DELIGHT") {
-                Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
-                Ok(delight) => {
-                    unsafe { Container::load(Path::new(&delight).join("lib").join(DELIGHT_LIB)) }
-                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                Err(e) => Err(Box::new(e) as _),
+                Ok(delight) => unsafe {
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
+                    let path = Path::new(&delight).join("lib").join(DELIGHT_LIB);
+                    #[cfg(target_os = "windows")]
+                    let path = Path::new(&delight).join("bin").join(DELIGHT_LIB);
+
+                    Container::load(path)
                 }
+                .map_err(|e| Box::new(e) as _),
             }) {
             Err(e) => Err(e),
             Ok(api) => {
@@ -125,23 +128,23 @@ impl DynamicApi {
 
 impl Api for DynamicApi {
     #[inline]
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t {
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext {
         self.api.NSIBegin(nparams, params)
     }
 
     #[inline]
-    fn NSIEnd(&self, ctx: NSIContext_t) {
+    fn NSIEnd(&self, ctx: NSIContext) {
         self.api.NSIEnd(ctx);
     }
 
     #[inline]
     fn NSICreate(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         type_: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api.NSICreate(ctx, handle, type_, nparams, params);
     }
@@ -149,10 +152,10 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIDelete(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api.NSIDelete(ctx, handle, nparams, params);
     }
@@ -160,10 +163,10 @@ impl Api for DynamicApi {
     #[inline]
     fn NSISetAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api.NSISetAttribute(ctx, object, nparams, params);
     }
@@ -171,11 +174,11 @@ impl Api for DynamicApi {
     #[inline]
     fn NSISetAttributeAtTime(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         time: f64,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api
             .NSISetAttributeAtTime(ctx, object, time, nparams, params);
@@ -184,8 +187,8 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIDeleteAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         name: *const ::std::os::raw::c_char,
     ) {
         self.api.NSIDeleteAttribute(ctx, object, name);
@@ -194,13 +197,13 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIConnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api
             .NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params);
@@ -209,10 +212,10 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIDisconnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     ) {
         self.api.NSIDisconnect(ctx, from, from_attr, to, to_attr);
@@ -221,9 +224,9 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIEvaluate(
         &self,
-        ctx: NSIContext_t,
+        ctx: NSIContext,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api.NSIEvaluate(ctx, nparams, params);
     }
@@ -231,9 +234,9 @@ impl Api for DynamicApi {
     #[inline]
     fn NSIRenderControl(
         &self,
-        ctx: NSIContext_t,
+        ctx: NSIContext,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         self.api.NSIRenderControl(ctx, nparams, params);
     }

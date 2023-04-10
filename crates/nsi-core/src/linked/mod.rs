@@ -26,23 +26,23 @@ impl LinkedApi {
 
 impl Api for LinkedApi {
     #[inline]
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t {
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext {
         unsafe { NSIBegin(nparams, params) }
     }
 
     #[inline]
-    fn NSIEnd(&self, ctx: NSIContext_t) {
+    fn NSIEnd(&self, ctx: NSIContext) {
         unsafe { NSIEnd(ctx) };
     }
 
     #[inline]
     fn NSICreate(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         type_: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSICreate(ctx, handle, type_, nparams, params) };
     }
@@ -50,10 +50,10 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIDelete(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSIDelete(ctx, handle, nparams, params) };
     }
@@ -61,10 +61,10 @@ impl Api for LinkedApi {
     #[inline]
     fn NSISetAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSISetAttribute(ctx, object, nparams, params) };
     }
@@ -72,11 +72,11 @@ impl Api for LinkedApi {
     #[inline]
     fn NSISetAttributeAtTime(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         time: f64,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSISetAttributeAtTime(ctx, object, time, nparams, params) };
     }
@@ -84,8 +84,8 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIDeleteAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         name: *const ::std::os::raw::c_char,
     ) {
         unsafe { NSIDeleteAttribute(ctx, object, name) };
@@ -94,13 +94,13 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIConnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params) };
     }
@@ -108,10 +108,10 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIDisconnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     ) {
         unsafe { NSIDisconnect(ctx, from, from_attr, to, to_attr) };
@@ -120,9 +120,9 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIEvaluate(
         &self,
-        ctx: NSIContext_t,
+        ctx: NSIContext,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSIEvaluate(ctx, nparams, params) };
     }
@@ -130,9 +130,9 @@ impl Api for LinkedApi {
     #[inline]
     fn NSIRenderControl(
         &self,
-        ctx: NSIContext_t,
+        ctx: NSIContext,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     ) {
         unsafe { NSIRenderControl(ctx, nparams, params) };
     }

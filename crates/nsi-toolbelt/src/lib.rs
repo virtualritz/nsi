@@ -55,24 +55,28 @@ pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> St
 /// # Arguments
 /// * `to` – Node to connect to downstream.
 ///
-/// * `slot` – Slot on target node to connect to. If [`None`], `"objects"`
-///   is used.
+/// * `slot` – Slot on target node to connect to. If [`None`], `"objects"` is
+///   used.
 ///
 /// * `handle` – Handle of node to append.
 ///
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # use nsi_toolbelt::{append, scaling};
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Create a scaling transform node and append to the scene root.
-/// let scale = ctx.append(
+/// let scale = append(
+///     &ctx,
 ///     ".root",
 ///     // Use "objects" slot.
 ///     None,
 ///     // Append the node "tetrahedron", which we created earlier,
 ///     // to the scale node.
-///     &ctx.append(
-///         &ctx.scaling(None, &[10., 10., 10.]),
+///     append(
+///         &ctx,
+///         &scaling(&ctx, None, &[10., 10., 10.]),
 ///         // Use "objects" slot.
 ///         None,
 ///         "tetrahedron",
@@ -91,7 +95,7 @@ where
     'a: 'b,
     'a: 'c,
 {
-    ctx.connect(handle, "", to, default_slot_objects(slot), &[]);
+    ctx.connect(handle, "", to, default_slot_objects(slot), None);
 
     (to, handle)
 }
@@ -101,23 +105,26 @@ where
 /// # Arguments
 /// * `to` – Node to connect to downstream.
 ///
-/// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"`
-///   is used.    .
+/// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"` is
+///   used.    .
 ///
 /// * `handle` – Handle of node to insert.
 ///
 /// * `handle_slot` – Slot on `handle` node to connect to. If [`None`],
 ///   `"objects"` is used.
 ///
-/// * `from` – Node to connect tp upstream.
+/// * `from` – Node to connect to upstream.
 ///
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # use nsi_toolbelt::insert;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Insert the node "tetrahedron" between the ".root" and
 /// // "terahedron_attrib" nodes.
-/// ctx.insert(
+/// insert(
+///     &ctx,
 ///     ".root",
 ///     None,
 ///     "tetrahedron",
@@ -143,27 +150,27 @@ where
 }
 
 /// The same as [`create()`](nsi::context::Context::create()) but
-/// with support for autmatic handle generation.
+/// with support for automatic handle generation.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// Returns `handle` for convenience.
 #[inline]
 pub fn node<'a>(
-    ctx: &'a nsi::Context<'a>,
+    ctx: &nsi::Context<'a>,
     handle: Option<&str>,
     node_type: impl Into<Vec<u8>>,
-    args: &nsi::ArgSlice<'_, 'a>,
+    args: Option<&nsi::ArgSlice<'_, 'a>>,
 ) -> String {
-    let node_type_copy: Vec<u8> = node_type.into();
+    let node_type: Vec<u8> = node_type.into();
     let handle = generate_or_use_handle(
         handle,
-        Some(unsafe { std::str::from_utf8_unchecked(&node_type_copy) }),
+        Some(unsafe { std::str::from_utf8_unchecked(&node_type) }),
     );
 
-    ctx.create(handle.as_str(), node_type_copy, &[]);
+    ctx.create(handle.as_str(), node_type, None);
 
-    if !args.is_empty() {
+    if let Some(args) = args {
         ctx.set_attribute(handle.as_str(), args);
     }
 
@@ -178,7 +185,7 @@ pub fn node<'a>(
 #[inline]
 pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> String {
     let handle = generate_or_use_handle(handle, Some("scaling"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -191,7 +198,7 @@ pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> St
     handle
 }
 
-/// Create a traslation transform node.
+/// Create a translation transform node.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
@@ -199,7 +206,7 @@ pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> St
 #[inline]
 pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3]) -> String {
     let handle = generate_or_use_handle(handle, Some("translation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -212,7 +219,7 @@ pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3
     handle
 }
 
-/// Create a traslation transform node.
+/// Create a translation transform node.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
@@ -221,7 +228,7 @@ pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3
 /// Returns `handle` for convenience.
 pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f64; 3]) -> String {
     let handle = generate_or_use_handle(handle, Some("rotation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -248,7 +255,7 @@ pub fn look_at_camera(
     up: &[f64; 3],
 ) {
     let handle = generate_or_use_handle(handle, Some("look_at"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -270,8 +277,8 @@ pub fn look_at_camera(
 /// bounding box under the specified field-of-view and aspect ratio
 /// (*with*÷*height*).
 /// # Arguments
-/// * `direction` – The axis the camera should be looking along. Does *not*
-///   need to be normalized.
+/// * `direction` – The axis the camera should be looking along. Does *not* need
+///   to be normalized.
 /// * `up` – A direction to look
 /// * `bounding_box` – Axis-aligned bounding box in the form `[x_min, y_min,
 ///   z_min, x_max, y_max, z_max]`.
@@ -326,7 +333,7 @@ pub fn look_at_bounding_box_perspective_camera(
 
     let handle = generate_or_use_handle(handle, Some("look_at"));
 
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, &[]);
+    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
 
     ctx.set_attribute(
         handle.as_str(),

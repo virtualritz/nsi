@@ -28,14 +28,15 @@ impl Layer {
         self.offset
     }
 
-    /// The number of channels in this layer. This is a shortcut for calling `depth().channels()`.
+    /// The number of channels in this layer. This is a shortcut for calling
+    /// `depth().channels()`.
     #[inline]
     pub fn channels(&self) -> usize {
         self.depth.channels()
     }
 
-    /// Returns true if the [depth](LayerDepth) of this layer contains an alpha channel. This is a
-    /// shortcut for calling `depth().has_alpha()`.
+    /// Returns true if the [depth](LayerDepth) of this layer contains an alpha
+    /// channel. This is a shortcut for calling `depth().has_alpha()`.
     #[inline]
     pub fn has_alpha(&self) -> bool {
         self.depth.has_alpha()
@@ -44,10 +45,11 @@ impl Layer {
 
 /// The depth (number and type of channels) a pixel in a [`Layer`] is
 /// composed of.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum LayerDepth {
     /// A single channel. Obtained when setting `"layertype"` `"scalar"` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    #[default]
     OneChannel,
     /// A single channel with alpha. Obtained when setting `"layertype"`
     /// `"scalar"` and `"withalpha"` `1` on an
@@ -76,12 +78,6 @@ pub enum LayerDepth {
     FourChannelsAndAlpha,
 }
 
-impl Default for LayerDepth {
-    fn default() -> Self {
-        LayerDepth::OneChannel
-    }
-}
-
 impl LayerDepth {
     /// Returns the number of channels this layer type consists of.
     pub fn channels(&self) -> usize {
@@ -108,8 +104,9 @@ impl LayerDepth {
     }
 }
 
-/// Accessor for the pixel format the renderer sends in [`FnOpen`](crate::output::FnOpen),
-/// [`FnWrite`](crate::output::FnWrite) and [`FnFinish`](crate::output::FnFinish)
+/// Accessor for the pixel format the renderer sends in
+/// [`FnOpen`](crate::output::FnOpen), [`FnWrite`](crate::output::FnWrite) and
+/// [`FnFinish`](crate::output::FnFinish)
 ///
 /// This is a stack of [`Layer`]s. Where each layer describes an
 /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
@@ -119,10 +116,12 @@ impl LayerDepth {
 /// A typical format for a pixel containing two such layers, an *RGBA* **color**
 /// + **alpha** output layer and a world space **normal**, will look like this:
 ///
-/// [`name`](Layer::name()) | [`depth`](Layer::depth())                             | [`offset`](Layer::offset())
+/// [`name`](Layer::name()) | [`depth`](Layer::depth())
+/// | [`offset`](Layer::offset())
 /// ------------------------|-------------------------------------------------------|----------------------------
-/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha) (`rgba`) | `0`
-/// `N_world`               | [`Vector`](LayerDepth::Vector) (`xyz`)                | `4`
+/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha)
+/// (`rgba`) | `0` `N_world`               | [`Vector`](LayerDepth::Vector)
+/// (`xyz`)                | `4`
 ///
 /// ## RAW Layout
 ///
@@ -144,8 +143,8 @@ impl LayerDepth {
 ///
 /// # Accessing Layers
 ///
-/// To access the [`Layer`]s inside a `PixelFormat` use the [`Deref`] operator to obtain the
-/// underlying [`Vec`]<`Layer`>.
+/// To access the [`Layer`]s inside a `PixelFormat` use the [`Deref`] operator
+/// to obtain the underlying [`Vec`]<`Layer`>.
 ///
 /// ```
 /// # #[cfg(feature = "output")]

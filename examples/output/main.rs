@@ -1,6 +1,5 @@
 use exr::prelude::*;
 use png;
-use polyhedron_ops as p_ops;
 use std::{
     fs::File,
     io::BufWriter,
@@ -104,7 +103,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_f32_file(name + ".exr", Vec2(width, height), &sample).unwrap();
+            write_rgba_file(name + ".exr", width, height, &sample).unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);
@@ -112,17 +111,8 @@ pub fn main() {
         },
     );
 
-    // Create some geometry.
-    let mut polyhedron = p_ops::Polyhedron::tetrahedron();
-    polyhedron.meta(None, None, None, None, true);
-    polyhedron.normalize();
-    polyhedron.gyro(Some(1. / 3.), Some(0.1), true);
-    polyhedron.normalize();
-    polyhedron.kis(Some(-0.2), None, None, true);
-    polyhedron.normalize();
-
     // The next call blocks until the render has finished.
-    nsi_render(32, &polyhedron, open, write, finish);
+    nsi_render(32, open, write, finish);
 
     // We can shed the Arc and the Mutex now that nsi_render() is done.
     let quantized_pixel_data = Arc::<_>::try_unwrap(quantized_pixel_data)
@@ -132,12 +122,12 @@ pub fn main() {
 
     // Write out the display-referred, u8 quantized data we prepared
     // in the write closure above as a PNG.
-    let path = Path::new("test.png");
+    let path = Path::new("output.png");
     let file = File::create(path).unwrap();
     let ref mut writer = BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(writer, dimensions.0, dimensions.1);
-    encoder.set_color(png::ColorType::RGBA);
+    encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
 
     let mut writer = encoder.write_header().unwrap();

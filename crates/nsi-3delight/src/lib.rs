@@ -11,8 +11,8 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specifies how much to rotate the environment around
+///   the Y (up) axis.
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///
@@ -21,12 +21,15 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
-pub fn environment<'a>(
+pub fn environment<'a, 'b>(
     ctx: &'a nsi::Context<'a>,
-    handle: Option<&str>,
+    handle: Option<&'b str>,
     angle: Option<f64>,
     visible: Option<bool>,
-) -> (String, String) {
+) -> (String, String)
+where
+    'a: 'b,
+{
     // Create a rotation transform – this is the handle we return.
     let rotation = rotation(ctx, None, angle.unwrap_or(0.0), &[0.0, 1.0, 0.0]);
 
@@ -41,11 +44,11 @@ pub fn environment<'a>(
             ctx,
             Some(environment.as_str()),
             nsi::NodeType::Environment,
-            &[],
+            None,
         ),
     );
 
-    let shader = node(ctx, None, nsi::NodeType::Shader, &[]);
+    let shader = node(ctx, None, nsi::NodeType::Shader, None);
 
     append(
         ctx,
@@ -57,10 +60,10 @@ pub fn environment<'a>(
                 ctx,
                 None,
                 nsi::NodeType::Attributes,
-                &[nsi::integer!(
+                Some(&[nsi::integer!(
                     "visibility.camera",
                     visible.unwrap_or(true) as _
-                )],
+                )]),
             ),
             Some("surfaceshader"),
             shader.as_str(),
@@ -76,8 +79,7 @@ pub fn environment<'a>(
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `texture – A latitude-longitude texture map in one of these
-///     formats:
+/// * `texture – A latitude-longitude texture map in one of these formats:
 ///     * TIFF
 ///     * JPEG
 ///     * Radiance
@@ -89,11 +91,10 @@ pub fn environment<'a>(
 ///     * Photoshop PSD
 ///     * TGA
 ///
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specifies how much to rotate the environment around
+///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in
-///     [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///
@@ -102,15 +103,19 @@ pub fn environment<'a>(
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
-pub fn environment_texture<'a, 'b>(
+pub fn environment_texture<'a, 'b, 'c>(
     ctx: &'a nsi::Context<'a>,
-    handle: Option<&str>,
-    texture: &str,
+    handle: Option<&'c str>,
+    texture: &'c str,
     angle: Option<f64>,
     exposure: Option<f32>,
     visible: Option<bool>,
-    args: &nsi::ArgSlice<'b, 'a>,
-) -> (String, String) {
+    args: Option<&nsi::ArgSlice<'b, 'a>>,
+) -> (String, String)
+where
+    'a: 'b,
+    'a: 'c,
+{
     let (rotation, shader) = environment(ctx, handle, angle, visible);
 
     // Environment light attributes.
@@ -123,7 +128,7 @@ pub fn environment_texture<'a, 'b>(
         ],
     );
 
-    if !args.is_empty() {
+    if let Some(args) = args {
         ctx.set_attribute(shader.as_str(), args);
     }
 
@@ -132,24 +137,22 @@ pub fn environment_texture<'a, 'b>(
 
 /// **Convenience method; not part of the official ɴsɪ API.**
 ///
-/// Creates a phiscally plausible, procedural sky environment
-/// light.
+/// Creates a physically plausible, procedural sky environment light.
 ///
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specicfies how much to rotate the
-///     environment around the Y (up) axis.
+/// * `angle` – In degrees; specifies how much to rotate the environment around
+///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in
-///     [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
 /// * `visible` – If the environment is visible to the camera.
 ///
 /// Returns `handle` and the handle of the created `shader`.
 ///
-/// Note that this instances a `dlSky` shader. Using the returned
-/// `shader` handle you can set more attributes on this node.
+/// Note that this instances a `dlSky` shader. Using the returned  `shader`
+/// handle you can set more attributes on this node.
 pub fn environment_sky<'a, 'b>(
     ctx: &'a nsi::Context<'a>,
     handle: Option<&str>,
@@ -157,7 +160,10 @@ pub fn environment_sky<'a, 'b>(
     exposure: Option<f32>,
     visible: Option<bool>,
     args: &nsi::ArgSlice<'b, 'a>,
-) -> (String, String) {
+) -> (String, String)
+where
+    'a: 'b,
+{
     let (rotation, shader) = environment(ctx, handle, angle, visible);
 
     // Environment light attributes.

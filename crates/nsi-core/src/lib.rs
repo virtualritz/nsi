@@ -1,15 +1,7 @@
-#![cfg_attr(
-    all(debug_assertions, feature = "nightly"),
-    feature(cstring_from_vec_with_nul)
-)]
 #![cfg_attr(feature = "nightly", feature(doc_cfg))]
 #![allow(non_snake_case)]
 //#![warn(missing_docs)]
 //#![warn(missing_doc_code_examples)]
-
-#[cfg(not(feature = "link_lib3delight"))]
-#[macro_use]
-extern crate dlopen_derive;
 
 use nsi_sys::*;
 
@@ -31,95 +23,91 @@ use self::linked as api;
 extern crate lazy_static;
 
 lazy_static! {
-    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight.");
+    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight");
 }
 
 // Default modules ----------------------------------------------------
 
 #[macro_use]
 pub mod argument;
+pub use argument::*;
+
 // Context should be in the crate root so we keep the module private.`
 pub mod context;
+pub use context::*;
 
 #[cfg(feature = "output")]
 pub mod output;
 
+#[cfg(feature = "output")]
+pub use output::*;
+
 mod tests;
 
-pub use crate::{
-    argument::*,
-    context::{Context, NodeType},
-};
-
 trait Api {
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam_t) -> NSIContext_t;
-    fn NSIEnd(&self, ctx: NSIContext_t);
+    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext;
+    fn NSIEnd(&self, ctx: NSIContext);
     fn NSICreate(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         type_: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
     fn NSIDelete(
         &self,
-        ctx: NSIContext_t,
-        handle: NSIHandle_t,
+        ctx: NSIContext,
+        handle: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
     fn NSISetAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
     fn NSISetAttributeAtTime(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         time: f64,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
     fn NSIDeleteAttribute(
         &self,
-        ctx: NSIContext_t,
-        object: NSIHandle_t,
+        ctx: NSIContext,
+        object: NSIHandle,
         name: *const ::std::os::raw::c_char,
     );
     #[allow(clippy::too_many_arguments)]
     fn NSIConnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
     fn NSIDisconnect(
         &self,
-        ctx: NSIContext_t,
-        from: NSIHandle_t,
+        ctx: NSIContext,
+        from: NSIHandle,
         from_attr: *const ::std::os::raw::c_char,
-        to: NSIHandle_t,
+        to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     );
-    fn NSIEvaluate(
-        &self,
-        ctx: NSIContext_t,
-        nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
-    );
+    fn NSIEvaluate(&self, ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam);
     fn NSIRenderControl(
         &self,
-        ctx: NSIContext_t,
+        ctx: NSIContext,
         nparams: ::std::os::raw::c_int,
-        params: *const NSIParam_t,
+        params: *const NSIParam,
     );
 
     #[cfg(feature = "output")]

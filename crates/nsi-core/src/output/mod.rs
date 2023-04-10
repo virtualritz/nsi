@@ -6,25 +6,27 @@
 //! pixels during and/or after a render, in-memory.
 //!
 //! There are three types of closure:
-//! * [`FnOpen`] is called once when the [`OutputDriver`](crate::context::NodeType::OutputDriver)
-//!   is *opened* by the renderer.
+//! * [`FnOpen`] is called once when the
+//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *opened* by
+//!   the renderer.
 //!
-//! * [`FnWrite`] is called for each bucket of pixel data the renderer sends to the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver).
+//! * [`FnWrite`] is called for each bucket of pixel data the renderer sends to
+//!   the [`OutputDriver`](crate::context::NodeType::OutputDriver).
 //!
-//! * [`FnFinish`] is called once when the [`OutputDriver`](crate::context::NodeType::OutputDriver)
-//!   is *closed* by the renderer.
+//! * [`FnFinish`] is called once when the
+//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *closed* by
+//!   the renderer.
 //!
 //! As a user you can choose how to use this API.
 //!
-//! * To get a single buffer of pixel data when rendering is finished it is enough to
-//!   implement an [`FnFinish`] closure.
+//! * To get a single buffer of pixel data when rendering is finished it is
+//!   enough to implement an [`FnFinish`] closure.
 //!
-//! * To get the pixel buffer updated while the renderer is working implemet an [`FnWrite`]
-//!   closure.
+//! * To get the pixel buffer updated while the renderer is working implement an
+//!   [`FnWrite`] closure.
 //!
-//! The format of the [`Vec<f32>`] buffer is described by the [`PixelFormat`] parameter which is
-//! passed to both of these closures.
+//! The format of the [`Vec<f32>`] buffer is described by the [`PixelFormat`]
+//! parameter which is passed to both of these closures.
 //!
 //! ## Example
 //! ```
@@ -103,19 +105,20 @@
 //! ```
 //!
 //! ## Color Profiles
-//! The pixel color data that the renderer generates is linear and scene-referred. I.e. relative to
-//! whatever units you used to describe illuminants in your scene.
+//! The pixel color data that the renderer generates is linear and
+//! scene-referred. I.e. relative to whatever units you used to describe
+//! illuminants in your scene.
 //!
 //! Using the
 //! [`"colorprofile"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the renderer to apply
-//! an [Open Color IO](https://opencolorio.org/) (OCIO)
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! renderer to apply an [Open Color IO](https://opencolorio.org/) (OCIO)
 //! [profile/LUT](https://github.com/colour-science/OpenColorIO-Configs/tree/feature/aces-1.2-config/aces_1.2/luts)
 //! before quantizing (see below).
 //!
 //! Once OCIO has a [Rust wrapper](https://crates.io/crates/opencolorio) you can easily choose to
 //! do these color conversions yourself. In the meantime there is the
-//! [`colorspace`](https://crates.io/crates/colorspace) crate which has some usefule profiles built
+//! [`colorspace`](https://crates.io/crates/colorspace) crate which has some useful profiles built
 //! in, e.g. [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
 //!
 //! ```
@@ -137,16 +140,19 @@
 //!
 //! Using the [`"scalarformat"`
 //! attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the renderer to
-//! quantize data down to a suitable range. For example, setting this to `"uint16"` will get you
-//! valid `u16` values from `0.0..65535.0`, but stored in the `f32`s of the `pixel_data` buffer.
-//! The value of `1.0` will map to `65535.0` and everything above will be clipped. You can convert
+//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! renderer to quantize data down to a suitable range. For example, setting
+//! this to `"uint16"` will get you valid `u16` values from `0.0..65535.0`, but
+//! stored in the `f32`s of the `pixel_data` buffer. The value of `1.0` will map
+//! to `65535.0` and everything above will be clipped. You can convert
 //! such a value straight via `f32 as u16`.
 //!
-//! Unless you asked the renderer to also apply some color profile (see above) the data is linear.
-//! To look good on a screen it needs to be made display-referred.
+//! Unless you asked the renderer to also apply some color profile (see above)
+//! the data is linear. To look good on a screen it needs to be made
+//! display-referred.
 //!
-//! See the `output` example on how to do this with a simple, display-referred `sRGB` curve.
+//! See the `output` example on how to do this with a simple, display-referred
+//! `sRGB` curve.
 use crate::argument::CallbackPtr;
 use std::{
     ffi::{CStr, CString},
@@ -156,8 +162,8 @@ use std::{
 pub mod pixel_format;
 pub use pixel_format::*;
 
-/// This is the name of the crate’s built-in output driver that understands the "closure.*"
-/// attributes.
+/// This is the name of the crate’s built-in output driver that understands the
+/// "closure.*" attributes.
 pub static FERRIS: &str = "ferris";
 
 /// An error type the callbacks return to communicate with the
@@ -165,18 +171,32 @@ pub static FERRIS: &str = "ferris";
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, num_enum::IntoPrimitive)]
 pub enum Error {
-    /// Everyhing is dandy.
-    None = ndspy_sys::PtDspyError_PkDspyErrorNone as _,
+    /// Everything is dandy.
+    None = ndspy_sys::PtDspyError::None as _,
     /// We ran out of memory.
-    NoMemory = ndspy_sys::PtDspyError_PkDspyErrorNoMemory as _,
+    NoMemory = ndspy_sys::PtDspyError::NoMemory as _,
     /// We do no support this request.
-    Unsupported = ndspy_sys::PtDspyError_PkDspyErrorUnsupported as _,
-    BadParameters = ndspy_sys::PtDspyError_PkDspyErrorBadParams as _,
-    NoResource = ndspy_sys::PtDspyError_PkDspyErrorNoResource as _,
+    Unsupported = ndspy_sys::PtDspyError::Unsupported as _,
+    BadParameters = ndspy_sys::PtDspyError::BadParams as _,
+    NoResource = ndspy_sys::PtDspyError::NoResource as _,
     /// Something else went wrong.
-    Undefined = ndspy_sys::PtDspyError_PkDspyErrorUndefined as _,
+    Undefined = ndspy_sys::PtDspyError::Undefined as _,
     /// Stop the render.
-    Stop = ndspy_sys::PtDspyError_PkDspyErrorStop as _,
+    Stop = ndspy_sys::PtDspyError::Stop as _,
+}
+
+impl From<Error> for ndspy_sys::PtDspyError {
+    fn from(item: Error) -> ndspy_sys::PtDspyError {
+        match item {
+            Error::None => ndspy_sys::PtDspyError::None,
+            Error::NoMemory => ndspy_sys::PtDspyError::NoMemory,
+            Error::Unsupported => ndspy_sys::PtDspyError::Unsupported,
+            Error::BadParameters => ndspy_sys::PtDspyError::BadParams,
+            Error::NoResource => ndspy_sys::PtDspyError::NoResource,
+            Error::Undefined => ndspy_sys::PtDspyError::Undefined,
+            Error::Stop => ndspy_sys::PtDspyError::Stop,
+        }
+    }
 }
 
 /// A closure which is called once per
@@ -184,11 +204,13 @@ pub enum Error {
 ///
 /// It is passed to ɴsɪ via the `"callback.open"` attribute on that node.
 ///
-/// The closure is called once, before the renderer starts sending pixels to the output driver.
+/// The closure is called once, before the renderer starts sending pixels to the
+/// output driver.
 ///
 /// # Arguments
-/// The `pixel_format` parameter is an array of strings that details the composition of the `f32`
-/// data that the renderer will send to the [`FnWrite`] and/or [`FnFinish`] closures.
+/// The `pixel_format` parameter is an array of strings that details the
+/// composition of the `f32` data that the renderer will send to the [`FnWrite`]
+/// and/or [`FnFinish`] closures.
 ///
 /// # Example
 /// ```
@@ -239,7 +261,8 @@ trait FnOpen<'a> = FnMut(
 */
 
 /// A closure which is called for each bucket of pixels the
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance sends during rendering.
+/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance sends
+/// during rendering.
 ///
 /// It is passed to ɴsɪ via the `"callback.write"` attribute on that node.
 /// # Example
@@ -410,12 +433,13 @@ impl<'a, T: FnMut(Query) -> Error + 'a> FnQuery<'a> for T {}
 pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 */
 
-/// Wrapper to pass an [`FnOpen`] closure to an [`OutputDriver`](crate::NodeType::OutputDriver)
-/// node.
+/// Wrapper to pass an [`FnOpen`] closure to an
+/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
 pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
 
-// Why do we need a triple Box here? No idea and neither had anyone from the Rust community.
-// But omitting a single Box wrapper layer leads to an instant crash.
+// Why do we need a triple Box here? No idea and neither had anyone from the
+// Rust community. But omitting a single Box wrapper layer leads to an instant
+// crash.
 impl<'a> OpenCallback<'a> {
     pub fn new<F>(fn_open: F) -> Self
     where
@@ -431,8 +455,8 @@ impl CallbackPtr for OpenCallback<'_> {
         Box::into_raw(self.0) as *const _ as _
     }
 }
-/// Wrapper to pass an [`FnWrite`] closure to an [`OutputDriver`](crate::NodeType::OutputDriver)
-/// node.
+/// Wrapper to pass an [`FnWrite`] closure to an
+/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
 pub struct WriteCallback<'a>(Box<Box<Box<dyn FnWrite<'a>>>>);
 
 impl<'a> WriteCallback<'a> {
@@ -451,8 +475,8 @@ impl CallbackPtr for WriteCallback<'_> {
     }
 }
 
-/// Wrapper to pass an [`FnFinish`] closure to an [`OutputDriver`](crate::NodeType::OutputDriver)
-/// node.
+/// Wrapper to pass an [`FnFinish`] closure to an
+/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
 pub struct FinishCallback<'a>(Box<Box<Box<dyn FnFinish<'a>>>>);
 
 impl<'a> FinishCallback<'a> {
@@ -603,7 +627,7 @@ pub(crate) extern "C" fn image_query(
     data: *mut c_void,
 ) -> ndspy_sys::PtDspyError {
     match query_type {
-        ndspy_sys::PtDspyQueryType_PkRenderProgress => {
+        ndspy_sys::PtDspyQueryType::RenderProgress => {
             if (data_len as usize) < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
             {
                 Error::BadParameters
@@ -650,7 +674,7 @@ pub(crate) extern "C" fn image_write(
         let dest_index = (y * display_data.width + x_min as usize) * pixel_length;
 
         // We memcpy() each scanline.
-        (&mut display_data.pixel_data[dest_index..dest_index + bucket_width])
+        display_data.pixel_data[dest_index..dest_index + bucket_width]
             .copy_from_slice(&(pixel_data[source_index..source_index + bucket_width]));
 
         source_index += bucket_width;
