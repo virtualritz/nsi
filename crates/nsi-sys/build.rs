@@ -28,9 +28,9 @@ impl ParseCallbacks for CleanNsiNamingCallbacks {
                         .trim_start_matches("NSIErr")
                         .to_string(),
                 ),
-                "enum NSIStoppingStatus" => {
-                    Some(original_variant_name.trim_start_matches("NSI").to_string())
-                }
+                "enum NSIStoppingStatus" => Some(
+                    original_variant_name.trim_start_matches("NSI").to_string(),
+                ),
                 "enum NSIType_t" => Some(
                     original_variant_name
                         .trim_start_matches("NSIType")
@@ -47,7 +47,8 @@ impl ParseCallbacks for CleanNsiNamingCallbacks {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=include/wrapper.h");
 
-    let include_path = PathBuf::from(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("include");
+    let include_path =
+        PathBuf::from(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("include");
 
     eprintln!("include: {}", include_path.display());
 

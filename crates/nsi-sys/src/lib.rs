@@ -77,16 +77,18 @@ mod c_api {
 }
 
 pub use c_api::{
-    NSIContext, NSIErrorHandler, NSIErrorLevel, NSIHandle, NSIParam, NSIProcedural,
-    NSIProceduralExecute, NSIProceduralLoad, NSIProceduralUnload, NSIRenderStopped, NSIReport,
-    NSIStoppingStatus, NSIType, NSI_ALL_ATTRIBUTES, NSI_ALL_NODES, NSI_SCENE_GLOBAL,
+    NSIContext, NSIErrorHandler, NSIErrorLevel, NSIHandle, NSIParam,
+    NSIProcedural, NSIProceduralExecute, NSIProceduralLoad,
+    NSIProceduralUnload, NSIRenderStopped, NSIReport, NSIStoppingStatus,
+    NSIType, NSI_ALL_ATTRIBUTES, NSI_ALL_NODES, NSI_SCENE_GLOBAL,
     NSI_SCENE_ROOT, NSI_VERSION,
 };
 
 #[cfg(not(feature = "omit_functions"))]
 pub use c_api::{
-    NSIBegin, NSIConnect, NSICreate, NSIDelete, NSIDeleteAttribute, NSIDisconnect, NSIEnd,
-    NSIEvaluate, NSIRenderControl, NSISetAttribute, NSISetAttributeAtTime,
+    NSIBegin, NSIConnect, NSICreate, NSIDelete, NSIDeleteAttribute,
+    NSIDisconnect, NSIEnd, NSIEvaluate, NSIRenderControl, NSISetAttribute,
+    NSISetAttributeAtTime,
 };
 
 bitflags! {
