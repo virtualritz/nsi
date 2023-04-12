@@ -1,6 +1,6 @@
 [package]
 name = "nsi-3delight"
-version = "0.1.2"
+version = "0.7.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
