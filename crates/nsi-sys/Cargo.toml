@@ -1,0 +1,26 @@
+[package]
+name = "nsi-sys"
+version = "0.7.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+build = "build.rs"
+edition = "2021"
+license = "Apache-2.0 OR BSD-3-Clause OR MIT OR Zlib"
+description = "Auto-generated bindings for Illumination Research’s Nodal Scene Interface – ɴꜱɪ."
+readme = "README.md"
+documentation = "https://nsi.readthedocs.io/"
+repository = "https://github.com/virtualritz/nsi-sys/"
+
+[badges]
+maintenance = { status = "passively-maintained" }
+
+[features]
+default = []
+# Omit the NSI callbacks from the generated wrapper. This
+# is for writing a renderer exposting an NSI API.
+omit_functions = []
+
+[build-dependencies]
+bindgen = "0.64"
+
+[dependencies]
+bitflags = "2"
