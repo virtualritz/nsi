@@ -38,7 +38,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::fs::File::create(lib_path.clone())
                     .expect(&format!("Could not create {}", lib_path.display()))
                     .write_all(&lib_data)
-                    .expect(&format!("Could not write to {}", lib_path.display()));
+                    .expect(&format!(
+                        "Could not write to {}",
+                        lib_path.display()
+                    ));
                 Some(())
             })();
         }
