@@ -34,6 +34,7 @@ dlopen2 = { version = "0.4.1", optional = true }
 enum_dispatch = "0.3.11"
 lazy_static = "1.4.0"
 ndspy-sys = { version = "0.2.2", optional = true }
-nsi-sys = { path = "../nsi-sys" }
+nsi-sys = { version = "0.7.0", path = "../nsi-sys" }
 num_enum = "0.5.11"
 rclite = "0.2.2"
+ustr = "0.9.0"

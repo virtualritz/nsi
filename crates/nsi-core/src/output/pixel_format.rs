@@ -55,8 +55,8 @@ pub enum LayerDepth {
     /// `"scalar"` and `"withalpha"` `1` on an
     /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
     OneChannelAndAlpha,
-    /// An `rgb` color triplet. Obtained when setting `"layertype"` `"color"` on
-    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// An `rgb` color triplet. Obtained when setting `"layertype"` `"color"`
+    /// on an [`OutputLayer`](crate::context::NodeType::OutputLayer).
     Color,
     /// An `rgb` color triplet with alpha. Obtained when setting `"layertype"`
     /// `"color"` and `"withalpha"` `1` on an
@@ -150,7 +150,11 @@ impl LayerDepth {
 /// # #[cfg(feature = "output")]
 /// # {
 /// let finish = nsi::output::FinishCallback::new(
-///     |_: String, _: usize, _: usize, pixel_format: nsi::output::PixelFormat, _: Vec<f32>| {
+///     |_: String,
+///      _: usize,
+///      _: usize,
+///      pixel_format: nsi::output::PixelFormat,
+///      _: Vec<f32>| {
 ///         // Dump all layer descriptions to stdout.
 ///         for layer in *pixel_format {
 ///             println!("{:?}", layer);
@@ -185,9 +189,12 @@ impl PixelFormat {
                 .filter_map(|format| {
                     // FIXME: add support for specifying AOV and detect type
                     // for indexing (.r vs .x)
-                    let name = unsafe { CStr::from_ptr(format.1.name) }.to_str().unwrap();
+                    let name = unsafe { CStr::from_ptr(format.1.name) }
+                        .to_str()
+                        .unwrap();
 
-                    let (layer_name, channel_id) = Self::split_into_layer_name_and_channel_id(name);
+                    let (layer_name, channel_id) =
+                        Self::split_into_layer_name_and_channel_id(name);
 
                     // A boundary between two layers will be when the postfix
                     // is a combination of those above.
@@ -215,14 +222,20 @@ impl PixelFormat {
                             offset: tmp_offset,
                         })
                     } else {
-                        // Do we we have a lonely alpha -> it belongs to the current
-                        // layer.
+                        // Do we we have a lonely alpha -> it belongs to the
+                        // current layer.
                         if layer_name.is_empty() && "a" == channel_id {
                             depth = match &depth {
-                                LayerDepth::OneChannel => LayerDepth::OneChannelAndAlpha,
+                                LayerDepth::OneChannel => {
+                                    LayerDepth::OneChannelAndAlpha
+                                }
                                 LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                LayerDepth::Vector => LayerDepth::VectorAndAlpha,
-                                LayerDepth::FourChannels => LayerDepth::FourChannelsAndAlpha,
+                                LayerDepth::Vector => {
+                                    LayerDepth::VectorAndAlpha
+                                }
+                                LayerDepth::FourChannels => {
+                                    LayerDepth::FourChannelsAndAlpha
+                                }
                                 _ => unreachable!(),
                             };
                         }
@@ -238,8 +251,12 @@ impl PixelFormat {
                                             LayerDepth::OneChannel => {
                                                 LayerDepth::OneChannelAndAlpha
                                             }
-                                            LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                            LayerDepth::Vector => LayerDepth::VectorAndAlpha,
+                                            LayerDepth::Color => {
+                                                LayerDepth::ColorAndAlpha
+                                            }
+                                            LayerDepth::Vector => {
+                                                LayerDepth::VectorAndAlpha
+                                            }
                                             _ => unreachable!(),
                                         };
                                     } else {

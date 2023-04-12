@@ -8,7 +8,10 @@ use crate::*;
 
 #[derive(WrapperApi)]
 struct CApi {
-    NSIBegin: extern "C" fn(nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext,
+    NSIBegin: extern "C" fn(
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    ) -> NSIContext,
     NSIEnd: extern "C" fn(ctx: NSIContext),
     NSICreate: extern "C" fn(
         ctx: NSIContext,
@@ -36,8 +39,11 @@ struct CApi {
         nparams: ::std::os::raw::c_int,
         params: *const NSIParam,
     ),
-    NSIDeleteAttribute:
-        extern "C" fn(ctx: NSIContext, object: NSIHandle, name: *const ::std::os::raw::c_char),
+    NSIDeleteAttribute: extern "C" fn(
+        ctx: NSIContext,
+        object: NSIHandle,
+        name: *const ::std::os::raw::c_char,
+    ),
     NSIConnect: extern "C" fn(
         ctx: NSIContext,
         from: NSIHandle,
@@ -54,10 +60,16 @@ struct CApi {
         to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     ),
-    NSIEvaluate:
-        extern "C" fn(ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam),
-    NSIRenderControl:
-        extern "C" fn(ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam),
+    NSIEvaluate: extern "C" fn(
+        ctx: NSIContext,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    ),
+    NSIRenderControl: extern "C" fn(
+        ctx: NSIContext,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    ),
     #[cfg(feature = "output")]
     DspyRegisterDriver: extern "C" fn(
         driver_name: *const ::std::os::raw::c_char,
@@ -99,9 +111,11 @@ impl DynamicApi {
                 Err(e) => Err(Box::new(e) as _),
                 Ok(delight) => unsafe {
                     #[cfg(any(target_os = "linux", target_os = "macos"))]
-                    let path = Path::new(&delight).join("lib").join(DELIGHT_LIB);
+                    let path =
+                        Path::new(&delight).join("lib").join(DELIGHT_LIB);
                     #[cfg(target_os = "windows")]
-                    let path = Path::new(&delight).join("bin").join(DELIGHT_LIB);
+                    let path =
+                        Path::new(&delight).join("bin").join(DELIGHT_LIB);
 
                     Container::load(path)
                 }
@@ -128,7 +142,11 @@ impl DynamicApi {
 
 impl Api for DynamicApi {
     #[inline]
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext {
+    fn NSIBegin(
+        &self,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    ) -> NSIContext {
         self.api.NSIBegin(nparams, params)
     }
 
@@ -251,7 +269,12 @@ impl Api for DynamicApi {
         p_close: ndspy_sys::PtDspyCloseFuncPtr,
         p_query: ndspy_sys::PtDspyQueryFuncPtr,
     ) -> ndspy_sys::PtDspyError {
-        self.api
-            .DspyRegisterDriver(driver_name, p_open, p_write, p_close, p_query)
+        self.api.DspyRegisterDriver(
+            driver_name,
+            p_open,
+            p_write,
+            p_close,
+            p_query,
+        )
     }
 }

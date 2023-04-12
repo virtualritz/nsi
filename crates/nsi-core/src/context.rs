@@ -7,11 +7,12 @@ use crate::{argument::*, *};
 use rclite::Arc;
 #[allow(unused_imports)]
 use std::{
-    ffi::{CStr, CString},
+    ffi::{c_char, CStr, CString},
     marker::PhantomData,
     ops::Drop,
     os::raw::{c_int, c_void},
 };
+use ustr::Ustr;
 
 /// The actual context and a marker to hold on to callbacks
 /// (closures)/references passed via [`set_attribute()`] or the like.
@@ -79,20 +80,19 @@ impl<'a> Context<'a> {
     /// # Examples
     ///
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create rendering context that dumps to stdout.
-    /// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
-    ///     .expect("Could not create ɴsɪ context.");
+    /// let ctx =
+    ///     nsi::Context::new(Some(&[nsi::string!("streamfilename", "stdout")]))
+    ///         .expect("Could not create ɴsɪ context.");
     /// ```
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
-        let context = if let Some(args) = args {
-            let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
-            NSI_API.NSIBegin(args_len, args_ptr)
-        } else {
-            NSI_API.NSIBegin(0, std::ptr::null())
-        };
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+
+        let context = NSI_API.NSIBegin(args_len, args_ptr);
 
         if 0 == context {
             None
@@ -108,59 +108,50 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` - A node handle. This string will uniquely identify the node
+    /// * `handle` -- A node handle. This string will uniquely identify the node
     ///   in the scene.
     ///
     ///   If the supplied handle matches an existing node, the function does
-    /// nothing if all other   parameters match the call which created that
-    /// node. Otherwise, it emits an error. Note   that handles need only be
-    /// unique within a given [`Context`].   It is ok to reuse the same
+    /// nothing if all other parameters match the call which created that
+    /// node. Otherwise, it emits an error. Note that handles need only be
+    /// unique within a given [`Context`]. It is ok to reuse the same
     /// handle inside different [`Context`]s.
     ///
-    /// * `nodeype` – The type of node to create. You can use [`NodeType`] to
-    ///   create nodes that are in the official NSI specification. As this
-    ///   parameter is just a string you can instance other node types that a
-    ///   particular implementation may provide and which are not part of the
-    ///   official specification.
+    /// * `node_type` -- The type of node to create. The crate has `&str`
+    ///   constants for all [`node`]s that are in the official NSI
+    ///   specification. As this parameter is just a string you can instance
+    ///   other node types that a particular implementation may provide and
+    ///   which are not part of the official specification.
     ///
-    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments. *There
-    ///   are no optional arguments defined as of now*.
+    /// * `args` -- A [`slice`](std::slice) of optional [`Arg`] arguments.
+    ///   *There are no optional arguments defined as of now*.
     ///
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create a context to send the scene to.
-    /// let ctx = nsi::Context::new(&[]).unwrap();
+    /// let ctx = nsi::Context::new(None).unwrap();
     ///
     /// // Create an infinte plane.
-    /// ctx.create("ground", nsi::NodeType::Plane, &[]);
+    /// ctx.create("ground", nsi::PLANE, None);
     /// ```
     #[inline]
     pub fn create(
         &self,
-        handle: impl Into<Vec<u8>>,
-        nodeype: impl Into<Vec<u8>>,
+        handle: &str,
+        node_type: &str,
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
-        let handle = CString::new(handle).unwrap();
-        let nodeype = CString::new(nodeype).unwrap();
+        let handle = HandleString::from(handle);
+        let node_type = Ustr::from(node_type);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        if let Some(args) = args {
-            let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
-            NSI_API.NSICreate(
-                self.0.context,
-                handle.as_ptr(),
-                nodeype.as_ptr(),
-                args_len,
-                args_ptr,
-            );
-        } else {
-            NSI_API.NSICreate(
-                self.0.context,
-                handle.as_ptr(),
-                nodeype.as_ptr(),
-                0,
-                std::ptr::null(),
-            );
-        }
+        NSI_API.NSICreate(
+            self.0.context,
+            handle.as_char_ptr(),
+            node_type.as_char_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function deletes a node from the scene. All connections to and from
@@ -171,10 +162,10 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` – A handle to a node previously created with
+    /// * `handle` -- A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
+    /// * `args` -- A [`slice`](std::slice) of optional [`Arg`] arguments.
     ///
     /// # Optional Arguments
     ///
@@ -190,27 +181,28 @@ impl<'a> Context<'a> {
     ///   This allows, for example, deletion of an entire shader network in a
     ///   single call.
     #[inline]
-    pub fn delete(&self, handle: impl Into<Vec<u8>>, args: Option<&ArgSlice<'_, 'a>>) {
-        let handle = CString::new(handle).unwrap();
+    pub fn delete(&self, handle: &str, args: Option<&ArgSlice<'_, 'a>>) {
+        let handle = HandleString::from(handle);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        if let Some(args) = args {
-            let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
-            NSI_API.NSIDelete(self.0.context, handle.as_ptr(), args_len, args_ptr);
-        } else {
-            NSI_API.NSIDelete(self.0.context, handle.as_ptr(), 0, std::ptr::null());
-        };
+        NSI_API.NSIDelete(
+            self.0.context,
+            handle.as_char_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This functions sets attributes on a previously node.
     /// All optional arguments of the function become attributes of
     /// the node.
     ///
-    /// On a [`NodeType::Shader`], this function is used to set the implicitly
-    /// defined shader arguments.
+    /// On a [`shader`](`node::SHADER`), this function is used to set the
+    /// implicitly defined shader arguments.
     ///
     /// Setting an attribute using this function replaces any value
     /// previously set by [`set_attribute()`](Context::set_attribute()) or
-    /// [`set_attribute_atime()`](Context::set_attribute_atime()).
+    /// [`set_attribute_at_time()`](Context::set_attribute_at_time()).
     ///
     /// To reset an attribute to its default value, use
     /// [`delete_attribute()`](Context::delete_attribute()).
@@ -222,11 +214,16 @@ impl<'a> Context<'a> {
     ///
     /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
-    pub fn set_attribute(&self, handle: impl Into<Vec<u8>>, args: &ArgSlice<'_, 'a>) {
-        let handle = CString::new(handle).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+    pub fn set_attribute(&self, handle: &str, args: &ArgSlice<'_, 'a>) {
+        let handle = HandleString::from(handle);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
 
-        NSI_API.NSISetAttribute(self.0.context, handle.as_ptr(), args_len, args_ptr);
+        NSI_API.NSISetAttribute(
+            self.0.context,
+            handle.as_char_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function sets time-varying attributes (i.e. motion blurred).
@@ -238,10 +235,10 @@ impl<'a> Context<'a> {
     /// particular order. In most uses, attributes that are motion blurred must
     /// have the same specification throughout the time range.
     ///
-    /// A notable  exception is the `P` attribute on [`NodeType::Particles`]
-    /// which can be of different size for each time step because of appearing
-    /// or disappearing particles. Setting an attribute using this function
-    /// replaces any value previously set by
+    /// A notable  exception is the `P` attribute on [`particles`
+    /// node](`node::PARTICLES`) which can be of different size for each
+    /// time step because of appearing or disappearing particles. Setting an
+    /// attribute using this function replaces any value previously set by
     /// [`set_attribute()`](Context::set_attribute()).
     ///
     /// # Arguments
@@ -255,14 +252,20 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn set_attribute_at_time(
         &self,
-        handle: impl Into<Vec<u8>>,
+        handle: &str,
         time: f64,
         args: &ArgSlice<'_, 'a>,
     ) {
-        let handle = CString::new(handle).unwrap();
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let handle = HandleString::from(handle);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
 
-        NSI_API.NSISetAttributeAtTime(self.0.context, handle.as_ptr(), time, args_len, args_ptr);
+        NSI_API.NSISetAttributeAtTime(
+            self.0.context,
+            handle.as_char_ptr(),
+            time,
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function deletes any attribute with a name which matches
@@ -272,9 +275,10 @@ impl<'a> Context<'a> {
     /// Deleting an attribute resets it to its default value.
     ///
     /// For example, after deleting the `transformationmatrix` attribute
-    /// on a [`NodeType::Transform`], the transform will be an identity.
-    /// Deleting a previously set attribute on a [`NodeType::Shader`]
-    /// will default to whatever is declared inside the shader.
+    /// on a [`transform` node](`node::TRANSFORM`), the transform will be an
+    /// identity. Deleting a previously set attribute on a [`shader`
+    /// node](`node::SHADER`) will default to whatever is declared inside
+    /// the shader.
     ///
     /// # Arguments
     ///
@@ -283,11 +287,15 @@ impl<'a> Context<'a> {
     ///
     /// * `name` – The name of the attribute to be deleted/reset.
     #[inline]
-    pub fn delete_attribute(&self, handle: impl Into<Vec<u8>>, name: impl Into<Vec<u8>>) {
-        let handle = CString::new(handle).unwrap();
-        let name = CString::new(name).unwrap();
+    pub fn delete_attribute(&self, handle: &str, name: &str) {
+        let handle = HandleString::from(handle);
+        let name = Ustr::from(name);
 
-        NSI_API.NSIDeleteAttribute(self.0.context, handle.as_ptr(), name.as_ptr());
+        NSI_API.NSIDeleteAttribute(
+            self.0.context,
+            handle.as_char_ptr(),
+            name.as_char_ptr(),
+        );
     }
 
     /// Create a connection between two elements.
@@ -326,40 +334,27 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn connect(
         &self,
-        from: impl Into<Vec<u8>>,
-        from_attr: impl Into<Vec<u8>>,
-        to: impl Into<Vec<u8>>,
-        to_attr: impl Into<Vec<u8>>,
+        from: &str,
+        from_attr: &str,
+        to: &str,
+        to_attr: &str,
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
-        let from = CString::new(from).unwrap();
-        let from_attr = CString::new(from_attr).unwrap();
-        let to = CString::new(to).unwrap();
-        let to_attr = CString::new(to_attr).unwrap();
+        let from = HandleString::from(from);
+        let from_attr = Ustr::from(from_attr);
+        let to = HandleString::from(to);
+        let to_attr = Ustr::from(to_attr);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
 
-        if let Some(args) = args {
-            let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
-
-            NSI_API.NSIConnect(
-                self.0.context,
-                from.as_ptr(),
-                from_attr.as_ptr(),
-                to.as_ptr(),
-                to_attr.as_ptr(),
-                args_len,
-                args_ptr,
-            );
-        } else {
-            NSI_API.NSIConnect(
-                self.0.context,
-                from.as_ptr(),
-                from_attr.as_ptr(),
-                to.as_ptr(),
-                to_attr.as_ptr(),
-                0,
-                std::ptr::null(),
-            );
-        }
+        NSI_API.NSIConnect(
+            self.0.context,
+            from.as_char_ptr(),
+            from_attr.as_char_ptr(),
+            to.as_char_ptr(),
+            to_attr.as_char_ptr(),
+            args_len,
+            args_ptr,
+        );
     }
 
     /// This function removes a connection between two elements.
@@ -371,8 +366,9 @@ impl<'a> Context<'a> {
     /// # Examples
     ///
     /// ```
+    /// # use nsi_core as nsi;
     /// // Create a rendering context.
-    /// let ctx = nsi::Context::new(&[]).unwrap();
+    /// let ctx = nsi::Context::new(None).unwrap();
     /// // [...]
     /// // Disconnect everything from the scene's root.
     /// ctx.disconnect(".all", "", ".root", "");
@@ -380,22 +376,22 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn disconnect(
         &self,
-        from: impl Into<Vec<u8>>,
-        from_attr: impl Into<Vec<u8>>,
-        to: impl Into<Vec<u8>>,
-        to_attr: impl Into<Vec<u8>>,
+        from: &str,
+        from_attr: &str,
+        to: &str,
+        to_attr: &str,
     ) {
-        let from = CString::new(from).unwrap();
-        let from_attr = CString::new(from_attr).unwrap();
-        let to = CString::new(to).unwrap();
-        let to_attr = CString::new(to_attr).unwrap();
+        let from = HandleString::from(from);
+        let from_attr = Ustr::from(from_attr);
+        let to = HandleString::from(to);
+        let to_attr = Ustr::from(to_attr);
 
         NSI_API.NSIDisconnect(
             self.0.context,
-            from.as_ptr(),
-            from_attr.as_ptr(),
-            to.as_ptr(),
-            to_attr.as_ptr(),
+            from.as_char_ptr(),
+            from_attr.as_char_ptr(),
+            to.as_char_ptr(),
+            to_attr.as_char_ptr(),
         );
     }
 
@@ -406,7 +402,7 @@ impl<'a> Context<'a> {
     /// are the same idea expressed in a different language.
     ///
     /// Note that for delayed procedural evaluation you should use a
-    /// [`Procedural`](NodeType::Procedural) node.
+    /// [`procedural` node](node::PROCEDURAL).
     ///
     /// The ɴsɪ adds a third option which sits in-between — [Lua
     /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html). They are more powerful than a
@@ -451,7 +447,7 @@ impl<'a> Context<'a> {
     ///   before rendering begins.
     #[inline]
     pub fn evaluate(&self, args: &ArgSlice<'_, 'a>) {
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
 
         NSI_API.NSIEvaluate(self.0.context, args_len, args_ptr);
     }
@@ -492,14 +488,16 @@ impl<'a> Context<'a> {
     /// * `"frame"` – Specifies the frame number of this render.
     #[inline]
     pub fn render_control(&self, args: &ArgSlice<'_, 'a>) {
-        let (_, _, mut args_out) = get_c_param_vec(args);
+        let (_, _, mut args_out) = get_c_param_vec(Some(args));
 
         let fn_pointer: nsi_sys::NSIRenderStopped =
             Some(render_status as extern "C" fn(*mut c_void, i32, i32));
 
-        if let Some(arg) = args.iter().find(|arg| unsafe { CStr::from_bytes_with_nul_unchecked(b"callback\0") } == arg.name.as_c_str()) {
+        if let Some(arg) =
+            args.iter().find(|arg| Ustr::from("callback") == arg.name)
+        {
             args_out.push(nsi_sys::NSIParam {
-                name: b"stoppedcallback\0" as *const _ as _,
+                name: Ustr::from("stoppedcallback").as_char_ptr(),
                 data: &fn_pointer as *const _ as _,
                 type_: NSIType::Pointer as _,
                 arraylength: 0,
@@ -507,7 +505,7 @@ impl<'a> Context<'a> {
                 flags: 0,
             });
             args_out.push(nsi_sys::NSIParam {
-                name: b"stoppedcallbackdata\0" as *const _ as _,
+                name: Ustr::from("stoppedcallbackdata").as_char_ptr(),
                 data: &arg.data.as_c_ptr() as *const _ as _,
                 type_: NSIType::Pointer as _,
                 arraylength: 1,
@@ -516,113 +514,11 @@ impl<'a> Context<'a> {
             });
         }
 
-        NSI_API.NSIRenderControl(self.0.context, args_out.len() as _, args_out.as_ptr());
-    }
-}
-
-/// The type for a node in the ɴsɪ scene graph.
-///
-/// This will just convert into a `Vec<u8>` of the string representing
-/// the node type when you use it.
-pub enum NodeType {
-    /// Wildcard node that references all existing nodes at once (`.all`).
-    All,
-    /// The scene’s root (`.root`).
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-root).
-    Root, // = ".root",
-    /// Global settings node (`.global`).
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#the-global-node).
-    Global,
-    /// Expresses relationships of groups of nodes.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-set).
-    Set,
-    /// [ᴏsʟ](http://opensource.imageworks.com/osl.html) shader or layer in a shader group.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-shader).
-    Shader,
-    /// Container for generic attributes (e.g. visibility).
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-attributes).
-    Attributes,
-    /// Transformation to place objects in the scene.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-transform).
-    Transform,
-    /// Specifies instances of other nodes.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-instances).
-    Instances,
-    /// An infinite plane.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-plane).
-    Plane,
-    /// Polygonal mesh or subdivision surface.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-mesh).
-    Mesh,
-    /// Assign attributes to part of a mesh, curves or particles.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-faceset).
-    FaceSet,
-    /// Linear, b-spline and Catmull-Rom curves.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-curves).
-    Curves,
-    /// Collection of particles.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-particles).
-    Particles,
-    /// Geometry to be loaded or generated in delayed fashion.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
-    Procedural,
-    /// A volume loaded from an [OpenVDB](https://www.openvdb.org) file.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-volume).
-    ///
-    /// Also see the `volume` example.
-    Volume,
-    /// Geometry type to define environment lighting.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-environment).
-    Environment,
-    /// Set of nodes to create viewing cameras.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-camera).
-    Camera,
-    OrthographicCamera,
-    PerspectiveCamera,
-    FisheyeCamera,
-    CylindricalCamera,
-    SphericalCamera,
-    /// A target where to output rendered pixels.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputdriver).
-    OutputDriver,
-    /// Describes one render layer to be connected to an `outputdriver` node.
-    /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-outputlayer).
-    OutputLayer,
-    /// Describes how the view from a camera node will be rasterized into an
-    /// `outputlayer` node. [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-screen).
-    Screen,
-}
-
-impl From<NodeType> for Vec<u8> {
-    #[inline]
-    fn from(nodeype: NodeType) -> Self {
-        match nodeype {
-            NodeType::All => b".all".to_vec(),
-            NodeType::Root => b".root".to_vec(),
-            NodeType::Global => b".global".to_vec(),
-            NodeType::Set => b"set".to_vec(),
-            NodeType::Plane => b"plane".to_vec(),
-            NodeType::Shader => b"shader".to_vec(),
-            NodeType::Attributes => b"attributes".to_vec(),
-            NodeType::Transform => b"transform".to_vec(),
-            NodeType::Instances => b"instances".to_vec(),
-            NodeType::Mesh => b"mesh".to_vec(),
-            NodeType::FaceSet => b"faceset".to_vec(),
-            NodeType::Curves => b"curves".to_vec(),
-            NodeType::Particles => b"particles".to_vec(),
-            NodeType::Procedural => b"procedural".to_vec(),
-            NodeType::Volume => b"volume".to_vec(),
-            NodeType::Environment => b"environment".to_vec(),
-            NodeType::Camera => b"camera".to_vec(),
-            NodeType::OrthographicCamera => b"orthographiccamera".to_vec(),
-            NodeType::PerspectiveCamera => b"perspectivecamera".to_vec(),
-            NodeType::FisheyeCamera => b"fisheyecamera".to_vec(),
-            NodeType::CylindricalCamera => b"cylindricalcamera".to_vec(),
-            NodeType::SphericalCamera => b"sphericalcamera".to_vec(),
-            NodeType::OutputDriver => b"outputdriver".to_vec(),
-            NodeType::OutputLayer => b"outputlayer".to_vec(),
-            NodeType::Screen => b"screen".to_vec(),
-        }
+        NSI_API.NSIRenderControl(
+            self.0.context,
+            args_out.len() as _,
+            args_out.as_ptr(),
+        );
     }
 }
 
@@ -645,7 +541,8 @@ pub enum RenderStatus {
 /// # Examples
 ///
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// let status_callback = nsi::context::StatusCallback::new(
 ///     |_: &nsi::context::Context, status: nsi::context::RenderStatus| {
 ///         println!("Status: {:?}", status);
@@ -668,7 +565,9 @@ pub trait FnStatus<'a>: Fn(
 #[doc(hidden)]
 impl<
         'a,
-        T: Fn(&Context, RenderStatus) + 'a + for<'r, 's> Fn(&'r context::Context<'s>, RenderStatus),
+        T: Fn(&Context, RenderStatus)
+            + 'a
+            + for<'r, 's> Fn(&'r context::Context<'s>, RenderStatus),
     > FnStatus<'a> for T
 {
 }
@@ -709,7 +608,8 @@ pub(crate) extern "C" fn render_status(
     status: c_int,
 ) {
     if !payload.is_null() {
-        let fn_status = unsafe { Box::from_raw(payload as *mut Box<dyn FnStatus>) };
+        let fn_status =
+            unsafe { Box::from_raw(payload as *mut Box<dyn FnStatus>) };
         let ctx = Context(Arc::new(InnerContext {
             context,
             _marker: PhantomData,
@@ -718,7 +618,8 @@ pub(crate) extern "C" fn render_status(
         fn_status(&ctx, status.into());
 
         // We must not call drop() on this context.
-        // This is safe as Context doesn't allocate and this one is on the stack anyway.
+        // This is safe as Context doesn't allocate and this one is on the stack
+        // anyway.
         std::mem::forget(ctx);
     }
 }

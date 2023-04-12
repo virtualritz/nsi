@@ -5,6 +5,19 @@
 
 use nsi_sys::*;
 
+pub mod node;
+pub use node::*;
+
+#[cfg(feature = "ustr_handles")]
+mod handle_ustr;
+#[cfg(feature = "ustr_handles")]
+use handle_ustr::HandleString;
+
+#[cfg(not(feature = "ustr_handles"))]
+mod handle_cstring;
+#[cfg(not(feature = "ustr_handles"))]
+use handle_cstring::HandleString;
+
 // Crate features -----------------------------------------------------
 
 #[cfg(not(feature = "link_lib3delight"))]
@@ -23,7 +36,8 @@ use self::linked as api;
 extern crate lazy_static;
 
 lazy_static! {
-    static ref NSI_API: api::ApiImpl = api::ApiImpl::new().expect("Could not load lib3delight");
+    static ref NSI_API: api::ApiImpl =
+        api::ApiImpl::new().expect("Could not load lib3delight");
 }
 
 // Default modules ----------------------------------------------------
@@ -45,7 +59,11 @@ pub use output::*;
 mod tests;
 
 trait Api {
-    fn NSIBegin(&self, nparams: ::std::os::raw::c_int, params: *const NSIParam) -> NSIContext;
+    fn NSIBegin(
+        &self,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    ) -> NSIContext;
     fn NSIEnd(&self, ctx: NSIContext);
     fn NSICreate(
         &self,
@@ -102,7 +120,12 @@ trait Api {
         to: NSIHandle,
         to_attr: *const ::std::os::raw::c_char,
     );
-    fn NSIEvaluate(&self, ctx: NSIContext, nparams: ::std::os::raw::c_int, params: *const NSIParam);
+    fn NSIEvaluate(
+        &self,
+        ctx: NSIContext,
+        nparams: ::std::os::raw::c_int,
+        params: *const NSIParam,
+    );
     fn NSIRenderControl(
         &self,
         ctx: NSIContext,

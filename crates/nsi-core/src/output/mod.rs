@@ -220,7 +220,10 @@ impl From<Error> for ndspy_sys::PtDspyError {
 /// # let ctx = nsi::Context::new(&[]).unwrap();
 /// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
 /// let open = nsi::output::OpenCallback::new(
-///     |name: &str, width: usize, height: usize, pixel_format: &nsi::output::PixelFormat| {
+///     |name: &str,
+///      width: usize,
+///      height: usize,
+///      pixel_format: &nsi::output::PixelFormat| {
 ///         println!(
 ///             "Resolution: {}×{}\nPixel Format:\n{:?}",
 ///             width, height, pixel_format
@@ -243,7 +246,10 @@ pub trait FnOpen<'a>: FnMut(
 + 'a {}
 
 #[doc(hidden)]
-impl<'a, T: FnMut(&str, usize, usize, &PixelFormat) -> Error + 'a> FnOpen<'a> for T {}
+impl<'a, T: FnMut(&str, usize, usize, &PixelFormat) -> Error + 'a> FnOpen<'a>
+    for T
+{
+}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -321,7 +327,18 @@ pub trait FnWrite<'a>: FnMut(
 #[doc(hidden)]
 impl<
         'a,
-        T: FnMut(&str, usize, usize, usize, usize, usize, usize, &PixelFormat, &[f32]) -> Error + 'a,
+        T: FnMut(
+                &str,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                &PixelFormat,
+                &[f32],
+            ) -> Error
+            + 'a,
     > FnWrite<'a> for T
 {
 }
@@ -404,7 +421,12 @@ pub trait FnFinish<'a>: FnMut(
 + 'a {}
 
 #[doc(hidden)]
-impl<'a, T: FnMut(String, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a> FnFinish<'a> for T {}
+impl<
+        'a,
+        T: FnMut(String, usize, usize, PixelFormat, Vec<f32>) -> Error + 'a,
+    > FnFinish<'a> for T
+{
+}
 
 // FIXME once trait aliases are in stable.
 /*
@@ -526,9 +548,14 @@ fn get_parameter_triple_box<T: ?Sized>(
     for p in parameters.iter() {
         let p_name = unsafe { CStr::from_ptr(p.name) }.to_str().unwrap();
 
-        if name == p_name && type_ == p.valueType as _ && len == p.valueCount as _ {
+        if name == p_name
+            && type_ == p.valueType as _
+            && len == p.valueCount as _
+        {
             if !p.value.is_null() {
-                return Some(unsafe { Box::from_raw(p.value as *mut Box<Box<T>>) });
+                return Some(unsafe {
+                    Box::from_raw(p.value as *mut Box<Box<T>>)
+                });
             } else {
                 // Parameter exists but value is missing –
                 // exit quietly.
@@ -577,13 +604,25 @@ pub(crate) extern "C" fn image_open(
         height: height as _,
         pixel_format: PixelFormat::default(),
         pixel_data: vec![0.0f32; (width * height * format_count) as _],
-        fn_write: get_parameter_triple_box::<dyn FnWrite>("callback.write", b'p', 1, parameters),
-        fn_finish: get_parameter_triple_box::<dyn FnFinish>("callback.finish", b'p', 1, parameters),
-        fn_query: None, /* get_parameter_triple_box::<FnQuery>("callback.query", b'p', 1,
+        fn_write: get_parameter_triple_box::<dyn FnWrite>(
+            "callback.write",
+            b'p',
+            1,
+            parameters,
+        ),
+        fn_finish: get_parameter_triple_box::<dyn FnFinish>(
+            "callback.finish",
+            b'p',
+            1,
+            parameters,
+        ),
+        fn_query: None, /* get_parameter_triple_box::<FnQuery>("callback.
+                         * query", b'p', 1,
                          * parameters), */
     });
 
-    let format = unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
+    let format =
+        unsafe { std::slice::from_raw_parts_mut(format, format_count as _) };
 
     // We want f32/channel data.
     format
@@ -592,9 +631,12 @@ pub(crate) extern "C" fn image_open(
 
     display_data.pixel_format = PixelFormat::new(format);
 
-    let error = if let Some(mut fn_open) =
-        get_parameter_triple_box::<dyn FnOpen>("callback.open", b'p', 1, parameters)
-    {
+    let error = if let Some(mut fn_open) = get_parameter_triple_box::<dyn FnOpen>(
+        "callback.open",
+        b'p',
+        1,
+        parameters,
+    ) {
         let error = fn_open(
             &display_data.name,
             width as _,
@@ -628,12 +670,16 @@ pub(crate) extern "C" fn image_query(
 ) -> ndspy_sys::PtDspyError {
     match query_type {
         ndspy_sys::PtDspyQueryType::RenderProgress => {
-            if (data_len as usize) < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
+            if (data_len as usize)
+                < core::mem::size_of::<ndspy_sys::PtDspyRenderProgressFuncPtr>()
             {
                 Error::BadParameters
             } else {
                 *unsafe {
-                    &mut std::mem::transmute::<_, ndspy_sys::PtDspyRenderProgressFuncPtr>(data)
+                    &mut std::mem::transmute::<
+                        _,
+                        ndspy_sys::PtDspyRenderProgressFuncPtr,
+                    >(data)
                 } = Some(image_progress);
                 Error::None
             }
@@ -663,7 +709,9 @@ pub(crate) extern "C" fn image_write(
     let pixel_data = unsafe {
         std::slice::from_raw_parts(
             pixel_data as *const f32,
-            pixel_length * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min)) as usize,
+            pixel_length
+                * ((x_max_plus_one - x_min) * (y_max_plus_one - y_min))
+                    as usize,
         )
     };
 
@@ -671,11 +719,14 @@ pub(crate) extern "C" fn image_write(
 
     let mut source_index = 0;
     for y in y_min as usize..y_max_plus_one as _ {
-        let dest_index = (y * display_data.width + x_min as usize) * pixel_length;
+        let dest_index =
+            (y * display_data.width + x_min as usize) * pixel_length;
 
         // We memcpy() each scanline.
         display_data.pixel_data[dest_index..dest_index + bucket_width]
-            .copy_from_slice(&(pixel_data[source_index..source_index + bucket_width]));
+            .copy_from_slice(
+                &(pixel_data[source_index..source_index + bucket_width]),
+            );
 
         source_index += bucket_width;
     }
@@ -704,7 +755,8 @@ pub(crate) extern "C" fn image_write(
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    let mut display_data = unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
+    let mut display_data =
+        unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData) };
 
     let error = if let Some(ref mut fn_finish) = display_data.fn_finish {
         fn_finish(
@@ -718,8 +770,8 @@ pub(crate) extern "C" fn image_close(
         Error::None
     };
 
-    // FIXME: These boxes somehow get deallocated twice if we don't suppress this
-    // here. No f*cking idea why.
+    // FIXME: These boxes somehow get deallocated twice if we don't suppress
+    // this here. No f*cking idea why.
     if let Some(fn_write) = display_data.fn_write {
         Box::leak(fn_write);
     }

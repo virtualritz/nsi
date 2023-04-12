@@ -5,24 +5,31 @@ use std::{
     ffi::{c_void, CString},
     marker::PhantomData,
 };
+use ustr::Ustr;
 
 // Needed for docs.
 #[allow(unused_imports)]
 use crate::*;
 
-#[inline]
-pub(crate) fn get_c_param_vec(args: &ArgSlice) -> (i32, *const NSIParam, Vec<NSIParam>) {
-    let args = args
-        .iter()
-        .map(|arg| NSIParam {
-            name: arg.name.as_ptr(),
-            data: arg.data.as_c_ptr(),
-            type_: arg.data.type_() as _,
-            arraylength: arg.array_length as _,
-            count: (arg.data.len() / arg.array_length) as _,
-            flags: arg.flags as _,
-        })
-        .collect::<Vec<_>>();
+#[inline(always)]
+pub(crate) fn get_c_param_vec(
+    args: Option<&ArgSlice>,
+) -> (i32, *const NSIParam, Vec<NSIParam>) {
+    let args = match args {
+        Some(args) => args
+            .iter()
+            .map(|arg| NSIParam {
+                name: arg.name.as_char_ptr(),
+                data: arg.data.as_c_ptr(),
+                type_: arg.data.type_() as _,
+                arraylength: arg.array_length as _,
+                count: (arg.data.len() / arg.array_length) as _,
+                flags: arg.flags as _,
+            })
+            .collect::<Vec<_>>(),
+        None => Vec::new(),
+    };
+
     (args.len() as _, args.as_ptr(), args)
 }
 
@@ -38,7 +45,7 @@ pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 /// [`Context`](context::Context).
 #[derive(Debug)]
 pub struct Arg<'a, 'b> {
-    pub(crate) name: CString,
+    pub(crate) name: Ustr,
     pub(crate) data: ArgData<'a, 'b>,
     // length of each element if an array type
     pub(crate) array_length: usize,
@@ -50,7 +57,7 @@ impl<'a, 'b> Arg<'a, 'b> {
     #[inline]
     pub fn new(name: &str, data: ArgData<'a, 'b>) -> Self {
         Arg {
-            name: CString::new(name).unwrap(),
+            name: Ustr::from(name),
             data,
             array_length: 1,
             flags: 0,
@@ -255,18 +262,19 @@ nsi_data_def!(i32, Integer, Type::Integer);
 /// This gets converted to a raw pointer when passed
 /// through the FFI boundary.
 /// ```
+/// # use nsi_core as nsi;
 /// struct Payload {
 ///     some_data: u32,
 /// }
 ///
-/// let ctx = nsi::Context::new(&[]).unwrap();
+/// let ctx = nsi::Context::new(None).unwrap();
 ///
 /// // Lots of scene setup omitted ...
 ///
 /// // Setup a custom output driver and send
 /// // a payload to it through the FFI boundary
-/// ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
-/// ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
+/// ctx.create("driver", nsi::node::OUTPUT_DRIVER, None);
+/// ctx.connect("driver", "", "beauty", "outputdrivers", None);
 /// let payload = Payload { some_data: 42 };
 /// ctx.set_attribute(
 ///     "driver",
@@ -745,13 +753,14 @@ macro_rules! matrices {
 /// The matrix is given as 16 [`f64`] values.
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Setup a transform node.
-/// ctx.create("xform", nsi::NodeType::Transform, &[]);
-/// ctx.connect("xform", "", ".root", "objects", &[]);
+/// ctx.create("xform", nsi::node::TRANSFORM, None);
+/// ctx.connect("xform", "", ".root", "objects", None);
 ///
 /// // Translate 5 units along z-axis.
-/// ctx.seattribute(
+/// ctx.set_attribute(
 ///     "xform",
 ///     &[nsi::double_matrix!(
 ///         "transformationmatrix",
@@ -771,16 +780,21 @@ macro_rules! double_matrix {
 #[macro_export]
 macro_rules! double_matrices {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrices::new($value)))
+        nsi::Arg::new(
+            $name,
+            nsi::ArgData::from(nsi::DoubleMatrices::new($value)),
+        )
     };
 }
 
 /// Create a [`String`] argument.
 /// # Example
 /// ```
+/// # use nsi_core as nsi;
 /// // Create rendering context.
-/// let ctx = nsi::Context::new(&[nsi::string!("streamfilename", "stdout")])
-///     .expect("Could not create NSI context.");
+/// let ctx =
+///     nsi::Context::new(Some(&[nsi::string!("streamfilename", "stdout")]))
+///         .expect("Could not create NSI context.");
 /// ```
 #[macro_export]
 macro_rules! string {
@@ -792,7 +806,8 @@ macro_rules! string {
 /// Create a [`String`] array argument.
 /// # Example
 /// ```
-/// # let ctx = nsi::Context::new(&[]).unwrap();
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // One of these is not an actor:
 /// ctx.set_attribute(
 ///     "dummy",
