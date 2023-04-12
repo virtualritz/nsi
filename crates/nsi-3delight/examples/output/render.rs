@@ -85,7 +85,10 @@ fn nsi_reflective_ground(c: &nsi::Context) {
         "ground_xform_0",
         &[nsi::double_matrix!(
             "transformationmatrix",
-            &[1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0., 1.,]
+            &[
+                1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0.,
+                1.,
+            ]
         )],
     );
 

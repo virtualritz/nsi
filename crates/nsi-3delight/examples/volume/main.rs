@@ -112,7 +112,10 @@ pub fn main() {
                     None,
                     nsi::NodeType::Shader,
                     &[
-                        nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
+                        nsi::string!(
+                            "shaderfilename",
+                            "${DELIGHT}/osl/dlPrincipled"
+                        ),
                         nsi::color!("i_color", &[1., 0.6, 0.3]),
                         //nsi::arg!("coating_thickness", 0.1),
                         nsi::float!("roughness", 0.1),
@@ -168,8 +171,9 @@ pub fn main() {
                     nsi::NodeType::PerspectiveCamera,
                     &[
                         nsi::float!("fov", field_of_view),
-                        /*nsi::doubles!("shutterrange", &[-0.01042, 0.01042]),
-                         *nsi::doubles!("shutteropening", &[0.333, 0.666]), */
+                        /*nsi::doubles!("shutterrange", &[-0.01042,
+                         * 0.01042]), nsi::doubles!
+                         * ("shutteropening", &[0.333, 0.666]), */
                     ],
                 ),
                 Some("screens"),
@@ -180,7 +184,8 @@ pub fn main() {
                         None,
                         nsi::NodeType::Screen,
                         &[
-                            nsi::integers!("resolution", &[1024, 512]).array_len(2),
+                            nsi::integers!("resolution", &[1024, 512])
+                                .array_len(2),
                             nsi::integer!("oversampling", 64),
                         ],
                     ),
