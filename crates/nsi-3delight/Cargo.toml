@@ -13,5 +13,5 @@ documentation = "https://docs.rs/nsi-3delight/"
 repository = "https://github.com/virtualritz/nsi-3delight/"
 
 [dependencies]
-nsi-core = { path = "../nsi-core" }
-nsi-toolbelt = { path = "../nsi-toolbelt" }
+nsi-core = { version = "0.7.0", path = "../nsi-core" }
+nsi-toolbelt = { version = "0.7.0", path = "../nsi-toolbelt" }

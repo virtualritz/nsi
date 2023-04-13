@@ -1,4 +1,5 @@
 //! # Nodal Scene Interface Helpers For 3Delight
+//!
 //! Shortcuts for instancing common nodes.
 use nsi_core as nsi;
 use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};

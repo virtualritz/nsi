@@ -1,3 +1,9 @@
-# 3Delight-Specific Helpers for the ɴsɪ Crate
+# `nsi-3delight`
 
-Convenience methods for using 3Delight from Rust via the ɴsɪ crate.
+<!-- cargo-rdme start -->
+
+## Nodal Scene Interface Helpers For 3Delight
+
+Shortcuts for instancing common nodes.
+
+<!-- cargo-rdme end -->
