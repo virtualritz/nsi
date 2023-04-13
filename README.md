@@ -63,10 +63,10 @@ let positions: [f32; 60] =
     ];
 
 // Create a new mesh node and call it 'dodecahedron'.
-ctx.create("dodecahedron", nsi::NodeType::Mesh, None);
+ctx.create("dodecahedron", nsi::node::MESH, None);
 
 // Connect the 'dodecahedron' node to the scene's root.
-ctx.connect("dodecahedron", "", ".root", "objects", None);
+ctx.connect("dodecahedron", None, ".root", "objects", None);
 
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
@@ -155,6 +155,9 @@ not suggested.
 * `toolbelt` – Add convenience methods to `Context`.
 * `nightly` – Enable some unstable features (suggested if you
   build with a `nightly` toolchain).
+* `ustr_handles` – use [`Ustr`] for node handles. This will give a
+  you a speed boost if your node names aren't changing while an app
+  using ɴsɪ is running but is not advised otherwise.
 * `download_lib3delight` & `link_lib3delight` – See next section.
 
 ## Linking Style

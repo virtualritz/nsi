@@ -7,7 +7,7 @@ static VDB_ASSET: &str = "assets/fireball_hi.vdb";
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
-    let ctx = nsi::Context::new(&[]).unwrap();
+    let ctx = nsi::Context::new(None).unwrap();
 
     append(
         &ctx,
@@ -20,7 +20,7 @@ pub fn main() {
             Some(90.0),
             Some(1.),
             Some(false),
-            &[],
+            None,
         )
         .0,
     );
@@ -105,13 +105,13 @@ pub fn main() {
             Some("geometryattributes"),
             &append(
                 &ctx,
-                &node(&ctx, None, nsi::NodeType::Attributes, &[]),
+                &node(&ctx, None, nsi::node::ATTRIBUTES, None),
                 Some("surfaceshader"),
                 &node(
                     &ctx,
                     None,
-                    nsi::NodeType::Shader,
-                    &[
+                    nsi::node::SHADER,
+                    Some(&[
                         nsi::string!(
                             "shaderfilename",
                             "${DELIGHT}/osl/dlPrincipled"
@@ -127,7 +127,7 @@ pub fn main() {
                         nsi::float!("sss_scale", 0.),
                         nsi::color!("incandescence", &[0., 0., 0.]),
                         nsi::float!("incandescence_intensity", 0.),
-                    ],
+                    ]),
                 ),
             )
             .0,
@@ -168,13 +168,13 @@ pub fn main() {
                 &node(
                     &ctx,
                     None,
-                    nsi::NodeType::PerspectiveCamera,
-                    &[
+                    nsi::node::PERSPECTIVE_CAMERA,
+                    Some(&[
                         nsi::float!("fov", field_of_view),
                         /*nsi::doubles!("shutterrange", &[-0.01042,
                          * 0.01042]), nsi::doubles!
                          * ("shutteropening", &[0.333, 0.666]), */
-                    ],
+                    ]),
                 ),
                 Some("screens"),
                 &append(
@@ -182,12 +182,12 @@ pub fn main() {
                     &node(
                         &ctx,
                         None,
-                        nsi::NodeType::Screen,
-                        &[
+                        nsi::node::SCREEN,
+                        Some(&[
                             nsi::integers!("resolution", &[1024, 512])
                                 .array_len(2),
                             nsi::integer!("oversampling", 64),
-                        ],
+                        ]),
                     ),
                     Some("outputlayers"),
                     &append(
@@ -195,19 +195,19 @@ pub fn main() {
                         &node(
                             &ctx,
                             None,
-                            nsi::NodeType::OutputLayer,
-                            &[
+                            nsi::node::OUTPUT_LAYER,
+                            Some(&[
                                 nsi::string!("variablename", "Ci"),
                                 nsi::integer!("withalpha", 1),
                                 nsi::string!("scalarformat", "float"),
-                            ],
+                            ]),
                         ),
                         Some("outputdrivers"),
                         &node(
                             &ctx,
                             Some("driver"),
-                            nsi::NodeType::OutputDriver,
-                            &[nsi::string!("drivername", "idisplay")],
+                            nsi::node::OUTPUT_DRIVER,
+                            Some(&[nsi::string!("drivername", "idisplay")]),
                         ),
                     )
                     .0,

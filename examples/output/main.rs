@@ -1,5 +1,7 @@
 use exr::prelude::*;
+use nsi_core as nsi;
 use png;
+use polyhedron_ops as p_ops;
 use std::{
     fs::File,
     io::BufWriter,
@@ -10,6 +12,7 @@ use std::{
 mod render;
 use render::*;
 
+
 pub fn main() {
     let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
@@ -19,10 +22,14 @@ pub fn main() {
     // If you decide to write data directly into a file in
     // WriteCallback.
     let open = nsi::output::OpenCallback::new(
-        |_name: &str, width: usize, height: usize, format: &nsi::output::PixelFormat| {
+        |_name: &str,
+         width: usize,
+         height: usize,
+         format: &nsi::output::PixelFormat| {
             let mut quantized_pixel_data = quantized_pixel_data.lock().unwrap();
             // Create a properly size buffer to receive our pixel data.
-            *quantized_pixel_data = vec![0u8; width * height * format.channels()];
+            *quantized_pixel_data =
+                vec![0u8; width * height * format.channels()];
             nsi::output::Error::None
         },
     );
@@ -62,11 +69,14 @@ pub fn main() {
                         // unpremultiplied pixels and that is what
                         // we will write the 8bit data to, at the end.
                         quantized_pixel_data[index + 0] =
-                            (linear_to_srgb(pixel_data[index + 0] / alpha) * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 0] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 1] =
-                            (linear_to_srgb(pixel_data[index + 1] / alpha) * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 1] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 2] =
-                            (linear_to_srgb(pixel_data[index + 2] / alpha) * 255.0) as _;
+                            (linear_to_srgb(pixel_data[index + 2] / alpha)
+                                * 255.0) as _;
                         quantized_pixel_data[index + 3] = (alpha * 255.0) as _;
                     }
                 }
@@ -103,7 +113,8 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_file(name + ".exr", width, height, &sample).unwrap();
+            write_rgba_file(name + ".exr", width, height, &sample)
+                .unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);
@@ -111,8 +122,17 @@ pub fn main() {
         },
     );
 
+    // Create some geometry.
+    let mut polyhedron = p_ops::Polyhedron::tetrahedron();
+    polyhedron.meta(None, None, None, None, true);
+    polyhedron.normalize();
+    polyhedron.gyro(Some(1. / 3.), Some(0.1), true);
+    polyhedron.normalize();
+    polyhedron.kis(Some(-0.2), None, None, true);
+    polyhedron.normalize();
+
     // The next call blocks until the render has finished.
-    nsi_render(32, open, write, finish);
+    nsi_render(32, &polyhedron, open, write, finish);
 
     // We can shed the Arc and the Mutex now that nsi_render() is done.
     let quantized_pixel_data = Arc::<_>::try_unwrap(quantized_pixel_data)
@@ -122,7 +142,7 @@ pub fn main() {
 
     // Write out the display-referred, u8 quantized data we prepared
     // in the write closure above as a PNG.
-    let path = Path::new("output.png");
+    let path = Path::new("test.png");
     let file = File::create(path).unwrap();
     let ref mut writer = BufWriter::new(file);
 

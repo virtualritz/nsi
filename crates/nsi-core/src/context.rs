@@ -335,13 +335,13 @@ impl<'a> Context<'a> {
     pub fn connect(
         &self,
         from: &str,
-        from_attr: &str,
+        from_attr: Option<&str>,
         to: &str,
         to_attr: &str,
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
         let from = HandleString::from(from);
-        let from_attr = Ustr::from(from_attr);
+        let from_attr = Ustr::from(from_attr.unwrap_or(""));
         let to = HandleString::from(to);
         let to_attr = Ustr::from(to_attr);
         let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
@@ -377,12 +377,12 @@ impl<'a> Context<'a> {
     pub fn disconnect(
         &self,
         from: &str,
-        from_attr: &str,
+        from_attr: Option<&str>,
         to: &str,
         to_attr: &str,
     ) {
         let from = HandleString::from(from);
-        let from_attr = Ustr::from(from_attr);
+        let from_attr = Ustr::from(from_attr.unwrap_or(""));
         let to = HandleString::from(to);
         let to_attr = Ustr::from(to_attr);
 

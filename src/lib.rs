@@ -1,6 +1,6 @@
 //#![warn(missing_docs)]
 //#![warn(missing_doc_code_examples)]
-//! # Nodal Scene Interface – ɴsɪ
+//! # Nodal Scene Interface -- ɴsɪ
 //! A flexible, modern API for offline 3D renderers
 //!
 //! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
@@ -52,9 +52,9 @@
 //!
 //! // 12 regular pentagon faces.
 //! let face_index: [i32; 60] = [
-//!     0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3, 17, 1, 12, 14, 5, 9, 2,
-//!     13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7, 15, 13, 4, 8, 10, 6, 18, 14, 5, 19, 18, 4, 5,
-//!     19, 7, 11, 9, 15, 7, 19, 18, 6,
+//!     0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3, 17, 1,
+//!     12, 14, 5, 9, 2, 13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7, 15, 13, 4,
+//!     8, 10, 6, 18, 14, 5, 19, 18, 4, 5, 19, 7, 11, 9, 15, 7, 19, 18, 6,
 //! ];
 //!
 //! // Golden ratio.
@@ -65,17 +65,18 @@
 //!
 //! // 20 points @ 3 vertices.
 //! let positions: [f32; 60] = [
-//!     1., 1., 1., 1., 1., -1., 1., -1., 1., 1., -1., -1., -1., 1., 1., -1., 1., -1., -1., -1.,
-//!     1., -1., -1., -1., 0., phi_c, phi, 0., phi_c, -phi, 0., -phi_c, phi, 0., -phi_c, -phi,
-//!     phi_c, phi, 0., phi_c, -phi, 0., -phi_c, phi, 0., -phi_c, -phi, 0., phi, 0., phi_c, phi,
-//!     0., -phi_c, -phi, 0., phi_c, -phi, 0., -phi_c,
+//!     1., 1., 1., 1., 1., -1., 1., -1., 1., 1., -1., -1., -1., 1., 1., -1.,
+//!     1., -1., -1., -1., 1., -1., -1., -1., 0., phi_c, phi, 0., phi_c, -phi,
+//!     0., -phi_c, phi, 0., -phi_c, -phi, phi_c, phi, 0., phi_c, -phi, 0.,
+//!     -phi_c, phi, 0., -phi_c, -phi, 0., phi, 0., phi_c, phi, 0., -phi_c,
+//!     -phi, 0., phi_c, -phi, 0., -phi_c,
 //! ];
 //!
 //! // Create a new mesh node and call it 'dodecahedron'.
-//! ctx.create("dodecahedron", nsi::NodeType::Mesh, None);
+//! ctx.create("dodecahedron", nsi::node::MESH, None);
 //!
 //! // Connect the 'dodecahedron' node to the scene's root.
-//! ctx.connect("dodecahedron", "", ".root", "objects", None);
+//! ctx.connect("dodecahedron", None, ".root", "objects", None);
 //!
 //! // Define the geometry of the 'dodecahedron' node.
 //! ctx.set_attribute(
@@ -119,8 +120,8 @@
 //!
 //! ### Volume
 //!
-//! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly through the
-//! [`toolbelt`](crate::toolbelt) helpers.
+//! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly
+//! through the [`toolbelt`](crate::toolbelt) helpers.
 //!
 //! ## Getting Pixels
 //!
@@ -131,17 +132,21 @@
 //!
 //! ## Cargo Features
 //!
-//! * [`output`](nsi_core::output) – Add support for streaming pixels from the
+//! * [`output`](nsi_core::output) -- Add support for streaming pixels from the
 //!   renderer to the calling context via closures.
 //!
-//! * [`jupyter`](crate::jupyter) – Add support for rendering to Jupyter notebooks (when using a [Rust Jupyter
-//!    kernel](https://github.com/google/evcxr)).
+//! * [`jupyter`](crate::jupyter) -- Add support for rendering to Jupyter
+//!   notebooks (when using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
 //!
-//! * [`toolbelt`](crate::toolbelt) – Add convenience methods that work with a
+//! * [`toolbelt`](crate::toolbelt) -- Add convenience methods that work with a
 //!   [`Context`](nsi_core::context::Context).
 //!
-//! * `nightly` – Enable some unstable features (suggested if you build with a
+//! * `nightly` -- Enable some unstable features (suggested if you build with a
 //!   `nightly` toolchain)
+//!
+//! * `ustr_handles` -- use [`Ustr`] for node handles. This will give a you a
+//!   speed boost if your node names aren't changing while an app using ɴsɪ is
+//!   running but is not advised otherwise.
 //!
 //! ## Linking Style
 //!
