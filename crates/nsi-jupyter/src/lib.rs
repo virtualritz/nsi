@@ -31,12 +31,16 @@ trait _Jupyter<'a> {
 /// blob to `stdout`.
 ///
 /// The [`Context`](nsi::Context) is unchanged after this returns.
-/// # Example
+///
+/// # Examples
+///
 /// ```no_run
 /// // Setup a screen.
+/// # use nsi_core as nsi;
+/// # use nsi_jupyter::as_jupyter;
 /// # let ctx = nsi::Context::new(None).unwrap();
-/// ctx.create("screen", nsi::NodeType::Screen, None);
-/// ctx.connect("screen", "", "my_camera", "screens", None);
+/// ctx.create("screen", nsi::node::SCREEN, None);
+/// ctx.connect("screen", None, "my_camera", "screens", None);
 /// ctx.set_attribute(
 ///     "screen",
 ///     &[
@@ -48,13 +52,13 @@ trait _Jupyter<'a> {
 /// );
 ///
 /// // Put an image of what "my_camera" sees into our notebook.
-/// as_jupyter(ctx, "screen");
+/// as_jupyter(&ctx, "screen");
 /// ```
 /// # Arguments
 /// * `screen` – A [`Screen`](nsi::context::NodeType::Screen).
 pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     // RGB layer.
-    ctx.create("jupyter_beauty", nsi::NodeType::OutputLayer, None);
+    ctx.create("jupyter_beauty", nsi::node::OUTPUT_LAYER, None);
     ctx.set_attribute(
         "jupyter_beauty",
         &[
@@ -63,7 +67,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
             nsi::string!("scalarformat", "float"),
         ],
     );
-    ctx.connect("jupyter_beauty", "", screen, "outputlayers", None);
+    ctx.connect("jupyter_beauty", None, screen, "outputlayers", None);
 
     // Callback to collect our pixels.
     let finish = nsi::output::FinishCallback::new(
@@ -87,10 +91,10 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     );
 
     // Setup an output driver.
-    ctx.create("jupyter_driver", nsi::NodeType::OutputDriver, None);
+    ctx.create("jupyter_driver", nsi::node::OUTPUT_DRIVER, None);
     ctx.connect(
         "jupyter_driver",
-        "",
+        None,
         "jupyter_beauty",
         "outputdrivers",
         None,

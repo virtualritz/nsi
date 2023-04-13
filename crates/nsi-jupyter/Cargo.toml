@@ -13,9 +13,9 @@ documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-base64 = "0.21.0"
-bytemuck = "1.13.1"
-evcxr_runtime = "1.1.0"
-nsi-core = { path = "../nsi-core", features = ["output"] }
-png = "0.17.8"
-rayon = "1.7.0"
+base64 = "0.21"
+bytemuck = "1.13"
+evcxr_runtime = "1.1"
+nsi-core = { version = "0.7.0", path = "../nsi-core", features = ["output"] }
+png = "0.17"
+rayon = "1.7"
