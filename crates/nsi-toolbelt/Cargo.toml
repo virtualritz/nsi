@@ -13,7 +13,7 @@ documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-nsi-core = { path = "../nsi-core" }
+nsi-core = { version = "0.7.0", path = "../nsi-core" }
 petname = { version = "1.1", default-features = false, features = ["std_rng", "default_dictionary"] }
 rand = { version = "0.8", features = ["small_rng"] }
 ultraviolet = { version = "0.9", features = ["f64"] }

@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "toolbelt")))]
-//! # Convenience Methods for an ɴsɪ [`Context`](nsi::Context).
+//! # Convenience Methods for an ɴsɪ [`Context`](nsi::Context)
 //!
 //! Names of methods that create nodes are nouns. Methods than modify
 //! the node graph afterwards use verbs.
