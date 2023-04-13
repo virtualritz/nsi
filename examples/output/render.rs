@@ -100,11 +100,23 @@ fn nsi_reflective_ground(c: &nsi::Context) {
         "ground_attrib",
         &[nsi::integer!("visibility.camera", false as _)],
     );
-    c.connect("ground_attrib", None, "ground_0", "geometryattributes", None);
+    c.connect(
+        "ground_attrib",
+        None,
+        "ground_0",
+        "geometryattributes",
+        None,
+    );
 
     // Ground shader.
     c.create("ground_shader", nsi::node::SHADER, None);
-    c.connect("ground_shader", None, "ground_attrib", "surfaceshader", None);
+    c.connect(
+        "ground_shader",
+        None,
+        "ground_attrib",
+        "surfaceshader",
+        None,
+    );
 
     c.set_attribute(
         "ground_shader",
@@ -134,13 +146,7 @@ fn nsi_material(c: &nsi::Context, name: &str) {
     // Metal shader.
     let shader_name = format!("{}_shader", name);
     c.create(&shader_name, nsi::node::SHADER, None);
-    c.connect(
-        &shader_name,
-        None,
-        &attribute_name,
-        "surfaceshader",
-        None,
-    );
+    c.connect(&shader_name, None, &attribute_name, "surfaceshader", None);
 
     c.set_attribute(
         &shader_name,

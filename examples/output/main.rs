@@ -12,7 +12,6 @@ use std::{
 mod render;
 use render::*;
 
-
 pub fn main() {
     let quantized_pixel_data = Arc::new(Mutex::new(Vec::new()));
 
@@ -113,8 +112,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_file(name + ".exr", width, height, &sample)
-                .unwrap();
+            write_rgba_file(name + ".exr", width, height, &sample).unwrap();
 
             // Remember the dimensions for writingb out our 8bit PNG below.
             dimensions = (width as _, height as _);
