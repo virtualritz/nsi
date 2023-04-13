@@ -371,7 +371,7 @@ impl<'a> Context<'a> {
     /// let ctx = nsi::Context::new(None).unwrap();
     /// // [...]
     /// // Disconnect everything from the scene's root.
-    /// ctx.disconnect(".all", "", ".root", "");
+    /// ctx.disconnect(".all", None, ".root", "");
     /// ```
     #[inline]
     pub fn disconnect(

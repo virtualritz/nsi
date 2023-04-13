@@ -45,11 +45,11 @@ nsi-jupyter = { path = "crates/nsi-jupyter", optional = true }
 nsi-toolbelt = { path = "crates/nsi-toolbelt", optional = true }
 
 [dev-dependencies]
+dl-openvdb-query = "0.1"
 exr = "1.6.3"
 nsi-3delight = { path = "crates/nsi-3delight" }
 nsi-toolbelt = { path = "crates/nsi-toolbelt" }
 png = "0.17.8"
-dl-openvdb-query = "0.1"
 polyhedron-ops = { version = "0.2.6", features = ["nsi"] }
 
 [[example]]

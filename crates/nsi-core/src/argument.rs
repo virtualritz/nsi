@@ -274,7 +274,7 @@ nsi_data_def!(i32, Integer, Type::Integer);
 /// // Setup a custom output driver and send
 /// // a payload to it through the FFI boundary
 /// ctx.create("driver", nsi::node::OUTPUT_DRIVER, None);
-/// ctx.connect("driver", "", "beauty", "outputdrivers", None);
+/// ctx.connect("driver", None, "beauty", "outputdrivers", None);
 /// let payload = Payload { some_data: 42 };
 /// ctx.set_attribute(
 ///     "driver",
@@ -757,7 +757,7 @@ macro_rules! matrices {
 /// # let ctx = nsi::Context::new(None).unwrap();
 /// // Setup a transform node.
 /// ctx.create("xform", nsi::node::TRANSFORM, None);
-/// ctx.connect("xform", "", ".root", "objects", None);
+/// ctx.connect("xform", None, ".root", "objects", None);
 ///
 /// // Translate 5 units along z-axis.
 /// ctx.set_attribute(

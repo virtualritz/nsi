@@ -206,7 +206,13 @@ fn live_edit() {
         "geometryattributes",
         None,
     );
-    c.connect("light1_shader", None, "light1_attribs", "surfaceshader", None);
+    c.connect(
+        "light1_shader",
+        None,
+        "light1_attribs",
+        "surfaceshader",
+        None,
+    );
 
     // Start interactive render.
     c.render_control(&[nsi::string!("action", "start")]); //, interactive=1)

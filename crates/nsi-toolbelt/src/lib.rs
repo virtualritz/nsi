@@ -19,7 +19,10 @@ fn default_slot_objects(slot: Option<&str>) -> &str {
 /// otherwise.
 #[doc(hidden)]
 #[cfg(debug_assertions)]
-pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> String {
+pub fn generate_or_use_handle(
+    handle: Option<&str>,
+    prefix: Option<&str>,
+) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
@@ -34,11 +37,16 @@ pub fn generate_or_use_handle(handle: Option<&str>, prefix: Option<&str>) -> Str
 
 #[doc(hidden)]
 #[cfg(not(debug_assertions))]
-pub fn generate_or_use_handle(handle: Option<&str>, _prefix: Option<&str>) -> String {
+pub fn generate_or_use_handle(
+    handle: Option<&str>,
+    _prefix: Option<&str>,
+) -> String {
     match handle {
         Some(handle) => handle.to_string(),
         None => {
-            use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
+            use rand::{
+                distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng,
+            };
             use std::iter;
             let mut rng = SmallRng::from_entropy();
 
@@ -95,7 +103,7 @@ where
     'a: 'b,
     'a: 'c,
 {
-    ctx.connect(handle, "", to, default_slot_objects(slot), None);
+    ctx.connect(handle, None, to, default_slot_objects(slot), None);
 
     (to, handle)
 }
@@ -159,14 +167,10 @@ where
 pub fn node<'a>(
     ctx: &nsi::Context<'a>,
     handle: Option<&str>,
-    node_type: impl Into<Vec<u8>>,
+    node_type: &str,
     args: Option<&nsi::ArgSlice<'_, 'a>>,
 ) -> String {
-    let node_type: Vec<u8> = node_type.into();
-    let handle = generate_or_use_handle(
-        handle,
-        Some(unsafe { std::str::from_utf8_unchecked(&node_type) }),
-    );
+    let handle = generate_or_use_handle(handle, Some(node_type));
 
     ctx.create(handle.as_str(), node_type, None);
 
@@ -183,9 +187,13 @@ pub fn node<'a>(
 ///
 /// Returns `handle` for convenience.
 #[inline]
-pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> String {
+pub fn scaling(
+    ctx: &nsi::Context,
+    handle: Option<&str>,
+    scale: &[f64; 3],
+) -> String {
     let handle = generate_or_use_handle(handle, Some("scaling"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+    ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -204,9 +212,13 @@ pub fn scaling(ctx: &nsi::Context, handle: Option<&str>, scale: &[f64; 3]) -> St
 ///
 /// Returns `handle` for convenience.
 #[inline]
-pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3]) -> String {
+pub fn translation(
+    ctx: &nsi::Context,
+    handle: Option<&str>,
+    translate: &[f64; 3],
+) -> String {
     let handle = generate_or_use_handle(handle, Some("translation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+    ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -226,9 +238,14 @@ pub fn translation(ctx: &nsi::Context, handle: Option<&str>, translate: &[f64; 3
 /// The `angle` is specified in degrees.
 ///
 /// Returns `handle` for convenience.
-pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f64; 3]) -> String {
+pub fn rotation(
+    ctx: &nsi::Context,
+    handle: Option<&str>,
+    angle: f64,
+    axis: &[f64; 3],
+) -> String {
     let handle = generate_or_use_handle(handle, Some("rotation"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+    ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -236,7 +253,9 @@ pub fn rotation(ctx: &nsi::Context, handle: Option<&str>, angle: f64, axis: &[f6
             "transformationmatrix",
             uv::DMat4::from_angle_plane(
                 (angle * core::f64::consts::TAU / 90.0) as _,
-                uv::DBivec3::from_normalized_axis(uv::DVec3::from(axis).normalized())
+                uv::DBivec3::from_normalized_axis(
+                    uv::DVec3::from(axis).normalized()
+                )
             )
             .transposed()
             .as_array()
@@ -255,7 +274,7 @@ pub fn look_at_camera(
     up: &[f64; 3],
 ) {
     let handle = generate_or_use_handle(handle, Some("look_at"));
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+    ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
 
     ctx.set_attribute(
         handle.as_str(),
@@ -296,7 +315,9 @@ pub fn look_at_bounding_box_perspective_camera(
     let vertical_fov = if let Some(aspect_ratio) = aspect_ratio {
         if aspect_ratio < 1.0 {
             // Portrait.
-            2.0 * (aspect_ratio * (0.5 * vertical_fov * core::f32::consts::PI / 180.0).tan()).atan()
+            2.0 * (aspect_ratio
+                * (0.5 * vertical_fov * core::f32::consts::PI / 180.0).tan())
+            .atan()
         } else {
             vertical_fov * core::f32::consts::PI / 180.0
         }
@@ -333,14 +354,15 @@ pub fn look_at_bounding_box_perspective_camera(
 
     let handle = generate_or_use_handle(handle, Some("look_at"));
 
-    ctx.create(handle.as_str(), nsi::NodeType::Transform, None);
+    ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
 
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::double_matrix!(
             "transformationmatrix",
             uv::DMat4::look_at(
-                bounding_box_center - distance * uv::DVec3::from(direction).normalized(),
+                bounding_box_center
+                    - distance * uv::DVec3::from(direction).normalized(),
                 bounding_box_center,
                 uv::DVec3::from(up)
             )

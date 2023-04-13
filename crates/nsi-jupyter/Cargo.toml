@@ -17,5 +17,5 @@ base64 = "0.21.0"
 bytemuck = "1.13.1"
 evcxr_runtime = "1.1.0"
 nsi-core = { path = "../nsi-core", features = ["output"] }
-png = "0.17.7"
+png = "0.17.8"
 rayon = "1.7.0"

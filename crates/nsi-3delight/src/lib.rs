@@ -43,12 +43,12 @@ where
         &node(
             ctx,
             Some(environment.as_str()),
-            nsi::NodeType::Environment,
+            nsi::node::ENVIRONMENT,
             None,
         ),
     );
 
-    let shader = node(ctx, None, nsi::NodeType::Shader, None);
+    let shader = node(ctx, None, nsi::node::SHADER, None);
 
     append(
         ctx,
@@ -59,7 +59,7 @@ where
             &node(
                 ctx,
                 None,
-                nsi::NodeType::Attributes,
+                nsi::node::ATTRIBUTES,
                 Some(&[nsi::integer!(
                     "visibility.camera",
                     visible.unwrap_or(true) as _
