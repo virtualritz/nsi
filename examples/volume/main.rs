@@ -2,10 +2,19 @@ use dl_openvdb_query as vdbq;
 use nsi_3delight::*;
 use nsi_toolbelt::*;
 
+/// Downloaded from https://jangafx.com/software/embergen/download/free-vdb-animations/
 static VDB_ASSET: &str = "assets/embergen_gasoline_explosion_a_50.vdb";
+
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
+
+    println!("{:?}",
+                &vdbq::DlOpenVdbQuery::new(VDB_ASSET)
+                    .unwrap()
+                    .grid_names()
+                    .unwrap(),
+                );
     let ctx = nsi::Context::new(None).unwrap();
 
     append(
@@ -40,10 +49,9 @@ pub fn main() {
                     nsi::node::VOLUME,
                     Some(&[
                         nsi::string!("vdbfilename", VDB_ASSET),
-                        nsi::string!("temperaturegrid", "Ce.x"),
+                        nsi::string!("temperaturegrid", "temperature"),
                         nsi::string!("densitygrid", "density"),
-                        nsi::string!("velocitygrid", "vel"),
-                        nsi::double!("velocityscale", 15.0),
+                        nsi::string!("emissionintensitygrid", "flames"),
                     ]),
                 ),
                 Some("geometryattributes"),
@@ -101,50 +109,6 @@ pub fn main() {
         .0,
     );
 
-    /*use polyhedron_ops::Polyhedron;
-
-    let polyhedron = Polyhedron::dodecahedron();
-
-    append(
-        &ctx,
-        ".root",
-        None,
-        &append(
-            &ctx,
-            &polyhedron.to_nsi(&ctx, None, None, None, None),
-            Some("geometryattributes"),
-            &append(
-                &ctx,
-                &node(&ctx, None, nsi::node::ATTRIBUTES, None),
-                Some("surfaceshader"),
-                &node(
-                    &ctx,
-                    None,
-                    nsi::node::SHADER,
-                    Some(&[
-                        nsi::string!(
-                            "shaderfilename",
-                            "${DELIGHT}/osl/dlPrincipled"
-                        ),
-                        nsi::color!("i_color", &[1., 0.6, 0.3]),
-                        //nsi::arg!("coating_thickness", 0.1),
-                        nsi::float!("roughness", 0.1),
-                        nsi::float!("specular_level", 1.0),
-                        nsi::float!("metallic", 1.),
-                        nsi::float!("anisotropy", 0.),
-                        nsi::float!("sss_weight", 0.),
-                        nsi::color!("sss_color", &[0.5, 0.5, 0.5]),
-                        nsi::float!("sss_scale", 0.),
-                        nsi::color!("incandescence", &[0., 0., 0.]),
-                        nsi::float!("incandescence_intensity", 0.),
-                    ]),
-                ),
-            )
-            .0,
-        )
-        .0,
-    );*/
-
     let field_of_view = 50.0;
 
     // Build our scene graph.
@@ -166,7 +130,6 @@ pub fn main() {
                 field_of_view,
                 Some(2.0),
                 // Bounding box to frame.
-                //&polyhedron.bounding_box(),
                 &vdbq::DlOpenVdbQuery::new(VDB_ASSET)
                     .unwrap()
                     .bounding_box()

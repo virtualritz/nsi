@@ -7,7 +7,7 @@ keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
-exclude = [".github/**/*", "crates/**/*", "assets/**/*"]
+exclude = [".github/**/*", "crates/**/*", "assets/**/*", "examples/**/*"]
 readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi/"
@@ -46,11 +46,11 @@ nsi-toolbelt = { version = "0.7.0", path = "crates/nsi-toolbelt", optional = tru
 
 [dev-dependencies]
 dl-openvdb-query = "0.1"
-exr = "1.6.3"
+exr = "1.6"
 nsi-3delight = { version = "0.7.0", path = "crates/nsi-3delight" }
 nsi-toolbelt = { version = "0.7.0", path = "crates/nsi-toolbelt" }
-png = "0.17.8"
-polyhedron-ops = { version = "0.2.6", path = "../polyhedron-ops", features = ["nsi"] }
+png = "0.17"
+polyhedron-ops = { version = "0.2", path = "../polyhedron-ops", features = ["nsi"] }
 
 [[example]]
 path = "examples/interactive/main.rs"
