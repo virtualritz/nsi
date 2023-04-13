@@ -22,15 +22,12 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
-pub fn environment<'a, 'b>(
-    ctx: &'a nsi::Context<'a>,
-    handle: Option<&'b str>,
+pub fn environment(
+    ctx: &nsi::Context,
+    handle: Option<&str>,
     angle: Option<f64>,
     visible: Option<bool>,
-) -> (String, String)
-where
-    'a: 'b,
-{
+) -> (String, String) {
     // Create a rotation transform – this is the handle we return.
     let rotation = rotation(ctx, None, angle.unwrap_or(0.0), &[0.0, 1.0, 0.0]);
 
@@ -104,10 +101,10 @@ where
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
-pub fn environment_texture<'a, 'b, 'c>(
-    ctx: &'a nsi::Context<'a>,
-    handle: Option<&'c str>,
-    texture: &'c str,
+pub fn environment_texture<'a, 'b>(
+    ctx: &nsi::Context<'a>,
+    handle: Option<&str>,
+    texture: &str,
     angle: Option<f64>,
     exposure: Option<f32>,
     visible: Option<bool>,
@@ -115,7 +112,6 @@ pub fn environment_texture<'a, 'b, 'c>(
 ) -> (String, String)
 where
     'a: 'b,
-    'a: 'c,
 {
     let (rotation, shader) = environment(ctx, handle, angle, visible);
 
@@ -155,12 +151,12 @@ where
 /// Note that this instances a `dlSky` shader. Using the returned  `shader`
 /// handle you can set more attributes on this node.
 pub fn environment_sky<'a, 'b>(
-    ctx: &'a nsi::Context<'a>,
+    ctx: &nsi::Context<'a>,
     handle: Option<&str>,
     angle: Option<f64>,
     exposure: Option<f32>,
     visible: Option<bool>,
-    args: &nsi::ArgSlice<'b, 'a>,
+    args: Option<&nsi::ArgSlice<'b, 'a>>,
 ) -> (String, String)
 where
     'a: 'b,
@@ -176,7 +172,7 @@ where
         ],
     );
 
-    if !args.is_empty() {
+    if let Some(args) = args {
         ctx.set_attribute(shader.as_str(), args);
     }
 
