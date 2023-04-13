@@ -126,7 +126,7 @@ pub fn main() {
     polyhedron.normalize();
     polyhedron.gyro(Some(1. / 3.), Some(0.1), true);
     polyhedron.normalize();
-    polyhedron.kis(Some(-0.2), None, None, true);
+    polyhedron.kis(Some(-0.2), None, None, None, true);
     polyhedron.normalize();
 
     // The next call blocks until the render has finished.
@@ -140,8 +140,8 @@ pub fn main() {
 
     // Write out the display-referred, u8 quantized data we prepared
     // in the write closure above as a PNG.
-    let path = Path::new("test.png");
-    let file = File::create(path).unwrap();
+    let path = format!("{}.png", polyhedron.name());
+    let file = File::create(Path::new(&path)).unwrap();
     let ref mut writer = BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(writer, dimensions.0, dimensions.1);

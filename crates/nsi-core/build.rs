@@ -3,14 +3,13 @@
 #[cfg(feature = "download_3delight_lib")]
 use reqwest;
 
-use std::{env, path::PathBuf};
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lib_path = PathBuf::from(&env::var("OUT_DIR")?);
-
     #[cfg(feature = "download_lib3delight")]
+    #[allow(unused_variables)]
     let lib_path = {
-        use std::{io::Write, path::Path};
+        use std::io::Write;
+
+        let lib_path = std::path::PathBuf::from(&std::env::var("OUT_DIR")?);
 
         eprintln!("Building against 3Delight 2.9.30");
 
@@ -21,7 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(target_os = "linux")]
         let lib = "https://www.dropbox.com/s/wfw6w6p41lqd8ko/lib3delight.so";
 
-        let lib_path = lib_path.join(Path::new(lib).file_name().unwrap());
+        let lib_path =
+            lib_path.join(std::path::Path::new(lib).file_name().unwrap());
 
         eprintln!("lib:     {}", lib_path.display());
 
@@ -46,18 +46,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })();
         }
 
-        lib_path
+        lib_path.parent().unwrap().to_path_buf()
     };
 
-    eprintln!("lib:     {}", lib_path.display());
+    #[cfg(not(feature = "download_lib3delight"))]
+    let lib_path = if let Ok(dl_path) = std::env::var("DELIGHT") {
+        eprintln!("Building against locally installed 3Delight @ {}", &dl_path);
+        let lib_path = std::path::PathBuf::from(dl_path);
 
-    if cfg!(feature = "link_lib3delight") {
-        // Emit linker searchpath
-        println!(
-            "cargo:rustc-link-search={}",
-            lib_path.parent().unwrap().display()
-        );
-        // Link to lib3delight
+        #[cfg(target_os = "windows")]
+        let lib_path = lib_path.join("bin");
+
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let lib_path = lib_path.join("lib");
+
+        lib_path
+    } else {
+        eprintln!("No 3Delight installation found. Make sure $DELIGHT is set.");
+        return Err(Box::new(std::fmt::Error));
+    };
+
+    #[cfg(feature = "link_lib3delight")]
+    {
+        // Emit linker searchpath.
+        println!("cargo:rustc-link-search={}", lib_path.display());
+
+        // Link to lib3delight.
         println!("cargo:rustc-link-lib=dylib=3delight");
     }
 

@@ -1,9 +1,8 @@
 use dl_openvdb_query as vdbq;
 use nsi_3delight::*;
-use nsi_core as nsi;
 use nsi_toolbelt::*;
 
-static VDB_ASSET: &str = "assets/fireball_hi.vdb";
+static VDB_ASSET: &str = "assets/embergen_gasoline_explosion_a_50.vdb";
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
@@ -25,34 +24,42 @@ pub fn main() {
         .0,
     );
 
-    /*
-    append(&ctx,
+    append(
+        &ctx,
         ".root",
         None,
-        append(&ctx,
-            &rotation(ctx, None, 135.0, &[0.0, 1.0, 0.0]),
+        append(
+            &ctx,
+            &rotation(&ctx, None, 135.0, &[0.0, 1.0, 0.0]),
             None,
-            &append(&ctx.,
-                &node(&ctx,
+            &append(
+                &ctx,
+                &node(
+                    &ctx,
                     None,
-                    nsi::NodeType::Volume,
-                    &[
+                    nsi::node::VOLUME,
+                    Some(&[
                         nsi::string!("vdbfilename", VDB_ASSET),
                         nsi::string!("temperaturegrid", "Ce.x"),
                         nsi::string!("densitygrid", "density"),
                         nsi::string!("velocitygrid", "vel"),
                         nsi::double!("velocityscale", 15.0),
-                    ],
+                    ]),
                 ),
                 Some("geometryattributes"),
-                &append(&ctx,
-                    &node(&ctx, None, nsi::NodeType::Attributes, &[]),
+                &append(
+                    &ctx,
+                    &node(&ctx, None, nsi::node::ATTRIBUTES, None),
                     Some("volumeshader"),
-                    &node(&ctx,
+                    &node(
+                        &ctx,
                         None,
-                        nsi::NodeType::Shader,
-                        &[
-                            nsi::string!("shaderfilename", "${DELIGHT}/osl/vdbVolume"),
+                        nsi::node::SHADER,
+                        Some(&[
+                            nsi::string!(
+                                "shaderfilename",
+                                "${DELIGHT}/osl/vdbVolume"
+                            ),
                             nsi::float!("density", 8.0),
                             nsi::float!("multiple_scattering_intensity", 0.44),
                             nsi::float!("emissionramp_intensity", 1.0),
@@ -79,9 +86,12 @@ pub fn main() {
                                 ]
                             )
                             .array_len(4),
-                            nsi::integers!("emissionramp_color_curve_Interp", &[3, 3, 3, 3,])
-                                .array_len(4),
-                        ],
+                            nsi::integers!(
+                                "emissionramp_color_curve_Interp",
+                                &[3, 3, 3, 3,]
+                            )
+                            .array_len(4),
+                        ]),
                     ),
                 )
                 .0,
@@ -89,9 +99,9 @@ pub fn main() {
             .0,
         )
         .0,
-    );*/
+    );
 
-    use polyhedron_ops::Polyhedron;
+    /*use polyhedron_ops::Polyhedron;
 
     let polyhedron = Polyhedron::dodecahedron();
 
@@ -133,7 +143,7 @@ pub fn main() {
             .0,
         )
         .0,
-    );
+    );*/
 
     let field_of_view = 50.0;
 
@@ -156,10 +166,11 @@ pub fn main() {
                 field_of_view,
                 Some(2.0),
                 // Bounding box to frame.
-                &polyhedron.bounding_box(), /*&vdbq::DlOpenVdbQuery::new(VDB_ASSET)
-                                            .unwrap()
-                                            .bounding_box()
-                                            .unwrap(),*/
+                //&polyhedron.bounding_box(),
+                &vdbq::DlOpenVdbQuery::new(VDB_ASSET)
+                    .unwrap()
+                    .bounding_box()
+                    .unwrap(),
             ),
             None,
             // Attach screen to our camera

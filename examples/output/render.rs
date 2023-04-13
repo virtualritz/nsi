@@ -1,6 +1,5 @@
 use crate::p_ops;
 use nsi_3delight as nsi_3dl;
-use nsi_core as nsi;
 use nsi_toolbelt as nsi_tb;
 
 fn nsi_camera<'a>(
@@ -16,7 +15,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "camera_xform",
         &[nsi::double_matrix!(
-            "TRANSFORMationmatrix",
+            "transformationmatrix",
             &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
         )],
     );
@@ -32,7 +31,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "screen",
         &[
-            nsi::integers!("resolution", &[32, 32]).array_len(2),
+            nsi::integers!("resolution", &[256, 256]).array_len(2),
             nsi::integer!("oversampling", 32),
         ],
     );
@@ -62,17 +61,6 @@ fn nsi_camera<'a>(
             nsi::callback!("callback.open", open),
             nsi::callback!("callback.write", write),
             nsi::callback!("callback.finish", finish),
-        ],
-    );
-
-    c.create("driver2", nsi::node::OUTPUT_DRIVER, None);
-    c.connect("driver2", None, "beauty", "outputdrivers", None);
-
-    c.set_attribute(
-        "driver2",
-        &[
-            nsi::string!("drivername", "exr"),
-            nsi::string!("imagefilename", "foobs.exr"),
         ],
     );
 }
