@@ -3,8 +3,7 @@
 //! This module adds an [`as_jupyter()`] function that takes a
 //! [`Context`](nsi::Context).
 //!
-//! A [`Screen`](nsi::context::NodeType::Screen) can be rendered
-//! directly inside a notebook.
+//! A [`Screen`](nsi::SCREEN) can be rendered directly inside a notebook.
 //!
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
@@ -24,8 +23,7 @@ trait _Jupyter<'a> {
     fn output_layer_as_jupyter(output_layer: &str, args: &ArgSlice<'_, 'a>);
 }
 
-/// Render a [`Screen`](nsi::context::NodeType::Screen) inside a
-/// Jupyter Notebook.
+/// Render a [`Screen`](nsi::SCREEN) inside a Jupyter Notebook.
 ///
 /// Essentially this dumps a 16bit PNG as a BASE64 encoded binary
 /// blob to `stdout`.
@@ -39,7 +37,7 @@ trait _Jupyter<'a> {
 /// # use nsi_core as nsi;
 /// # use nsi_jupyter::as_jupyter;
 /// # let ctx = nsi::Context::new(None).unwrap();
-/// ctx.create("screen", nsi::node::SCREEN, None);
+/// ctx.create("screen", nsi::SCREEN, None);
 /// ctx.connect("screen", None, "my_camera", "screens", None);
 /// ctx.set_attribute(
 ///     "screen",
@@ -55,10 +53,10 @@ trait _Jupyter<'a> {
 /// as_jupyter(&ctx, "screen");
 /// ```
 /// # Arguments
-/// * `screen` – A [`Screen`](nsi::context::NodeType::Screen).
+/// * `screen` – A [`Screen`](nsi::SCREEN).
 pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     // RGB layer.
-    ctx.create("jupyter_beauty", nsi::node::OUTPUT_LAYER, None);
+    ctx.create("jupyter_beauty", nsi::OUTPUT_LAYER, None);
     ctx.set_attribute(
         "jupyter_beauty",
         &[
@@ -91,7 +89,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     );
 
     // Setup an output driver.
-    ctx.create("jupyter_driver", nsi::node::OUTPUT_DRIVER, None);
+    ctx.create("jupyter_driver", nsi::OUTPUT_DRIVER, None);
     ctx.connect(
         "jupyter_driver",
         None,

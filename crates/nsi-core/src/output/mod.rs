@@ -2,20 +2,18 @@
 //! # Output Driver Callbacks
 //! This module declares several closure types. These can be passed via
 //! [`Callback`](crate::argument::Callback)s to an
-//! [`OutputDriver`](crate::context::NodeType::OutputDriver) node to stream
+//! [`OutputDriver`](crate::OUTPUT_DRIVER) node to stream
 //! pixels during and/or after a render, in-memory.
 //!
 //! There are three types of closure:
 //! * [`FnOpen`] is called once when the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *opened* by
-//!   the renderer.
+//!   [`OutputDriver`](crate::OUTPUT_LAYER) is *opened* by the renderer.
 //!
 //! * [`FnWrite`] is called for each bucket of pixel data the renderer sends to
-//!   the [`OutputDriver`](crate::context::NodeType::OutputDriver).
+//!   the [`OutputDriver`](crate::OUTPUT_DRIVER).
 //!
 //! * [`FnFinish`] is called once when the
-//!   [`OutputDriver`](crate::context::NodeType::OutputDriver) is *closed* by
-//!   the renderer.
+//!   [`OutputDriver`](crate::OUTPUT_DRIVER) is *closed* by the renderer.
 //!
 //! As a user you can choose how to use this API.
 //!
@@ -30,12 +28,13 @@
 //!
 //! ## Example
 //! ```
+//! # use nsi_core as nsi;
 //! # fn write_exr(_: &str, _: usize, _: usize, _: usize, _: &[f32]) {}
-//! # let ctx = nsi::Context::new(&[]).unwrap();
+//! # let ctx = nsi::Context::new(None).unwrap();
 //! // Setup a screen.
-//! ctx.create("screen", nsi::NodeType::Screen, &[]);
+//! ctx.create("screen", nsi::SCREEN, None);
 //! // We pretend we defined a camera node earlier.
-//! ctx.connect("screen", "", "camera", "screens", &[]);
+//! ctx.connect("screen", None, "camera", "screens", None);
 //! ctx.set_attribute(
 //!     "screen",
 //!     &[
@@ -46,7 +45,7 @@
 //! );
 //!
 //! // Setup an RGBA output layer.
-//! ctx.create("beauty", nsi::NodeType::OutputLayer, &[]);
+//! ctx.create("beauty", nsi::OUTPUT_LAYER, None);
 //! ctx.set_attribute(
 //!     "beauty",
 //!     &[
@@ -57,11 +56,11 @@
 //!         nsi::integer!("withalpha", 1),
 //!     ],
 //! );
-//! ctx.connect("beauty", "", "screen", "outputlayers", &[]);
+//! ctx.connect("beauty", None, "screen", "outputlayers", None);
 //!
 //! // Setup an output driver.
-//! ctx.create("driver", nsi::NodeType::OutputDriver, &[]);
-//! ctx.connect("driver", "", "beauty", "outputdrivers", &[]);
+//! ctx.create("driver", nsi::OUTPUT_DRIVER, None);
+//! ctx.connect("driver", None, "beauty", "outputdrivers", None);
 //!
 //! // Our FnFinish callback. We will be called once.
 //! let finish = nsi::output::FinishCallback::new(
@@ -105,13 +104,14 @@
 //! ```
 //!
 //! ## Color Profiles
+//!
 //! The pixel color data that the renderer generates is linear and
 //! scene-referred. I.e. relative to whatever units you used to describe
 //! illuminants in your scene.
 //!
 //! Using the
 //! [`"colorprofile"` attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! of an [`OutputLayer`](crate::OUTPUT_LAYER) you can ask the
 //! renderer to apply an [Open Color IO](https://opencolorio.org/) (OCIO)
 //! [profile/LUT](https://github.com/colour-science/OpenColorIO-Configs/tree/feature/aces-1.2-config/aces_1.2/luts)
 //! before quantizing (see below).
@@ -122,8 +122,9 @@
 //! in, e.g. [ACEScg](https://en.wikipedia.org/wiki/Academy_Color_Encoding_System#ACEScg).
 //!
 //! ```
-//! # let ctx = nsi::Context::new(&[]).unwrap();
-//! ctx.create("beauty", nsi::NodeType::OutputLayer, &[]);
+//! # use nsi_core as nsi;
+//! # let ctx = nsi::Context::new(None).unwrap();
+//! ctx.create("beauty", nsi::OUTPUT_LAYER, None);
 //! ctx.set_attribute(
 //!     "beauty",
 //!     &[
@@ -140,7 +141,7 @@
 //!
 //! Using the [`"scalarformat"`
 //! attribute](https://nsi.readthedocs.io/en/latest/nodes.html?highlight=outputlayer#the-outputlayer-node)
-//! of an [`OutputLayer`](crate::context::NodeType::OutputLayer) you can ask the
+//! of an [`OutputLayer`](crate::OUTPUT_LAYER) you can ask the
 //! renderer to quantize data down to a suitable range. For example, setting
 //! this to `"uint16"` will get you valid `u16` values from `0.0..65535.0`, but
 //! stored in the `f32`s of the `pixel_data` buffer. The value of `1.0` will map
@@ -200,7 +201,7 @@ impl From<Error> for ndspy_sys::PtDspyError {
 }
 
 /// A closure which is called once per
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) instance.
 ///
 /// It is passed to ɴsɪ via the `"callback.open"` attribute on that node.
 ///
@@ -216,9 +217,10 @@ impl From<Error> for ndspy_sys::PtDspyError {
 /// ```
 /// # #[cfg(feature = "output")]
 /// # {
+/// # use nsi_core as nsi;
 /// # use nsi::output::PixelFormat;
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// # let ctx = nsi::Context::new(None).unwrap();
+/// # ctx.create("display_driver", nsi::OUTPUT_DRIVER, None);
 /// let open = nsi::output::OpenCallback::new(
 ///     |name: &str,
 ///      width: usize,
@@ -267,7 +269,7 @@ trait FnOpen<'a> = FnMut(
 */
 
 /// A closure which is called for each bucket of pixels the
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance sends
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) instance sends
 /// during rendering.
 ///
 /// It is passed to ɴsɪ via the `"callback.write"` attribute on that node.
@@ -275,8 +277,9 @@ trait FnOpen<'a> = FnMut(
 /// ```
 /// # #[cfg(feature = "output")]
 /// # {
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
+/// # ctx.create("display_driver", nsi::OUTPUT_DRIVER, None);
 /// let write = nsi::output::WriteCallback::new(
 ///     |name: &str,
 ///      width: usize,
@@ -369,7 +372,7 @@ pub trait FnWrite<'a> = FnMut(
 */
 
 /// A closure which is called once per
-/// [`OutputDriver`](crate::context::NodeType::OutputDriver) instance.
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) instance.
 ///
 /// It is passed to ɴsɪ via the `"callback.finish"` attribute on that node.
 ///
@@ -379,8 +382,9 @@ pub trait FnWrite<'a> = FnMut(
 /// ```
 /// # #[cfg(feature = "output")]
 /// # {
-/// # let ctx = nsi::Context::new(&[]).unwrap();
-/// # ctx.create("display_driver", nsi::NodeType::OutputDriver, &[]);
+/// # use nsi_core as nsi;
+/// # let ctx = nsi::Context::new(None).unwrap();
+/// # ctx.create("display_driver", nsi::OUTPUT_DRIVER, None);
 /// let finish = nsi::output::FinishCallback::new(
 ///     |name: String,
 ///      width: usize,
@@ -456,7 +460,7 @@ pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 */
 
 /// Wrapper to pass an [`FnOpen`] closure to an
-/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
 pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
 
 // Why do we need a triple Box here? No idea and neither had anyone from the
@@ -478,7 +482,7 @@ impl CallbackPtr for OpenCallback<'_> {
     }
 }
 /// Wrapper to pass an [`FnWrite`] closure to an
-/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
 pub struct WriteCallback<'a>(Box<Box<Box<dyn FnWrite<'a>>>>);
 
 impl<'a> WriteCallback<'a> {
@@ -498,7 +502,7 @@ impl CallbackPtr for WriteCallback<'_> {
 }
 
 /// Wrapper to pass an [`FnFinish`] closure to an
-/// [`OutputDriver`](crate::NodeType::OutputDriver) node.
+/// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
 pub struct FinishCallback<'a>(Box<Box<Box<dyn FnFinish<'a>>>>);
 
 impl<'a> FinishCallback<'a> {
@@ -516,16 +520,6 @@ impl CallbackPtr for FinishCallback<'_> {
         Box::into_raw(self.0) as *const _ as _
     }
 }
-
-/*struct Dummy {
-    boxy: Box<u32>,
-}
-
-impl Drop for Dummy {
-    fn drop(&mut self) {
-        println!("Dropping Dummy");
-    }
-}*/
 
 struct DisplayData<'a> {
     name: String,
@@ -566,7 +560,7 @@ fn get_parameter_triple_box<T: ?Sized>(
     None
 }
 
-/// Trampoline function for the FnOpen callback.
+// Trampoline function for the FnOpen callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_open(
     image_handle_ptr: *mut ndspy_sys::PtDspyImageHandle,
@@ -660,7 +654,7 @@ pub(crate) extern "C" fn image_open(
     error.into()
 }
 
-/// FIXME: this will be used for a FnProgress callback later.
+// FIXME: this will be used for a FnProgress callback later.
 #[no_mangle]
 pub(crate) extern "C" fn image_query(
     _image_handle_ptr: ndspy_sys::PtDspyImageHandle,
@@ -689,7 +683,7 @@ pub(crate) extern "C" fn image_query(
     .into()
 }
 
-/// Trampoline function for the FnWrite callback.
+// Trampoline function for the FnWrite callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_write(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
@@ -750,7 +744,7 @@ pub(crate) extern "C" fn image_write(
     .into()
 }
 
-/// Trampoline function for the FnFinish callback.
+// Trampoline function for the FnFinish callback.
 #[no_mangle]
 pub(crate) extern "C" fn image_close(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,

@@ -35,7 +35,7 @@ fn test_dodecahedron() {
     ctx.create("dodecahedron", nsi::MESH, None);
 
     // Connect the 'dodecahedron' node to the scene's root.
-    ctx.connect("dodecahedron", None, ".root", "objects", None);
+    ctx.connect("dodecahedron", None, nsi::ROOT, "objects", None);
 
     // Define the geometry of the 'dodecahedron' node.
     ctx.set_attribute(
@@ -92,7 +92,7 @@ fn live_edit() {
 
     // Setup a camera transform.
     c.create("cam1_trs", nsi::TRANSFORM, None);
-    c.connect("cam1_trs", None, ".root", "objects", None);
+    c.connect("cam1_trs", None, nsi::ROOT, "objects", None);
 
     c.set_attribute(
         "cam1_trs",
@@ -139,7 +139,7 @@ fn live_edit() {
 
     // Add a plane.
     c.create("mesh1", nsi::MESH, None);
-    c.connect("mesh1", None, ".root", "objects", None);
+    c.connect("mesh1", None, nsi::ROOT, "objects", None);
     c.set_attribute(
         "mesh1",
         &[
@@ -164,7 +164,7 @@ fn live_edit() {
 
     // Add a triangular light, with shader.
     c.create("light1_trs", nsi::TRANSFORM, None);
-    c.connect("light1_trs", None, ".root", "objects", None);
+    c.connect("light1_trs", None, nsi::ROOT, "objects", None);
 
     c.set_attribute(
         "light1_trs",

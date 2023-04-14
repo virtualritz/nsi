@@ -10,11 +10,6 @@ use nsi_core as nsi;
 use ultraviolet as uv;
 //use uv::{DVec3, DMat4};
 
-#[inline]
-fn default_slot_objects(slot: Option<&str>) -> &str {
-    slot.unwrap_or("objects")
-}
-
 /// Generates a random handle if `handle` is `None` or falls through,
 /// otherwise.
 #[doc(hidden)]
@@ -103,7 +98,7 @@ where
     'a: 'b,
     'a: 'c,
 {
-    ctx.connect(handle, None, to, default_slot_objects(slot), None);
+    ctx.connect(handle, None, to, slot.unwrap_or("objects"), None);
 
     (to, handle)
 }
@@ -325,7 +320,7 @@ pub fn look_at_bounding_box_perspective_camera(
         vertical_fov * core::f32::consts::PI / 180.0
     } as f64;
 
-    println!("{}", vertical_fov);
+    //println!("{}", vertical_fov);
 
     // Make a cube from the bounds.
     let cube = [
@@ -339,7 +334,7 @@ pub fn look_at_bounding_box_perspective_camera(
 
     let bounding_box_center = 0.5 * (cube[0] + cube[3]);
 
-    println!("{:?}", bounding_box_center);
+    //println!("{:?}", bounding_box_center);
 
     let bounding_sphere_radius = cube
         .iter()
@@ -350,7 +345,7 @@ pub fn look_at_bounding_box_perspective_camera(
 
     let distance = bounding_sphere_radius / (vertical_fov * 0.5).sin();
 
-    println!("{}", distance);
+    //println!("{}", distance);
 
     let handle = generate_or_use_handle(handle, Some("look_at"));
 

@@ -63,10 +63,10 @@ let positions: [f32; 60] =
     ];
 
 // Create a new mesh node and call it 'dodecahedron'.
-ctx.create("dodecahedron", nsi::node::MESH, None);
+ctx.create("dodecahedron", nsi::MESH, None);
 
 // Connect the 'dodecahedron' node to the scene's root.
-ctx.connect("dodecahedron", None, ".root", "objects", None);
+ctx.connect("dodecahedron", None, nsi::ROOT, "objects", None);
 
 // Define the geometry of the 'dodecahedron' node.
 ctx.set_attribute(
@@ -150,14 +150,23 @@ not suggested.
 
 * `output` – Add support for streaming pixels from the renderer
   to the calling context via closures.
+
 * `jupyter` – Add support for rendering to Jupyter notebooks (when
   using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
+
 * `toolbelt` – Add convenience methods to `Context`.
-* `nightly` – Enable some unstable features (suggested if you
-  build with a `nightly` toolchain).
-* `ustr_handles` – use [`Ustr`] for node handles. This will give a
-  you a speed boost if your node names aren't changing while an app
-  using ɴsɪ is running but is not advised otherwise.
+
+* [`delight`](crate::delight) -- Add some nodes & shaders specifi to
+  3Delight.
+
+* `nightly` -- Enable some unstable features (suggested if you build
+  with a `nightly` toolchain)
+
+* `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for
+  node handles. This will give a you a speed boost if your node names
+  aren't changing while an app using ɴsɪ is running but is not advised
+  otherwise (`ustr` are never freed).
+
 * `download_lib3delight` & `link_lib3delight` – See next section.
 
 ## Linking Style

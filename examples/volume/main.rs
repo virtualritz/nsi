@@ -8,13 +8,6 @@ static VDB_ASSET: &str = "assets/embergen_gasoline_explosion_a_50.vdb";
 static ENVMAP_HDR: &str = "assets/wooden_lounge_1k.tdl";
 
 pub fn main() {
-    println!(
-        "{:?}",
-        &vdbq::DlOpenVdbQuery::new(VDB_ASSET)
-            .unwrap()
-            .grid_names()
-            .unwrap(),
-    );
     let ctx = nsi::Context::new(None).unwrap();
 
     append(

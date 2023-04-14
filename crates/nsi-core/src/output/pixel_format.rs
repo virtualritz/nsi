@@ -1,6 +1,6 @@
 use core::ops::Deref;
 use std::ffi::CStr;
-/// Description of an [`OutputLayer`](crate::context::NodeType::OutputLayer)
+/// Description of an [`OutputLayer`](crate::OUTPUT_LAYER) node
 /// inside a flat, raw pixel.
 #[derive(Debug, Clone, Default)]
 pub struct Layer {
@@ -48,33 +48,33 @@ impl Layer {
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum LayerDepth {
     /// A single channel. Obtained when setting `"layertype"` `"scalar"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     #[default]
     OneChannel,
     /// A single channel with alpha. Obtained when setting `"layertype"`
     /// `"scalar"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     OneChannelAndAlpha,
     /// An `rgb` color triplet. Obtained when setting `"layertype"` `"color"`
-    /// on an [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// on an [`OutputLayer`](crate::OUTPUT_LAYER).
     Color,
     /// An `rgb` color triplet with alpha. Obtained when setting `"layertype"`
     /// `"color"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     ColorAndAlpha,
     /// An `xyz` triplet. Obtained when setting `"layertype"` `"vector"` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     Vector,
     /// An `xyz` triplet with alpha. Obtained when setting `"layertype"`
     /// `"vector"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     VectorAndAlpha,
     /// An quadruple of values. Obtained when setting `"layertype"` `"quad"` on
-    /// an [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// an [`OutputLayer`](crate::OUTPUT_LAYER).
     FourChannels,
     /// An quadruple of values with alpha. Obtained when setting `"layertype"`
     /// `"quad"` and `"withalpha"` `1` on an
-    /// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+    /// [`OutputLayer`](crate::OUTPUT_LAYER).
     FourChannelsAndAlpha,
 }
 
@@ -109,7 +109,7 @@ impl LayerDepth {
 /// [`FnFinish`](crate::output::FnFinish)
 ///
 /// This is a stack of [`Layer`]s. Where each layer describes an
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer).
+/// [`OutputLayer`](crate::OUTPUT_LAYER).
 ///
 /// # Example
 ///
@@ -119,9 +119,9 @@ impl LayerDepth {
 /// [`name`](Layer::name()) | [`depth`](Layer::depth())
 /// | [`offset`](Layer::offset())
 /// ------------------------|-------------------------------------------------------|----------------------------
-/// `Ci`                    | [`ColorAndAlpha`](LayerDepth::ColorAndAlpha)
-/// (`rgba`) | `0` `N_world`               | [`Vector`](LayerDepth::Vector)
-/// (`xyz`)                | `4`
+/// `Ci`                    |
+/// [`ColorAndAlpha`](LayerDepth::ColorAndAlpha)(`rgba`)  | `0` `N_world`
+/// | [`Vector`](LayerDepth::Vector)(`xyz`)                 | `4`
 ///
 /// ## RAW Layout
 ///
@@ -138,7 +138,7 @@ impl LayerDepth {
 /// channel at offset `5` (`4` + `1`).
 ///
 /// The pixel format is in the order in which
-/// [`OutputLayer`](crate::context::NodeType::OutputLayer)s were defined in the
+/// [`OutputLayer`](crate::OUTPUT_LAYER)s were defined in the
 /// [ɴsɪ scene](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy).
 ///
 /// # Accessing Layers
@@ -149,6 +149,7 @@ impl LayerDepth {
 /// ```
 /// # #[cfg(feature = "output")]
 /// # {
+/// # use nsi_core as nsi;
 /// let finish = nsi::output::FinishCallback::new(
 ///     |_: String,
 ///      _: usize,
@@ -156,7 +157,7 @@ impl LayerDepth {
 ///      pixel_format: nsi::output::PixelFormat,
 ///      _: Vec<f32>| {
 ///         // Dump all layer descriptions to stdout.
-///         for layer in *pixel_format {
+///         for layer in &*pixel_format {
 ///             println!("{:?}", layer);
 ///         }
 ///
@@ -312,6 +313,12 @@ impl Deref for PixelFormat {
     type Target = Vec<Layer>;
 
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<Vec<Layer>> for PixelFormat {
+    fn as_ref(&self) -> &Vec<Layer> {
         &self.0
     }
 }

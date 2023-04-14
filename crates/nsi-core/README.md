@@ -1,4 +1,4 @@
-`nsi-core`
+# `nsi-core`
 
 This crate implements the high level wrapper around the NSI API and
 links against the commercial 3Delight renderer.

@@ -169,7 +169,7 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"recursive"` ([`Integer`]) – Specifies whether deletion is recursive.
+    /// * `"recursive"` ([`Integer`]) -- Specifies whether deletion is recursive.
     ///   By default, only the specified node is deleted. If a value of `1` is
     ///   given, then nodes which connect to the specified node are recursively
     ///   removed. Unless they meet one of the following conditions:
@@ -209,10 +209,10 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` – A handle to a node previously created with
+    /// * `handle` -- A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
+    /// * `args` -- A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: &str, args: &ArgSlice<'_, 'a>) {
         let handle = HandleString::from(handle);
@@ -243,12 +243,12 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` – A handle to a node previously created with
+    /// * `handle` -- A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `time` – The time at which to set the value.
+    /// * `time` -- The time at which to set the value.
     ///
-    /// * `args` – A [`slice`](std::slice) of optional [`Arg`] arguments.
+    /// * `args` -- A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute_at_time(
         &self,
@@ -282,10 +282,10 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `handle` – A handle to a node previously created with
+    /// * `handle` -- A handle to a node previously created with
     ///   [`create()`](Context::create()).
     ///
-    /// * `name` – The name of the attribute to be deleted/reset.
+    /// * `name` -- The name of the attribute to be deleted/reset.
     #[inline]
     pub fn delete_attribute(&self, handle: &str, name: &str) {
         let handle = HandleString::from(handle);
@@ -306,29 +306,31 @@ impl<'a> Context<'a> {
     ///
     /// # Arguments
     ///
-    /// * `from` – The handle of the node from which the connection is made.
+    /// * `from` -- The handle of the node from which the connection is made.
     ///
-    /// * `from_attr` – The name of the attribute from which the connection is
+    /// * `from_attr` -- The name of the attribute from which the connection is
     ///   made. If this is an empty string then the connection is made from the
     ///   node instead of from a specific attribute of the node.
     ///
-    /// * `to` – The handle of the node to which the connection is made.
+    ///   If this is `None` the node itself will be connected.
     ///
-    /// * `to_attr` – The name of the attribute to which the connection is made.
+    /// * `to` -- The handle of the node to which the connection is made.
+    ///
+    /// * `to_attr` -- The name of the attribute to which the connection is made.
     ///   If this is an empty string then the connection is made to the node
     ///   instead of to a specific attribute of the node.
     ///
     /// # Optional Arguments
     ///
-    /// * `"value"` – This can be used to change the value of a node's attribute
+    /// * `"value"` -- This can be used to change the value of a node's attribute
     ///   in some contexts. Refer to guidelines on inter-object visibility for
     ///   more information about the utility of this parameter.
     ///
-    /// * `"priority"` ([`Integer`]) – When connecting attribute nodes,
+    /// * `"priority"` ([`Integer`]) -- When connecting attribute nodes,
     ///   indicates in which order the nodes should be considered when
     ///   evaluating the value of an attribute.
     ///
-    /// * `"strength"` ([`Integer`]) – A connection with a `strength` greater
+    /// * `"strength"` ([`Integer`]) -- A connection with a `strength` greater
     ///   than `0` will *block* the progression of a recursive
     ///   [`delete()`](Context::delete()).
     #[inline]
@@ -359,7 +361,7 @@ impl<'a> Context<'a> {
 
     /// This function removes a connection between two elements.
     ///
-    /// The handle for either node may be the special value `".all"`.
+    /// The handle for either node may be the special value [`.all`](crate::node::ALL).
     /// This will remove all connections which match the other three
     /// arguments.
     ///
@@ -367,11 +369,10 @@ impl<'a> Context<'a> {
     ///
     /// ```
     /// # use nsi_core as nsi;
-    /// // Create a rendering context.
-    /// let ctx = nsi::Context::new(None).unwrap();
-    /// // [...]
+    /// # // Create a rendering context.
+    /// # let ctx = nsi::Context::new(None).unwrap();
     /// // Disconnect everything from the scene's root.
-    /// ctx.disconnect(".all", None, ".root", "");
+    /// ctx.disconnect(nsi::ALL, None, ".root", "");
     /// ```
     #[inline]
     pub fn disconnect(
@@ -418,29 +419,29 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`String`]) – The type of file which will generate the
+    /// * `"type"` ([`String`]) -- The type of file which will generate the
     ///   interface calls. This can be one of:
-    ///   * `"apistream"` – Read in an ɴsɪ stream. This requires either
+    ///   * `"apistream"` -- Read in an ɴsɪ stream. This requires either
     ///     `"filename"` or `"buffer"`/`"size"` arguments to be specified too.
     ///
-    ///   * `"lua"` – Execute a Lua script, either from file or inline. See also
+    ///   * `"lua"` -- Execute a Lua script, either from file or inline. See also
     ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
     ///
-    ///   * `"dynamiclibrary"` – Execute native compiled code in a loadable library. See
+    ///   * `"dynamiclibrary"` -- Execute native compiled code in a loadable library. See
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`String`]) – The name of the file which contains the
+    /// * `"filename"` ([`String`]) -- The name of the file which contains the
     ///   interface calls to include.
     ///
-    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"`
+    /// * `"script"` ([`String`]) -- A valid Lua script to execute when `"type"`
     ///   is set to `"lua"`.
     ///
     /// * `"buffer"` ([`Pointer`])
-    /// * `"size"` ([`Integer`]) – These two parameters define a memory block
+    /// * `"size"` ([`Integer`]) -- These two parameters define a memory block
     ///   that contain ɴsɪ commands to execute.
     ///
-    /// * `"backgroundload"` ([`Integer`]) – If this is nonzero, the object may
+    /// * `"backgroundload"` ([`Integer`]) -- If this is nonzero, the object may
     ///   be loaded in a separate thread, at some later time. This requires that
     ///   further interface calls not directly reference objects defined in the
     ///   included file. The only guarantee is that the file will be loaded
@@ -460,32 +461,32 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`String`]) – Specifies the operation to be performed,
+    /// * `"action"` ([`String`]) -- Specifies the operation to be performed,
     ///   which should be one of the following:
-    ///   * `"start"` – This starts rendering the scene in the provided context.
+    ///   * `"start"` -- This starts rendering the scene in the provided context.
     ///     The render starts in parallel and the control flow is not blocked.
     ///
-    ///   * `"wait"` – Wait for a render to finish.
+    ///   * `"wait"` -- Wait for a render to finish.
     ///
-    ///   * `"synchronize"` – For an interactive render, apply all the buffered
+    ///   * `"synchronize"` -- For an interactive render, apply all the buffered
     ///     calls to scene’s state.
     ///
-    ///   * `"suspend"` – Suspends render in the provided context.
+    ///   * `"suspend"` -- Suspends render in the provided context.
     ///
-    ///   * `"resume"` – Resumes a previously suspended render.
+    ///   * `"resume"` -- Resumes a previously suspended render.
     ///
-    ///   * `"stop"` – Stops rendering in the provided context without
+    ///   * `"stop"` -- Stops rendering in the provided context without
     ///     destroying the scene.
-    /// * `"progressive"` ([`Integer`]) – If set to `1`, render the image in a
+    /// * `"progressive"` ([`Integer`]) -- If set to `1`, render the image in a
     ///   progressive fashion.
     ///
-    /// * `"interactive"` ([`Integer`]) – If set to `1`, the renderer will
+    /// * `"interactive"` ([`Integer`]) -- If set to `1`, the renderer will
     ///   accept commands to edit scene’s state while rendering. The difference
     ///   with a normal render is that the render task will not exit even if
     ///   rendering is finished. Interactive renders are by definition
     ///   progressive.
     ///
-    /// * `"frame"` – Specifies the frame number of this render.
+    /// * `"frame"` -- Specifies the frame number of this render.
     #[inline]
     pub fn render_control(&self, args: &ArgSlice<'_, 'a>) {
         let (_, _, mut args_out) = get_c_param_vec(Some(args));

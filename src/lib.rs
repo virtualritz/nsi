@@ -5,8 +5,8 @@
 //!
 //! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
 //! nodes. Each node has a *unique handle* to identify it. It also has
-//! a [type](nsi_core::context::NodeType) which describes its intended function
-//! in the scene.
+//! a [type](nsi_core::node) which describes its intended function in
+//! the scene.
 //!
 //! Nodes are abstract containers for data. The interpretation depends
 //! on the node type. Nodes can also be [connected to each
@@ -28,12 +28,10 @@
 //!
 //! What we refer to as the ɴsɪ has two major components:
 //!
-//! 1.  Methods to create nodes, attributes and their connections.
-//!     These are attached to a rendering
-//! [`Context`](nsi_core::context::Context).
+//! 1. Methods to create nodes, attributes and their connections.
+//!    These are attached to a rendering [`Context`](nsi_core::context::Context).
 //!
-//! 2.  Nodes of different [`NodeType`](nsi_core::context::NodeType)s understood
-//! by the renderer.
+//! 2. [Nodes](nsi_core::node) understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -73,10 +71,10 @@
 //! ];
 //!
 //! // Create a new mesh node and call it 'dodecahedron'.
-//! ctx.create("dodecahedron", nsi::node::MESH, None);
+//! ctx.create("dodecahedron", nsi::MESH, None);
 //!
 //! // Connect the 'dodecahedron' node to the scene's root.
-//! ctx.connect("dodecahedron", None, ".root", "objects", None);
+//! ctx.connect("dodecahedron", None, nsi::ROOT, "objects", None);
 //!
 //! // Define the geometry of the 'dodecahedron' node.
 //! ctx.set_attribute(
@@ -141,12 +139,14 @@
 //! * [`toolbelt`](crate::toolbelt) -- Add convenience methods that work with a
 //!   [`Context`](nsi_core::context::Context).
 //!
+//! * [`delight`](crate::delight) -- Add some nodes & shaders specifi to 3Delight.
+//!
 //! * `nightly` -- Enable some unstable features (suggested if you build with a
 //!   `nightly` toolchain)
 //!
-//! * `ustr_handles` -- use [`Ustr`] for node handles. This will give a you a
-//!   speed boost if your node names aren't changing while an app using ɴsɪ is
-//!   running but is not advised otherwise.
+//! * `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node handles.
+//!   This will give a you a speed boost if your node names aren't changing while an
+//!   app using ɴsɪ is running but is not advised otherwise (`ustr` are never freed).
 //!
 //! ## Linking Style
 //!
@@ -188,10 +188,18 @@
 //!
 //!   * The feature is called `download_lib3delight`.
 
-#[cfg(feature = "delight")]
-pub use nsi_3delight::*;
 pub use nsi_core::*;
+#[cfg(feature = "delight")]
+pub mod delight {
+    pub use nsi_3delight::*;
+}
+
 #[cfg(feature = "jupyter")]
-pub use nsi_jupyter::*;
+pub mod jupyter {
+    pub use nsi_jupyter::*;
+}
+
 #[cfg(feature = "toolbelt")]
-pub use nsi_toolbelt::*;
+pub mod toolbelt {
+    pub use nsi_toolbelt::*;
+}

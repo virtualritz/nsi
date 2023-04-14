@@ -1,5 +1,6 @@
 use crate::p_ops;
 use nsi_3delight as nsi_3dl;
+use nsi_core as nsi;
 use nsi_toolbelt as nsi_tb;
 
 fn nsi_camera<'a>(
@@ -10,34 +11,34 @@ fn nsi_camera<'a>(
     finish: nsi::output::FinishCallback,
 ) {
     // Setup a camera TRANSFORM.
-    c.create("camera_xform", nsi::node::TRANSFORM, None);
-    c.connect("camera_xform", None, ".root", "objects", None);
+    c.create("camera_xform", nsi::TRANSFORM, None);
+    c.connect("camera_xform", None, nsi::ROOT, "objects", None);
     c.set_attribute(
         "camera_xform",
         &[nsi::double_matrix!(
-            "transformationmatrix",
+            "TRANSFORMationmatrix",
             &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
         )],
     );
 
     // Setup a camera.
-    c.create("camera", nsi::node::PERSPECTIVE_CAMERA, None);
+    c.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     c.connect("camera", None, "camera_xform", "objects", None);
     c.set_attribute("camera", &[nsi::float!("fov", 35.)]);
 
     // Setup a screen.
-    c.create("screen", nsi::node::SCREEN, None);
+    c.create("screen", nsi::SCREEN, None);
     c.connect("screen", None, "camera", "screens", None);
     c.set_attribute(
         "screen",
         &[
-            nsi::integers!("resolution", &[256, 256]).array_len(2),
+            nsi::integers!("resolution", &[32, 32]).array_len(2),
             nsi::integer!("oversampling", 32),
         ],
     );
 
     // RGB layer.
-    c.create("beauty", nsi::node::OUTPUT_LAYER, None);
+    c.create("beauty", nsi::OUTPUT_LAYER, None);
     c.set_attribute(
         "beauty",
         &[
@@ -49,7 +50,7 @@ fn nsi_camera<'a>(
     c.connect("beauty", None, "screen", "outputlayers", None);
 
     // Setup an output driver.
-    c.create("driver", nsi::node::OUTPUT_DRIVER, None);
+    c.create("driver", nsi::OUTPUT_DRIVER, None);
     c.connect("driver", None, "beauty", "outputdrivers", None);
 
     c.set_attribute(
@@ -63,12 +64,23 @@ fn nsi_camera<'a>(
             nsi::callback!("callback.finish", finish),
         ],
     );
+
+    c.create("driver2", nsi::OUTPUT_DRIVER, None);
+    c.connect("driver2", None, "beauty", "outputdrivers", None);
+
+    c.set_attribute(
+        "driver2",
+        &[
+            nsi::string!("drivername", "exr"),
+            nsi::string!("imagefilename", "foobs.exr"),
+        ],
+    );
 }
 
 fn nsi_reflective_ground(c: &nsi::Context) {
     // Floor.
-    c.create("ground_xform_0", nsi::node::TRANSFORM, None);
-    c.connect("ground_xform_0", None, ".root", "objects", None);
+    c.create("ground_xform_0", nsi::TRANSFORM, None);
+    c.connect("ground_xform_0", None, nsi::ROOT, "objects", None);
     c.set_attribute(
         "ground_xform_0",
         &[nsi::double_matrix!(
@@ -80,10 +92,10 @@ fn nsi_reflective_ground(c: &nsi::Context) {
         )],
     );
 
-    c.create("ground_0", nsi::node::PLANE, None);
+    c.create("ground_0", nsi::PLANE, None);
     c.connect("ground_0", None, "ground_xform_0", "objects", None);
 
-    c.create("ground_attrib", nsi::node::ATTRIBUTES, None);
+    c.create("ground_attrib", nsi::ATTRIBUTES, None);
     c.set_attribute(
         "ground_attrib",
         &[nsi::integer!("visibility.camera", false as _)],
@@ -97,7 +109,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
     );
 
     // Ground shader.
-    c.create("ground_shader", nsi::node::SHADER, None);
+    c.create("ground_shader", nsi::SHADER, None);
     c.connect(
         "ground_shader",
         None,
@@ -128,12 +140,12 @@ fn nsi_reflective_ground(c: &nsi::Context) {
 fn nsi_material(c: &nsi::Context, name: &str) {
     // Particle attributes.
     let attribute_name = format!("{}_attrib", name);
-    c.create(&attribute_name, nsi::node::ATTRIBUTES, None);
+    c.create(&attribute_name, nsi::ATTRIBUTES, None);
     c.connect(&attribute_name, None, name, "geometryattributes", None);
 
     // Metal shader.
     let shader_name = format!("{}_shader", name);
-    c.create(&shader_name, nsi::node::SHADER, None);
+    c.create(&shader_name, nsi::SHADER, None);
     c.connect(&shader_name, None, &attribute_name, "surfaceshader", None);
 
     c.set_attribute(
@@ -179,7 +191,7 @@ pub(crate) fn nsi_render<'a>(
 
     nsi_tb::append(
         &ctx,
-        ".root",
+        nsi::ROOT,
         None,
         &nsi_3dl::environment_texture(
             &ctx,
@@ -194,7 +206,7 @@ pub(crate) fn nsi_render<'a>(
     );
 
     let name = polyhedron.to_nsi(&ctx, None, None, None, None);
-    nsi_tb::append(&ctx, ".root", None, &name);
+    nsi_tb::append(&ctx, nsi::ROOT, None, &name);
 
     nsi_material(&ctx, &name);
 
