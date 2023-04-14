@@ -64,17 +64,6 @@ fn nsi_camera<'a>(
             nsi::callback!("callback.finish", finish),
         ],
     );
-
-    c.create("driver2", nsi::OUTPUT_DRIVER, None);
-    c.connect("driver2", None, "beauty", "outputdrivers", None);
-
-    c.set_attribute(
-        "driver2",
-        &[
-            nsi::string!("drivername", "exr"),
-            nsi::string!("imagefilename", "foobs.exr"),
-        ],
-    );
 }
 
 fn nsi_reflective_ground(c: &nsi::Context) {
