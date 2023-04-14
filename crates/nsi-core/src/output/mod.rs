@@ -1,7 +1,8 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "output")))]
-//! # Output Driver Callbacks
+//! Output driver callbacks.
+//!
 //! This module declares several closure types. These can be passed via
-//! [`Callback`](crate::argument::Callback)s to an
+//! [`Callback`](crate::Callback)s to an
 //! [`OutputDriver`](crate::OUTPUT_DRIVER) node to stream
 //! pixels during and/or after a render, in-memory.
 //!

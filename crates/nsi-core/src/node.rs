@@ -1,4 +1,4 @@
-//! Known node types in the ɴsɪ scene graph.
+//! Standard ɴsɪ node types.
 
 /// Wildcard node that references all existing nodes at once (`.all`).
 pub const ALL: &'static str = ".all";

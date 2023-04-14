@@ -1,4 +1,4 @@
-//! # n Notebook Support
+//! Jupyter Notebook support.
 //!
 //! This module adds an [`as_jupyter()`] function that takes a
 //! [`Context`](nsi::Context).

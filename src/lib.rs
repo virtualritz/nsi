@@ -175,14 +175,12 @@
 //!     case:
 //!
 //!     ```toml
-//!     [dependencies.nsi]
-//!     version = "0.5.5"
-//!     features = [ "link_lib3delight" ]
-//!     default-features = false
+//!     [dependencies]
+//!     nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
 //!     ```
 //!
 //! * Download `lib3delight` during build.
-
+//!
 //!   * `lib3delight` is downloaded during build. Note that this may be an
 //!     outdated version. This feature mainly exists for CI purposes.
 //!
@@ -191,15 +189,18 @@
 pub use nsi_core::*;
 #[cfg(feature = "delight")]
 pub mod delight {
+    //! Helpers for using ɴsɪ with 3Delight.
     pub use nsi_3delight::*;
 }
 
 #[cfg(feature = "jupyter")]
 pub mod jupyter {
+    //! Jupyter Notebook support.
     pub use nsi_jupyter::*;
 }
 
 #[cfg(feature = "toolbelt")]
 pub mod toolbelt {
+    //! Convenience methods for an ɴsɪ context.
     pub use nsi_toolbelt::*;
 }

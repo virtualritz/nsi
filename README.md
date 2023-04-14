@@ -121,7 +121,7 @@ Currently the only renderer that does is 3Delight which, though
 commercial, has been and is free for personal use since over twenty
 years.
 
-> **_Note:_** The free version of 3Delight will render with up to 12
+> ***Note:*** The free version of 3Delight will render with up to 12
 cores on your machine. For crazier projects you can use their cheap
 cloud rendering service that gives you access to unlimited CPU cores.
 When you register you get 1,000 cloud minutes for free which ain’t too
@@ -177,29 +177,35 @@ during build or loaded at runtime.
 By default the lib is *loaded at runtime*.
 
 * Load `lib3deligh` at runtime (default). This has several advantages:
+
   1. If you ship your application or library you can ship it without
      the library. It can still run and will print an informative error
      if the library can not be loaded.
+
   2. A user can install an updated version of the renderer and stuff
      will ‘just work’.
 
 * Dynamically link against `lib3delight`.
+
   * `lib3delight` becomes a dependency. If it can not be found your
     lib/app will not load/start.
+
   * The feature is called `link_lib3delight`.
+
   * You should disable default features (they are not needed/used)
+
   * in this case:
 
     ```toml
-    [dependencies.nsi]
-    version = "0.7"
-    features = [ "link_lib3delight" ]
-    default-features = false
+    [dependencies]
+    nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
     ```
 
 * Download `lib3delight` during build.
+
   * `lib3delight` is downloaded during build. Note that this may be
     an outdated version. This feature mainly exists for CI purposes.
+
   * The feature is called `download_lib3delight`.
 
 ## Documentation

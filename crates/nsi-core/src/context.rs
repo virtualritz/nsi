@@ -1,4 +1,4 @@
-//! # An ɴsɪ context.
+//! An ɴsɪ context.
 
 // Needed for the example dode to build.
 extern crate self as nsi;

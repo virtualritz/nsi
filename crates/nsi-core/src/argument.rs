@@ -1,4 +1,4 @@
-//! # Optional Arguments Passed to Methods of an ɴsɪ Context.
+//! Optional arguments passed to methods of an ɴsɪ context.
 use enum_dispatch::enum_dispatch;
 use nsi_sys::*;
 use std::{
