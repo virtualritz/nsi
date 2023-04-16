@@ -24,4 +24,4 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --features output,toolbelt
+        args: --features output,toolbelt,download_lib3delight
