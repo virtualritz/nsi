@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,7 +14,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -24,4 +24,4 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --features output,toolbelt
+        args: --features download_lib3delight,output,toolbelt,delight,jupyter"
