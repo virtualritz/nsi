@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -66,4 +66,4 @@ path = "examples/volume/main.rs"
 name = "volume"
 
 [package.metadata.docs.rs]
-features = ["jupyter", "output", "toolbelt", "delight", "nightly"]
+features = ["download_lib3delight", "jupyter", "output", "toolbelt", "delight", "nightly"]

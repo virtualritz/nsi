@@ -113,9 +113,8 @@ out to 8bit/channel PNG and 32bit/channel (float) OpenEXR formats.
 
 ## Dependencies
 
-This crate depends on [nsi-sys](https://github.com/virtualritz/nsi-sys)
-which in term requires a renderer that implements the ɴsɪ API to
-generate images.
+This crate depends on `nsi-core` which in term requires a renderer that
+implements the ɴsɪ API to generate images.
 
 Currently the only renderer that does is 3Delight which, though
 commercial, has been and is free for personal use since over twenty
@@ -156,13 +155,13 @@ not suggested.
 
 * `toolbelt` – Add convenience methods to `Context`.
 
-* [`delight`](crate::delight) -- Add some nodes & shaders specifi to
+* [`delight`](crate::delight) – Add some nodes & shaders specifi to
   3Delight.
 
-* `nightly` -- Enable some unstable features (suggested if you build
+* `nightly` – Enable some unstable features (suggested if you build
   with a `nightly` toolchain)
 
-* `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for
+* `ustr_handles` – use [`ustr`](https://crates.io/crates/ustr) for
   node handles. This will give a you a speed boost if your node names
   aren't changing while an app using ɴsɪ is running but is not advised
   otherwise (`ustr` are never freed).
@@ -176,7 +175,7 @@ during build or loaded at runtime.
 
 By default the lib is *loaded at runtime*.
 
-* Load `lib3deligh` at runtime (default). This has several advantages:
+* Load `lib3delight` at runtime (default). This has several advantages:
 
   1. If you ship your application or library you can ship it without
      the library. It can still run and will print an informative error
@@ -192,7 +191,7 @@ By default the lib is *loaded at runtime*.
 
   * The feature is called `link_lib3delight`.
 
-  * You should disable default features (they are not needed/used)
+  * You should disable default features (`default-features = false`).
 
   * in this case:
 
