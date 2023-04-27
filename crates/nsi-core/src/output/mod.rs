@@ -7,8 +7,8 @@
 //! pixels during and/or after a render, in-memory.
 //!
 //! There are three types of closure:
-//! * [`FnOpen`] is called once when the
-//!   [`OutputDriver`](crate::OUTPUT_LAYER) is *opened* by the renderer.
+//! * [`FnOpen`] is called once when the [`OutputDriver`](crate::OUTPUT_LAYER)
+//!   is *opened* by the renderer.
 //!
 //! * [`FnWrite`] is called for each bucket of pixel data the renderer sends to
 //!   the [`OutputDriver`](crate::OUTPUT_DRIVER).

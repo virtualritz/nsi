@@ -214,13 +214,8 @@ fn live_edit() {
         None,
     );
 
-    // Start interactive render.
-    c.render_control(&[nsi::string!("action", "start")]); //, interactive=1)
-
-    // Let it render a while.
-    //thread::sleep(time::Duration::from_secs(5));
-
-    c.render_control(&[nsi::string!("action", "wait")]);
+    c.render_control(nsi::Action::Start, None);
+    c.render_control(nsi::Action::Wait, None);
 }
 
 // FIXME: port rest of live_edit example from Python

@@ -202,6 +202,6 @@ pub(crate) fn nsi_render<'a>(
     nsi_reflective_ground(&ctx);
 
     // And now, render it!
-    ctx.render_control(&[nsi::string!("action", "start")]);
-    ctx.render_control(&[nsi::string!("action", "wait")]);
+    ctx.render_control(nsi::Action::Start, None);
+    ctx.render_control(nsi::Action::Wait, None);
 }

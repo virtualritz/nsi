@@ -7,9 +7,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "download_lib3delight")]
     #[allow(unused_variables)]
     let lib_path = {
-        use std::io::Write;
+        use std::{
+            fs::File,
+            io::Write,
+            path::{Path, PathBuf},
+        };
 
-        let lib_path = std::path::PathBuf::from(&std::env::var("OUT_DIR")?);
+        let lib_path = PathBuf::from(&std::env::var("OUT_DIR")?);
 
         eprintln!("Building against 3Delight 2.9.30");
 
@@ -20,8 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(target_os = "linux")]
         let lib = "https://www.dropbox.com/s/wfw6w6p41lqd8ko/lib3delight.so";
 
-        let lib_path =
-            lib_path.join(std::path::Path::new(lib).file_name().unwrap());
+        let lib_path = lib_path.join(Path::new(lib).file_name().unwrap());
 
         eprintln!("lib:     {}", lib_path.display());
 
@@ -35,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .ok()?
                     .bytes()
                     .ok()?;
-                std::fs::File::create(lib_path.clone())
+                File::create(lib_path.clone())
                     .expect(&format!("Could not create {}", lib_path.display()))
                     .write_all(&lib_data)
                     .expect(&format!(
@@ -63,14 +66,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         lib_path
     } else {
-        eprintln!("No 3Delight installation found. Make sure $DELIGHT is set.");
-        return Err(Box::new(std::fmt::Error));
+        std::path::PathBuf::new()
     };
 
     #[cfg(feature = "link_lib3delight")]
     {
         // Emit linker searchpath.
-        println!("cargo:rustc-link-search={}", lib_path.display());
+        if !lib_path.as_path().as_os_str().is_empty() {
+            println!("cargo:rustc-link-search={}", lib_path.display());
+        }
 
         // Link to lib3delight.
         println!("cargo:rustc-link-lib=dylib=3delight");

@@ -29,7 +29,8 @@
 //! What we refer to as the ɴsɪ has two major components:
 //!
 //! 1. Methods to create nodes, attributes and their connections.
-//!    These are attached to a rendering [`Context`](nsi_core::context::Context).
+//!    These are attached to a rendering
+//! [`Context`](nsi_core::context::Context).
 //!
 //! 2. [Nodes](nsi_core::node) understood by the renderer.
 //!
@@ -139,14 +140,16 @@
 //! * [`toolbelt`](crate::toolbelt) -- Add convenience methods that work with a
 //!   [`Context`](nsi_core::context::Context).
 //!
-//! * [`delight`](crate::delight) -- Add some nodes & shaders specifi to 3Delight.
+//! * [`delight`](crate::delight) -- Add some nodes & shaders specifi to
+//!   3Delight.
 //!
 //! * `nightly` -- Enable some unstable features (suggested if you build with a
 //!   `nightly` toolchain)
 //!
-//! * `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node handles.
-//!   This will give a you a speed boost if your node names aren't changing while an
-//!   app using ɴsɪ is running but is not advised otherwise (`ustr` are never freed).
+//! * `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node
+//!   handles. This will give a you a speed boost if your node names aren't
+//!   changing while an app using ɴsɪ is running but is not advised otherwise
+//!   (`ustr` are never freed).
 //!
 //! ## Linking Style
 //!
@@ -176,8 +179,8 @@
 //!
 //!     ```toml
 //!     [dependencies]
-//!     nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
-//!     ```
+//!     nsi = { version = "0.7", default-features = false, features =
+//! ["link_lib3delight"] }     ```
 //!
 //! * Download `lib3delight` during build.
 //!

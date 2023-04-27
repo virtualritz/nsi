@@ -169,10 +169,10 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"recursive"` ([`Integer`]) -- Specifies whether deletion is recursive.
-    ///   By default, only the specified node is deleted. If a value of `1` is
-    ///   given, then nodes which connect to the specified node are recursively
-    ///   removed. Unless they meet one of the following conditions:
+    /// * `"recursive"` ([`Integer`]) -- Specifies whether deletion is
+    ///   recursive. By default, only the specified node is deleted. If a value
+    ///   of `1` is given, then nodes which connect to the specified node are
+    ///   recursively removed. Unless they meet one of the following conditions:
     ///   * They also have connections which do not eventually lead to the
     ///     specified node.
     ///   * Their connection to the node to be deleted was created with a
@@ -316,15 +316,15 @@ impl<'a> Context<'a> {
     ///
     /// * `to` -- The handle of the node to which the connection is made.
     ///
-    /// * `to_attr` -- The name of the attribute to which the connection is made.
-    ///   If this is an empty string then the connection is made to the node
-    ///   instead of to a specific attribute of the node.
+    /// * `to_attr` -- The name of the attribute to which the connection is
+    ///   made. If this is an empty string then the connection is made to the
+    ///   node instead of to a specific attribute of the node.
     ///
     /// # Optional Arguments
     ///
-    /// * `"value"` -- This can be used to change the value of a node's attribute
-    ///   in some contexts. Refer to guidelines on inter-object visibility for
-    ///   more information about the utility of this parameter.
+    /// * `"value"` -- This can be used to change the value of a node's
+    ///   attribute in some contexts. Refer to guidelines on inter-object
+    ///   visibility for more information about the utility of this parameter.
     ///
     /// * `"priority"` ([`Integer`]) -- When connecting attribute nodes,
     ///   indicates in which order the nodes should be considered when
@@ -361,9 +361,9 @@ impl<'a> Context<'a> {
 
     /// This function removes a connection between two elements.
     ///
-    /// The handle for either node may be the special value [`.all`](crate::node::ALL).
-    /// This will remove all connections which match the other three
-    /// arguments.
+    /// The handle for either node may be the special value
+    /// [`.all`](crate::node::ALL). This will remove all connections which
+    /// match the other three arguments.
     ///
     /// # Examples
     ///
@@ -459,24 +459,13 @@ impl<'a> Context<'a> {
     /// also allows for synchronizing the render with interactive calls that
     /// might have been issued.
     ///
+    /// # Arguments
+    ///
+    /// * `action` -- Specifies the render [`Action`] to be performed on the
+    ///   scene.
+    ///
     /// # Optional Arguments
     ///
-    /// * `"action"` ([`String`]) -- Specifies the operation to be performed,
-    ///   which should be one of the following:
-    ///   * `"start"` -- This starts rendering the scene in the provided context.
-    ///     The render starts in parallel and the control flow is not blocked.
-    ///
-    ///   * `"wait"` -- Wait for a render to finish.
-    ///
-    ///   * `"synchronize"` -- For an interactive render, apply all the buffered
-    ///     calls to scene’s state.
-    ///
-    ///   * `"suspend"` -- Suspends render in the provided context.
-    ///
-    ///   * `"resume"` -- Resumes a previously suspended render.
-    ///
-    ///   * `"stop"` -- Stops rendering in the provided context without
-    ///     destroying the scene.
     /// * `"progressive"` ([`Integer`]) -- If set to `1`, render the image in a
     ///   progressive fashion.
     ///
@@ -486,33 +475,82 @@ impl<'a> Context<'a> {
     ///   rendering is finished. Interactive renders are by definition
     ///   progressive.
     ///
-    /// * `"frame"` -- Specifies the frame number of this render.
+    /// * `"callback"` ([`FnStatus`]) -- A closure that will be called be when
+    ///   the status of the render changes.
+    ///
+    ///   # Example
+    ///
+    ///   ```
+    ///   # use nsi_core as nsi;
+    ///   # let ctx = nsi::Context::new(None).unwrap();
+    ///   let status_callback = nsi::StatusCallback::new(
+    ///       |_ctx: &nsi::Context, status: nsi::RenderStatus| {
+    ///           println!("Status: {:?}", status);
+    ///         },
+    ///      );
+    ///
+    ///   /// The renderer will abort because we didn't define an output driver.
+    ///   /// So our status_callback() above will receive RenderStatus::Aborted.
+    ///   ctx.render_control(
+    ///       nsi::Action::Start,
+    ///       Some(&[
+    ///           nsi::integer!("interactive", true as _),
+    ///           nsi::callback!("callback", status_callback),
+    ///       ]),
+    ///   );
+    ///
+    ///   // Block until the renderer is really done.
+    ///   ctx.render_control(nsi::Action::Wait, None);
+    ///   ```
     #[inline]
-    pub fn render_control(&self, args: &ArgSlice<'_, 'a>) {
-        let (_, _, mut args_out) = get_c_param_vec(Some(args));
+    pub fn render_control(
+        &self,
+        action: Action,
+        args: Option<&ArgSlice<'_, 'a>>,
+    ) {
+        let (_, _, mut args_out) = get_c_param_vec(args);
 
         let fn_pointer: nsi_sys::NSIRenderStopped =
             Some(render_status as extern "C" fn(*mut c_void, i32, i32));
 
-        if let Some(arg) =
-            args.iter().find(|arg| Ustr::from("callback") == arg.name)
-        {
-            args_out.push(nsi_sys::NSIParam {
-                name: Ustr::from("stoppedcallback").as_char_ptr(),
-                data: &fn_pointer as *const _ as _,
-                type_: NSIType::Pointer as _,
-                arraylength: 0,
-                count: 1,
-                flags: 0,
-            });
-            args_out.push(nsi_sys::NSIParam {
-                name: Ustr::from("stoppedcallbackdata").as_char_ptr(),
-                data: &arg.data.as_c_ptr() as *const _ as _,
-                type_: NSIType::Pointer as _,
-                arraylength: 1,
-                count: 1,
-                flags: 0,
-            });
+        args_out.push(nsi_sys::NSIParam {
+            name: Ustr::from("action").as_char_ptr(),
+            data: &Ustr::from(match action {
+                Action::Start => "start",
+                Action::Wait => "wait",
+                Action::Synchronize => "synchronize",
+                Action::Suspend => "suspend",
+                Action::Resume => "resume",
+                Action::Stop => "stop",
+            })
+            .as_char_ptr() as *const _ as _,
+            type_: NSIType::String as _,
+            arraylength: 0,
+            count: 1,
+            flags: 0,
+        });
+
+        if let Some(args) = args {
+            if let Some(arg) =
+                args.iter().find(|arg| Ustr::from("callback") == arg.name)
+            {
+                args_out.push(nsi_sys::NSIParam {
+                    name: Ustr::from("stoppedcallback").as_char_ptr(),
+                    data: &fn_pointer as *const _ as _,
+                    type_: NSIType::Pointer as _,
+                    arraylength: 0,
+                    count: 1,
+                    flags: 0,
+                });
+                args_out.push(nsi_sys::NSIParam {
+                    name: Ustr::from("stoppedcallbackdata").as_char_ptr(),
+                    data: &arg.data.as_c_ptr() as *const _ as _,
+                    type_: NSIType::Pointer as _,
+                    arraylength: 1,
+                    count: 1,
+                    flags: 0,
+                });
+            }
         }
 
         NSI_API.NSIRenderControl(
@@ -521,6 +559,27 @@ impl<'a> Context<'a> {
             args_out.as_ptr(),
         );
     }
+}
+
+/// The render action to perform when calling
+/// [`render_control()`](Context::render_control()).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Action {
+    /// Starts rendering the scene in the provided context. The render starts
+    /// in parallel -- this does not block.
+    Start,
+    /// Wait for a render to finish. This blocks.
+    Wait,
+    /// For an interactive render, apply all the buffered calls to scene's
+    /// state.
+    Synchronize,
+    /// Suspends render. Does not block.
+    Suspend,
+    /// Resumes a previously suspended render. Does not block.
+    Resume,
+    /// Stops rendering in the provided context without destroying the scene.
+    /// Does not block.
+    Stop,
 }
 
 /// The status of a *interactive* render session.
@@ -550,10 +609,10 @@ pub enum RenderStatus {
 ///     },
 /// );
 ///
-/// ctx.render_control(&[
-///     nsi::string!("action", "start"),
-///     nsi::callback!("callback", status_callback),
-/// ]);
+/// ctx.render_control(
+///     nsi::Action::Start,
+///     Some(&[nsi::callback!("callback", status_callback)]),
+/// );
 /// ```
 pub trait FnStatus<'a>: Fn(
     // The [`Context`] for which this closure was called.
