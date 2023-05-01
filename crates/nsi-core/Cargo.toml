@@ -35,8 +35,10 @@ reqwest = { version = "0.11", features = ["blocking"], optional = true }
 dlopen2 = { version = "0.4", optional = true }
 enum_dispatch = "0.3"
 lazy_static = "1.4"
+log = "0.4.17"
 ndspy-sys = { version = "0.2", optional = true }
 nsi-sys = { version = "0.7", path = "../nsi-sys" }
+null-terminated-str = "0.1.4"
 num_enum = "0.6"
 rclite = "0.2"
 ustr = "0.9"

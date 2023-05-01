@@ -3,7 +3,7 @@
 // Needed for the example dode to build.
 extern crate self as nsi;
 use crate::{argument::*, *};
-// std::slice is imported so the (doc) examples compile w/o hiccups.
+use null_terminated_str::NullTerminatedStr;
 use rclite::Arc;
 #[allow(unused_imports)]
 use std::{
@@ -90,9 +90,38 @@ impl<'a> Context<'a> {
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (_, _, mut args_out) = get_c_param_vec(args);
 
-        let context = NSI_API.NSIBegin(args_len, args_ptr);
+        let fn_pointer: nsi_sys::NSIErrorHandler = Some(
+            error_handler
+                as extern "C" fn(*mut c_void, c_int, c_int, *const c_char),
+        );
+
+        if let Some(args) = args {
+            if let Some(arg) = args
+                .iter()
+                .find(|arg| Ustr::from("errorhandler") == arg.name)
+            {
+                args_out.push(nsi_sys::NSIParam {
+                    name: Ustr::from("errorhandler").as_char_ptr(),
+                    data: &fn_pointer as *const _ as _,
+                    type_: NSIType::Pointer as _,
+                    arraylength: 0,
+                    count: 1,
+                    flags: 0,
+                });
+                args_out.push(nsi_sys::NSIParam {
+                    name: Ustr::from("errorhandlerdata").as_char_ptr(),
+                    data: &arg.data.as_c_ptr() as *const _ as _,
+                    type_: NSIType::Pointer as _,
+                    arraylength: 1,
+                    count: 1,
+                    flags: 0,
+                });
+            }
+        }
+
+        let context = NSI_API.NSIBegin(args_out.len() as _, args_out.as_ptr());
 
         if 0 == context {
             None
@@ -459,6 +488,8 @@ impl<'a> Context<'a> {
     /// also allows for synchronizing the render with interactive calls that
     /// might have been issued.
     ///
+    /// Note that this call will block if [`Action::Wait`] is selected.
+    ///
     /// # Arguments
     ///
     /// * `action` -- Specifies the render [`Action`] to be performed on the
@@ -511,7 +542,7 @@ impl<'a> Context<'a> {
         let (_, _, mut args_out) = get_c_param_vec(args);
 
         let fn_pointer: nsi_sys::NSIRenderStopped =
-            Some(render_status as extern "C" fn(*mut c_void, i32, i32));
+            Some(render_status as extern "C" fn(*mut c_void, c_int, c_int));
 
         args_out.push(nsi_sys::NSIParam {
             name: Ustr::from("action").as_char_ptr(),
@@ -681,5 +712,99 @@ pub(crate) extern "C" fn render_status(
         // This is safe as Context doesn't allocate and this one is on the stack
         // anyway.
         std::mem::forget(ctx);
+    }
+}
+
+/// A closure which is called to inform about the errors during scene defintion
+/// or a render.
+///
+/// It is passed to ɴsɪ via [`new()`](Context::new())’s `"errorhandler"`
+/// argument.
+///
+/// # Examples
+///
+/// ```
+/// # use nsi_core as nsi;
+/// use log::{debug, error, info, trace, warn, Level};
+///
+/// let error_handler = nsi::ErrorCallback::new(
+///     |level: Level, message_id: i32, message: &str| match level {
+///         Level::Error => error!("[{}] {}", message_id, message),
+///         Level::Warn => warn!("[{}] {}", message_id, message),
+///         Level::Info => info!("[{}] {}", message_id, message),
+///         Level::Debug => debug!("[{}] {}", message_id, message),
+///         Level::Trace => trace!("[{}] {}", message_id, message),
+///     },
+/// );
+///
+/// let ctx = nsi::Context::new(Some(&[nsi::callback!(
+///     "errorhander",
+///     error_handler
+/// )]))
+/// .unwrap();
+///
+/// // Do something with ctx ...
+/// ```
+pub trait FnError<'a>: Fn(
+    // The error level.
+    log::Level,
+    // The message id.
+    i32,
+    // The message.
+    &str,
+)
++ 'a {}
+
+#[doc(hidden)]
+impl<
+        'a,
+        T: Fn(log::Level, i32, &str) + 'a + for<'r> Fn(log::Level, i32, &'r str),
+    > FnError<'a> for T
+{
+}
+
+/// Wrapper to pass a [`FnError`] closure to a [`Context`].
+pub struct ErrorCallback<'a>(Box<Box<dyn FnError<'a>>>);
+
+impl<'a> ErrorCallback<'a> {
+    pub fn new<F>(fn_error: F) -> Self
+    where
+        F: FnError<'a>,
+    {
+        ErrorCallback(Box::new(Box::new(fn_error)))
+    }
+}
+
+impl CallbackPtr for ErrorCallback<'_> {
+    #[doc(hidden)]
+    fn to_ptr(self) -> *const core::ffi::c_void {
+        Box::into_raw(self.0) as *const _ as _
+    }
+}
+
+// Trampoline function for the FnError callback.
+#[no_mangle]
+pub(crate) extern "C" fn error_handler(
+    payload: *mut c_void,
+    level: c_int,
+    code: c_int,
+    message: *const c_char,
+) {
+    if !payload.is_null() {
+        let fn_error =
+            unsafe { Box::from_raw(payload as *mut Box<dyn FnError>) };
+
+        let message = unsafe {
+            NullTerminatedStr::from_cstr_unchecked(CStr::from_ptr(message as _))
+        };
+
+        let level = match NSIErrorLevel::from(level) {
+            NSIErrorLevel::Message => log::Level::Trace,
+            NSIErrorLevel::Info => log::Level::Info,
+            NSIErrorLevel::Warning => log::Level::Warn,
+            NSIErrorLevel::Error => log::Level::Error,
+        };
+
+        fn_error(level, code as _, message.as_ref());
     }
 }

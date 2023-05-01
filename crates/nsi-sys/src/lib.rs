@@ -99,3 +99,14 @@ bitflags! {
         const PerVertex = c_api::NSIParamPerVertex as _;
     }
 }
+
+impl From<i32> for NSIErrorLevel {
+    fn from(level: i32) -> Self {
+        match level {
+            0 => NSIErrorLevel::Message,
+            1 => NSIErrorLevel::Info,
+            2 => NSIErrorLevel::Warning,
+            _ => NSIErrorLevel::Error,
+        }
+    }
+}
