@@ -1,6 +1,6 @@
 [package]
 name = "nsi-sys"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 build = "build.rs"
 edition = "2021"
