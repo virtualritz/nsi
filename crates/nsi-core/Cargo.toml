@@ -1,6 +1,6 @@
 [package]
 name = "nsi-core"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
