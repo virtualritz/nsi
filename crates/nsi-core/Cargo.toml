@@ -41,7 +41,7 @@ nsi-sys = { version = "0.7", path = "../nsi-sys" }
 null-terminated-str = "0.1.4"
 num_enum = "0.6"
 rclite = "0.2"
-ustr = "0.9"
+ustr = "0.10"
 
 [package.metadata.docs.rs]
 features = ["download_lib3delight", "output", "toolbelt", "delight", "jupyter"]
