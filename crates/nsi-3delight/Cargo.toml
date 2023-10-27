@@ -15,3 +15,6 @@ repository = "https://github.com/virtualritz/nsi-3delight/"
 [dependencies]
 nsi-core = { version = "0.8", path = "../nsi-core" }
 nsi-toolbelt = { version = "0.8", path = "../nsi-toolbelt" }
+
+[package.metadata.docs.rs]
+all-features = true

@@ -35,9 +35,9 @@ reqwest = { version = "0.11", features = ["blocking"], optional = true }
 dlopen2 = { version = "0.6", optional = true }
 enum_dispatch = "0.3"
 lazy_static = "1.4"
-log = "0.4.20"
+log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
-nsi-sys = { version = "0.7", path = "../nsi-sys" }
+nsi-sys = "0.7"
 null-terminated-str = "0.1"
 num_enum = "0.7"
 rclite = "0.2"
@@ -45,3 +45,4 @@ ustr = "0.10"
 
 [package.metadata.docs.rs]
 features = ["output", "nightly"]
+all-features = true

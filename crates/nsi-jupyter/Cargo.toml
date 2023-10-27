@@ -19,3 +19,6 @@ evcxr_runtime = "1.1"
 nsi-core = { version = "0.8", path = "../nsi-core", features = ["output"] }
 png = "0.17"
 rayon = "1.8"
+
+[package.metadata.docs.rs]
+all-features = true

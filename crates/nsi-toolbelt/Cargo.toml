@@ -17,3 +17,6 @@ nsi-core = { version = "0.8", path = "../nsi-core" }
 petname = { version = "1.1", default-features = false, features = ["std_rng", "default_dictionary"] }
 rand = { version = "0.8", features = ["small_rng"] }
 ultraviolet = { version = "0.9", features = ["f64"] }
+
+[package.metadata.docs.rs]
+all-features = true
