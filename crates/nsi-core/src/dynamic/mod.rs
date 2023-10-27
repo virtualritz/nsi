@@ -44,6 +44,7 @@ struct CApi {
         object: NSIHandle,
         name: *const ::std::os::raw::c_char,
     ),
+    #[allow(clippy::too_many_arguments)]
     NSIConnect: extern "C" fn(
         ctx: NSIContext,
         from: NSIHandle,
@@ -121,6 +122,30 @@ impl DynamicApi {
                 }
                 .map_err(|e| Box::new(e) as _),
             }) {
+            Err(e) => Err(e),
+            Ok(api) => {
+                let api = DynamicApi { api };
+
+                #[cfg(feature = "output")]
+                api.DspyRegisterDriver(
+                    b"ferris\0" as *const u8 as _,
+                    Some(output::image_open),
+                    Some(output::image_write),
+                    Some(output::image_close),
+                    Some(output::image_query),
+                );
+
+                Ok(api)
+            }
+        }
+    }
+}
+
+impl TryFrom<&Path> for DynamicApi {
+    type Error = dlopen2::Error;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        match unsafe { Container::load(path) } {
             Err(e) => Err(e),
             Ok(api) => {
                 let api = DynamicApi { api };

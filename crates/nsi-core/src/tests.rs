@@ -70,7 +70,7 @@ fn test_reference() {
         &[
             nsi::string!("drivername", "idisplay"),
             // Pass a pointer to foo to NSI
-            nsi::reference!("_foo", Some(&foo)),
+            nsi::reference!("_foo", &foo),
         ],
     );
 

@@ -35,7 +35,7 @@
 //! to read.
 //!
 //! Finally, [`NSIParamFlags`] is a [`bitflags`](https://docs.rs/bitflags)
-//! `struct` that wraps the `NSIParam*` flags from the C-API for ergnomics.
+//! `struct` that wraps the `NSIParam*` flags from the C-API for ergonomics.
 //!
 //! # Compile- vs. Runtime
 //!
@@ -92,6 +92,7 @@ pub use c_api::{
 };
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct NSIParamFlags: c_int {
         const InterpolateLinear = c_api::NSIParamInterpolateLinear as _;
         const IsArray = c_api::NSIParamIsArray as _;

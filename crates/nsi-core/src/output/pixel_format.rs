@@ -1,5 +1,6 @@
 use core::ops::Deref;
 use std::ffi::CStr;
+
 /// Description of an [`OutputLayer`](crate::OUTPUT_LAYER) node
 /// inside a flat, raw pixel.
 #[derive(Debug, Clone, Default)]
@@ -114,7 +115,7 @@ impl LayerDepth {
 /// # Example
 ///
 /// A typical format for a pixel containing two such layers, an *RGBA* **color**
-/// + **alpha** output layer and a world space **normal**, will look like this:
+/// & **alpha** output layer and a world space **normal**, will look like this:
 ///
 /// [`name`](Layer::name()) | [`depth`](Layer::depth())
 /// | [`offset`](Layer::offset())
@@ -145,6 +146,10 @@ impl LayerDepth {
 ///
 /// To access the [`Layer`]s inside a `PixelFormat` use the [`Deref`] operator
 /// to obtain the underlying [`Vec`]<`Layer`>.
+///
+/// # Examples
+///
+/// Dump all layers to `stdout` after a frame has finished rendering:
 ///
 /// ```
 /// # #[cfg(feature = "output")]

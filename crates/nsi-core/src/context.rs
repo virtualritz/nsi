@@ -72,6 +72,16 @@ impl<'a> From<Context<'a>> for NSIContext {
     }
 }
 
+impl<'a> From<NSIContext> for Context<'a> {
+    #[inline]
+    fn from(context: NSIContext) -> Self {
+        Self(Arc::new(InnerContext {
+            context,
+            _marker: PhantomData,
+        }))
+    }
+}
+
 impl<'a> Context<'a> {
     /// Creates an ɴsɪ context.
     ///
@@ -432,9 +442,9 @@ impl<'a> Context<'a> {
     /// are the same idea expressed in a different language.
     ///
     /// Note that for delayed procedural evaluation you should use a
-    /// [`procedural` node](node::PROCEDURAL).
+    /// `Procedural` node.
     ///
-    /// The ɴsɪ adds a third option which sits in-between — [Lua
+    /// The ɴꜱɪ adds a third option which sits in-between — [Lua
     /// scripts](https://nsi.readthedocs.io/en/latest/lua-api.html). They are more powerful than a
     /// simple included file yet they are also easier to generate as they do not
     /// require compilation.
@@ -444,33 +454,32 @@ impl<'a> Context<'a> {
     /// a frame. This gives great flexibility in how components of a scene
     /// are put together.
     ///
-    /// The ability to load ɴsɪ commands from memory is also provided.
+    /// The ability to load ɴꜱɪ commands from memory is also provided.
     ///
     /// # Optional Arguments
     ///
-    /// * `"type"` ([`String`]) -- The type of file which will generate the
+    /// * `"type"` ([`String`]) – The type of file which will generate the
     ///   interface calls. This can be one of:
-    ///   * `"apistream"` -- Read in an ɴsɪ stream. This requires either
+    ///   * `"apistream"` – Read in an ɴꜱɪ stream. This requires either
     ///     `"filename"` or `"buffer"`/`"size"` arguments to be specified too.
     ///
-    ///   * `"lua"` -- Execute a Lua script, either from file or inline. See also
+    ///   * `"lua"` – Execute a Lua script, either from file or inline. See also
     ///     [how to evaluate a Lua script](https://nsi.readthedocs.io/en/latest/lua-api.html#luaapi-evaluation).
     ///
-    ///   * `"dynamiclibrary"` -- Execute native compiled code in a loadable library. See
+    ///   * `"dynamiclibrary"` – Execute native compiled code in a loadable library. See
     ///     [dynamic library procedurals](https://nsi.readthedocs.io/en/latest/procedurals.html#section-procedurals)
     ///     for an implementation example in C.
     ///
-    /// * `"filename"` ([`String`]) -- The name of the file which contains the
+    /// * `"filename"` ([`String`]) – The name of the file which contains the
     ///   interface calls to include.
     ///
-    /// * `"script"` ([`String`]) -- A valid Lua script to execute when `"type"`
+    /// * `"script"` ([`String`]) – A valid Lua script to execute when `"type"`
     ///   is set to `"lua"`.
     ///
-    /// * `"buffer"` ([`Pointer`])
-    /// * `"size"` ([`Integer`]) -- These two parameters define a memory block
-    ///   that contain ɴsɪ commands to execute.
+    /// * `"buffer"` ([`String`]) – A memory block that contain ɴꜱɪ commands to
+    ///   execute.
     ///
-    /// * `"backgroundload"` ([`Integer`]) -- If this is nonzero, the object may
+    /// * `"backgroundload"` ([`Integer`]) – If this is nonzero, the object may
     ///   be loaded in a separate thread, at some later time. This requires that
     ///   further interface calls not directly reference objects defined in the
     ///   included file. The only guarantee is that the file will be loaded
@@ -675,6 +684,9 @@ trait FnStatus<'a> = FnMut(
 /// Wrapper to pass a [`FnStatus`] closure to a [`Context`].
 pub struct StatusCallback<'a>(Box<Box<dyn FnStatus<'a>>>);
 
+unsafe impl Send for StatusCallback<'static> {}
+unsafe impl Sync for StatusCallback<'static> {}
+
 impl<'a> StatusCallback<'a> {
     pub fn new<F>(fn_status: F) -> Self
     where
@@ -765,6 +777,9 @@ impl<
 
 /// Wrapper to pass a [`FnError`] closure to a [`Context`].
 pub struct ErrorCallback<'a>(Box<Box<dyn FnError<'a>>>);
+
+unsafe impl Send for ErrorCallback<'static> {}
+unsafe impl Sync for ErrorCallback<'static> {}
 
 impl<'a> ErrorCallback<'a> {
     pub fn new<F>(fn_error: F) -> Self

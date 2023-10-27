@@ -1,6 +1,6 @@
 [package]
 name = "nsi-sys"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 build = "build.rs"
 edition = "2021"
@@ -20,7 +20,7 @@ default = []
 omit_functions = []
 
 [build-dependencies]
-bindgen = "0.65"
+bindgen = "0.68"
 
 [dependencies]
 bitflags = "2"

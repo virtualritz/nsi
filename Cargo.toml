@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.7.2"
+version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -39,18 +39,18 @@ nightly = ["nsi-core/nightly"]
 ustr = ["nsi-core/ustr_handles"]
 
 [dependencies]
-nsi-3delight = { version = "0.7", path = "crates/nsi-3delight", optional = true }
-nsi-core = { version = "0.7", path = "crates/nsi-core" }
-nsi-jupyter = { version = "0.7", path = "crates/nsi-jupyter", optional = true }
-nsi-toolbelt = { version = "0.7", path = "crates/nsi-toolbelt", optional = true }
+nsi-3delight = { version = "0.8", path = "crates/nsi-3delight", optional = true }
+nsi-core = { version = "0.8", path = "crates/nsi-core" }
+nsi-jupyter = { version = "0.8", path = "crates/nsi-jupyter", optional = true }
+nsi-toolbelt = { version = "0.8", path = "crates/nsi-toolbelt", optional = true }
 
 [dev-dependencies]
 dl-openvdb-query = "0.1"
-exr = "1.6"
-nsi-3delight = { version = "0.7", path = "crates/nsi-3delight" }
-nsi-toolbelt = { version = "0.7", path = "crates/nsi-toolbelt" }
+exr = "1.71"
+nsi-3delight = { version = "0.8", path = "crates/nsi-3delight" }
+nsi-toolbelt = { version = "0.8", path = "crates/nsi-toolbelt" }
 png = "0.17"
-#polyhedron-ops = { version = "0.2.7", features = ["nsi"] }
+polyhedron-ops = { version = "0.2.7", features = ["nsi"], path = "../polyhedron-ops" }
 
 [[example]]
 path = "examples/interactive/main.rs"

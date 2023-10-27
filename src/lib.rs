@@ -28,9 +28,8 @@
 //!
 //! What we refer to as the ɴsɪ has two major components:
 //!
-//! 1. Methods to create nodes, attributes and their connections.
-//!    These are attached to a rendering
-//! [`Context`](nsi_core::context::Context).
+//! 1. Methods to create nodes, attributes and their connections. These are
+//!    attached to a rendering [`Context`].
 //!
 //! 2. [Nodes](nsi_core::node) understood by the renderer.
 //!
@@ -100,8 +99,7 @@
 //!
 //! ### Interactive
 //!
-//! Demonstrates using the [`FnStatus`](nsi_core::context::FnStatus) callback
-//! closure during rendering.
+//! Demonstrates using the [`FnStatus`] callback closure during rendering.
 //!
 //! ### Jupyter
 //!
@@ -113,35 +111,31 @@
 //!
 //! ### Output
 //!
-//! This is a full [`output`](nsi_core::output) example showing color conversion
-//! and writing data out to 8bit/channel PNG and 32bit/channel (float) OpenEXR
-//! formats.
+//! This is a full [`output`] example showing color conversion and writing data
+//! out to 8bit/channel PNG and 32bit/channel (float) OpenEXR formats.
 //!
 //! ### Volume
 //!
 //! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly
-//! through the [`toolbelt`](crate::toolbelt) helpers.
+//! through the [`toolbelt`] helpers.
 //!
 //! ## Getting Pixels
 //!
 //! The crate has support for streaming pixels from the renderer, via callbacks
-//! (i.e. closures) during and/or after rendering via the
-//! [`output`](nsi_core::output) module. This module is enabled through the
-//! feature of the same name (see below).
+//! (i.e. closures) during and/or after rendering via the [`output`] module.
+//! This module is enabled through the feature of the same name (see below).
 //!
 //! ## Cargo Features
 //!
-//! * [`output`](nsi_core::output) -- Add support for streaming pixels from the
-//!   renderer to the calling context via closures.
+//! * [`output`] -- Add support for streaming pixels from the renderer to the
+//!   calling context via closures.
 //!
-//! * [`jupyter`](crate::jupyter) -- Add support for rendering to Jupyter
-//!   notebooks (when using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
+//! * [`jupyter`] -- Add support for rendering to Jupyter notebooks (when using
+//!   a [Rust Jupyter kernel](https://github.com/google/evcxr)).
 //!
-//! * [`toolbelt`](crate::toolbelt) -- Add convenience methods that work with a
-//!   [`Context`](nsi_core::context::Context).
+//! * [`toolbelt`] -- Add convenience methods that work with a [`Context`].
 //!
-//! * [`delight`](crate::delight) -- Add some nodes & shaders specifi to
-//!   3Delight.
+//! * [`delight`] -- Add some nodes & shaders specifi to 3Delight.
 //!
 //! * `nightly` -- Enable some unstable features (suggested if you build with a
 //!   `nightly` toolchain)
@@ -179,8 +173,8 @@
 //!
 //!     ```toml
 //!     [dependencies]
-//!     nsi = { version = "0.7", default-features = false, features =
-//! ["link_lib3delight"] }     ```
+//!     nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
+//!     ```
 //!
 //! * Download `lib3delight` during build.
 //!

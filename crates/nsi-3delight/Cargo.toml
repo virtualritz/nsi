@@ -1,6 +1,6 @@
 [package]
 name = "nsi-3delight"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2021"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
@@ -13,5 +13,5 @@ documentation = "https://docs.rs/nsi-3delight/"
 repository = "https://github.com/virtualritz/nsi-3delight/"
 
 [dependencies]
-nsi-core = { version = "0.7.0", path = "../nsi-core" }
-nsi-toolbelt = { version = "0.7.0", path = "../nsi-toolbelt" }
+nsi-core = { version = "0.8", path = "../nsi-core" }
+nsi-toolbelt = { version = "0.8", path = "../nsi-toolbelt" }

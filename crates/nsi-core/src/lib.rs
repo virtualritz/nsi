@@ -35,6 +35,7 @@ use self::linked as api;
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(not(feature = "manual_init"))]
 lazy_static! {
     static ref NSI_API: api::ApiImpl =
         api::ApiImpl::new().expect("Could not load lib3delight");
@@ -46,7 +47,7 @@ lazy_static! {
 pub mod argument;
 pub use argument::*;
 
-// Context should be in the crate root so we keep the module private.`
+// Context should be in the crate root so we keep the module private.
 pub mod context;
 pub use context::*;
 

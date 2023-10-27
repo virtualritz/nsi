@@ -98,7 +98,7 @@
 //!     ],
 //! );
 //!
-//! ctx.render_control(&[nsi::string!("action", "start")]);
+//! ctx.render_control(nsi::Action::Start, None);
 //!
 //! // The finish() closure will be called once, before the next call returns.
 //! ctx.render_control(&[nsi::string!("action", "wait")]);
