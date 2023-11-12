@@ -102,15 +102,16 @@
 //!
 //! ### Interactive
 //!
-//! Demonstrates using the [`FnStatus`] callback closure during rendering.
+//! Demonstrates using the [`FnStatus`] callback closure during rendering and a
+//! channel for communicating between main- and rendering thread(s).
 //!
 //! ### Jupyter
 //!
 //! Render directly into a Jupyter notebook.
 //!
 //! Follow
-//! [these instructions](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md) to
-//! get a Rust Jupyter kernel up and running first.
+//! [these instructions](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md)
+//! to get a Rust Jupyter kernel up and running first.
 //!
 //! ### Output
 //!
@@ -129,7 +130,8 @@
 //! This module is enabled through the feature of the same name (see below).
 //!
 //! It should be straightforward to create an `async` implementation with this
-//! or use channels to stream pixels back to a main thread.
+//! or use channels to stream pixels back to a main thread (see the
+//! `interactive` example).
 //!
 //! ## Cargo Features
 //!

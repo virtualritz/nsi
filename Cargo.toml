@@ -50,7 +50,7 @@ exr = "1.71"
 nsi-3delight = { version = "0.8", path = "crates/nsi-3delight" }
 nsi-toolbelt = { version = "0.8", path = "crates/nsi-toolbelt" }
 png = "0.17"
-polyhedron-ops = { version = "0.2.7", features = ["nsi"], path = "../polyhedron-ops" }
+polyhedron-ops = { version = "0.2.7", features = ["nsi"] }
 
 [[example]]
 path = "examples/interactive/main.rs"

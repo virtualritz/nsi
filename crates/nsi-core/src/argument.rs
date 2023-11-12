@@ -4,6 +4,7 @@ use nsi_sys::*;
 use std::{
     ffi::{c_void, CString},
     marker::PhantomData,
+    pin::Pin,
 };
 use ustr::Ustr;
 
@@ -117,47 +118,91 @@ pub(crate) trait ArgDataMethods {
 pub enum ArgData<'a, 'b> {
     /// Single [`f32`] value.
     Float,
+    /// An `[`[`f32`]`]` slice.
     Floats(Floats<'a>),
     /// Single [`f64`] value.
     Double,
+    /// An `[`[`f64`]`]` slice.
     Doubles(Doubles<'a>),
     /// Single [`i32`] value.
     Integer,
-    /// An [`i32`] array.
+    /// An `[`[`i32`]`]` slice.
     Integers(Integers<'a>),
     /// A [`String`].
     String(String),
-    /// A [`String`] array.
+    /// A `[`[`String`]`]` slice.
     Strings(Strings),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
-    /// An array of colors.
+    /// A flat `[`[`f32`]`]` slice of colors (`len % 3 == 0`).
     Colors(Colors<'a>),
     /// Point, given as three [`f32`] values.
     Point(Point<'a>),
+    /// A flat `[`[`f32`]`]` slice of points (`len % 3 == 0`).
     Points(Points<'a>),
     /// Vector, given as three [`f32`] values.
     Vector(Vector<'a>),
+    /// A flat `[`[`f32`]`]` slice of vectors (`len % 3 == 0`).
     Vectors(Vectors<'a>),
     /// Normal vector, given as three [`f32`] values.
     Normal(Normal<'a>),
+    /// A flat `[`[`f32`]`]` slice of normals (`len % 3 == 0`).
     Normals(Normals<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
     Matrix(Matrix<'a>),
+    /// A flat `[`[`f32`]`]` slice of matrices (`len % 16 == 0`).
     Matrices(Matrices<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f64`] values.
     DoubleMatrix(DoubleMatrix<'a>),
+    /// A flat `[`[`f64`]`]` slice of matrices (`len % 16 == 0`).
     DoubleMatrices(DoubleMatrices<'a>),
-    /// Reference to arbitrary data.
+    /// Reference *with* lifetime guarantees.
+    ///
+    /// This gets converted to a raw pointer when passed
+    /// through the FFI boundary.
+    ///
+    /// ```
+    /// # use nsi_core as nsi;
+    /// # use std::pin::Pin;
+    /// let ctx = nsi::Context::new(None).unwrap();
+    ///
+    /// // Lots of scene setup omitted ...
+    ///
+    /// // Setup a custom output driver and send
+    /// // a payload to it through the FFI boundary.
+    /// ctx.create("driver", nsi::OUTPUT_DRIVER, None);
+    /// ctx.connect("driver", None, "beauty", "outputdrivers", None);
+    ///
+    /// struct Payload {
+    ///     some_data: u32,
+    /// }
+    ///
+    /// let payload = Payload { some_data: 42 };
+    /// ctx.set_attribute(
+    ///     "driver",
+    ///     &[
+    ///         nsi::string!("drivername", "custom_driver"),
+    ///         // Payload gets sent as raw pointer through
+    ///         // the FFI boundary.
+    ///         nsi::reference!("payload", Pin::new(&payload)),
+    ///     ],
+    /// );
+    ///
+    /// // We need to explicitly call drop here as
+    /// // ctx's lifetime is pegged to that of payload.
+    /// drop(ctx);
+    /// ```
     Reference(Reference<'b>),
+    /// A `[`[`Reference`]`]` slice.
     References(References<'b>),
-    /// Callback.
+    /// A callback.
     Callback(Callback<'b>),
 }
 
 macro_rules! nsi_data_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
+        /// See [`ArgData`] for details.
         #[derive(Debug, Clone)]
         pub struct $name {
             data: $type,
@@ -187,6 +232,7 @@ macro_rules! nsi_data_def {
 
 macro_rules! nsi_data_array_def {
     ($type: ty, $name: ident, $nsi_type: expr) => {
+        /// See [`ArgData`] for details.
         #[derive(Debug, Clone)]
         pub struct $name<'a> {
             data: &'a [$type],
@@ -194,7 +240,7 @@ macro_rules! nsi_data_array_def {
 
         impl<'a> $name<'a> {
             pub fn new(data: &'a [$type]) -> Self {
-                debug_assert!(data.len() % $nsi_type.elemensize() == 0);
+                debug_assert_eq!(0, data.len() % $nsi_type.elemensize());
                 Self { data }
             }
         }
@@ -217,6 +263,7 @@ macro_rules! nsi_data_array_def {
 
 macro_rules! nsi_tuple_data_def {
     ($type: tt, $len: expr, $name: ident, $nsi_type: expr) => {
+        /// See [`ArgData`] for details.
         #[derive(Debug, Clone)]
         pub struct $name<'a> {
             data: &'a [$type; $len],
@@ -248,40 +295,7 @@ nsi_data_def!(f32, Float, Type::Float);
 nsi_data_def!(f64, Double, Type::Double);
 nsi_data_def!(i32, Integer, Type::Integer);
 
-/// Reference type *with* lifetime guarantees.
-///
-/// This gets converted to a raw pointer when passed
-/// through the FFI boundary.
-///
-/// ```
-/// # use nsi_core as nsi;
-/// struct Payload {
-///     some_data: u32,
-/// }
-///
-/// let ctx = nsi::Context::new(None).unwrap();
-///
-/// // Lots of scene setup omitted ...
-///
-/// // Setup a custom output driver and send
-/// // a payload to it through the FFI boundary
-/// ctx.create("driver", nsi::OUTPUT_DRIVER, None);
-/// ctx.connect("driver", None, "beauty", "outputdrivers", None);
-/// let payload = Payload { some_data: 42 };
-/// ctx.set_attribute(
-///     "driver",
-///     &[
-///         nsi::string!("drivername", "custom_driver"),
-///         // Payload gets sent as raw pointer through
-///         // the FFI boundary.
-///         nsi::reference!("payload", &payload),
-///     ],
-/// );
-///
-/// // We need to explicitly call drop here as
-/// // ctx's lifetime is pegged to that of payload.
-/// drop(ctx);
-/// ```
+/// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct Reference<'a> {
     data: *const c_void,
@@ -292,9 +306,9 @@ unsafe impl Send for Reference<'static> {}
 unsafe impl Sync for Reference<'static> {}
 
 impl<'a> Reference<'a> {
-    pub fn new<T: Sized>(data: &'a T) -> Self {
+    pub fn new<T: Sized>(data: Pin<&'a T>) -> Self {
         Self {
-            data: data as *const _ as _,
+            data: data.get_ref() as *const _ as _,
             _marker: PhantomData,
         }
     }
@@ -323,6 +337,7 @@ pub trait CallbackPtr {
 unsafe impl Send for Callback<'static> {}
 unsafe impl Sync for Callback<'static> {}
 
+/// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct Callback<'a> {
     data: *const c_void,
@@ -352,6 +367,7 @@ impl<'a> ArgDataMethods for Callback<'a> {
     }
 }
 
+/// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct String {
     #[allow(dead_code)]
@@ -396,10 +412,7 @@ nsi_data_array_def!(f32, Normals, Type::Normal);
 nsi_data_array_def!(f32, Matrices, Type::Matrix);
 nsi_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix);
 
-/// Reference array type *with* lifetime guarantees.
-///
-/// This gets converted to an array of raw pointers when
-/// passed through the FFI boundary.
+/// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct References<'a> {
     data: Vec<*const c_void>,
@@ -411,7 +424,7 @@ unsafe impl Sync for References<'static> {}
 
 impl<'a> References<'a> {
     pub fn new<T>(data: &'a [&'a T]) -> Self {
-        debug_assert!(data.len() % Type::Reference.elemensize() == 0);
+        debug_assert_eq!(0, data.len() % Type::Reference.elemensize());
 
         Self {
             data: data.iter().map(|r| r as *const _ as _).collect(),
@@ -434,6 +447,7 @@ impl<'a> ArgDataMethods for References<'a> {
     }
 }
 
+/// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct Strings {
     #[allow(dead_code)]

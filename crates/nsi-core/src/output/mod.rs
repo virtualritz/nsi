@@ -101,7 +101,7 @@
 //! ctx.render_control(nsi::Action::Start, None);
 //!
 //! // The finish() closure will be called once, before the next call returns.
-//! ctx.render_control(&[nsi::string!("action", "wait")]);
+//! ctx.render_control(nsi::Action::Wait, None);
 //! ```
 //!
 //! ## Color Profiles
