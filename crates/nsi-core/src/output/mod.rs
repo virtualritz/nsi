@@ -464,9 +464,9 @@ pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 /// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
 pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
 
-// Why do we need a triple Box here? No idea and neither had anyone from the
-// Rust community. But omitting a single Box wrapper layer leads to an instant
-// crash.
+// Why do we need a triple Box here? Why does a Box<Box<T>> not suffice?
+// No idea and neither had anyone from the Rust community. But omitting a
+// single Box wrapper layer leads to an instant segfault.
 impl<'a> OpenCallback<'a> {
     pub fn new<F>(fn_open: F) -> Self
     where

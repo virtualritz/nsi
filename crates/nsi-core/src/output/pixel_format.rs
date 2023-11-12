@@ -117,12 +117,10 @@ impl LayerDepth {
 /// A typical format for a pixel containing two such layers, an *RGBA* **color**
 /// & **alpha** output layer and a world space **normal**, will look like this:
 ///
-/// [`name`](Layer::name()) | [`depth`](Layer::depth())
-/// | [`offset`](Layer::offset())
-/// ------------------------|-------------------------------------------------------|----------------------------
-/// `Ci`                    |
-/// [`ColorAndAlpha`](LayerDepth::ColorAndAlpha)(`rgba`)  | `0` `N_world`
-/// | [`Vector`](LayerDepth::Vector)(`xyz`)                 | `4`
+/// | [`name`](Layer::name()) | [`depth`](Layer::depth())                           | [`offset`](Layer::offset())
+/// |-------------------------|-----------------------------------------------------|----------------------------
+/// | `Ci`                    |[`ColorAndAlpha`](LayerDepth::ColorAndAlpha)(`rgba`) | `0`
+/// | `N_world`               | [`Vector`](LayerDepth::Vector)(`xyz`)               | `4`
 ///
 /// ## RAW Layout
 ///
@@ -130,9 +128,9 @@ impl LayerDepth {
 /// For the above example the actual layout of a single pixel in the
 /// buffer is:
 ///
-/// Value  | `r`ed   | `g`reen | `b`lue  | `a`lpha | `x` | `y` | `z`
-/// -------|---------|---------|---------|---------|-----|-----|----
-/// Offset | `0`     | `1`     | `2`     | `3`     | `4` | `5` | `6`
+/// | Value  | `r`ed   | `g`reen | `b`lue  | `a`lpha | `x` | `y` | `z`
+/// |--------|---------|---------|---------|---------|-----|-----|----
+/// | Offset | `0`     | `1`     | `2`     | `3`     | `4` | `5` | `6`
 ///
 /// The `offset` is the offset into the pixel buffer to obtain the 1st element.
 /// For example, the **y** coordinate of the the normal will be stored in

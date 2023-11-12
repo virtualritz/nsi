@@ -1,8 +1,5 @@
 #![cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 
-#[cfg(feature = "download_lib3delight")]
-use reqwest;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "download_lib3delight")]
     #[allow(unused_variables)]
@@ -39,9 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .bytes()
                     .ok()?;
                 File::create(lib_path.clone())
-                    .expect(&format!("Could not create {}", lib_path.display()))
+                    .unwrap_or_else(|_| panic!("Could not create {}", lib_path.display()))
                     .write_all(&lib_data)
-                    .expect(&format!(
+                    .unwrap_or_else(|_| panic!(
                         "Could not write to {}",
                         lib_path.display()
                     ));
