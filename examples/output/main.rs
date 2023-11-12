@@ -38,7 +38,7 @@ pub fn main() {
     // rendered.
     // Bucket size is commonly 16x16 pixels but this is not guaranteed
     // by the API.
-    // The pixel_data will contain a full buffer of all the pixel that
+    // The pixel_data will contain a full buffer of all the pixels that
     // were finished so far.
     let write = nsi::output::WriteCallback::new(
         |_name: &str,

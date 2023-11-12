@@ -16,7 +16,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "camera_xform",
         &[nsi::double_matrix!(
-            "TRANSFORMationmatrix",
+            "transformationmatrix",
             &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
         )],
     );
@@ -32,7 +32,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "screen",
         &[
-            nsi::integers!("resolution", &[32, 32]).array_len(2),
+            nsi::integers!("resolution", &[128, 128]).array_len(2),
             nsi::integer!("oversampling", 32),
         ],
     );
