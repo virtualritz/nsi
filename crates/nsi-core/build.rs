@@ -36,12 +36,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .bytes()
                     .ok()?;
                 File::create(lib_path.clone())
-                    .unwrap_or_else(|_| panic!("Could not create {}", lib_path.display()))
+                    .unwrap_or_else(|_| {
+                        panic!("Could not create {}", lib_path.display())
+                    })
                     .write_all(&lib_data)
-                    .unwrap_or_else(|_| panic!(
-                        "Could not write to {}",
-                        lib_path.display()
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!("Could not write to {}", lib_path.display())
+                    });
                 Some(())
             })();
         }

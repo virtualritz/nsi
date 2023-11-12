@@ -94,8 +94,11 @@
 //! ```
 //! ## More Examples
 //!
-//! All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
-//! installation to run.
+//! These can be found in the [`examples`](https://github.com/virtualritz/nsi/tree/master/examples)
+//! folder.
+//!
+//! *All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
+//! installation to run!*
 //!
 //! ### Interactive
 //!
@@ -124,6 +127,9 @@
 //! The crate has support for streaming pixels from the renderer, via callbacks
 //! (i.e. closures) during and/or after rendering via the [`output`] module.
 //! This module is enabled through the feature of the same name (see below).
+//!
+//! It should be straightforward to create an `async` implementation with this
+//! or use channels to stream pixels back to a main thread.
 //!
 //! ## Cargo Features
 //!

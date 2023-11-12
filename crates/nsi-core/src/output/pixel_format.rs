@@ -94,6 +94,7 @@ impl LayerDepth {
         }
     }
 
+    /// Returns `true`` if this layer contains an alpha channel.
     pub fn has_alpha(&self) -> bool {
         [
             LayerDepth::OneChannelAndAlpha,
