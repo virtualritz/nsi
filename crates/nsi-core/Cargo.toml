@@ -41,7 +41,7 @@ nsi-sys = "0.8"
 null-terminated-str = "0.1"
 num_enum = "0.7"
 rclite = "0.2"
-ustr = "0.10"
+ustr = "1.0"
 
 [package.metadata.docs.rs]
 features = ["output", "nightly"]
