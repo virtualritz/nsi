@@ -20,7 +20,7 @@ default = []
 omit_functions = []
 
 [build-dependencies]
-bindgen = "0.68"
+bindgen = "0.70"
 
 [dependencies]
 bitflags = "2"
