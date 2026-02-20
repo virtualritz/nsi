@@ -7,12 +7,12 @@
 //!
 //! Documentation on how to use Rust with Jupyter Notebooks is
 //! [here](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md).
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use nsi::{
     argument::ArgSlice,
     output::{Layer, LayerDepth, PixelFormat},
 };
-use nsi_core as nsi;
+use nsi_ffi_wrap as nsi;
 use rayon::prelude::*;
 
 // FIXME: implement this for Context instead of the single method
@@ -34,7 +34,7 @@ trait _Jupyter<'a> {
 ///
 /// ```no_run
 /// // Setup a screen.
-/// # use nsi_core as nsi;
+/// # use nsi_ffi_wrap as nsi;
 /// # use nsi_jupyter::as_jupyter;
 /// # let ctx = nsi::Context::new(None).unwrap();
 /// ctx.create("screen", nsi::SCREEN, None);
@@ -53,7 +53,7 @@ trait _Jupyter<'a> {
 /// as_jupyter(&ctx, "screen");
 /// ```
 /// # Arguments
-/// * `screen` – A [`Screen`](nsi::SCREEN).
+/// * `screen` -- A [`Screen`](nsi::SCREEN).
 pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     // RGB layer.
     ctx.create("jupyter_beauty", nsi::OUTPUT_LAYER, None);
@@ -67,8 +67,8 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     );
     ctx.connect("jupyter_beauty", None, screen, "outputlayers", None);
 
-    // Callback to collect our pixels.
-    let finish = nsi::output::FinishCallback::new(
+    // Use AccumulatingCallbacks to collect all pixels and process at finish
+    let (write, finish) = nsi::output::AccumulatingCallbacks::<f32>::new(
         |_name: String,
          width: usize,
          height: usize,
@@ -101,8 +101,9 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     ctx.set_attribute(
         "jupyter_driver",
         &[
-            nsi::string!("drivername", nsi::output::FERRIS),
+            nsi::string!("drivername", nsi::output::FERRIS_F32),
             nsi::string!("imagefilename", "jupyter"),
+            nsi::callback!("callback.write", write),
             nsi::callback!("callback.finish", finish),
         ],
     );
@@ -267,7 +268,7 @@ fn pixel_data_to_jupyter(
     );
 }
 
-// Linear to (0..1 clamped) sRGB conversion – cheesy but cheap.
+// Linear to (0..1 clamped) sRGB conversion -- cheesy but cheap.
 // FIXME: implement a proper 'filmic' tonemapper instead.
 #[inline]
 fn linear_to_srgb(x: f32) -> f32 {

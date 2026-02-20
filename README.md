@@ -12,8 +12,8 @@ This puts one of the most advanced 3D production offline renderers at
 your fingertips in Rust – [3Delight](https://www.3delight.com/).
 
 ![Moana Island, rendered with 3Delight|ɴsɪ](moana_island.jpg)
-*[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene),
-provided courtesy of Walt Disney Pictures, rendered with 3Delight|ɴsɪ.*
+_[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene),
+provided courtesy of Walt Disney Pictures, rendered with 3Delight|ɴsɪ._
 
 This is a huge scene (72GB of data) made of 31 million instances,
 78 million polygons defining subdivision surface geometry and 2,300
@@ -120,11 +120,11 @@ Currently the only renderer that does is 3Delight which, though
 commercial, has been and is free for personal use since over twenty
 years.
 
-> ***Note:*** The free version of 3Delight will render with up to 12
-cores on your machine. For crazier projects you can use their cheap
-cloud rendering service that gives you access to unlimited CPU cores.
-When you register you get 1,000 cloud minutes for free which ain’t too
-shabby.
+> **_Note:_** The free version of 3Delight will render with up to 12
+> cores on your machine. For crazier projects you can use their cheap
+> cloud rendering service that gives you access to unlimited CPU cores.
+> When you register you get 1,000 cloud minutes for free which ain’t too
+> shabby.
 
 That being said – I hope this crate serves as inspiration for other
 people writing renderers, particularly in Rust, to adopt this API for
@@ -147,65 +147,62 @@ not suggested.
 
 ## Cargo Features
 
-* `output` – Add support for streaming pixels from the renderer
+- `output` – Add support for streaming pixels from the renderer
   to the calling context via closures.
 
-* `jupyter` – Add support for rendering to Jupyter notebooks (when
+- `jupyter` – Add support for rendering to Jupyter notebooks (when
   using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
 
-* `toolbelt` – Add convenience methods to `Context`.
+- `toolbelt` – Add convenience methods to `Context`.
 
-* [`delight`](crate::delight) – Add some nodes & shaders specifi to
+- [`delight`](crate::delight) – Add some nodes & shaders specific to
   3Delight.
 
-* `nightly` – Enable some unstable features (suggested if you build
+- `nightly` – Enable some unstable features (suggested if you build
   with a `nightly` toolchain)
 
-* `ustr_handles` – use [`ustr`](https://crates.io/crates/ustr) for
+- `ustr_handles` – use [`ustr`](https://crates.io/crates/ustr) for
   node handles. This will give a you a speed boost if your node names
   aren't changing while an app using ɴsɪ is running but is not advised
   otherwise (`ustr` are never freed).
 
-* `download_lib3delight` & `link_lib3delight` – See next section.
+- `download_lib3delight` & `link_lib3delight` – See next section.
 
 ## Linking Style
 
 The 3Delight dynamic library (`lib3delight`) can either be linked to
 during build or loaded at runtime.
 
-By default the lib is *loaded at runtime*.
+By default the lib is _loaded at runtime_.
 
-* Load `lib3delight` at runtime (default). This has several advantages:
-
+- Load `lib3delight` at runtime (default). This has several advantages:
   1. If you ship your application or library you can ship it without
-     the library. It can still run and will print an informative error
-     if the library can not be loaded.
+     the 3Delight library. It can still run and will print an informative
+     errorif the library can not be loaded.
 
-  2. A user can install an updated version of the renderer and stuff
+  2. A user can install an updated version of the 3Delight renderer and stuff
      will ‘just work’.
 
-* Dynamically link against `lib3delight`.
-
-  * `lib3delight` becomes a dependency. If it can not be found your
+- Dynamically link against `lib3delight`.
+  - `lib3delight` becomes a dependency. If it can not be found your
     lib/app will not load/start.
 
-  * The feature is called `link_lib3delight`.
+  - The feature is called `link_lib3delight`.
 
-  * You should disable default features (`default-features = false`).
+  - You should disable default features (`default-features = false`).
 
-  * in this case:
+  - in this case:
 
     ```toml
     [dependencies]
     nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
     ```
 
-* Download `lib3delight` during build.
-
-  * `lib3delight` is downloaded during build. Note that this may be
+- Download `lib3delight` during build.
+  - `lib3delight` is downloaded during build. Note that this may be
     an outdated version. This feature mainly exists for CI purposes.
 
-  * The feature is called `download_lib3delight`.
+  - The feature is called `download_lib3delight`.
 
 ## Documentation
 

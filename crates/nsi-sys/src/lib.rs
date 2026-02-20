@@ -2,14 +2,14 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 //! Auto-generated Rust bindings for *Illumination Research*'s *Nodal
-//! Scene Interface* – ɴsɪ.
+//! Scene Interface* -- ɴsɪ.
 //!
 //! You should not need to use this crate directly except for two
 //! reasons. You are likely either:
 //!
 //! * a masochist who wants to use the C-API directly from Rust.
 //!
-//! * Not happy with my high level Rust binding (see below) – consider
+//! * Not happy with my high level Rust binding (see below) -- consider
 //!   opening an issue [here](https://github.com/virtualritz/nsi/issues)
 //!   instead.
 //!
@@ -22,7 +22,7 @@
 //!
 //! ## Differences From The C API
 //!
-//! All `enum`s have been rustified – they were mapped to actual Rust `enum`s.
+//! All `enum`s have been rustified -- they were mapped to actual Rust `enum`s.
 //!
 //! Postfixes were stripped on `enum` and `struct` type names. E.g.:
 //!
@@ -50,7 +50,7 @@
 //!
 //! # Features
 //!
-//! * `omit_functions` – Omit generating bindings for the API's functions. This
+//! * `omit_functions` -- Omit generating bindings for the API's functions. This
 //!   is for the case where you want to expose your own C-API hooks from your
 //!   renderer.
 use bitflags::bitflags;
@@ -61,11 +61,11 @@ mod c_api {
 }
 
 pub use c_api::{
-    NSIContext, NSIErrorHandler, NSIErrorLevel, NSIHandle, NSIParam,
-    NSIProcedural, NSIProceduralExecute, NSIProceduralLoad,
+    NSI_ALL_ATTRIBUTES, NSI_ALL_NODES, NSI_SCENE_GLOBAL, NSI_SCENE_ROOT,
+    NSI_VERSION, NSIContext, NSIErrorHandler, NSIErrorLevel, NSIHandle,
+    NSIParam, NSIProcedural, NSIProceduralExecute, NSIProceduralLoad,
     NSIProceduralUnload, NSIRenderStopped, NSIReport, NSIStoppingStatus,
-    NSIType, NSI_ALL_ATTRIBUTES, NSI_ALL_NODES, NSI_SCENE_GLOBAL,
-    NSI_SCENE_ROOT, NSI_VERSION,
+    NSIType,
 };
 
 #[cfg(not(feature = "omit_functions"))]

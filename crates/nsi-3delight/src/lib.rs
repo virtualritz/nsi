@@ -1,7 +1,7 @@
 //! Helpers for using ɴsɪ with 3Delight.
 //!
 //! Shortcuts for instancing common nodes.
-use nsi_core as nsi;
+use nsi_ffi_wrap as nsi;
 use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 
 /// Creates a typical environment node.
@@ -12,10 +12,10 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specifies how much to rotate the environment around
+/// * `angle` -- In degrees; specifies how much to rotate the environment around
 ///   the Y (up) axis.
 ///
-/// * `visible` – If the environment is visible to the camera.
+/// * `visible` -- If the environment is visible to the camera.
 ///
 /// Returns `handle` and the handle of the created `shader`.
 ///
@@ -28,7 +28,7 @@ pub fn environment(
     angle: Option<f64>,
     visible: Option<bool>,
 ) -> (String, String) {
-    // Create a rotation transform – this is the handle we return.
+    // Create a rotation transform -- this is the handle we return.
     let rotation = rotation(ctx, None, angle.unwrap_or(0.0), &[0.0, 1.0, 0.0]);
 
     let environment = generate_or_use_handle(handle, Some("environment"));
@@ -77,7 +77,7 @@ pub fn environment(
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `texture – A latitude-longitude texture map in one of these formats:
+/// * `texture -- A latitude-longitude texture map in one of these formats:
 ///     * TIFF
 ///     * JPEG
 ///     * Radiance
@@ -89,12 +89,12 @@ pub fn environment(
 ///     * Photoshop PSD
 ///     * TGA
 ///
-/// * `angle` – In degrees; specifies how much to rotate the environment around
+/// * `angle` -- In degrees; specifies how much to rotate the environment around
 ///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` -- Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
-/// * `visible` – If the environment is visible to the camera.
+/// * `visible` -- If the environment is visible to the camera.
 ///
 /// Returns `handle` and the handle of the created `shader`.
 ///
@@ -139,12 +139,12 @@ where
 /// If `handle` is [`None`] a random handle is generated.
 ///
 /// # Arguments
-/// * `angle` – In degrees; specifies how much to rotate the environment around
+/// * `angle` -- In degrees; specifies how much to rotate the environment around
 ///   the Y (up) axis.
 ///
-/// * `exposure` – Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
+/// * `exposure` -- Scales the intensity in [stops or EV values](https://en.wikipedia.org/wiki/Exposure_value).
 ///
-/// * `visible` – If the environment is visible to the camera.
+/// * `visible` -- If the environment is visible to the camera.
 ///
 /// Returns `handle` and the handle of the created `shader`.
 ///

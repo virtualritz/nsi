@@ -1,14 +1,14 @@
 use crate::p_ops;
 use nsi_3delight as nsi_3dl;
-use nsi_core as nsi;
+use nsi_ffi_wrap as nsi;
 use nsi_toolbelt as nsi_tb;
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
     name: &str,
     open: nsi::output::OpenCallback,
-    write: nsi::output::WriteCallback,
-    finish: nsi::output::FinishCallback,
+    write: nsi::output::WriteCallback<'a, f32>,
+    finish: nsi::output::FinishCallback<'a>,
 ) {
     // Setup a camera TRANSFORM.
     c.create("camera_xform", nsi::TRANSFORM, None);
@@ -17,7 +17,9 @@ fn nsi_camera<'a>(
         "camera_xform",
         &[nsi::double_matrix!(
             "transformationmatrix",
-            &[1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,]
+            &[
+                1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
+            ]
         )],
     );
 
@@ -56,7 +58,7 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "driver",
         &[
-            nsi::string!("drivername", nsi::output::FERRIS),
+            nsi::string!("drivername", nsi::output::FERRIS_F32),
             nsi::string!("imagefilename", name),
             nsi::integer!("associatealpha", 1),
             nsi::callback!("callback.open", open),
@@ -160,8 +162,8 @@ pub(crate) fn nsi_render<'a>(
     samples: u32,
     polyhedron: &p_ops::Polyhedron,
     open: nsi::output::OpenCallback,
-    write: nsi::output::WriteCallback,
-    finish: nsi::output::FinishCallback,
+    write: nsi::output::WriteCallback<'a, f32>,
+    finish: nsi::output::FinishCallback<'a>,
 ) {
     let ctx = nsi::Context::new(None) //&[nsi::string!("streamfilename", "stdout")])
         .expect("Could not create NSI rendering context.");

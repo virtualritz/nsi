@@ -2,7 +2,7 @@
 name = "nsi-3delight"
 version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
-edition = "2021"
+edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -13,7 +13,7 @@ documentation = "https://docs.rs/nsi-3delight/"
 repository = "https://github.com/virtualritz/nsi-3delight/"
 
 [dependencies]
-nsi-core = { version = "0.8", path = "../nsi-core" }
+nsi-ffi-wrap = { version = "0.8", path = "../nsi-ffi-wrap" }
 nsi-toolbelt = { version = "0.8", path = "../nsi-toolbelt" }
 
 [package.metadata.docs.rs]

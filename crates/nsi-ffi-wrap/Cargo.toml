@@ -1,0 +1,61 @@
+[package]
+name = "nsi-ffi-wrap"
+version = "0.8.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "FFI wrapper and macro for NSI-compliant renderers – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-ffi-wrap/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[features]
+default = ["dlopen2"]
+# Specify this to link agains lib3delight
+link_lib3delight = []
+# Whether to download a dynamic library version of 3Delight
+# if the renderer can't be found locally. The renderer is
+# needed as soon as the crate is linked against (e.g. for
+# running the tests).
+download_lib3delight = ["reqwest"]
+# Pixel streaming support.
+output = ["ndspy-sys"]
+# Nightly/unstable features.
+nightly = []
+# Use Ustr cache for handles (C FFI + interning). Default is CString.
+ustr_handles = []
+# Use CString for tokens instead of Ustr. Default is Ustr (interned).
+cstring_tokens = []
+# Manually initialize API
+manual_init = []
+
+[build-dependencies]
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
+
+[dependencies]
+dlopen2 = { version = "0.7", optional = true }
+enum_dispatch = "0.3"
+lazy_static = "1"
+log = "0.4"
+ndspy-sys = { version = "0.2", optional = true }
+nsi-sys = "0.8"
+nsi-trait = { version = "0.2", path = "../nsi-trait" }
+null-terminated-str = "0.1"
+num_enum = "0.7"
+parking_lot = "0.12"
+triomphe = "0.1"
+ustr = "1"
+
+[dev-dependencies]
+png = "0.17"
+exr = "1"
+rand = "0.8"
+bytemuck = "1"
+anyhow = "1"
+
+[package.metadata.docs.rs]
+features = ["output", "nightly"]
+all-features = true

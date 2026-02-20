@@ -2,7 +2,7 @@
 name = "nsi-toolbelt"
 version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
-edition = "2021"
+edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/nsi/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-nsi-core = { version = "0.8", path = "../nsi-core" }
-petname = { version = "1.1", default-features = false, features = ["std_rng", "default_dictionary"] }
+nsi-ffi-wrap = { version = "0.8", path = "../nsi-ffi-wrap" }
+petname = { version = "1", default-features = false, features = ["std_rng", "default_dictionary"] }
 rand = { version = "0.8", features = ["small_rng"] }
 ultraviolet = { version = "0.9", features = ["f64"] }
 

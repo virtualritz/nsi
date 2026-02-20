@@ -1,4 +1,3 @@
-#![cfg_attr(feature = "nightly", doc(cfg(feature = "toolbelt")))]
 //! Convenience methods for an ɴsɪ context.
 //!
 //! Names of methods that create nodes are nouns. Methods than modify
@@ -6,7 +5,7 @@
 //!
 //! Where ergonomically advised, creation methods names carry postfixes
 //! that specify the type of node being created, such as `shader`.
-use nsi_core as nsi;
+use nsi_ffi_wrap as nsi;
 use ultraviolet as uv;
 //use uv::{DVec3, DMat4};
 
@@ -40,7 +39,7 @@ pub fn generate_or_use_handle(
         Some(handle) => handle.to_string(),
         None => {
             use rand::{
-                distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng,
+                Rng, SeedableRng, distributions::Alphanumeric, rngs::SmallRng,
             };
             use std::iter;
             let mut rng = SmallRng::from_entropy();
@@ -56,17 +55,17 @@ pub fn generate_or_use_handle(
 /// Append node `handle` to node `to`.
 ///
 /// # Arguments
-/// * `to` – Node to connect to downstream.
+/// * `to` -- Node to connect to downstream.
 ///
-/// * `slot` – Slot on target node to connect to. If [`None`], `"objects"` is
+/// * `slot` -- Slot on target node to connect to. If [`None`], `"objects"` is
 ///   used.
 ///
-/// * `handle` – Handle of node to append.
+/// * `handle` -- Handle of node to append.
 ///
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # use nsi_core as nsi;
+/// # use nsi_ffi_wrap as nsi;
 /// # use nsi_toolbelt::{append, scaling};
 /// # let ctx = nsi::Context::new(None).unwrap();
 /// // Create a scaling transform node and append to the scene root.
@@ -106,22 +105,22 @@ where
 /// Insert node `handle` in-between `to` and `from`.
 ///
 /// # Arguments
-/// * `to` – Node to connect to downstream.
+/// * `to` -- Node to connect to downstream.
 ///
-/// * `to_slot` – Slot on `to` node to connect to. If [`None`], `"objects"` is
+/// * `to_slot` -- Slot on `to` node to connect to. If [`None`], `"objects"` is
 ///   used.    .
 ///
-/// * `handle` – Handle of node to insert.
+/// * `handle` -- Handle of node to insert.
 ///
-/// * `handle_slot` – Slot on `handle` node to connect to. If [`None`],
+/// * `handle_slot` -- Slot on `handle` node to connect to. If [`None`],
 ///   `"objects"` is used.
 ///
-/// * `from` – Node to connect to upstream.
+/// * `from` -- Node to connect to upstream.
 ///
 /// Returns (`to`, `handle`).
 /// # Example
 /// ```
-/// # use nsi_core as nsi;
+/// # use nsi_ffi_wrap as nsi;
 /// # use nsi_toolbelt::insert;
 /// # let ctx = nsi::Context::new(None).unwrap();
 /// // Insert the node "tetrahedron" between the ".root" and
@@ -291,10 +290,10 @@ pub fn look_at_camera(
 /// bounding box under the specified field-of-view and aspect ratio
 /// (*with*÷*height*).
 /// # Arguments
-/// * `direction` – The axis the camera should be looking along. Does *not* need
+/// * `direction` -- The axis the camera should be looking along. Does *not* need
 ///   to be normalized.
-/// * `up` – A direction to look
-/// * `bounding_box` – Axis-aligned bounding box in the form `[x_min, y_min,
+/// * `up` -- A direction to look
+/// * `bounding_box` -- Axis-aligned bounding box in the form `[x_min, y_min,
 ///   z_min, x_max, y_max, z_max]`.
 pub fn look_at_bounding_box_perspective_camera(
     ctx: &nsi::Context,

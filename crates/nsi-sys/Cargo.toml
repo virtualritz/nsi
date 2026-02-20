@@ -3,7 +3,7 @@ name = "nsi-sys"
 version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 build = "build.rs"
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0 OR BSD-3-Clause OR MIT OR Zlib"
 description = "Auto-generated bindings for Illumination Research’s Nodal Scene Interface – ɴꜱɪ."
 readme = "README.md"
@@ -20,7 +20,7 @@ default = []
 omit_functions = []
 
 [build-dependencies]
-bindgen = "0.68"
+bindgen = "0.71"
 
 [dependencies]
 bitflags = "2"

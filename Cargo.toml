@@ -2,7 +2,7 @@
 name = "nsi"
 version = "0.8.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
-edition = "2021"
+edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -19,14 +19,14 @@ members = ["crates/*"]
 [features]
 default = []
 # Specify this to link agains lib3delight
-link_lib3delight = ["nsi-core/link_lib3delight"]
+link_lib3delight = ["nsi-ffi-wrap/link_lib3delight"]
 # Whether to download a dynamic library version of 3Delight
 # if the renderer can't be found locally. The renderer is
 # needed as soon as the crate is linked against (e.g. for
 # running the tests).
-download_lib3delight = ["nsi-core/download_lib3delight"]
+download_lib3delight = ["nsi-ffi-wrap/download_lib3delight"]
 # Pixel streaming support.
-output = ["nsi-core/output"]
+output = ["nsi-ffi-wrap/output"]
 # Jupyter notebooks integration.
 jupyter = ["nsi-jupyter"]
 # Scene construction helpers.
@@ -34,23 +34,28 @@ toolbelt = ["nsi-toolbelt"]
 # 3Delight support.
 delight = ["nsi-3delight"]
 # Nightly/unstable features.
-nightly = ["nsi-core/nightly"]
+nightly = ["nsi-ffi-wrap/nightly"]
 # Ustr handles.
-ustr = ["nsi-core/ustr_handles"]
+ustr = ["nsi-ffi-wrap/ustr_handles"]
 
 [dependencies]
 nsi-3delight = { version = "0.8", path = "crates/nsi-3delight", optional = true }
-nsi-core = { version = "0.8", path = "crates/nsi-core" }
+nsi-ffi-wrap = { version = "0.8", path = "crates/nsi-ffi-wrap" }
 nsi-jupyter = { version = "0.8", path = "crates/nsi-jupyter", optional = true }
 nsi-toolbelt = { version = "0.8", path = "crates/nsi-toolbelt", optional = true }
+nsi-trait = { version = "0.2", path = "crates/nsi-trait" }
 
 [dev-dependencies]
 dl-openvdb-query = "0.1"
-exr = "1.71"
+exr = "1"
 nsi-3delight = { version = "0.8", path = "crates/nsi-3delight" }
 nsi-toolbelt = { version = "0.8", path = "crates/nsi-toolbelt" }
 png = "0.17"
-polyhedron-ops = { version = "0.2.7", features = ["nsi"] }
+
+[dev-dependencies.polyhedron-ops]
+#path = "../polyhedron-ops"
+version = "0.2"
+features = ["nsi"]
 
 [[example]]
 path = "examples/interactive/main.rs"

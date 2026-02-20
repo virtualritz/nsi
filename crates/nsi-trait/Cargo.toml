@@ -1,0 +1,24 @@
+[package]
+name = "nsi-trait"
+version = "0.2.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Core traits and types for the Nodal Scene Interface – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-trait/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[dependencies]
+bitflags = "2"
+ustr = { version = "1", optional = true }
+
+[features]
+default = []
+ustr = ["dep:ustr"]
+
+[package.metadata.docs.rs]
+all-features = true

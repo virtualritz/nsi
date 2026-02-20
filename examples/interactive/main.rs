@@ -1,7 +1,7 @@
 //! Demonstrates using the render_control() "callback" parameter to have the
 //! renderer call a closure when it is done and using a channel block the main
 //! thread from exiting while the render is still running.
-use nsi_core as nsi;
+use nsi_ffi_wrap as nsi;
 
 fn main() {
     let ctx = nsi::Context::new(None).unwrap();

@@ -5,7 +5,7 @@
 //!
 //! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
 //! nodes. Each node has a *unique handle* to identify it. It also has
-//! a [type](nsi_core::node) which describes its intended function in
+//! a [type](nsi_ffi_wrap::node) which describes its intended function in
 //! the scene.
 //!
 //! Nodes are abstract containers for data. The interpretation depends
@@ -31,7 +31,7 @@
 //! 1. Methods to create nodes, attributes and their connections. These are
 //!    attached to a rendering [`Context`].
 //!
-//! 2. [Nodes](nsi_core::node) understood by the renderer.
+//! 2. [Nodes](nsi_ffi_wrap::node) understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -191,7 +191,9 @@
 //!
 //!   * The feature is called `download_lib3delight`.
 
-pub use nsi_core::*;
+// Re-export everything from nsi_ffi_wrap, which includes Action from nsi-trait crate
+pub use nsi_ffi_wrap::*;
+
 #[cfg(feature = "delight")]
 pub mod delight {
     //! Helpers for using ɴsɪ with 3Delight.

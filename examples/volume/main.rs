@@ -34,7 +34,7 @@ pub fn main() {
             &ctx,
             &rotation(&ctx, None, 135.0, &[0.0, 1.0, 0.0]),
             None,
-            &append(
+            append(
                 &ctx,
                 &node(
                     &ctx,
@@ -48,7 +48,7 @@ pub fn main() {
                     ]),
                 ),
                 Some("geometryattributes"),
-                &append(
+                append(
                     &ctx,
                     &node(&ctx, None, nsi::node::ATTRIBUTES, None),
                     Some("volumeshader"),
@@ -72,18 +72,10 @@ pub fn main() {
                             nsi::colors!(
                                 "emissionramp_color_curve_Colors",
                                 &[
-                                    0.,
-                                    0.,
-                                    0.,
-                                    0.,
-                                    0.,
-                                    0.,
-                                    0.832,
-                                    0.0416,
-                                    0.,
-                                    1.,
-                                    0.5935334,
-                                    0.061999976
+                                    [0., 0., 0.],
+                                    [0., 0., 0.],
+                                    [0.832, 0.0416, 0.],
+                                    [1., 0.5935334, 0.061999976]
                                 ]
                             )
                             .array_len(4),
@@ -111,7 +103,7 @@ pub fn main() {
         ".root",
         // None – use "objects"
         None,
-        &append(
+        append(
             &ctx,
             &look_at_bounding_box_perspective_camera(
                 &ctx,
@@ -130,7 +122,7 @@ pub fn main() {
             ),
             None,
             // Attach screen to our camera
-            &append(
+            append(
                 &ctx,
                 &node(
                     &ctx,
@@ -144,7 +136,7 @@ pub fn main() {
                     ]),
                 ),
                 Some("screens"),
-                &append(
+                append(
                     &ctx,
                     &node(
                         &ctx,
@@ -157,7 +149,7 @@ pub fn main() {
                         ]),
                     ),
                     Some("outputlayers"),
-                    &append(
+                    append(
                         &ctx,
                         &node(
                             &ctx,
