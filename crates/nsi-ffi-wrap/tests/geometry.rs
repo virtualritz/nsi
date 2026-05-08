@@ -69,9 +69,9 @@ fn cube() {
         ctx.set_attribute(
             "cube",
             &[
-                nsi::points!("P", points),
-                nsi::integers!("P.indices", &face_indices),
-                nsi::integers!("nvertices", &[4; 6]),
+                nsi::point_slice!("P", points),
+                nsi::i32_slice!("P.indices", &face_indices),
+                nsi::i32_slice!("nvertices", &[4; 6]),
             ],
         );
 
@@ -111,11 +111,11 @@ fn dodecahedron() {
         ctx.set_attribute(
             "dodecahedron",
             &[
-                nsi::points!("P", points),
-                nsi::integers!("P.indices", &face_index),
-                nsi::integers!("nvertices", &[5; 12]),
+                nsi::point_slice!("P", points),
+                nsi::i32_slice!("P.indices", &face_index),
+                nsi::i32_slice!("nvertices", &[5; 12]),
                 nsi::string!("subdivision.scheme", "catmull-clark"),
-                nsi::integer!("subdivision.level", 2),
+                nsi::i32!("subdivision.level", 2),
             ],
         );
 
@@ -171,11 +171,11 @@ fn subdivision_surface() {
         ctx.set_attribute(
             "subdiv_mesh",
             &[
-                nsi::points!("P", points),
-                nsi::integers!("P.indices", &face_indices),
-                nsi::integers!("nvertices", &[4, 3, 3, 3, 3]),
+                nsi::point_slice!("P", points),
+                nsi::i32_slice!("P.indices", &face_indices),
+                nsi::i32_slice!("nvertices", &[4, 3, 3, 3, 3]),
                 nsi::string!("subdivision.scheme", "catmull-clark"),
-                nsi::integer!("subdivision.level", 3),
+                nsi::i32!("subdivision.level", 3),
             ],
         );
 

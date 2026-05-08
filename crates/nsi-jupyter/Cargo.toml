@@ -1,6 +1,6 @@
 [package]
 name = "nsi-jupyter"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -16,8 +16,8 @@ repository = "https://github.com/virtualritz/nsi/"
 base64 = "0.22"
 bytemuck = "1"
 evcxr_runtime = "1"
-nsi-ffi-wrap = { version = "0.8", path = "../nsi-ffi-wrap", features = ["output"] }
-png = "0.17"
+nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = ["output"] }
+png = "0.18"
 rayon = "1"
 
 [package.metadata.docs.rs]

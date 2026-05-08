@@ -51,6 +51,13 @@ pub const CURVES: &str = "curves";
 /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-particles).
 pub const PARTICLES: &str = "particles";
 
+/// NURBS surface with optional trim curves.
+///
+/// Intrinsic attributes: `nu`, `nv`, `uorder`, `vorder`, `uknot`, `vknot`, and
+/// either `P` (point) or `Pw` (rational, float[4]). Trim curves are specified
+/// via the `trimcurves.*` attribute family.
+pub const NURBS: &str = "nurbs";
+
 /// Geometry to be loaded or generated in delayed fashion.
 /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
 pub const PROCEDURAL: &str = "procedural";
@@ -129,6 +136,8 @@ pub enum NodeType {
     Curves,
     /// Collection of particles.
     Particles,
+    /// NURBS surface with optional trim curves.
+    Nurbs,
     /// Geometry to be loaded or generated in delayed fashion.
     Procedural,
     /// A volume loaded from an OpenVDB file.
@@ -171,6 +180,7 @@ impl NodeType {
             Self::FaceSet => FACESET,
             Self::Curves => CURVES,
             Self::Particles => PARTICLES,
+            Self::Nurbs => NURBS,
             Self::Procedural => PROCEDURAL,
             Self::Volume => VOLUME,
             Self::Environment => ENVIRONMENT,
@@ -201,6 +211,7 @@ impl NodeType {
             FACESET => Self::FaceSet,
             CURVES => Self::Curves,
             PARTICLES => Self::Particles,
+            NURBS => Self::Nurbs,
             PROCEDURAL => Self::Procedural,
             VOLUME => Self::Volume,
             ENVIRONMENT => Self::Environment,
@@ -243,6 +254,7 @@ mod tests {
             NodeType::FaceSet,
             NodeType::Curves,
             NodeType::Particles,
+            NodeType::Nurbs,
             NodeType::Procedural,
             NodeType::Volume,
             NodeType::Environment,

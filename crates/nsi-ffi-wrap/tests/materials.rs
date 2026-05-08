@@ -72,11 +72,11 @@ fn glass() {
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
                 nsi::color!("i_color", &[1.0, 1.0, 1.0]),
-                nsi::float!("roughness", 0.0),
-                nsi::float!("specular_level", 1.0),
-                nsi::float!("metallic", 0.0),
-                nsi::float!("glass", 1.0),
-                nsi::float!("glass_ior", 1.5),
+                nsi::f32!("roughness", 0.0),
+                nsi::f32!("specular_level", 1.0),
+                nsi::f32!("metallic", 0.0),
+                nsi::f32!("glass", 1.0),
+                nsi::f32!("glass_ior", 1.5),
             ],
         );
 
@@ -116,7 +116,7 @@ fn emissive() {
             shader_name,
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/emitter"),
-                nsi::float!("intensity", 10.0),
+                nsi::f32!("intensity", 10.0),
                 nsi::color!("tint", &[1.0, 0.8, 0.5]),
             ],
         );
@@ -157,10 +157,10 @@ fn anisotropic() {
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
                 nsi::color!("i_color", &[0.9, 0.7, 0.3]),
-                nsi::float!("roughness", 0.3),
-                nsi::float!("specular_level", 1.0),
-                nsi::float!("metallic", 1.0),
-                nsi::float!("anisotropy", 0.8),
+                nsi::f32!("roughness", 0.3),
+                nsi::f32!("specular_level", 1.0),
+                nsi::f32!("metallic", 1.0),
+                nsi::f32!("anisotropy", 0.8),
                 nsi::color!("anisotropy_direction", &[1., 0., 0.]),
             ],
         );
@@ -196,12 +196,12 @@ fn subsurface_scattering() {
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
                 nsi::color!("i_color", &[0.9, 0.7, 0.6]),
-                nsi::float!("roughness", 0.4),
-                nsi::float!("specular_level", 0.5),
-                nsi::float!("metallic", 0.0),
-                nsi::float!("sss_weight", 1.0),
+                nsi::f32!("roughness", 0.4),
+                nsi::f32!("specular_level", 0.5),
+                nsi::f32!("metallic", 0.0),
+                nsi::f32!("sss_weight", 1.0),
                 nsi::color!("sss_color", &[0.8, 0.4, 0.3]),
-                nsi::float!("sss_scale", 0.5),
+                nsi::f32!("sss_scale", 0.5),
             ],
         );
 

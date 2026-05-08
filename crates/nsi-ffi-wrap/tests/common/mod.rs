@@ -35,7 +35,7 @@ pub fn add_test_sphere(
     ];
     ctx.set_attribute(
         &xform_name,
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             &transform_matrix
         )],
@@ -66,11 +66,11 @@ pub fn add_test_sphere(
     ctx.set_attribute(
         name,
         &[
-            nsi::points!("P", points),
-            nsi::integers!("P.indices", &face_indices),
-            nsi::integers!("nvertices", &[4; 6]),
+            nsi::point_slice!("P", points),
+            nsi::i32_slice!("P.indices", &face_indices),
+            nsi::i32_slice!("nvertices", &[4; 6]),
             nsi::string!("subdivision.scheme", "catmull-clark"),
-            nsi::integer!("subdivision.level", 4), // High subdivision for smooth sphere
+            nsi::i32!("subdivision.level", 4), // High subdivision for smooth sphere
         ],
     );
 }
@@ -104,9 +104,9 @@ pub fn add_diffuse_material(
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
             nsi::color!("i_color", color),
-            nsi::float!("roughness", roughness),
-            nsi::float!("specular_level", 0.5),
-            nsi::float!("metallic", 0.0),
+            nsi::f32!("roughness", roughness),
+            nsi::f32!("specular_level", 0.5),
+            nsi::f32!("metallic", 0.0),
         ],
     );
 }
@@ -140,9 +140,9 @@ pub fn add_metal_material(
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
             nsi::color!("i_color", color),
-            nsi::float!("roughness", roughness),
-            nsi::float!("specular_level", 1.0),
-            nsi::float!("metallic", 1.0),
+            nsi::f32!("roughness", roughness),
+            nsi::f32!("specular_level", 1.0),
+            nsi::f32!("metallic", 1.0),
         ],
     );
 }
@@ -183,7 +183,7 @@ pub fn add_area_light(
     ];
     ctx.set_attribute(
         &xform_name,
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             &transform_matrix
         )],
@@ -199,7 +199,7 @@ pub fn add_area_light(
 
     ctx.set_attribute(
         name,
-        &[nsi::integer!("nvertices", 4), nsi::points!("P", points)],
+        &[nsi::i32!("nvertices", 4), nsi::point_slice!("P", points)],
     );
 
     // Attributes
@@ -214,7 +214,7 @@ pub fn add_area_light(
         &shader_name,
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/areaLight"),
-            nsi::float!("intensity", intensity),
+            nsi::f32!("intensity", intensity),
         ],
     );
 }
@@ -240,7 +240,7 @@ pub fn add_constant_environment(
     );
     ctx.set_attribute(
         "env_attrib",
-        &[nsi::integer!("visibility.camera", 0)], // Not visible to camera
+        &[nsi::i32!("visibility.camera", 0)], // Not visible to camera
     );
 
     // Shader
@@ -251,7 +251,7 @@ pub fn add_constant_environment(
         "env_shader",
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/environmentLight"),
-            nsi::float!("intensity", intensity),
+            nsi::f32!("intensity", intensity),
             nsi::color!("i_color", color),
         ],
     );
@@ -264,7 +264,7 @@ pub fn add_ground_plane(ctx: &nsi::Context, y_position: f64) {
     ctx.connect("ground_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "ground_xform",
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., y_position,

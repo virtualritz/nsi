@@ -24,7 +24,7 @@ fn main() {
     ctx.render_control(
         nsi::Action::Start,
         Some(&[
-            nsi::integer!("interactive", true as _),
+            nsi::i32!("interactive", true as _),
             nsi::callback!("callback", status_callback),
         ]),
     );

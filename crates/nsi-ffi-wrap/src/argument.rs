@@ -117,46 +117,50 @@ pub(crate) trait ArgDataMethods {
 #[derive(Debug, Clone)]
 pub enum ArgData<'a, 'b> {
     /// Single [`f32`] value.
-    Float,
+    F32,
     /// An `[`[`f32`]`]` slice.
-    Floats(Floats<'a>),
+    F32Slice(F32Slice<'a>),
     /// Single [`f64`] value.
-    Double,
+    F64,
     /// An `[`[`f64`]`]` slice.
-    Doubles(Doubles<'a>),
+    F64Slice(F64Slice<'a>),
     /// Single [`i32`] value.
-    Integer,
+    I32,
     /// An `[`[`i32`]`]` slice.
-    Integers(Integers<'a>),
+    I32Slice(I32Slice<'a>),
+    /// Single [`i64`] value.
+    I64,
+    /// An `[`[`i64`]`]` slice.
+    I64Slice(I64Slice<'a>),
     /// A [`String`].
     String(String),
     /// A `[`[`String`]`]` slice.
-    Strings(Strings),
+    StringSlice(StringSlice),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
     /// A flat `[`[`f32`]`]` slice of colors (`len % 3 == 0`).
-    Colors(Colors<'a>),
+    ColorSlice(ColorSlice<'a>),
     /// Point, given as three [`f32`] values.
     Point(Point<'a>),
     /// A flat `[`[`f32`]`]` slice of points (`len % 3 == 0`).
-    Points(Points<'a>),
+    PointSlice(PointSlice<'a>),
     /// Vector, given as three [`f32`] values.
     Vector(Vector<'a>),
     /// A flat `[`[`f32`]`]` slice of vectors (`len % 3 == 0`).
-    Vectors(Vectors<'a>),
+    VectorSlice(VectorSlice<'a>),
     /// Normal vector, given as three [`f32`] values.
     Normal(Normal<'a>),
     /// A flat `[`[`f32`]`]` slice of normals (`len % 3 == 0`).
-    Normals(Normals<'a>),
+    NormalSlice(NormalSlice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
-    Matrix(Matrix<'a>),
+    MatrixF32(MatrixF32<'a>),
     /// A flat `[`[`f32`]`]` slice of matrices (`len % 16 == 0`).
-    Matrices(Matrices<'a>),
+    MatrixF32Slice(MatrixF32Slice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f64`] values.
-    DoubleMatrix(DoubleMatrix<'a>),
+    MatrixF64(MatrixF64<'a>),
     /// A flat `[`[`f64`]`]` slice of matrices (`len % 16 == 0`).
-    DoubleMatrices(DoubleMatrices<'a>),
+    MatrixF64Slice(MatrixF64Slice<'a>),
     /// Reference *with* lifetime guarantees.
     ///
     /// This gets converted to a raw pointer when passed
@@ -195,7 +199,7 @@ pub enum ArgData<'a, 'b> {
     /// ```
     Reference(Reference<'b>),
     /// A `[`[`Reference`]`]` slice.
-    References(References<'b>),
+    ReferenceSlice(ReferenceSlice<'b>),
     /// A callback.
     Callback(Callback<'b>),
 }
@@ -322,9 +326,10 @@ macro_rules! nsi_tuple_data_def {
     };
 }
 
-nsi_data_def!(f32, Float, Type::Float);
-nsi_data_def!(f64, Double, Type::Double);
-nsi_data_def!(i32, Integer, Type::Integer);
+nsi_data_def!(f32, F32, Type::F32);
+nsi_data_def!(f64, F64, Type::F64);
+nsi_data_def!(i32, I32, Type::I32);
+nsi_data_def!(i64, I64, Type::I64);
 
 /// See [`ArgData`] for details.
 /// A reference to data that will be passed through FFI.
@@ -552,27 +557,28 @@ impl ArgDataMethods for String {
     }
 }
 
-nsi_data_array_def!(f32, Floats, Type::Float);
-nsi_data_array_def!(f64, Doubles, Type::Double);
-nsi_data_array_def!(i32, Integers, Type::Integer);
-nsi_tuple_data_array_def!(f32, Colors, Type::Color, 3);
-nsi_tuple_data_array_def!(f32, Points, Type::Point, 3);
-nsi_tuple_data_array_def!(f32, Vectors, Type::Vector, 3);
-nsi_tuple_data_array_def!(f32, Normals, Type::Normal, 3);
-nsi_tuple_data_array_def!(f32, Matrices, Type::Matrix, 16);
-nsi_tuple_data_array_def!(f64, DoubleMatrices, Type::DoubleMatrix, 16);
+nsi_data_array_def!(f32, F32Slice, Type::F32);
+nsi_data_array_def!(f64, F64Slice, Type::F64);
+nsi_data_array_def!(i32, I32Slice, Type::I32);
+nsi_data_array_def!(i64, I64Slice, Type::I64);
+nsi_tuple_data_array_def!(f32, ColorSlice, Type::Color, 3);
+nsi_tuple_data_array_def!(f32, PointSlice, Type::Point, 3);
+nsi_tuple_data_array_def!(f32, VectorSlice, Type::Vector, 3);
+nsi_tuple_data_array_def!(f32, NormalSlice, Type::Normal, 3);
+nsi_tuple_data_array_def!(f32, MatrixF32Slice, Type::MatrixF32, 16);
+nsi_tuple_data_array_def!(f64, MatrixF64Slice, Type::MatrixF64, 16);
 
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
-pub struct References<'a> {
+pub struct ReferenceSlice<'a> {
     data: Vec<*const c_void>,
     _marker: PhantomData<&'a ()>,
 }
 
-unsafe impl Send for References<'static> {}
-unsafe impl Sync for References<'static> {}
+unsafe impl Send for ReferenceSlice<'static> {}
+unsafe impl Sync for ReferenceSlice<'static> {}
 
-impl<'a> References<'a> {
+impl<'a> ReferenceSlice<'a> {
     pub fn new<T>(data: &'a [&'a T]) -> Self {
         debug_assert_eq!(0, data.len() % Type::Reference.elemensize());
 
@@ -583,7 +589,7 @@ impl<'a> References<'a> {
     }
 }
 
-impl<'a> ArgDataMethods for References<'a> {
+impl<'a> ArgDataMethods for ReferenceSlice<'a> {
     fn type_(&self) -> Type {
         Type::Reference
     }
@@ -599,16 +605,16 @@ impl<'a> ArgDataMethods for References<'a> {
 
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
-pub struct Strings {
+pub struct StringSlice {
     #[allow(dead_code)]
     data: Vec<CString>,
     pointer: Vec<*const c_void>,
 }
 
-unsafe impl Send for Strings {}
-unsafe impl Sync for Strings {}
+unsafe impl Send for StringSlice {}
+unsafe impl Sync for StringSlice {}
 
-impl Strings {
+impl StringSlice {
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
         let data = data
             .iter()
@@ -616,11 +622,11 @@ impl Strings {
             .collect::<Vec<_>>();
         let pointer = data.iter().map(|s| s.as_ptr() as _).collect();
 
-        Strings { data, pointer }
+        StringSlice { data, pointer }
     }
 }
 
-impl ArgDataMethods for Strings {
+impl ArgDataMethods for StringSlice {
     fn type_(&self) -> Type {
         Type::String
     }
@@ -638,19 +644,21 @@ nsi_tuple_data_def!(f32, 3, Color, Type::Color);
 nsi_tuple_data_def!(f32, 3, Point, Type::Point);
 nsi_tuple_data_def!(f32, 3, Vector, Type::Vector);
 nsi_tuple_data_def!(f32, 3, Normal, Type::Normal);
-nsi_tuple_data_def!(f32, 16, Matrix, Type::Matrix);
-nsi_tuple_data_def!(f64, 16, DoubleMatrix, Type::DoubleMatrix);
+nsi_tuple_data_def!(f32, 16, MatrixF32, Type::MatrixF32);
+nsi_tuple_data_def!(f64, 16, MatrixF64, Type::MatrixF64);
 
 /// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub(crate) enum Type {
     /// A single [`f32`] value.
-    Float = NSIType::Float as _,
+    F32 = NSIType::F32 as _,
     /// A single [`f64`] value.
-    Double = NSIType::Double as _,
+    F64 = NSIType::F64 as _,
     /// Single [`i32`] value.
-    Integer = NSIType::Integer as _,
+    I32 = NSIType::I32 as _,
+    /// Single [`i64`] value.
+    I64 = NSIType::I64 as _,
     /// A [`String`].
     String = NSIType::String as _,
     /// Color, given as three [`f32`] values,
@@ -664,9 +672,9 @@ pub(crate) enum Type {
     /// Normal vector, given as three [`f32`] values.
     Normal = NSIType::Normal as _,
     /// Transformation matrix, given as 16 [`f32`] values.
-    Matrix = NSIType::Matrix as _,
+    MatrixF32 = NSIType::MatrixF32 as _,
     /// Transformation matrix, given as 16 [`f64`] values.
-    DoubleMatrix = NSIType::DoubleMatrix as _,
+    MatrixF64 = NSIType::MatrixF64 as _,
     /// Raw (`*const T`) pointer.
     Reference = NSIType::Pointer as _,
 }
@@ -676,66 +684,83 @@ impl Type {
     #[inline]
     pub(crate) fn elemensize(&self) -> usize {
         match self {
-            Type::Float => 1,
-            Type::Double => 1,
-            Type::Integer => 1,
+            Type::F32 => 1,
+            Type::F64 => 1,
+            Type::I32 => 1,
+            Type::I64 => 1,
             Type::String => 1,
             Type::Color => 3,
             Type::Point => 3,
             Type::Vector => 3,
             Type::Normal => 3,
-            Type::Matrix => 16,
-            Type::DoubleMatrix => 16,
+            Type::MatrixF32 => 16,
+            Type::MatrixF64 => 16,
             Type::Reference => 1,
         }
     }
 }
 
-/// Create a [`Float`] argument.
+/// Create a [`F32`] argument.
 #[macro_export]
-macro_rules! float {
+macro_rules! f32 {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Float::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::F32::new($value)))
     };
 }
 
-/// Create a [`Floats`] array argument.
+/// Create a [`F32Slice`] array argument.
 #[macro_export]
-macro_rules! floats {
+macro_rules! f32_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Floats::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::F32Slice::new($value)))
     };
 }
 
-/// Create a [`Double`] precision argument.
+/// Create a [`F64`] precision argument.
 #[macro_export]
-macro_rules! double {
+macro_rules! f64 {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Double::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::F64::new($value)))
     };
 }
 
-/// Create a [`Doubles`] precision array argument.
+/// Create a [`F64Slice`] precision array argument.
 #[macro_export]
-macro_rules! doubles {
+macro_rules! f64_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Doubles::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::F64Slice::new($value)))
     };
 }
 
-/// Create a [`Integer`] argument.
+/// Create a [`I32`] argument.
 #[macro_export]
-macro_rules! integer {
+macro_rules! i32 {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Integer::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::I32::new($value)))
     };
 }
 
-/// Create a [`Integers`] array argument.
+/// Create a [`I32Slice`] array argument.
 #[macro_export]
-macro_rules! integers {
+macro_rules! i32_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Integers::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::I32Slice::new($value)))
+    };
+}
+
+/// Create a [`I64`] argument.
+#[macro_export]
+macro_rules! i64 {
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::I64::new($value)))
+    };
+}
+
+/// Create a [`I64Slice`] array argument.
+#[macro_export]
+macro_rules! i64_slice {
+    ($name: tt, $value: expr) => {
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::I64Slice::new($value)))
     };
 }
 
@@ -747,11 +772,11 @@ macro_rules! color {
     };
 }
 
-/// Create a [`Colors`] array argument.
+/// Create a [`ColorSlice`] array argument.
 #[macro_export]
-macro_rules! colors {
+macro_rules! color_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Colors::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::ColorSlice::new($value)))
     };
 }
 
@@ -763,11 +788,11 @@ macro_rules! point {
     };
 }
 
-/// Create a [`Points`] array argument.
+/// Create a [`PointSlice`] array argument.
 #[macro_export]
-macro_rules! points {
+macro_rules! point_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Points::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::PointSlice::new($value)))
     };
 }
 
@@ -779,11 +804,11 @@ macro_rules! vector {
     };
 }
 
-/// Create a [`Vectors`] array argument.
+/// Create a [`VectorSlice`] array argument.
 #[macro_export]
-macro_rules! vectors {
+macro_rules! vector_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Vectors::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::VectorSlice::new($value)))
     };
 }
 
@@ -795,33 +820,33 @@ macro_rules! normal {
     };
 }
 
-/// Create a [`Normals`] array argument.
+/// Create a [`NormalSlice`] array argument.
 #[macro_export]
-macro_rules! normals {
+macro_rules! normal_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Normals::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::NormalSlice::new($value)))
     };
 }
 
-/// Create a [`Matrix`] row-major, 4×4 transformation matrix argument.
+/// Create a [`MatrixF32`] row-major, 4×4 transformation matrix argument.
 /// The matrix is given as 16 [`f32`] values.
 #[macro_export]
-macro_rules! matrix {
+macro_rules! matrix_f32 {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Matrix::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF32::new($value)))
     };
 }
 
-/// Create a [`Matrices`] row-major, 4×4 transformation matrices argument.
+/// Create a [`MatrixF32Slice`] row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`f32`] values.
 #[macro_export]
-macro_rules! matrices {
+macro_rules! matrix_f32_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Matrices::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF32Slice::new($value)))
     };
 }
 
-/// Create a [`DoubleMatrix`] row-major, 4×4 transformation matrix argument.
+/// Create a [`MatrixF64`] row-major, 4×4 transformation matrix argument.
 /// The matrix is given as 16 [`f64`] values.
 ///
 /// # Examples
@@ -836,7 +861,7 @@ macro_rules! matrices {
 /// // Translate 5 units along z-axis.
 /// ctx.set_attribute(
 ///     "xform",
-///     &[nsi::double_matrix!(
+///     &[nsi::matrix_f64!(
 ///         "transformationmatrix",
 ///         &[
 ///             1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
@@ -845,20 +870,20 @@ macro_rules! matrices {
 /// );
 /// ```
 #[macro_export]
-macro_rules! double_matrix {
+macro_rules! matrix_f64 {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::DoubleMatrix::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF64::new($value)))
     };
 }
 
-/// Create a [`DoubleMatrices`] row-major, 4×4 transformation matrices argument.
+/// Create a [`MatrixF64Slice`] row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`f64`] values.
 #[macro_export]
-macro_rules! double_matrices {
+macro_rules! matrix_f64_slice {
     ($name: tt, $value: expr) => {
         nsi::Arg::new(
             $name,
-            nsi::ArgData::from(nsi::DoubleMatrices::new($value)),
+            nsi::ArgData::from(nsi::MatrixF64Slice::new($value)),
         )
     };
 }
@@ -891,25 +916,25 @@ macro_rules! string {
 /// // One of these is not an actor:
 /// ctx.set_attribute(
 ///     "dummy",
-///     &[nsi::strings!(
+///     &[nsi::string_slice!(
 ///         "actors",
 ///         &["Klaus Kinski", "Giorgio Moroder", "Rainer Brandt"]
 ///     )],
 /// );
 /// ```
 #[macro_export]
-macro_rules! strings {
+macro_rules! string_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Strings::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::StringSlice::new($value)))
     };
 }
 
 /// Create a [`Reference`] argument.
 ///
 /// This macro accepts:
-/// - `&Box<T>` - References to boxed data
-/// - `&Arc<T>` - References to Arc'd data  
-/// - `&Pin<Box<T>>` - References to pinned boxes
+/// - `&Box<T>` - ReferenceSlice to boxed data
+/// - `&Arc<T>` - ReferenceSlice to Arc'd data  
+/// - `&Pin<Box<T>>` - ReferenceSlice to pinned boxes
 ///
 /// For other types with stable addresses, use `reference_stable!` instead.
 #[macro_export]
@@ -936,9 +961,9 @@ macro_rules! reference_stable {
 
 /// Create a [`Reference`] array argument.
 #[macro_export]
-macro_rules! references {
+macro_rules! reference_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::References::new($value)))
+        nsi::Arg::new($name, nsi::ArgData::from(nsi::ReferenceSlice::new($value)))
     };
 }
 

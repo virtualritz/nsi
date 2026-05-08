@@ -20,7 +20,7 @@ fn simple_callback() {
         ctx.connect("screen", None, "camera", "screens", None);
         ctx.set_attribute(
             "screen",
-            &[nsi::integers!("resolution", &[32, 32]).array_len(2)],
+            &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
         );
 
         ctx.create("beauty", nsi::OUTPUT_LAYER, None);

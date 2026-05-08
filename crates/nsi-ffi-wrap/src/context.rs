@@ -211,7 +211,7 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"recursive"` ([`Integer`]) -- Specifies whether deletion is
+    /// * `"recursive"` ([`I32`]) -- Specifies whether deletion is
     ///   recursive. By default, only the specified node is deleted. If a value
     ///   of `1` is given, then nodes which connect to the specified node are
     ///   recursively removed. Unless they meet one of the following conditions:
@@ -368,11 +368,11 @@ impl<'a> Context<'a> {
     ///   attribute in some contexts. Refer to guidelines on inter-object
     ///   visibility for more information about the utility of this parameter.
     ///
-    /// * `"priority"` ([`Integer`]) -- When connecting attribute nodes,
+    /// * `"priority"` ([`I32`]) -- When connecting attribute nodes,
     ///   indicates in which order the nodes should be considered when
     ///   evaluating the value of an attribute.
     ///
-    /// * `"strength"` ([`Integer`]) -- A connection with a `strength` greater
+    /// * `"strength"` ([`I32`]) -- A connection with a `strength` greater
     ///   than `0` will *block* the progression of a recursive
     ///   [`delete()`](Context::delete()).
     #[inline]
@@ -482,7 +482,7 @@ impl<'a> Context<'a> {
     /// * `"buffer"` ([`String`]) -- A memory block that contain ɴꜱɪ commands to
     ///   execute.
     ///
-    /// * `"backgroundload"` ([`Integer`]) -- If this is nonzero, the object may
+    /// * `"backgroundload"` ([`I32`]) -- If this is nonzero, the object may
     ///   be loaded in a separate thread, at some later time. This requires that
     ///   further interface calls not directly reference objects defined in the
     ///   included file. The only guarantee is that the file will be loaded
@@ -509,10 +509,10 @@ impl<'a> Context<'a> {
     ///
     /// # Optional Arguments
     ///
-    /// * `"progressive"` ([`Integer`]) -- If set to `1`, render the image in a
+    /// * `"progressive"` ([`I32`]) -- If set to `1`, render the image in a
     ///   progressive fashion.
     ///
-    /// * `"interactive"` ([`Integer`]) -- If set to `1`, the renderer will
+    /// * `"interactive"` ([`I32`]) -- If set to `1`, the renderer will
     ///   accept commands to edit scene’s state while rendering. The difference
     ///   with a normal render is that the render task will not exit even if
     ///   rendering is finished. Interactive renders are by definition
@@ -537,7 +537,7 @@ impl<'a> Context<'a> {
     ///   ctx.render_control(
     ///       nsi::Action::Start,
     ///       Some(&[
-    ///           nsi::integer!("interactive", true as _),
+    ///           nsi::i32!("interactive", true as _),
     ///           nsi::callback!("callback", status_callback),
     ///       ]),
     ///   );

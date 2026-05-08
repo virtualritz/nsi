@@ -246,11 +246,11 @@ where
     ctx.set_attribute(
         nsi::GLOBAL,
         &[
-            nsi::integer!("renderatlowpriority", 1),
+            nsi::i32!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "horizontal"),
-            nsi::integer!("quality.shadingsamples", samples as _),
-            nsi::integer!("maximumraydepth.reflection", 3),
-            nsi::integer!("maximumraydepth.refraction", 3),
+            nsi::i32!("quality.shadingsamples", samples as _),
+            nsi::i32!("maximumraydepth.reflection", 3),
+            nsi::i32!("maximumraydepth.refraction", 3),
         ],
     );
 
@@ -289,7 +289,7 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "camera_xform",
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.
@@ -300,14 +300,14 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     // Camera
     ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("camera", None, "camera_xform", "objects", None);
-    ctx.set_attribute("camera", &[nsi::float!("fov", 35.0)]);
+    ctx.set_attribute("camera", &[nsi::f32!("fov", 35.0)]);
 
     // Screen
     ctx.create("screen", nsi::SCREEN, None);
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::integers!("resolution", &[width as i32, height as i32])
+        &[nsi::i32_slice!("resolution", &[width as i32, height as i32])
             .array_len(2)],
     );
 }
@@ -324,7 +324,7 @@ fn setup_test_output(
         "beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::integer!("withalpha", 1),
+            nsi::i32!("withalpha", 1),
             nsi::string!("scalarformat", "float"),
         ],
     );
@@ -367,15 +367,16 @@ fn save_png(path: &Path, render_data: &RenderData) -> Result<()> {
 /// Compare two PNG files and return the average pixel difference.
 fn compare_png_files(path1: &Path, path2: &Path) -> Result<f64> {
     use std::fs::File;
+    use std::io::BufReader;
 
-    let decoder1 = png::Decoder::new(File::open(path1)?);
+    let decoder1 = png::Decoder::new(BufReader::new(File::open(path1)?));
     let mut reader1 = decoder1.read_info()?;
-    let mut buf1 = vec![0; reader1.output_buffer_size()];
+    let mut buf1 = vec![0; reader1.output_buffer_size().expect("png buffer size unknown")];
     reader1.next_frame(&mut buf1)?;
 
-    let decoder2 = png::Decoder::new(File::open(path2)?);
+    let decoder2 = png::Decoder::new(BufReader::new(File::open(path2)?));
     let mut reader2 = decoder2.read_info()?;
-    let mut buf2 = vec![0; reader2.output_buffer_size()];
+    let mut buf2 = vec![0; reader2.output_buffer_size().expect("png buffer size unknown")];
     reader2.next_frame(&mut buf2)?;
 
     if buf1.len() != buf2.len() {

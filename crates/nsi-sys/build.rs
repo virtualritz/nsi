@@ -1,5 +1,5 @@
 #![cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-use bindgen::callbacks::{EnumVariantValue, ParseCallbacks};
+use bindgen::callbacks::{EnumVariantValue, ItemInfo, ParseCallbacks};
 
 use std::{env, path::PathBuf};
 
@@ -7,9 +7,9 @@ use std::{env, path::PathBuf};
 struct CleanNsiNamingCallbacks {}
 
 impl ParseCallbacks for CleanNsiNamingCallbacks {
-    fn item_name(&self, original_item_name: &str) -> Option<String> {
-        if original_item_name.starts_with("NSI") {
-            Some(original_item_name.trim_end_matches("_t").to_string())
+    fn item_name(&self, item_info: ItemInfo<'_>) -> Option<String> {
+        if item_info.name.starts_with("NSI") {
+            Some(item_info.name.trim_end_matches("_t").to_string())
         } else {
             None
         }
@@ -32,9 +32,16 @@ impl ParseCallbacks for CleanNsiNamingCallbacks {
                     original_variant_name.trim_start_matches("NSI").to_string(),
                 ),
                 "enum NSIType_t" => Some(
-                    original_variant_name
-                        .trim_start_matches("NSIType")
-                        .to_string(),
+                    match original_variant_name {
+                        "NSITypeFloat" => "F32",
+                        "NSITypeDouble" => "F64",
+                        "NSITypeInteger" => "I32",
+                        "NSITypeInt64" => "I64",
+                        "NSITypeMatrix" => "MatrixF32",
+                        "NSITypeDoubleMatrix" => "MatrixF64",
+                        other => other.trim_start_matches("NSIType"),
+                    }
+                    .to_string(),
                 ),
                 _ => None,
             }
@@ -60,11 +67,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allowlist_var("NSI.*")
         .rustified_enum("NSI.*")
         .prepend_enum_name(false)
+        // NSIProcedural_t is forward-declared in nsi_procedural.h and used by
+        // function-pointer typedefs before its full definition; bindgen emits
+        // an opaque `_address: u8` body but still computes the layout
+        // assertion against the real (24-byte) C size, which then fails.
+        // Treat it as opaque so the generated `[u8; 24]` blob matches.
+        .opaque_type("NSIProcedural_t")
         // Searchpath
         .clang_arg(format!("-I{}", include_path.display()))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .parse_callbacks(Box::new(CleanNsiNamingCallbacks {}));
 
     if cfg!(feature = "omit_functions") {

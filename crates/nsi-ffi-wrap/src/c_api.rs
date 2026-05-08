@@ -42,7 +42,7 @@
 //! ```
 
 use crate::{
-    Arg, ArgData, Double, Float, Integer, String as NsiString,
+    Arg, ArgData, F64, F32, I32, I64, String as NsiString,
     nsi_trait::{Action, NodeType},
 };
 use nsi_sys::NSIParam;
@@ -95,20 +95,25 @@ unsafe fn marshal_single_param<'a>(param: &NSIParam) -> Option<Arg<'a, 'a>> {
     // Convert based on type
     // This is a simplified version - full implementation would handle all types
     let arg_data = match param.type_ {
-        t if t == nsi_sys::NSIType::Float as i32 => {
+        t if t == nsi_sys::NSIType::F32 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid f32
             let value = unsafe { *(param.data as *const f32) };
-            ArgData::from(Float::new(value))
+            ArgData::from(F32::new(value))
         }
-        t if t == nsi_sys::NSIType::Double as i32 => {
+        t if t == nsi_sys::NSIType::F64 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid f64
             let value = unsafe { *(param.data as *const f64) };
-            ArgData::from(Double::new(value))
+            ArgData::from(F64::new(value))
         }
-        t if t == nsi_sys::NSIType::Integer as i32 => {
+        t if t == nsi_sys::NSIType::I32 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid i32
             let value = unsafe { *(param.data as *const i32) };
-            ArgData::from(Integer::new(value))
+            ArgData::from(I32::new(value))
+        }
+        t if t == nsi_sys::NSIType::I64 as i32 => {
+            // SAFETY: Caller guarantees param.data points to valid i64
+            let value = unsafe { *(param.data as *const i64) };
+            ArgData::from(I64::new(value))
         }
         t if t == nsi_sys::NSIType::String as i32 => {
             // SAFETY: Caller guarantees param.data points to valid string pointer

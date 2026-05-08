@@ -27,7 +27,7 @@ fn callback_lifetime_management() {
         ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
         ctx.set_attribute(
             "camera_xform",
-            &[nsi::double_matrix!(
+            &[nsi::matrix_f64!(
                 "transformationmatrix",
                 &[
                     1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5.,
@@ -44,7 +44,7 @@ fn callback_lifetime_management() {
         ctx.connect("screen", None, "camera", "screens", None);
         ctx.set_attribute(
             "screen",
-            &[nsi::integers!("resolution", &[32, 32]).array_len(2)],
+            &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
         );
 
         ctx.create("beauty", nsi::OUTPUT_LAYER, None);
@@ -68,7 +68,7 @@ fn callback_lifetime_management() {
         ];
         ctx.set_attribute(
             "mesh",
-            &[nsi::points!("P", positions), nsi::integer!("nvertices", 4)],
+            &[nsi::point_slice!("P", positions), nsi::i32!("nvertices", 4)],
         );
 
         // Write callback that increments counter - use f32 driver
@@ -150,13 +150,13 @@ fn multiple_contexts() {
     ctx2.create("node2", nsi::ATTRIBUTES, None);
 
     // Set attributes
-    ctx1.set_attribute("node1", &[nsi::integer!("test", 1)]);
-    ctx2.set_attribute("node2", &[nsi::integer!("test", 2)]);
+    ctx1.set_attribute("node1", &[nsi::i32!("test", 1)]);
+    ctx2.set_attribute("node2", &[nsi::i32!("test", 2)]);
 
     // Both contexts should work independently
     drop(ctx1);
     // ctx2 should still be valid
-    ctx2.set_attribute("node2", &[nsi::integer!("test", 3)]);
+    ctx2.set_attribute("node2", &[nsi::i32!("test", 3)]);
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn thread_safety() {
                 ctx_clone.create(&node_name, nsi::ATTRIBUTES, None);
                 ctx_clone.set_attribute(
                     &node_name,
-                    &[nsi::integer!("thread_id", i as i32)],
+                    &[nsi::i32!("thread_id", i as i32)],
                 );
             })
         })
@@ -241,14 +241,14 @@ fn status_callback() {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::integers!("resolution", &[32, 32]).array_len(2)],
+        &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
     );
 
     // Start interactive render with callback
     ctx.render_control(
         nsi::Action::Start,
         Some(&[
-            nsi::integer!("interactive", 1),
+            nsi::i32!("interactive", 1),
             nsi::callback!("callback", status_callback),
         ]),
     );
@@ -280,8 +280,8 @@ fn large_data_transfer() {
     ctx.set_attribute(
         "large_mesh",
         &[
-            nsi::points!("P", points),
-            nsi::integer!("nvertices", 3), // Triangle soup
+            nsi::point_slice!("P", points),
+            nsi::i32!("nvertices", 3), // Triangle soup
         ],
     );
 }
@@ -316,7 +316,7 @@ fn callback_panic_safety() {
     ctx.create("screen", nsi::SCREEN, None);
     ctx.set_attribute(
         "screen",
-        &[nsi::integers!("resolution", &[32, 32]).array_len(2)],
+        &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
     );
 
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);

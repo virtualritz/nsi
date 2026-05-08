@@ -1,6 +1,6 @@
 [package]
 name = "nsi-ffi-wrap"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
@@ -33,16 +33,16 @@ cstring_tokens = []
 manual_init = []
 
 [build-dependencies]
-reqwest = { version = "0.12", features = ["blocking"], optional = true }
+reqwest = { version = "0.13", features = ["blocking"], optional = true }
 
 [dependencies]
-dlopen2 = { version = "0.7", optional = true }
+dlopen2 = { version = "0.8", optional = true }
 enum_dispatch = "0.3"
 lazy_static = "1"
 log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
-nsi-sys = "0.8"
-nsi-trait = { version = "0.2", path = "../nsi-trait" }
+nsi-sys = { version = "0.9", path = "../nsi-sys" }
+nsi-trait = { version = "0.3", path = "../nsi-trait" }
 null-terminated-str = "0.1"
 num_enum = "0.7"
 parking_lot = "0.12"
@@ -50,9 +50,9 @@ triomphe = "0.1"
 ustr = "1"
 
 [dev-dependencies]
-png = "0.17"
+png = "0.18"
 exr = "1"
-rand = "0.8"
+rand = "0.10"
 bytemuck = "1"
 anyhow = "1"
 

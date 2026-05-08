@@ -1,6 +1,6 @@
 [package]
 name = "nsi-trait"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]

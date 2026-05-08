@@ -20,10 +20,12 @@ pub fn generate_or_use_handle(
     match handle {
         Some(handle) => handle.to_string(),
         None => {
+            let name = petname::petname(3, "_")
+                .expect("petname default dictionary missing");
             if let Some(prefix) = prefix {
-                String::from(prefix) + "_" + &petname::petname(3, "_")
+                String::from(prefix) + "_" + &name
             } else {
-                petname::petname(3, "_")
+                name
             }
         }
     }
@@ -38,11 +40,9 @@ pub fn generate_or_use_handle(
     match handle {
         Some(handle) => handle.to_string(),
         None => {
-            use rand::{
-                Rng, SeedableRng, distributions::Alphanumeric, rngs::SmallRng,
-            };
+            use rand::{Rng, distr::Alphanumeric};
             use std::iter;
-            let mut rng = SmallRng::from_entropy();
+            let mut rng = rand::rng();
 
             iter::repeat(())
                 .map(|()| rng.sample(Alphanumeric) as char)
@@ -191,7 +191,7 @@ pub fn scaling(
 
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale)).as_array()
         )],
@@ -216,7 +216,7 @@ pub fn translation(
 
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             uv::DMat4::from_translation(uv::DVec3::from(translate)).as_array()
         )],
@@ -243,7 +243,7 @@ pub fn rotation(
 
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             uv::DMat4::from_angle_plane(
                 (angle * core::f64::consts::TAU / 90.0) as _,
@@ -272,7 +272,7 @@ pub fn look_at_camera(
 
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             uv::DMat4::look_at(
                 uv::DVec3::from(eye),
@@ -352,7 +352,7 @@ pub fn look_at_bounding_box_perspective_camera(
 
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::double_matrix!(
+        &[nsi::matrix_f64!(
             "transformationmatrix",
             uv::DMat4::look_at(
                 bounding_box_center

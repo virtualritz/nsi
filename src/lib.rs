@@ -80,15 +80,15 @@
 //! ctx.set_attribute(
 //!     "dodecahedron",
 //!     &[
-//!         nsi::points!("P", &positions),
-//!         nsi::integers!("P.indices", &face_index),
+//!         nsi::point_slice!("P", &positions),
+//!         nsi::i32_slice!("P.indices", &face_index),
 //!         // 5 vertices per each face.
-//!         nsi::integers!("nvertices", &[5; 12]),
+//!         nsi::i32_slice!("nvertices", &[5; 12]),
 //!         // Render this as a subdivison surface.
 //!         nsi::string!("subdivision.scheme", "catmull-clark"),
 //!         // Crease each of our 30 edges a bit.
-//!         nsi::integers!("subdivision.creasevertices", &face_index),
-//!         nsi::floats!("subdivision.creasesharpness", &[10.; 30]),
+//!         nsi::i32_slice!("subdivision.creasevertices", &face_index),
+//!         nsi::f32_slice!("subdivision.creasesharpness", &[10.; 30]),
 //!     ],
 //! );
 //! ```

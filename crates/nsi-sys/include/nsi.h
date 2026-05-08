@@ -30,6 +30,7 @@ enum NSIType_t
 	NSITypeFloat = 1,
 	NSITypeDouble = NSITypeFloat | 0x10,
 	NSITypeInteger = 2,
+	NSITypeInt64 = NSITypeInteger | 0x10,
 	NSITypeString = 3,
 	NSITypeColor = 4,
 	NSITypePoint = 5,
@@ -49,7 +50,7 @@ size_t NSITypeSizeOf(unsigned t)
 		3*sizeof(float), 3*sizeof(float), 3*sizeof(float), 3*sizeof(float),
 		16*sizeof(float), sizeof(void*), 0, 0,
 		0, 0, 0, 0,
-		0, sizeof(double), 0, 0,
+		0, sizeof(double), 8, 0,
 		0, 0, 0, 0,
 		16*sizeof(double)
 	};

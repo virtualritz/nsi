@@ -11,16 +11,17 @@ use bitflags::bitflags;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Invalid = 0,
-    Float = 1,
-    Double = 0x11,
-    Integer = 2,
+    F32 = 1,
+    F64 = 0x11,
+    I32 = 2,
+    I64 = 0x12,
     String = 3,
     Color = 4,
     Point = 5,
     Vector = 6,
     Normal = 7,
-    Matrix = 8,
-    DoubleMatrix = 0x18,
+    MatrixF32 = 8,
+    MatrixF64 = 0x18,
     /// Called "Pointer" in the C API; renamed for clarity.
     Reference = 9,
 }
@@ -177,7 +178,7 @@ impl std::fmt::Display for Action {
 /// # Generic Associated Type
 ///
 /// `Arg<'call>` uses a GAT with a transient borrow lifetime (`'call`).
-/// The context-bound lifetime (for References/Callbacks that must outlive
+/// The context-bound lifetime (for ReferenceSlice/Callbacks that must outlive
 /// the context) is baked into the implementor's concrete `Arg` type.
 ///
 /// # Thread Safety
@@ -194,7 +195,7 @@ pub trait Nsi: Send + Sync {
     /// Argument type -- each implementor picks its own.
     ///
     /// `'call` is the transient borrow lifetime (data copied by C side).
-    /// The context-bound lifetime (for References/Callbacks) is baked
+    /// The context-bound lifetime (for ReferenceSlice/Callbacks) is baked
     /// into the implementor's concrete Arg type.
     type Arg<'call>: Parameter
     where
@@ -297,16 +298,17 @@ mod tests {
     #[test]
     fn type_values_match_c_header() {
         assert_eq!(Type::Invalid as i32, 0);
-        assert_eq!(Type::Float as i32, 1);
-        assert_eq!(Type::Double as i32, 0x11);
-        assert_eq!(Type::Integer as i32, 2);
+        assert_eq!(Type::F32 as i32, 1);
+        assert_eq!(Type::F64 as i32, 0x11);
+        assert_eq!(Type::I32 as i32, 2);
+        assert_eq!(Type::I64 as i32, 0x12);
         assert_eq!(Type::String as i32, 3);
         assert_eq!(Type::Color as i32, 4);
         assert_eq!(Type::Point as i32, 5);
         assert_eq!(Type::Vector as i32, 6);
         assert_eq!(Type::Normal as i32, 7);
-        assert_eq!(Type::Matrix as i32, 8);
-        assert_eq!(Type::DoubleMatrix as i32, 0x18);
+        assert_eq!(Type::MatrixF32 as i32, 8);
+        assert_eq!(Type::MatrixF64 as i32, 0x18);
         assert_eq!(Type::Reference as i32, 9);
     }
 
