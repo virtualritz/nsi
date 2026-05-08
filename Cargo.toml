@@ -70,5 +70,9 @@ required-features = ["output"]
 path = "examples/volume/main.rs"
 name = "volume"
 
+[[example]]
+path = "examples/nurbs/main.rs"
+name = "nurbs"
+
 [package.metadata.docs.rs]
 features = ["download_lib3delight", "jupyter", "output", "toolbelt", "delight", "nightly"]

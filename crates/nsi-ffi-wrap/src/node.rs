@@ -39,6 +39,15 @@ pub const CURVES: &str = "curves";
 /// Collection of particles.
 /// [🕮](https://nsi.readthedocs.io/en/latest/nodes.html#node-particles).
 pub const PARTICLES: &str = "particles";
+/// NURBS surface with optional trim curves.
+///
+/// Intrinsic attributes: `nu`, `nv` (i32, control-point counts);
+/// `uorder`, `vorder` (i32, ≥ 2); `uknot`, `vknot` (f32 array, lengths
+/// `nu + uorder` and `nv + vorder`); and either `P` (point) or `Pw`
+/// (rational, f32[4]). Optional trim is the `trimcurves.*` family
+/// (`nloops`, `ncurves`, `n`, `order`, `knot`, `min`, `max`, `u`, `v`,
+/// `w`, `sense`).
+pub const NURBS: &str = "nurbs";
 /// Geometry to be loaded or generated in delayed fashion.
 /// [🕮](https://nsi.readthedocs.io/en/latest/nodes.html#node-procedural).
 pub const PROCEDURAL: &str = "procedural";
