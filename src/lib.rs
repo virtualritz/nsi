@@ -64,16 +64,26 @@
 //! // 20 control points, each a Point3F32 ([f32; 3]).
 //! // Length divisibility by 3 is enforced at the type level.
 //! let positions: [nsi::Point3F32; 20] = [
-//!     [ 1.,    1.,    1.   ], [ 1.,    1.,    -1.  ],
-//!     [ 1.,    -1.,   1.   ], [ 1.,    -1.,   -1.  ],
-//!     [-1.,    1.,    1.   ], [-1.,    1.,    -1.  ],
-//!     [-1.,    -1.,   1.   ], [-1.,    -1.,   -1.  ],
-//!     [ 0.,    phi_c, phi  ], [ 0.,    phi_c, -phi ],
-//!     [ 0.,   -phi_c, phi  ], [ 0.,   -phi_c, -phi ],
-//!     [ phi_c, phi,   0.   ], [ phi_c, -phi,  0.   ],
-//!     [-phi_c, phi,   0.   ], [-phi_c, -phi,  0.   ],
-//!     [ phi,   0.,    phi_c], [ phi,   0.,   -phi_c],
-//!     [-phi,   0.,    phi_c], [-phi,   0.,   -phi_c],
+//!     [1., 1., 1.],
+//!     [1., 1., -1.],
+//!     [1., -1., 1.],
+//!     [1., -1., -1.],
+//!     [-1., 1., 1.],
+//!     [-1., 1., -1.],
+//!     [-1., -1., 1.],
+//!     [-1., -1., -1.],
+//!     [0., phi_c, phi],
+//!     [0., phi_c, -phi],
+//!     [0., -phi_c, phi],
+//!     [0., -phi_c, -phi],
+//!     [phi_c, phi, 0.],
+//!     [phi_c, -phi, 0.],
+//!     [-phi_c, phi, 0.],
+//!     [-phi_c, -phi, 0.],
+//!     [phi, 0., phi_c],
+//!     [phi, 0., -phi_c],
+//!     [-phi, 0., phi_c],
+//!     [-phi, 0., -phi_c],
 //! ];
 //!
 //! // Create a new mesh node and call it 'dodecahedron'.
@@ -86,9 +96,10 @@
 //! ctx.set_attribute(
 //!     "dodecahedron",
 //!     &[
-//!         // Typed name: `nsi::P` is `Attribute<[nsi::Point3F32]>`. Wrong-shape
-//!         // data (e.g. a `&[f32]`) is rejected by rustc at this call site.
-//!         nsi::point_slice!(nsi::P, &positions),
+//!         // Typed name: `nsi::POSITION` is `Attribute<[nsi::Point3F32]>`.
+//!         // Wrong-shape data (e.g. a `&[f32]`) is rejected by rustc at
+//!         // this call site.
+//!         nsi::point_slice!(nsi::POSITION, &positions),
 //!         nsi::i32_slice!("P.indices", &face_index),
 //!         // 5 vertices per each face.
 //!         nsi::i32_slice!("nvertices", &[5; 12]),
@@ -168,13 +179,20 @@
 //! accepts. Examples:
 //!
 //! ```text
-//! Attribute<f32>           -- e.g. nsi::FOV
-//! Attribute<i32>           -- e.g. nsi::COUNT_U, nsi::ORDER_U
-//! Attribute<[f32]>         -- e.g. nsi::KNOT_U, nsi::TRIM_CURVE_KNOT
-//! Attribute<[Point3F32]>   -- nsi::P (length always divisible by 3)
-//! Attribute<[Point4F32]>   -- nsi::PW (rational xyzw points)
-//! Attribute<Matrix4F64>    -- nsi::TRANSFORMATION_MATRIX
+//! Attribute<f32>           -- e.g. nsi::FIELD_OF_VIEW
+//! Attribute<i32>           -- e.g. nsi::U_COUNT, nsi::U_ORDER
+//! Attribute<[f32]>         -- e.g. nsi::U_KNOT, nsi::TRIM_CURVES_KNOT
+//! Attribute<[Point3F32]>   -- nsi::POSITION (length always divisible by 3)
+//! Attribute<[Point4F32]>   -- nsi::WEIGHTED_POSITION (rational xyzw points)
+//! Attribute<Matrix4F64>    -- nsi::MATRIX
 //! ```
+//!
+//! The Rust constant identifiers are derived from the new ɴsɪ naming
+//! convention (see the `naming-convention.md` chapter in the ɴsɪ spec). The
+//! wire-side string literals each constant points to currently still hold
+//! the legacy names (`"fov"`, `"nu"`, `"transformationmatrix"`, …) so the
+//! constants work against today's renderers; switching to the new wire
+//! names is a one-line change per constant when the renderer ships them.
 //!
 //! Renderer-specific or experimental attributes are added in their own
 //! crates without touching this one -- `Attribute::new("custom_name")` is

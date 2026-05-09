@@ -41,7 +41,7 @@ pub const MESH: &str = "mesh";
 
 /// Assign attributes to part of a mesh, curves or particles.
 /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-faceset).
-pub const FACESET: &str = "faceset";
+pub const FACE_SET: &str = "faceset";
 
 /// Linear, b-spline and Catmull-Rom curves.
 /// [Documentation](https://nsi.readthedocs.io/en/latest/nodes.html#node-curves).
@@ -177,7 +177,7 @@ impl NodeType {
             Self::Instances => INSTANCES,
             Self::Plane => PLANE,
             Self::Mesh => MESH,
-            Self::FaceSet => FACESET,
+            Self::FaceSet => FACE_SET,
             Self::Curves => CURVES,
             Self::Particles => PARTICLES,
             Self::Nurbs => NURBS,
@@ -208,7 +208,7 @@ impl NodeType {
             INSTANCES => Self::Instances,
             PLANE => Self::Plane,
             MESH => Self::Mesh,
-            FACESET => Self::FaceSet,
+            FACE_SET => Self::FaceSet,
             CURVES => Self::Curves,
             PARTICLES => Self::Particles,
             NURBS => Self::Nurbs,

@@ -18,8 +18,8 @@
 //! exported `const`s through the parameter macros:
 //!
 //! ```text
-//! nsi::point_slice!(P, &points)     // node attribute
-//! nsi::string!(STREAM_FORMAT, "nsi") // function parameter to NSIBegin
+//! nsi::point_slice!(POSITION, &points)  // node attribute (was: P)
+//! nsi::string!(STREAM_FORMAT, "nsi")    // function parameter to NSIBegin
 //! ```
 //!
 //! Renderer- or app-specific entries are added in downstream crates without
@@ -151,16 +151,26 @@ pub type Parameter<T> = Attribute<T>;
 
 // ─── Standard ɴsɪ attribute names ───────────────────────────────────────────
 //
-// Naming convention on the Rust side:
-//   * Counts use `Count` postfix:    `nu` → `COUNT_U`, `nv` → `COUNT_V`
-//   * Orders use `Order` postfix:    `uorder` → `ORDER_U`
-//   * Knots use `Knot`:              `uknot` → `KNOT_U`
-//   * Trim-curve attrs are nested:   `trimcurves.nloops` → `TRIM_CURVE_LOOP_COUNT`
+// Rust constant identifiers are derived from the **new** wire-name convention
+// (see the `naming-convention.md` chapter in the ɴsɪ spec). Mapping rule:
+// take the new name, replace `-` and `.` with `_`, uppercase. Examples:
+//
+//   new wire        Rust const
+//   --------        ----------
+//   field-of-view   FIELD_OF_VIEW
+//   u.count         U_COUNT
+//   trim-curves.    TRIM_CURVES_*
+//   callback.error  CALLBACK_ERROR
+//
+// The string literals below intentionally still hold the **old** wire names
+// (e.g. `"fov"`, `"nu"`, `"errorhandler"`) so the constants work against a
+// pre-rename 3DelightNSI. Once the renderer ships the new names, only the
+// string literals here need to change -- the public Rust API stays stable.
 
 // Camera --------------------------------------------------------------------
 
-/// `fov` — perspective camera field of view (degrees).
-pub const FOV: Attribute<f32> = Attribute::new("fov");
+/// `field-of-view` (currently `fov`) — perspective camera FOV in degrees.
+pub const FIELD_OF_VIEW: Attribute<f32> = Attribute::new("fov");
 
 // Screen --------------------------------------------------------------------
 
@@ -171,71 +181,75 @@ pub const OVERSAMPLING: Attribute<i32> = Attribute::new("oversampling");
 
 // Transform / shading -------------------------------------------------------
 
-/// `transformationmatrix` — 4×4 row-major matrix (`f64`).
-pub const TRANSFORMATION_MATRIX: Attribute<Matrix4F64> =
+/// `matrix` (currently `transformationmatrix`) — 4×4 row-major matrix (`f64`).
+pub const MATRIX: Attribute<Matrix4F64> =
     Attribute::new("transformationmatrix");
-/// `shaderfilename` — OSL shader filename.
-pub const SHADER_FILENAME: Attribute<&'static str> =
-    Attribute::new("shaderfilename");
+/// `filename` (currently `shaderfilename`) — OSL shader filename.
+pub const FILENAME: Attribute<&'static str> = Attribute::new("shaderfilename");
 
 // Common geometry attrs -----------------------------------------------------
 
-/// `P` — Cartesian control points / vertices.
+/// `position` (currently `P`) — Cartesian control points / vertices.
 ///
 /// Slice of 3-component f32 points; total component count is divisible by 3
 /// at the type level.
-pub const P: Attribute<[Point3F32]> = Attribute::new("P");
-/// `Pw` — rational (weighted homogeneous) control points: xyzw.
-pub const PW: Attribute<[Point4F32]> = Attribute::new("Pw");
+pub const POSITION: Attribute<[Point3F32]> = Attribute::new("P");
+/// `weighted-position` (currently `Pw`) — rational (weighted homogeneous)
+/// control points: xyzw.
+pub const WEIGHTED_POSITION: Attribute<[Point4F32]> = Attribute::new("Pw");
 
 // NURBS surface intrinsics --------------------------------------------------
 
-/// `nu` — control-point count along *u*.
-pub const COUNT_U: Attribute<i32> = Attribute::new("nu");
-/// `nv` — control-point count along *v*.
-pub const COUNT_V: Attribute<i32> = Attribute::new("nv");
-/// `uorder` — order along *u* (degree + 1, ≥ 2).
-pub const ORDER_U: Attribute<i32> = Attribute::new("uorder");
-/// `vorder` — order along *v* (degree + 1, ≥ 2).
-pub const ORDER_V: Attribute<i32> = Attribute::new("vorder");
-/// `uknot` — knot vector along *u*; length = `nu + uorder`.
-pub const KNOT_U: Attribute<[f32]> = Attribute::new("uknot");
-/// `vknot` — knot vector along *v*; length = `nv + vorder`.
-pub const KNOT_V: Attribute<[f32]> = Attribute::new("vknot");
+/// `u.count` (currently `nu`) — control-point count along *u*.
+pub const U_COUNT: Attribute<i32> = Attribute::new("nu");
+/// `v.count` (currently `nv`) — control-point count along *v*.
+pub const V_COUNT: Attribute<i32> = Attribute::new("nv");
+/// `u.order` (currently `uorder`) — order along *u* (degree + 1, ≥ 2).
+pub const U_ORDER: Attribute<i32> = Attribute::new("uorder");
+/// `v.order` (currently `vorder`) — order along *v* (degree + 1, ≥ 2).
+pub const V_ORDER: Attribute<i32> = Attribute::new("vorder");
+/// `u.knot` (currently `uknot`) — knot vector along *u*; length = `nu + uorder`.
+pub const U_KNOT: Attribute<[f32]> = Attribute::new("uknot");
+/// `v.knot` (currently `vknot`) — knot vector along *v*; length = `nv + vorder`.
+pub const V_KNOT: Attribute<[f32]> = Attribute::new("vknot");
 
 // NURBS trim curves ---------------------------------------------------------
 
-/// `trimcurves.nloops` — number of trim loops on a NURBS surface.
-pub const TRIM_CURVE_LOOP_COUNT: Attribute<i32> =
+/// `trim-curves.loop-count` (currently `trimcurves.nloops`) — number of
+/// trim loops on a NURBS surface.
+pub const TRIM_CURVES_LOOP_COUNT: Attribute<i32> =
     Attribute::new("trimcurves.nloops");
-/// `trimcurves.ncurves` — curves per loop.
-pub const TRIM_CURVE_COUNT: Attribute<[i32]> =
+/// `trim-curves.curve-count` (currently `trimcurves.ncurves`) — curves per loop.
+pub const TRIM_CURVES_CURVE_COUNT: Attribute<[i32]> =
     Attribute::new("trimcurves.ncurves");
-/// `trimcurves.n` — control-point count per trim curve.
-pub const TRIM_CURVE_CV_COUNT: Attribute<[i32]> =
+/// `trim-curves.cv-count` (currently `trimcurves.n`) — control-point count
+/// per trim curve.
+pub const TRIM_CURVES_CV_COUNT: Attribute<[i32]> =
     Attribute::new("trimcurves.n");
-/// `trimcurves.order` — order per trim curve (degree + 1).
-pub const TRIM_CURVE_ORDER: Attribute<[i32]> =
+/// `trim-curves.order` — order per trim curve (degree + 1).
+pub const TRIM_CURVES_ORDER: Attribute<[i32]> =
     Attribute::new("trimcurves.order");
-/// `trimcurves.knot` — concatenated knots; total length = Σ(`n[i] + order[i]`).
-pub const TRIM_CURVE_KNOT: Attribute<[f32]> = Attribute::new("trimcurves.knot");
-/// `trimcurves.min` — parametric start per trim curve.
-pub const TRIM_CURVE_MIN: Attribute<[f32]> = Attribute::new("trimcurves.min");
-/// `trimcurves.max` — parametric end per trim curve.
-pub const TRIM_CURVE_MAX: Attribute<[f32]> = Attribute::new("trimcurves.max");
-/// `trimcurves.u` — concatenated *u* control values; length = Σ`n[i]`.
-pub const TRIM_CURVE_U: Attribute<[f32]> = Attribute::new("trimcurves.u");
-/// `trimcurves.v` — concatenated *v* control values; length = Σ`n[i]`.
-pub const TRIM_CURVE_V: Attribute<[f32]> = Attribute::new("trimcurves.v");
-/// `trimcurves.w` — concatenated weights; length = Σ`n[i]`.
-pub const TRIM_CURVE_W: Attribute<[f32]> = Attribute::new("trimcurves.w");
-/// `trimcurves.sense` — one per loop. `0` = keep inside, `1` = keep outside (hole).
-pub const TRIM_CURVE_SENSE: Attribute<[i32]> =
+/// `trim-curves.knot` — concatenated knots; total length = Σ(`n[i] + order[i]`).
+pub const TRIM_CURVES_KNOT: Attribute<[f32]> =
+    Attribute::new("trimcurves.knot");
+/// `trim-curves.min` — parametric start per trim curve.
+pub const TRIM_CURVES_MIN: Attribute<[f32]> = Attribute::new("trimcurves.min");
+/// `trim-curves.max` — parametric end per trim curve.
+pub const TRIM_CURVES_MAX: Attribute<[f32]> = Attribute::new("trimcurves.max");
+/// `trim-curves.u` — concatenated *u* control values; length = Σ`n[i]`.
+pub const TRIM_CURVES_U: Attribute<[f32]> = Attribute::new("trimcurves.u");
+/// `trim-curves.v` — concatenated *v* control values; length = Σ`n[i]`.
+pub const TRIM_CURVES_V: Attribute<[f32]> = Attribute::new("trimcurves.v");
+/// `trim-curves.w` — concatenated weights; length = Σ`n[i]`.
+pub const TRIM_CURVES_W: Attribute<[f32]> = Attribute::new("trimcurves.w");
+/// `trim-curves.sense` — one per loop. `0` = keep inside, `1` = keep outside (hole).
+pub const TRIM_CURVES_SENSE: Attribute<[i32]> =
     Attribute::new("trimcurves.sense");
 
 // Globals / render-control --------------------------------------------------
 
-/// `bucketorder` — bucket traversal pattern (`"horizontal"`, `"spiral"`, …).
+/// `bucket-order` (currently `bucketorder`) — bucket traversal pattern
+/// (`"horizontal"`, `"spiral"`, …).
 pub const BUCKET_ORDER: Attribute<&'static str> = Attribute::new("bucketorder");
 
 // ─── Function-level parameters (Parameter<T>) ───────────────────────────────
@@ -244,23 +258,25 @@ pub const BUCKET_ORDER: Attribute<&'static str> = Attribute::new("bucketorder");
 // underlying type is the same -- `Parameter<T>` is just an alias for
 // `Attribute<T>` -- the split is purely for readability at call sites.
 
-/// `streamformat` — output stream format for `NSIBegin` (`"nsi"`, `"binarynsi"`,
-/// `"autonsi"`).
+/// `stream.format` (currently `streamformat`) — output stream format for
+/// `NSIBegin` (`"nsi"`, `"binarynsi"`, `"autonsi"`).
 pub const STREAM_FORMAT: Parameter<&'static str> =
     Parameter::new("streamformat");
-/// `streamfilename` — output file path when `NSIBegin` is invoked in
-/// stream-to-file mode.
-pub const STREAM_FILE_NAME: Parameter<&'static str> =
+/// `stream.filename` (currently `streamfilename`) — output file path when
+/// `NSIBegin` is invoked in stream-to-file mode.
+pub const STREAM_FILENAME: Parameter<&'static str> =
     Parameter::new("streamfilename");
-/// `streampathreplace` — substitution pairs applied to paths in the output
-/// stream.
-pub const STREAM_PATH_REPLACE: Parameter<&'static str> =
+/// `stream.path-replacement` (currently `streampathreplace`) — substitution
+/// pairs applied to paths in the output stream.
+pub const STREAM_PATH_REPLACEMENT: Parameter<&'static str> =
     Parameter::new("streampathreplace");
-/// `errorhandler` — error-handler callback registered through `NSIBegin`.
-pub const ERROR_HANDLER: Parameter<&'static str> =
+/// `callback.error` (currently `errorhandler`) — error-handler callback
+/// registered through `NSIBegin`.
+pub const CALLBACK_ERROR: Parameter<&'static str> =
     Parameter::new("errorhandler");
-/// `stoppedcallback` — callback fired when an interactive render stops.
-pub const STOPPED_CALLBACK: Parameter<&'static str> =
+/// `callback.stop` (currently `stoppedcallback`) — callback fired when an
+/// interactive render stops.
+pub const CALLBACK_STOP: Parameter<&'static str> =
     Parameter::new("stoppedcallback");
 
 #[cfg(test)]
@@ -269,15 +285,15 @@ mod tests {
 
     #[test]
     fn names_match_wire_strings() {
-        assert_eq!(FOV.name(), "fov");
-        assert_eq!(P.name(), "P");
-        assert_eq!(PW.name(), "Pw");
-        assert_eq!(COUNT_U.name(), "nu");
-        assert_eq!(COUNT_V.name(), "nv");
-        assert_eq!(ORDER_U.name(), "uorder");
-        assert_eq!(KNOT_U.name(), "uknot");
-        assert_eq!(TRIM_CURVE_LOOP_COUNT.name(), "trimcurves.nloops");
-        assert_eq!(TRIM_CURVE_SENSE.name(), "trimcurves.sense");
+        assert_eq!(FIELD_OF_VIEW.name(), "fov");
+        assert_eq!(POSITION.name(), "P");
+        assert_eq!(WEIGHTED_POSITION.name(), "Pw");
+        assert_eq!(U_COUNT.name(), "nu");
+        assert_eq!(V_COUNT.name(), "nv");
+        assert_eq!(U_ORDER.name(), "uorder");
+        assert_eq!(U_KNOT.name(), "uknot");
+        assert_eq!(TRIM_CURVES_LOOP_COUNT.name(), "trimcurves.nloops");
+        assert_eq!(TRIM_CURVES_SENSE.name(), "trimcurves.sense");
     }
 
     #[test]
@@ -290,7 +306,7 @@ mod tests {
 
     #[test]
     fn attribute_is_copy() {
-        let p = P;
+        let p = POSITION;
         let p2 = p; // Copy
         assert_eq!(p.name(), p2.name());
     }
@@ -299,13 +315,13 @@ mod tests {
     #[test]
     fn ustr_round_trip_and_null_terminated() {
         // Same Attribute → same Ustr (caching).
-        let u1 = P.ustr();
-        let u2 = P.ustr();
+        let u1 = POSITION.ustr();
+        let u2 = POSITION.ustr();
         assert_eq!(u1, u2);
         assert_eq!(u1.as_str(), "P");
 
         // Raw C pointer ends in NUL; readable with CStr.
-        let cptr = P.as_c_ptr();
+        let cptr = POSITION.as_c_ptr();
         // SAFETY: Ustr always returns a valid null-terminated C string.
         let cstr = unsafe { core::ffi::CStr::from_ptr(cptr) };
         assert_eq!(cstr.to_str().unwrap(), "P");
