@@ -125,7 +125,7 @@ fn pixel_data_to_jupyter(
     channels: usize,
     pixel_data: &[f32],
 ) {
-    let one = std::u16::MAX as f32;
+    let one = u16::MAX as f32;
     let offset = layer.offset();
 
     png_to_jupyter(

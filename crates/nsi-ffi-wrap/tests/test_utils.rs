@@ -5,7 +5,6 @@
 
 use anyhow::{Context as _, Result};
 use nsi_ffi_wrap as nsi;
-use png;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -207,9 +206,9 @@ where
                     let dst_idx = (y * width + x) * 4; // RGBA
 
                     // Copy RGBA channels
-                    for c in 0..4.min(pixel_format.channels()) {
-                        data.pixel_data[dst_idx + c] = pixel_data[src_idx + c];
-                    }
+                    let n = 4.min(pixel_format.channels());
+                    data.pixel_data[dst_idx..dst_idx + n]
+                        .copy_from_slice(&pixel_data[src_idx..src_idx + n]);
 
                     // Quantize to u8 with sRGB conversion
                     let alpha = if pixel_format.channels() > 3 {
@@ -350,7 +349,7 @@ fn save_png(path: &Path, render_data: &RenderData) -> Result<()> {
     use std::{fs::File, io::BufWriter};
 
     let file = File::create(path)?;
-    let ref mut w = BufWriter::new(file);
+    let w = &mut BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(
         w,
@@ -405,7 +404,7 @@ fn compare_png_files(path1: &Path, path2: &Path) -> Result<f64> {
 
 /// Get global test arguments.
 pub fn test_args() -> &'static TestArgs {
-    TEST_ARGS.get_or_init(|| TestArgs::parse())
+    TEST_ARGS.get_or_init(TestArgs::parse)
 }
 
 /// Assert that a render test passes.

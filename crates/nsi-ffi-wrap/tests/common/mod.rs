@@ -1,6 +1,5 @@
 //! Common utilities and helpers for NSI tests.
 
-use bytemuck;
 use nsi_ffi_wrap as nsi;
 
 /// Add a simple diffuse sphere to the scene.
@@ -109,6 +108,7 @@ pub fn add_diffuse_material(
 }
 
 /// Add a metallic material to a geometry node.
+#[allow(dead_code)]
 pub fn add_metal_material(
     ctx: &nsi::Context,
     geometry_name: &str,
@@ -252,6 +252,7 @@ pub fn add_constant_environment(
 }
 
 /// Add a ground plane.
+#[allow(dead_code)]
 pub fn add_ground_plane(ctx: &nsi::Context, y_position: f64) {
     // Transform
     ctx.create("ground_xform", nsi::TRANSFORM, None);

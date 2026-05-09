@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(feature = "download_lib3delight"))]
     #[allow(unused_variables)]
     let lib_path = if let Ok(dl_path) = std::env::var("DELIGHT") {
-        eprintln!("Building against locally installed 3Delight @ {}", &dl_path);
+        eprintln!("Building against locally installed 3Delight @ {dl_path}");
         let lib_path = std::path::PathBuf::from(dl_path);
 
         #[cfg(target_os = "windows")]

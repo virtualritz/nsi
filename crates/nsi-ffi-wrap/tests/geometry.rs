@@ -1,6 +1,5 @@
 //! Geometry rendering tests for NSI.
 
-use bytemuck;
 use nsi_ffi_wrap as nsi;
 
 mod common;

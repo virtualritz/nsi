@@ -1,6 +1,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+// Bindgen output mirrors the C header: enums like `NSIType_t` carry the
+// `NSI`-prefixed variant names (`NSITypeFloat`, etc.) by construction.
+#![allow(clippy::enum_variant_names)]
 //! Auto-generated Rust bindings for *Illumination Research*'s *Nodal
 //! Scene Interface* -- ɴsɪ.
 //!

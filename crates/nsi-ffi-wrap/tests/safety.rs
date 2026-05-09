@@ -3,7 +3,6 @@
 //! These tests are designed to catch memory safety issues, particularly
 //! around callbacks, FFI boundaries, and lifetime management.
 
-use bytemuck;
 use nsi_ffi_wrap as nsi;
 use std::{
     panic::{self, AssertUnwindSafe},
@@ -175,7 +174,7 @@ fn thread_safety() {
                 ctx_clone.create(&node_name, nsi::ATTRIBUTES, None);
                 ctx_clone.set_attribute(
                     &node_name,
-                    &[nsi::i32!("thread_id", i as i32)],
+                    &[nsi::i32!("thread_id", i)],
                 );
             })
         })

@@ -258,12 +258,8 @@ impl PixelFormat {
                     // FIXME: add support for specifying AOV and detect type
                     // for indexing (.r vs .x)
                     // SAFETY: format.name should be a valid C string from the renderer
-                    let name = match unsafe { CStr::from_ptr(format.1.name) }
-                        .to_str()
-                    {
-                        Ok(n) => n,
-                        Err(_) => "<invalid>",
-                    };
+                    let name = unsafe { CStr::from_ptr(format.1.name) }
+                        .to_str().unwrap_or("<invalid>");
 
                     let (layer_name, channel_id) =
                         Self::split_into_layer_name_and_channel_id(name);

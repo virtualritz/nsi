@@ -37,7 +37,9 @@ fn box_sizes() {
         mem::align_of::<Box<Box<Box<dyn Fn(i32) -> i32>>>>()
     );
 
-    // Check raw pointer representation for a properly boxed trait object
+    // Check raw pointer representation for a properly boxed trait object.
+    // The triple-Box mirrors the FFI callback shape — see output/mod.rs.
+    #[allow(clippy::type_complexity, clippy::redundant_allocation)]
     let boxed: Box<Box<Box<dyn Fn(i32) -> i32>>> =
         Box::new(Box::new(Box::new(closure)));
     let ptr = Box::into_raw(boxed);

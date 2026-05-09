@@ -1,7 +1,6 @@
 //! Helper to generate a test image.
 //! Run with: cargo test --test generate_test_image -- --nocapture
 
-use nsi_ffi_wrap as nsi;
 
 mod common;
 mod test_utils;

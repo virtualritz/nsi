@@ -1,4 +1,13 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "output")))]
+// The triple-Box (`Box<Box<Box<dyn Fn…>>>`) pattern below is required for
+// crossing the C-FFI boundary: the outer Box turns the trait object into a
+// thin pointer, the middle Box is captured by ndspy as `void*`, and the
+// inner Box is what the user originally allocated. Clippy doesn't recognise
+// the FFI shape and flags it as `redundant_allocation`. Same for the `new`
+// constructor that returns a `*mut`-shaped state for ndspy to keep — it's
+// not idiomatic Rust but it IS the C-API contract.
+#![allow(clippy::redundant_allocation)]
+#![allow(clippy::new_ret_no_self)]
 //! Output driver callbacks.
 //!
 //! This module provides type-safe, generic callback support for streaming pixel
