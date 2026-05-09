@@ -14,10 +14,16 @@
 //! | `vorder`  | i32 (≥ 2)   | order along v (degree + 1)                  |
 //! | `uknot`   | f32\[\]     | knot vector along u, len = `nu + uorder`    |
 //! | `vknot`   | f32\[\]     | knot vector along v, len = `nv + vorder`    |
+//! | `umin`    | f32         | u-domain start, ≥ `uknot[uorder-1]`, default 0 |
+//! | `umax`    | f32         | u-domain end, ≤ `uknot[nu]`, default 1      |
+//! | `vmin`    | f32         | v-domain start, ≥ `vknot[vorder-1]`, default 0 |
+//! | `vmax`    | f32         | v-domain end, ≤ `vknot[nv]`, default 1      |
 //! | `P`       | point\[\]   | `nu * nv` control points (xyz)              |
 //! | `Pw`      | f32\[4\]\[\]| **alternative** to `P`: rational xyzw      |
 //!
-//! Provide either `P` or `Pw`; the latter enables rational NURBS.
+//! Provide either `P` or `Pw`; the latter enables rational NURBS. The
+//! surface is parameterised over (umin..umax) × (vmin..vmax) — same
+//! convention as RiNuPatch.
 //!
 //! ## Trim curves — `trimcurves.*` (all optional, but provide them as
 //! a set when used)
@@ -163,27 +169,35 @@ fn main() {
             nsi::i32!("nv", NV),
             nsi::i32!("uorder", UORDER),
             nsi::i32!("vorder", VORDER),
-            nsi::f32_slice!("uknot", &uknot).array_len(uknot.len() as _),
-            nsi::f32_slice!("vknot", &vknot).array_len(vknot.len() as _),
+            // uknot/vknot are flat float slices, NOT fixed-size tuples,
+            // so no .array_len() — that would encode the value as
+            // `float[N]` (one tuple) and the renderer rejects it with
+            // E6007. Same rule applies to every `trimcurves.*` array
+            // below.
+            nsi::f32_slice!("uknot", &uknot),
+            nsi::f32_slice!("vknot", &vknot),
+            // Surface domain (analogous to RiNuPatch's umin/umax/vmin/vmax).
+            // Constraints: umin ≥ uknot[uorder-1], umax ≤ uknot[nu]
+            // (and the same for v). Defaults to 0..1 if omitted.
+            nsi::f32!("umin", 0.0),
+            nsi::f32!("umax", 1.0),
+            nsi::f32!("vmin", 0.0),
+            nsi::f32!("vmax", 1.0),
             nsi::point_slice!("P", &p),
             // Trim.
             nsi::i32!("trimcurves.nloops", 1),
-            nsi::i32_slice!("trimcurves.ncurves", &[1]).array_len(1),
-            nsi::i32_slice!("trimcurves.n", &[TRIM_N]).array_len(1),
-            nsi::i32_slice!("trimcurves.order", &[TRIM_ORDER]).array_len(1),
-            nsi::f32_slice!("trimcurves.knot", &trim_knot)
-                .array_len(trim_knot.len() as _),
-            nsi::f32_slice!("trimcurves.min", &[0.0_f32]).array_len(1),
-            nsi::f32_slice!("trimcurves.max", &[1.0_f32]).array_len(1),
-            nsi::f32_slice!("trimcurves.u", &trim_u)
-                .array_len(trim_u.len() as _),
-            nsi::f32_slice!("trimcurves.v", &trim_v)
-                .array_len(trim_v.len() as _),
-            nsi::f32_slice!("trimcurves.w", &trim_w)
-                .array_len(trim_w.len() as _),
+            nsi::i32_slice!("trimcurves.ncurves", &[1]),
+            nsi::i32_slice!("trimcurves.n", &[TRIM_N]),
+            nsi::i32_slice!("trimcurves.order", &[TRIM_ORDER]),
+            nsi::f32_slice!("trimcurves.knot", &trim_knot),
+            nsi::f32_slice!("trimcurves.min", &[0.0_f32]),
+            nsi::f32_slice!("trimcurves.max", &[1.0_f32]),
+            nsi::f32_slice!("trimcurves.u", &trim_u),
+            nsi::f32_slice!("trimcurves.v", &trim_v),
+            nsi::f32_slice!("trimcurves.w", &trim_w),
             // 0 = keep inside the loop, 1 = keep outside (i.e. the loop
             // is a hole). For a hole we want to *remove* the inside.
-            nsi::i32_slice!("trimcurves.sense", &[1]).array_len(1),
+            nsi::i32_slice!("trimcurves.sense", &[1]),
         ],
     );
 
