@@ -161,6 +161,13 @@ pub enum ArgData<'a, 'b> {
     MatrixF64(MatrixF64<'a>),
     /// A flat `[`[`f64`]`]` slice of matrices (`len % 16 == 0`).
     MatrixF64Slice(MatrixF64Slice<'a>),
+    /// A slice of 4-component f32 points (xyzw).
+    /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats — the
+    /// renderer groups them by attribute semantics. Use the
+    /// [`point4_f32_slice!`][crate::point4_f32_slice] macro to keep
+    /// `&[[f32; 4]]` ergonomics in Rust while the FFI sees the flat
+    /// layout.
+    Point4F32Slice(Point4F32Slice<'a>),
     /// Reference *with* lifetime guarantees.
     ///
     /// This gets converted to a raw pointer when passed
@@ -568,6 +575,42 @@ nsi_tuple_data_array_def!(f32, NormalSlice, DataType::Normal, 3);
 nsi_tuple_data_array_def!(f32, MatrixF32Slice, DataType::MatrixF32, 16);
 nsi_tuple_data_array_def!(f64, MatrixF64Slice, DataType::MatrixF64, 16);
 
+/// Slice of weighted (rational) homogeneous 4-component f32 control points
+/// — backing for [`point4_f32_slice!`][crate::point4_f32_slice] (NURBS
+/// rational positions `Pw`, RGBA-style colour-with-alpha attributes, etc.).
+///
+/// On the wire this is a flat `NSITypeFloat` slice — the renderer infers
+/// the 4-component grouping from the attribute name (`Pw`). The wrapper
+/// exists so callers can keep the natural `&[[f32; 4]]` shape in Rust
+/// while the FFI sees `4 * N` flat floats.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Point4F32Slice<'a> {
+    data: &'a [[f32; 4]],
+}
+
+impl<'a> Point4F32Slice<'a> {
+    pub fn new(data: &'a [[f32; 4]]) -> Self {
+        Self { data }
+    }
+}
+
+impl<'a> ArgDataMethods for Point4F32Slice<'a> {
+    fn type_(&self) -> DataType {
+        DataType::F32
+    }
+
+    /// Total flat `f32` count = `4 * number-of-points`. With the
+    /// default `arraylength = 1` the renderer receives that many
+    /// scalar floats and groups them by attribute semantics.
+    fn len(&self) -> usize {
+        self.data.len() * 4
+    }
+
+    fn as_c_ptr(&self) -> *const c_void {
+        self.data.as_ptr() as _
+    }
+}
+
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct ReferenceSlice<'a> {
@@ -917,6 +960,39 @@ macro_rules! point_slice {
         nsi::Arg::new(
             __ATTR_CHECK.name(),
             nsi::ArgData::from(nsi::PointSlice::new($value)),
+        )
+    }};
+}
+
+/// Create a slice-of-4-component-f32-points argument.
+///
+/// Wraps a `&[[f32; 4]]` (e.g. weighted homogeneous control points
+/// `Pw` for NURBS, RGBA colour-with-alpha attributes, or any other
+/// 4-float-per-element vertex datum) and sends it as a **flat**
+/// `NSITypeFloat` slice — the renderer groups the floats into
+/// 4-tuples by attribute name, analogous to how `uknot`/`vknot` are
+/// flat float slices.
+///
+/// Name accepts:
+/// * a string literal (escape hatch — no static check), or
+/// * a typed name constant of type
+///   [`Attribute<[Point4F32]>`](crate::Attribute) / [`Parameter<[Point4F32]>`](crate::Parameter)
+///   (compile-time type-checked, e.g. [`WEIGHTED_POSITION`](crate::WEIGHTED_POSITION)).
+#[macro_export]
+macro_rules! point4_f32_slice {
+    // String-literal name — legacy / escape hatch (no type check).
+    ($name: literal, $value: expr) => {
+        nsi::Arg::new(
+            $name,
+            nsi::ArgData::from(nsi::Point4F32Slice::new($value)),
+        )
+    };
+    // Typed Attribute<[Point4F32]> path — compile-time type-checked.
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Point4F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::Point4F32Slice::new($value)),
         )
     }};
 }

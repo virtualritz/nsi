@@ -19,7 +19,7 @@
 //! | `vmin`    | f32         | v-domain start, ≥ `vknot[vorder-1]`, default 0 |
 //! | `vmax`    | f32         | v-domain end, ≤ `vknot[nv]`, default 1      |
 //! | `P`       | point\[\]   | `nu * nv` control points (xyz)              |
-//! | `Pw`      | f32\[4\]\[\]| **alternative** to `P`: rational xyzw      |
+//! | `Pw`      | f32\[\]     | **alternative** to `P`: flat `4 * nu * nv` floats (xyzw per CV) — typed wrapper: `point4_f32_slice!`/`Point4F32Slice` |
 //!
 //! Provide either `P` or `Pw`; the latter enables rational NURBS. The
 //! surface is parameterised over (umin..umax) × (vmin..vmax) — same
@@ -134,15 +134,18 @@ fn main() {
     let uknot: [f32; 8] = [0., 0., 0., 0., 1., 1., 1., 1.];
     let vknot: [f32; 8] = [0., 0., 0., 0., 1., 1., 1., 1.];
 
-    // 4×4 control points laid out row-major: P[i*nu + j] is column j of
-    // row i. We add some bumps on the diagonal to make the trim hole
-    // actually visible.
+    // 4×4 control points laid out row-major: Pw[i*nu + j] is column j of
+    // row i. Each is `[x, y, z, w]` — the rational/weighted homogeneous
+    // form. With `w = 1.0` everywhere this is geometrically equivalent
+    // to passing `P` (xyz) instead, but it exercises the rational path
+    // and is what 3DelightNSI's BRep emitter sends when it dehomogenises
+    // explicitly. Bumps on the diagonal make the trim hole visible.
     #[rustfmt::skip]
-    let p: [[f32; 3]; 16] = [
-        [-1., 0.0, -1.], [-0.33, 0.0, -1.], [0.33, 0.0, -1.], [1., 0.0, -1.],
-        [-1., 0.0, -0.33], [-0.33, 0.6, -0.33], [0.33, 0.6, -0.33], [1., 0.0, -0.33],
-        [-1., 0.0,  0.33], [-0.33, 0.6,  0.33], [0.33, 0.6,  0.33], [1., 0.0,  0.33],
-        [-1., 0.0,  1.], [-0.33, 0.0,  1.], [0.33, 0.0,  1.], [1., 0.0,  1.],
+    let pw: [[f32; 4]; 16] = [
+        [-1.0, 0.0, -1.0, 1.0],   [-0.33, 0.0, -1.0, 1.0],   [0.33, 0.0, -1.0, 1.0],   [1.0, 0.0, -1.0, 1.0],
+        [-1.0, 0.0, -0.33, 1.0],  [-0.33, 0.6, -0.33, 1.0],  [0.33, 0.6, -0.33, 1.0],  [1.0, 0.0, -0.33, 1.0],
+        [-1.0, 0.0,  0.33, 1.0],  [-0.33, 0.6,  0.33, 1.0],  [0.33, 0.6,  0.33, 1.0],  [1.0, 0.0,  0.33, 1.0],
+        [-1.0, 0.0,  1.0, 1.0],   [-0.33, 0.0,  1.0, 1.0],   [0.33, 0.0,  1.0, 1.0],   [1.0, 0.0,  1.0, 1.0],
     ];
 
     // ── trim curve: a closed square hole in (u,v) parameter space ──
@@ -183,7 +186,13 @@ fn main() {
             nsi::f32!("umax", 1.0),
             nsi::f32!("vmin", 0.0),
             nsi::f32!("vmax", 1.0),
-            nsi::point_slice!("P", &p),
+            // Rational form. `point4_f32_slice!` keeps the
+            // `&[[f32; 4]]` shape on the Rust side and ships a flat
+            // `NSITypeFloat` slice of `4 * NU * NV` floats — same
+            // wire layout uknot/vknot use. Equivalent typed form
+            // (compile-time-checked name):
+            //     nsi::point4_f32_slice!(nsi::WEIGHTED_POSITION, &pw)
+            nsi::point4_f32_slice!("Pw", &pw),
             // Trim.
             nsi::i32!("trimcurves.nloops", 1),
             nsi::i32_slice!("trimcurves.ncurves", &[1]),
