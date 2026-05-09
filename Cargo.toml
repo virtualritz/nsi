@@ -53,8 +53,12 @@ nsi-toolbelt = { version = "0.9", path = "crates/nsi-toolbelt" }
 png = "0.18"
 
 [dev-dependencies.polyhedron-ops]
-#path = "../polyhedron-ops"
-version = "0.2"
+# Local path during development. The published 0.2.7 on crates.io was built
+# against the old `nsi-core` crate name and won't compile against this
+# version. Bump to 0.2.9 (published) or a git rev once polyhedron-ops ships
+# a release that targets `nsi-ffi-wrap`.
+path = "../polyhedron-ops/crates/polyhedron-ops"
+version = "0.2.9"
 features = ["nsi"]
 
 [[example]]
