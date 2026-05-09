@@ -1,8 +1,5 @@
 # ɴsɪ
 
-High level Rust bindings for Illumination Research’s Nodal Scene
-Interface – [ɴsɪ](https://nsi.readthedocs.io/).
-
 [![Build](https://github.com/virtualritz/nsi/workflows/Build/badge.svg)](https://github.com/virtualritz/nsi/actions)
 [![Documentation](https://docs.rs/nsi/badge.svg)](https://docs.rs/nsi)
 [![Crate](https://img.shields.io/crates/v/nsi.svg)](https://crates.io/crates/nsi)
@@ -16,30 +13,68 @@ _[The Moana Island Scene](https://www.technology.disneyanimation.com/islandscene
 provided courtesy of Walt Disney Pictures, rendered with 3Delight|ɴsɪ._
 
 This is a huge scene (72GB of data) made of 31 million instances,
-78 million polygons defining subdivision surface geometry and 2,300
-[Ptex](http://ptex.us/) textures. The above image was rendered in less
+78 million polygons defining subdivision surface geometry and 2,300
+[Ptex](http://ptex.us/) textures. The above image was rendered in less
 than two minutes (wall time) using
 [3Delight Cloud](https://documentation.3delightcloud.com/display/3DLC/Cloud+Rendering+Speed).
 
-## Example
+<!-- cargo-rdme start -->
+
+## Nodal Scene Interface -- ɴsɪ
+
+A flexible, modern API for offline 3D renderers
+
+[Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
+nodes. Each node has a _unique handle_ to identify it. It also has
+a [type](node) which describes its intended function in the scene.
+
+Nodes are abstract containers for data. The interpretation depends
+on the node type. Nodes can also be [connected to each
+other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
+to express relationships.
+
+Data is stored on nodes as _attributes_. Each attribute has a name
+which is unique on the node and a type which describes the kind of
+data it holds (strings, integer numbers, floating point numbers,
+etc.). The standard ɴsɪ attribute names are exposed as typed
+constants -- see [Typed attribute names](#typed-attribute-names) below.
+
+Relationships and data flow between nodes are represented as
+connections. Connections have a source and a destination. Both can
+be either a node or a specific attribute of a node. There are no
+type restrictions for connections in the interface itself. It is
+acceptable to connect attributes of different types or even
+attributes to nodes. The validity of such connections depends on
+the types of the nodes involved.
+
+What we refer to as the ɴsɪ has two major components:
+
+1. Methods to create nodes, attributes and their connections. These are
+   attached to a rendering `Context`.
+
+2. [Nodes](node) understood by the renderer.
+
+Much of the complexity and expressiveness of the interface comes
+from
+[the supported nodes](https://nsi.readthedocs.io/en/latest/nodes.html).
+
+The first part was kept deliberately simple to make it easy to
+support multiple ways of creating nodes.
+
+### Examples
 
 ```rust
 // Create a context to send the scene to.
-let ctx = nsi::Context::new(None)
-    .expect("Could not create NSI context.");
+let ctx = nsi::Context::new(None).expect("Could not create NSI context.");
 
 // Create a dodecahedron.
 
 // 12 regular pentagon faces.
-let face_index: [i32; 60] =
-    [
-         0, 16,  2, 10,  8,  0,  8,  4, 14, 12,
-        16, 17,  1, 12,  0,  1,  9, 11,  3, 17,
-         1, 12, 14,  5,  9,  2, 13, 15,  6, 10,
-        13,  3, 17, 16,  2,  3, 11,  7, 15, 13,
-         4,  8, 10,  6, 18, 14,  5, 19, 18,  4,
-         5, 19,  7, 11,  9, 15,  7, 19, 18,  6,
-    ];
+let face_index: [i32; 60] = [
+    0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3, 17, 1,
+    12, 14, 5, 9, 2, 13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7, 15, 13, 4,
+    8, 10, 6, 18, 14, 5, 19, 18, 4, 5, 19, 7, 11, 9, 15, 7, 19, 18, 6,
+];
 
 // Golden ratio.
 let phi: f32 = 0.5 * (1.0 + 5_f32.sqrt());
@@ -47,20 +82,30 @@ let phi: f32 = 0.5 * (1.0 + 5_f32.sqrt());
 // Golden ratio conjugate.
 let phi_c: f32 = phi - 1.0;
 
-// 20 points @ 3 vertices.
-let positions: [f32; 60] =
-    [
-         1.,     1.,     1.,     1.,     1.,    -1.,
-         1.,    -1.,     1.,     1.,    -1.,    -1.,
-        -1.,     1.,     1.,    -1.,     1.,    -1.,
-        -1.,    -1.,     1.,    -1.,    -1.,    -1.,
-         0.,     phi_c,  phi,    0.,     phi_c, -phi,
-         0.,    -phi_c,  phi,    0.,    -phi_c, -phi,
-         phi_c,  phi,    0.,     phi_c, -phi,    0.,
-        -phi_c,  phi,    0.,    -phi_c, -phi,    0.,
-         phi,    0.,     phi_c,  phi,    0.,    -phi_c,
-        -phi,    0.,     phi_c, -phi,    0.,    -phi_c,
-    ];
+// 20 control points, each a Point3F32 ([f32; 3]).
+// Length divisibility by 3 is enforced at the type level.
+let positions: [nsi::Point3F32; 20] = [
+    [1., 1., 1.],
+    [1., 1., -1.],
+    [1., -1., 1.],
+    [1., -1., -1.],
+    [-1., 1., 1.],
+    [-1., 1., -1.],
+    [-1., -1., 1.],
+    [-1., -1., -1.],
+    [0., phi_c, phi],
+    [0., phi_c, -phi],
+    [0., -phi_c, phi],
+    [0., -phi_c, -phi],
+    [phi_c, phi, 0.],
+    [phi_c, -phi, 0.],
+    [-phi_c, phi, 0.],
+    [-phi_c, -phi, 0.],
+    [phi, 0., phi_c],
+    [phi, 0., -phi_c],
+    [-phi, 0., phi_c],
+    [-phi, 0., -phi_c],
+];
 
 // Create a new mesh node and call it 'dodecahedron'.
 ctx.create("dodecahedron", nsi::MESH, None);
@@ -72,25 +117,181 @@ ctx.connect("dodecahedron", None, nsi::ROOT, "objects", None);
 ctx.set_attribute(
     "dodecahedron",
     &[
-        nsi::points!("P", &positions),
-        nsi::unsigneds!("P.indices", &face_index),
+        // Typed name: `nsi::POSITION` is `Attribute<[nsi::Point3F32]>`.
+        // Wrong-shape data (e.g. a `&[f32]`) is rejected by rustc at
+        // this call site.
+        nsi::point_slice!(nsi::POSITION, &positions),
+        nsi::i32_slice!("P.indices", &face_index),
         // 5 vertices per each face.
-        nsi::unsigneds!("nvertices", &[5; 12]),
+        nsi::i32_slice!("nvertices", &[5; 12]),
         // Render this as a subdivison surface.
-        nsi::string!("subdivision.scheme",
-            "catmull-clark"
-        ),
+        nsi::string!("subdivision.scheme", "catmull-clark"),
         // Crease each of our 30 edges a bit.
-        nsi::unsigneds!("subdivision.creasevertices",
-            &face_index
-        ),
-        nsi::floats!(
-            "subdivision.creasesharpness",
-            &[10.; 30]
-        ),
+        nsi::i32_slice!("subdivision.creasevertices", &face_index),
+        nsi::f32_slice!("subdivision.creasesharpness", &[10.; 30]),
     ],
 );
 ```
+
+### More Examples
+
+These can be found in the [`examples`](https://github.com/virtualritz/nsi/tree/master/examples)
+folder.
+
+_All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
+installation to run!_
+
+#### Interactive
+
+Demonstrates using the `FnStatus` callback closure during rendering and a
+channel for communicating between main- and rendering thread(s).
+
+#### Jupyter
+
+Render directly into a Jupyter notebook.
+
+Follow
+[these instructions](https://github.com/google/evcxr/blob/master/evcxr_jupyter/README.md)
+to get a Rust Jupyter kernel up and running first.
+
+#### Output
+
+This is a full `output` example showing color conversion and writing data
+out to 8bit/channel PNG and 32bit/channel (float) OpenEXR formats.
+
+#### Volume
+
+Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly
+through the [`toolbelt`](https://docs.rs/nsi/latest/nsi/toolbelt/) helpers.
+
+### Crate Organization
+
+The `nsi` crate is a facade. The work is split across smaller crates so
+consumers can pick the layer they need:
+
+- [`nsi-trait`](https://crates.io/crates/nsi-trait) -- pure-Rust trait
+  crate. Defines `Nsi` (`self` _is_ the context), the `Attribute`
+  typed-name machinery, `NodeType`, `Action`, and the standard
+  node-type / attribute-name constants. No FFI deps.
+- [`nsi-ffi-wrap`](https://crates.io/crates/nsi-ffi-wrap) -- FFI wrapper.
+  Provides `Context`, the C-API loader (dynamic via `dlopen2` or static
+  via `link_lib3delight`), the parameter macros (`f32!`, `point_slice!`,
+  …), and `FfiApiAdapter` which exposes any pure-Rust `Nsi` impl
+  through the C API (handle-mapping is internal, via a factory closure).
+- [`nsi-3delight`](https://crates.io/crates/nsi-3delight) -- helpers for
+  the 3Delight renderer (environment lights, shader graphs, etc.).
+- [`nsi-toolbelt`](https://crates.io/crates/nsi-toolbelt) -- convenience
+  scene-construction helpers (handle generation, append/prepend,
+  transform shortcuts).
+- [`nsi-jupyter`](https://crates.io/crates/nsi-jupyter) -- render into a
+  Jupyter notebook.
+- [`nsi-sys`](https://crates.io/crates/nsi-sys) -- auto-generated bindings
+  for the NSI C header.
+- [`nsi-procedural`](https://crates.io/crates/nsi-procedural) -- scaffolding
+  for writing procedural-node plugins.
+
+The `nsi` crate re-exports everything from `nsi-ffi-wrap` (which itself
+pulls types and constants from `nsi-trait`) so a typical user only needs
+to depend on `nsi`.
+
+### Typed Attribute Names
+
+The standard ɴsɪ attribute names are exposed as typed constants of
+`Attribute<T>`, where `T` describes the data shape the attribute
+accepts. Examples:
+
+```text
+Attribute<f32>           -- e.g. nsi::FIELD_OF_VIEW
+Attribute<i32>           -- e.g. nsi::U_COUNT, nsi::U_ORDER
+Attribute<[f32]>         -- e.g. nsi::U_KNOT, nsi::TRIM_CURVES_KNOT
+Attribute<[Point3F32]>   -- nsi::POSITION (length always divisible by 3)
+Attribute<[Point4F32]>   -- nsi::WEIGHTED_POSITION (rational xyzw points)
+Attribute<Matrix4F64>    -- nsi::MATRIX
+```
+
+The Rust constant identifiers are derived from the new ɴsɪ naming
+convention (see the `naming-convention.md` chapter in the ɴsɪ spec). The
+wire-side string literals each constant points to currently still hold
+the legacy names (`"fov"`, `"nu"`, `"transformationmatrix"`, …) so the
+constants work against today's renderers; switching to the new wire
+names is a one-line change per constant when the renderer ships them.
+
+Renderer-specific or experimental attributes are added in their own
+crates without touching this one -- `Attribute::new("custom_name")` is
+`const`, so consumers declare their own typed constants.
+
+Note: the parameter macros (`nsi::f32!`, `nsi::point_slice!`, …)
+currently accept the wire-side string literal directly; static
+verification against `Attribute<T>` is in progress.
+
+### Getting Pixels
+
+The crate has support for streaming pixels from the renderer, via callbacks
+(i.e. closures) during and/or after rendering via the `output` module.
+This module is enabled through the feature of the same name (see below).
+
+It should be straightforward to create an `async` implementation with this
+or use channels to stream pixels back to a main thread (see the
+`interactive` example).
+
+### Cargo Features
+
+- `output` -- Add support for streaming pixels from the renderer to the
+  calling context via closures.
+
+- [`jupyter`](https://docs.rs/nsi/latest/nsi/jupyter/) -- Add support for rendering to Jupyter notebooks (when using
+  a [Rust Jupyter kernel](https://github.com/google/evcxr)).
+
+- [`toolbelt`](https://docs.rs/nsi/latest/nsi/toolbelt/) -- Add convenience methods that work with a `Context`.
+
+- [`delight`](https://docs.rs/nsi/latest/nsi/delight/) -- Add some nodes & shaders specific to 3Delight.
+
+- `nightly` -- Enable some unstable features (suggested if you build with a
+  `nightly` toolchain)
+
+- `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node
+  handles. This will give a you a speed boost if your node names aren't
+  changing while an app using ɴsɪ is running but is not advised otherwise
+  (`ustr` are never freed).
+
+### Linking Style
+
+The 3Delight dynamic library (`lib3delight`) can either be linked to during
+build or loaded at runtime.
+
+By default the lib is loaded at runtime.
+
+- Load `lib3deligh` at runtime (default). This has several advantages:
+  1. If you ship your application or library you can ship it without the
+     library. It can still run and will print an informative error if the
+     library cannot be loaded.
+
+  2. A user can install an updated version of the renderer and stuff will
+     ‘just work’.
+
+- Dynamically link against `lib3delight`.
+  - `lib3delight` becomes a dependency. If it cannot be found your lib/app
+    will not load/start.
+
+  - The feature is called `link_lib3delight`.
+
+  - You should disable default features (they are not needed/used) in this
+    case:
+
+    ```toml
+    [dependencies]
+    nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
+    ```
+
+- Download `lib3delight` during build.
+  - `lib3delight` is downloaded during build. Note that this may be an
+    outdated version. This feature mainly exists for CI purposes.
+
+  - The feature is called `download_lib3delight`.
+
+<!-- cargo-rdme end -->
+
+## More Sample Code
 
 Also check out my
 [Diffusion Limited Aggregation play-thingy](https://github.com/virtualritz/rust-diffusion-limited-aggregation)
@@ -100,35 +301,6 @@ to the renderer, instancing, particle rendering, [OSL](https://github.com/imagew
 shaders, environment (lights) and dumping a scene description to disk).
 
 PRs are most welcome!
-
-## Getting Pixels
-
-The crate has support for streaming pixels from the renderer, via
-callbacks (i.e. closures) during and/or after rendering via the
-`output` module. This module is enabled through the feature of the
-same name.
-
-There is a full example showing color conversion and writing data
-out to 8bit/channel PNG and 32bit/channel (float) OpenEXR formats.
-
-## Dependencies
-
-This crate depends on `nsi-core` which in term requires a renderer that
-implements the ɴsɪ API to generate images.
-
-Currently the only renderer that does is 3Delight which, though
-commercial, has been and is free for personal use since over twenty
-years.
-
-> **_Note:_** The free version of 3Delight will render with up to 12
-> cores on your machine. For crazier projects you can use their cheap
-> cloud rendering service that gives you access to unlimited CPU cores.
-> When you register you get 1,000 cloud minutes for free which ain’t too
-> shabby.
-
-That being said – I hope this crate serves as inspiration for other
-people writing renderers, particularly in Rust, to adopt this API for
-scene description.
 
 ## Prerequisites
 
@@ -141,75 +313,9 @@ It will also install 3Delight Display which you can render to as an
 alternative to writing images to disk. When working with this crate
 this is quite handy.
 
-You can skip this step and build with the `download_3delight` feature.
+You can skip this step and build with the `download_lib3delight` feature.
 However, this will download an older version of 3Delight so this is
 not suggested.
-
-## Cargo Features
-
-- `output` – Add support for streaming pixels from the renderer
-  to the calling context via closures.
-
-- `jupyter` – Add support for rendering to Jupyter notebooks (when
-  using a [Rust Jupyter kernel](https://github.com/google/evcxr)).
-
-- `toolbelt` – Add convenience methods to `Context`.
-
-- [`delight`](crate::delight) – Add some nodes & shaders specific to
-  3Delight.
-
-- `nightly` – Enable some unstable features (suggested if you build
-  with a `nightly` toolchain)
-
-- `ustr_handles` – use [`ustr`](https://crates.io/crates/ustr) for
-  node handles. This will give a you a speed boost if your node names
-  aren't changing while an app using ɴsɪ is running but is not advised
-  otherwise (`ustr` are never freed).
-
-- `download_lib3delight` & `link_lib3delight` – See next section.
-
-## Linking Style
-
-The 3Delight dynamic library (`lib3delight`) can either be linked to
-during build or loaded at runtime.
-
-By default the lib is _loaded at runtime_.
-
-- Load `lib3delight` at runtime (default). This has several advantages:
-  1. If you ship your application or library you can ship it without
-     the 3Delight library. It can still run and will print an informative
-     errorif the library can not be loaded.
-
-  2. A user can install an updated version of the 3Delight renderer and stuff
-     will ‘just work’.
-
-- Dynamically link against `lib3delight`.
-  - `lib3delight` becomes a dependency. If it can not be found your
-    lib/app will not load/start.
-
-  - The feature is called `link_lib3delight`.
-
-  - You should disable default features (`default-features = false`).
-
-  - in this case:
-
-    ```toml
-    [dependencies]
-    nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
-    ```
-
-- Download `lib3delight` during build.
-  - `lib3delight` is downloaded during build. Note that this may be
-    an outdated version. This feature mainly exists for CI purposes.
-
-  - The feature is called `download_lib3delight`.
-
-## Documentation
-
-Crate documentation can be found at [docs.rs](https://docs.rs/nsi/).
-
-Docs for the C, C++, Lua & Python bindings as well as an introduction
-and deep dive into the API [can be found here](https://nsi.readthedocs.io/).
 
 ## Getting Help
 
