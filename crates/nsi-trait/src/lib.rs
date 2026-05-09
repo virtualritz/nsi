@@ -3,8 +3,11 @@
 //! This crate provides the fundamental abstractions for ɴsɪ without any FFI
 //! dependencies. It defines:
 //!
-//! - [`Nsi`] -- The core trait that rendering contexts implement (Self IS the context)
-//! - [`Parameter`] -- Trait for individual typed parameters
+//! - [`Nsi`] -- the core trait that rendering contexts implement (`self` _is_ the context)
+//! - [`ParamValue`] -- trait implemented by Rust values that can be expressed
+//!   as a single ɴsɪ `NSIParam_t` at the FFI boundary
+//! - [`Attribute<T>`](attribute::Attribute) and its alias [`Parameter<T>`](attribute::Parameter)
+//!   -- typed compile-time names
 //! - [`Type`] -- NSI data type discriminant (`#[repr(i32)]`, C-compatible)
 //! - [`FfiParam`] -- C-compatible parameter struct (`#[repr(C)]`)
 //! - [`Flags`] -- Parameter flags (PerFace, PerVertex, etc.)
@@ -12,14 +15,19 @@
 //! - [`Action`] -- Render control actions
 //! - [`NodeType`] -- Enum of all standard node types
 //! - Node type constants ([`ROOT`], [`MESH`], etc.)
+//! - [`Attribute<T>`](attribute::Attribute) -- Typed attribute names with
+//!   per-name compile-time data-shape verification, plus standard attribute
+//!   constants ([`P`](attribute::P), [`FOV`](attribute::FOV), etc.)
 //!
 //! # Crate Organization
 //!
 //! This is a pure Rust crate with no FFI. For FFI wrapper functionality,
 //! see the `nsi-ffi-wrap` crate.
 
-mod node;
+pub mod attribute;
+pub mod node;
 mod nsi_trait;
 
+pub use attribute::*;
 pub use node::*;
 pub use nsi_trait::*;

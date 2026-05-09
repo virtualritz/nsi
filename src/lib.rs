@@ -5,18 +5,18 @@
 //!
 //! [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
 //! nodes. Each node has a *unique handle* to identify it. It also has
-//! a [type](nsi_ffi_wrap::node) which describes its intended function in
-//! the scene.
+//! a [type](node) which describes its intended function in the scene.
 //!
 //! Nodes are abstract containers for data. The interpretation depends
 //! on the node type. Nodes can also be [connected to each
 //! other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 //! to express relationships.
 //!
-//! Data is stored on nodes as attributes. Each attribute has a name
+//! Data is stored on nodes as *attributes*. Each attribute has a name
 //! which is unique on the node and a type which describes the kind of
 //! data it holds (strings, integer numbers, floating point numbers,
-//! etc).
+//! etc.). The standard ɴsɪ attribute names are exposed as typed
+//! constants -- see [Typed attribute names](#typed-attribute-names) below.
 //!
 //! Relationships and data flow between nodes are represented as
 //! connections. Connections have a source and a destination. Both can
@@ -31,7 +31,7 @@
 //! 1. Methods to create nodes, attributes and their connections. These are
 //!    attached to a rendering [`Context`].
 //!
-//! 2. [Nodes](nsi_ffi_wrap::node) understood by the renderer.
+//! 2. [Nodes](node) understood by the renderer.
 //!
 //! Much of the complexity and expressiveness of the interface comes
 //! from
@@ -61,13 +61,19 @@
 //! // Golden ratio conjugate.
 //! let phi_c: f32 = phi - 1.0;
 //!
-//! // 20 points @ 3 vertices.
-//! let positions: [f32; 60] = [
-//!     1., 1., 1., 1., 1., -1., 1., -1., 1., 1., -1., -1., -1., 1., 1., -1.,
-//!     1., -1., -1., -1., 1., -1., -1., -1., 0., phi_c, phi, 0., phi_c, -phi,
-//!     0., -phi_c, phi, 0., -phi_c, -phi, phi_c, phi, 0., phi_c, -phi, 0.,
-//!     -phi_c, phi, 0., -phi_c, -phi, 0., phi, 0., phi_c, phi, 0., -phi_c,
-//!     -phi, 0., phi_c, -phi, 0., -phi_c,
+//! // 20 control points, each a Point3F32 ([f32; 3]).
+//! // Length divisibility by 3 is enforced at the type level.
+//! let positions: [nsi::Point3F32; 20] = [
+//!     [ 1.,    1.,    1.   ], [ 1.,    1.,    -1.  ],
+//!     [ 1.,    -1.,   1.   ], [ 1.,    -1.,   -1.  ],
+//!     [-1.,    1.,    1.   ], [-1.,    1.,    -1.  ],
+//!     [-1.,    -1.,   1.   ], [-1.,    -1.,   -1.  ],
+//!     [ 0.,    phi_c, phi  ], [ 0.,    phi_c, -phi ],
+//!     [ 0.,   -phi_c, phi  ], [ 0.,   -phi_c, -phi ],
+//!     [ phi_c, phi,   0.   ], [ phi_c, -phi,  0.   ],
+//!     [-phi_c, phi,   0.   ], [-phi_c, -phi,  0.   ],
+//!     [ phi,   0.,    phi_c], [ phi,   0.,   -phi_c],
+//!     [-phi,   0.,    phi_c], [-phi,   0.,   -phi_c],
 //! ];
 //!
 //! // Create a new mesh node and call it 'dodecahedron'.
@@ -80,7 +86,9 @@
 //! ctx.set_attribute(
 //!     "dodecahedron",
 //!     &[
-//!         nsi::point_slice!("P", &positions),
+//!         // Typed name: `nsi::P` is `Attribute<[nsi::Point3F32]>`. Wrong-shape
+//!         // data (e.g. a `&[f32]`) is rejected by rustc at this call site.
+//!         nsi::point_slice!(nsi::P, &positions),
 //!         nsi::i32_slice!("P.indices", &face_index),
 //!         // 5 vertices per each face.
 //!         nsi::i32_slice!("nvertices", &[5; 12]),
@@ -123,6 +131,59 @@
 //! Demonstrates rendering an [OpenVDB](https://www.openvdb.org/) asset. Mostly
 //! through the [`toolbelt`] helpers.
 //!
+//! ## Crate Organization
+//!
+//! The `nsi` crate is a facade. The work is split across smaller crates so
+//! consumers can pick the layer they need:
+//!
+//! - [`nsi-trait`](https://crates.io/crates/nsi-trait) -- pure-Rust trait
+//!   crate. Defines [`Nsi`] (`self` _is_ the context), the [`Attribute`]
+//!   typed-name machinery, [`NodeType`], [`Action`], and the standard
+//!   node-type / attribute-name constants. No FFI deps.
+//! - [`nsi-ffi-wrap`](https://crates.io/crates/nsi-ffi-wrap) -- FFI wrapper.
+//!   Provides [`Context`], the C-API loader (dynamic via `dlopen2` or static
+//!   via `link_lib3delight`), the parameter macros (`f32!`, `point_slice!`,
+//!   …), and [`FfiApiAdapter`] which exposes any pure-Rust [`Nsi`] impl
+//!   through the C API (handle-mapping is internal, via a factory closure).
+//! - [`nsi-3delight`](https://crates.io/crates/nsi-3delight) -- helpers for
+//!   the 3Delight renderer (environment lights, shader graphs, etc.).
+//! - [`nsi-toolbelt`](https://crates.io/crates/nsi-toolbelt) -- convenience
+//!   scene-construction helpers (handle generation, append/prepend,
+//!   transform shortcuts).
+//! - [`nsi-jupyter`](https://crates.io/crates/nsi-jupyter) -- render into a
+//!   Jupyter notebook.
+//! - [`nsi-sys`](https://crates.io/crates/nsi-sys) -- auto-generated bindings
+//!   for the NSI C header.
+//! - [`nsi-procedural`](https://crates.io/crates/nsi-procedural) -- scaffolding
+//!   for writing procedural-node plugins.
+//!
+//! The `nsi` crate re-exports everything from `nsi-ffi-wrap` (which itself
+//! pulls types and constants from `nsi-trait`) so a typical user only needs
+//! to depend on `nsi`.
+//!
+//! ## Typed Attribute Names
+//!
+//! The standard ɴsɪ attribute names are exposed as typed constants of
+//! [`Attribute<T>`], where `T` describes the data shape the attribute
+//! accepts. Examples:
+//!
+//! ```text
+//! Attribute<f32>           -- e.g. nsi::FOV
+//! Attribute<i32>           -- e.g. nsi::COUNT_U, nsi::ORDER_U
+//! Attribute<[f32]>         -- e.g. nsi::KNOT_U, nsi::TRIM_CURVE_KNOT
+//! Attribute<[Point3F32]>   -- nsi::P (length always divisible by 3)
+//! Attribute<[Point4F32]>   -- nsi::PW (rational xyzw points)
+//! Attribute<Matrix4F64>    -- nsi::TRANSFORMATION_MATRIX
+//! ```
+//!
+//! Renderer-specific or experimental attributes are added in their own
+//! crates without touching this one -- `Attribute::new("custom_name")` is
+//! `const`, so consumers declare their own typed constants.
+//!
+//! Note: the parameter macros (`nsi::f32!`, `nsi::point_slice!`, …)
+//! currently accept the wire-side string literal directly; static
+//! verification against [`Attribute<T>`] is in progress.
+//!
 //! ## Getting Pixels
 //!
 //! The crate has support for streaming pixels from the renderer, via callbacks
@@ -143,7 +204,7 @@
 //!
 //! * [`toolbelt`] -- Add convenience methods that work with a [`Context`].
 //!
-//! * [`delight`] -- Add some nodes & shaders specifi to 3Delight.
+//! * [`delight`] -- Add some nodes & shaders specific to 3Delight.
 //!
 //! * `nightly` -- Enable some unstable features (suggested if you build with a
 //!   `nightly` toolchain)

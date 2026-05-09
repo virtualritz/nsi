@@ -202,10 +202,7 @@ fn main() {
     );
 
     // ─── render ──────────────────────────────────────────────────────
-    ctx.set_attribute(
-        nsi::GLOBAL,
-        &[nsi::string!("bucketorder", "spiral")],
-    );
+    ctx.set_attribute(nsi::GLOBAL, &[nsi::string!("bucketorder", "spiral")]);
     ctx.render_control(nsi::Action::Start, None);
     ctx.render_control(nsi::Action::Wait, None);
 }

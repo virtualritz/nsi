@@ -600,7 +600,7 @@ impl<'a> Context<'a> {
     }
 }
 
-// Action is re-exported from nsi_trait module - see lib.rs
+// Action is re-exported from nsi-trait via lib.rs
 
 /// The status of a *interactive* render session.
 #[repr(i32)]

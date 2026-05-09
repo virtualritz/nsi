@@ -16,7 +16,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use nsi_ffi_wrap::{FfiApiAdapter, Nsi, nsi_trait::Action};
+//! use nsi_ffi_wrap::{FfiApiAdapter, Nsi, Action};
 //! use std::sync::OnceLock;
 //!
 //! // Your renderer implementation
@@ -42,8 +42,7 @@
 //! ```
 
 use crate::{
-    Arg, ArgData, F64, F32, I32, I64, String as NsiString,
-    nsi_trait::{Action, NodeType},
+    Action, Arg, ArgData, F32, F64, I32, I64, NodeType, String as NsiString,
 };
 use nsi_sys::NSIParam;
 use std::ffi::{CStr, c_char, c_int};

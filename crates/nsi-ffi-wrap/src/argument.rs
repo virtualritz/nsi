@@ -97,8 +97,8 @@ impl<'a, 'b> Arg<'a, 'b> {
 
 #[enum_dispatch(ArgData)]
 pub(crate) trait ArgDataMethods {
-    //const TYPE: Type;
-    fn type_(&self) -> Type;
+    //const TYPE: DataType;
+    fn type_(&self) -> DataType;
     fn len(&self) -> usize;
     fn as_c_ptr(&self) -> *const c_void;
 }
@@ -219,7 +219,7 @@ macro_rules! nsi_data_def {
         }
 
         impl ArgDataMethods for $name {
-            fn type_(&self) -> Type {
+            fn type_(&self) -> DataType {
                 $nsi_type
             }
 
@@ -250,7 +250,7 @@ macro_rules! nsi_data_array_def {
         }
 
         impl<'a> ArgDataMethods for $name<'a> {
-            fn type_(&self) -> Type {
+            fn type_(&self) -> DataType {
                 $nsi_type
             }
 
@@ -281,7 +281,7 @@ macro_rules! nsi_tuple_data_array_def {
         }
 
         impl<'a> ArgDataMethods for $name<'a> {
-            fn type_(&self) -> Type {
+            fn type_(&self) -> DataType {
                 $nsi_type
             }
 
@@ -311,7 +311,7 @@ macro_rules! nsi_tuple_data_def {
         }
 
         impl<'a> ArgDataMethods for $name<'a> {
-            fn type_(&self) -> Type {
+            fn type_(&self) -> DataType {
                 $nsi_type
             }
 
@@ -326,10 +326,10 @@ macro_rules! nsi_tuple_data_def {
     };
 }
 
-nsi_data_def!(f32, F32, Type::F32);
-nsi_data_def!(f64, F64, Type::F64);
-nsi_data_def!(i32, I32, Type::I32);
-nsi_data_def!(i64, I64, Type::I64);
+nsi_data_def!(f32, F32, DataType::F32);
+nsi_data_def!(f64, F64, DataType::F64);
+nsi_data_def!(i32, I32, DataType::I32);
+nsi_data_def!(i64, I64, DataType::I64);
 
 /// See [`ArgData`] for details.
 /// A reference to data that will be passed through FFI.
@@ -470,8 +470,8 @@ impl<'a> Reference<'a> {
 }
 
 impl<'a> ArgDataMethods for Reference<'a> {
-    fn type_(&self) -> Type {
-        Type::Reference
+    fn type_(&self) -> DataType {
+        DataType::Reference
     }
 
     fn len(&self) -> usize {
@@ -509,8 +509,8 @@ impl<'a> Callback<'a> {
 }
 
 impl<'a> ArgDataMethods for Callback<'a> {
-    fn type_(&self) -> Type {
-        Type::Reference
+    fn type_(&self) -> DataType {
+        DataType::Reference
     }
 
     fn len(&self) -> usize {
@@ -544,8 +544,8 @@ impl String {
 }
 
 impl ArgDataMethods for String {
-    fn type_(&self) -> Type {
-        Type::String
+    fn type_(&self) -> DataType {
+        DataType::String
     }
 
     fn len(&self) -> usize {
@@ -557,16 +557,16 @@ impl ArgDataMethods for String {
     }
 }
 
-nsi_data_array_def!(f32, F32Slice, Type::F32);
-nsi_data_array_def!(f64, F64Slice, Type::F64);
-nsi_data_array_def!(i32, I32Slice, Type::I32);
-nsi_data_array_def!(i64, I64Slice, Type::I64);
-nsi_tuple_data_array_def!(f32, ColorSlice, Type::Color, 3);
-nsi_tuple_data_array_def!(f32, PointSlice, Type::Point, 3);
-nsi_tuple_data_array_def!(f32, VectorSlice, Type::Vector, 3);
-nsi_tuple_data_array_def!(f32, NormalSlice, Type::Normal, 3);
-nsi_tuple_data_array_def!(f32, MatrixF32Slice, Type::MatrixF32, 16);
-nsi_tuple_data_array_def!(f64, MatrixF64Slice, Type::MatrixF64, 16);
+nsi_data_array_def!(f32, F32Slice, DataType::F32);
+nsi_data_array_def!(f64, F64Slice, DataType::F64);
+nsi_data_array_def!(i32, I32Slice, DataType::I32);
+nsi_data_array_def!(i64, I64Slice, DataType::I64);
+nsi_tuple_data_array_def!(f32, ColorSlice, DataType::Color, 3);
+nsi_tuple_data_array_def!(f32, PointSlice, DataType::Point, 3);
+nsi_tuple_data_array_def!(f32, VectorSlice, DataType::Vector, 3);
+nsi_tuple_data_array_def!(f32, NormalSlice, DataType::Normal, 3);
+nsi_tuple_data_array_def!(f32, MatrixF32Slice, DataType::MatrixF32, 16);
+nsi_tuple_data_array_def!(f64, MatrixF64Slice, DataType::MatrixF64, 16);
 
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
@@ -580,7 +580,7 @@ unsafe impl Sync for ReferenceSlice<'static> {}
 
 impl<'a> ReferenceSlice<'a> {
     pub fn new<T>(data: &'a [&'a T]) -> Self {
-        debug_assert_eq!(0, data.len() % Type::Reference.elemensize());
+        debug_assert_eq!(0, data.len() % DataType::Reference.elemensize());
 
         Self {
             data: data.iter().map(|r| r as *const _ as _).collect(),
@@ -590,12 +590,12 @@ impl<'a> ReferenceSlice<'a> {
 }
 
 impl<'a> ArgDataMethods for ReferenceSlice<'a> {
-    fn type_(&self) -> Type {
-        Type::Reference
+    fn type_(&self) -> DataType {
+        DataType::Reference
     }
 
     fn len(&self) -> usize {
-        self.data.len() / Type::Reference.elemensize()
+        self.data.len() / DataType::Reference.elemensize()
     }
 
     fn as_c_ptr(&self) -> *const c_void {
@@ -627,8 +627,8 @@ impl StringSlice {
 }
 
 impl ArgDataMethods for StringSlice {
-    fn type_(&self) -> Type {
-        Type::String
+    fn type_(&self) -> DataType {
+        DataType::String
     }
 
     fn len(&self) -> usize {
@@ -640,17 +640,17 @@ impl ArgDataMethods for StringSlice {
     }
 }
 
-nsi_tuple_data_def!(f32, 3, Color, Type::Color);
-nsi_tuple_data_def!(f32, 3, Point, Type::Point);
-nsi_tuple_data_def!(f32, 3, Vector, Type::Vector);
-nsi_tuple_data_def!(f32, 3, Normal, Type::Normal);
-nsi_tuple_data_def!(f32, 16, MatrixF32, Type::MatrixF32);
-nsi_tuple_data_def!(f64, 16, MatrixF64, Type::MatrixF64);
+nsi_tuple_data_def!(f32, 3, Color, DataType::Color);
+nsi_tuple_data_def!(f32, 3, Point, DataType::Point);
+nsi_tuple_data_def!(f32, 3, Vector, DataType::Vector);
+nsi_tuple_data_def!(f32, 3, Normal, DataType::Normal);
+nsi_tuple_data_def!(f32, 16, MatrixF32, DataType::MatrixF32);
+nsi_tuple_data_def!(f64, 16, MatrixF64, DataType::MatrixF64);
 
 /// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
-pub(crate) enum Type {
+pub(crate) enum DataType {
     /// A single [`f32`] value.
     F32 = NSIType::F32 as _,
     /// A single [`f64`] value.
@@ -679,171 +679,359 @@ pub(crate) enum Type {
     Reference = NSIType::Pointer as _,
 }
 
-impl Type {
+impl DataType {
     /// Returns the number of components of the resp. type.
     #[inline]
     pub(crate) fn elemensize(&self) -> usize {
         match self {
-            Type::F32 => 1,
-            Type::F64 => 1,
-            Type::I32 => 1,
-            Type::I64 => 1,
-            Type::String => 1,
-            Type::Color => 3,
-            Type::Point => 3,
-            Type::Vector => 3,
-            Type::Normal => 3,
-            Type::MatrixF32 => 16,
-            Type::MatrixF64 => 16,
-            Type::Reference => 1,
+            DataType::F32 => 1,
+            DataType::F64 => 1,
+            DataType::I32 => 1,
+            DataType::I64 => 1,
+            DataType::String => 1,
+            DataType::Color => 3,
+            DataType::Point => 3,
+            DataType::Vector => 3,
+            DataType::Normal => 3,
+            DataType::MatrixF32 => 16,
+            DataType::MatrixF64 => 16,
+            DataType::Reference => 1,
         }
     }
 }
 
 /// Create a [`F32`] argument.
+///
+/// Name accepts a string literal (escape hatch) or a typed
+/// [`Attribute<f32>`](crate::Attribute) / [`Parameter<f32>`](crate::Parameter)
+/// constant (compile-time type-checked).
 #[macro_export]
 macro_rules! f32 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::F32::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<f32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::F32::new($value)),
+        )
+    }};
 }
 
 /// Create a [`F32Slice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[f32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! f32_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::F32Slice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[f32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::F32Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`F64`] precision argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<f64>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! f64 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::F64::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<f64> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::F64::new($value)),
+        )
+    }};
 }
 
 /// Create a [`F64Slice`] precision array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[f64]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! f64_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::F64Slice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[f64]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::F64Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`I32`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<i32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! i32 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::I32::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<i32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::I32::new($value)),
+        )
+    }};
 }
 
 /// Create a [`I32Slice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[i32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! i32_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::I32Slice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[i32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::I32Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`I64`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<i64>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! i64 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::I64::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<i64> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::I64::new($value)),
+        )
+    }};
 }
 
 /// Create a [`I64Slice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[i64]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! i64_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::I64Slice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[i64]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::I64Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`Color`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Color3F32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! color {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::Color::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Color3F32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::Color::new($value)),
+        )
+    }};
 }
 
 /// Create a [`ColorSlice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[Color3F32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! color_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::ColorSlice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Color3F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::ColorSlice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`Point`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Point3F32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! point {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::Point::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Point3F32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::Point::new($value)),
+        )
+    }};
 }
 
 /// Create a [`PointSlice`] array argument.
+///
+/// First argument may be either:
+/// * a string literal (escape hatch — no static check), or
+/// * a typed name constant of type [`Attribute<[Point3F32]>`](crate::Attribute) /
+///   [`Parameter<[Point3F32]>`](crate::Parameter) (compile-time type-checked).
 #[macro_export]
 macro_rules! point_slice {
-    ($name: tt, $value: expr) => {
+    // String-literal name -- legacy / escape hatch (no type check).
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::PointSlice::new($value)))
     };
+    // Typed Attribute<[Point3F32]> path -- compile-time type-checked.
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Point3F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::PointSlice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`Vector`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Vector3F32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! vector {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::Vector::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Vector3F32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::Vector::new($value)),
+        )
+    }};
 }
 
 /// Create a [`VectorSlice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[Vector3F32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! vector_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::VectorSlice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Vector3F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::VectorSlice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`Normal`] argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Normal3F32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! normal {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::Normal::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Normal3F32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::Normal::new($value)),
+        )
+    }};
 }
 
 /// Create a [`NormalSlice`] array argument.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[Normal3F32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! normal_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::NormalSlice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Normal3F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::NormalSlice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`MatrixF32`] row-major, 4×4 transformation matrix argument.
 /// The matrix is given as 16 [`f32`] values.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Matrix4F32>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! matrix_f32 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF32::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Matrix4F32> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::MatrixF32::new($value)),
+        )
+    }};
 }
 
 /// Create a [`MatrixF32Slice`] row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`f32`] values.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[Matrix4F32]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! matrix_f32_slice {
-    ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF32Slice::new($value)))
+    ($name: literal, $value: expr) => {
+        nsi::Arg::new(
+            $name,
+            nsi::ArgData::from(nsi::MatrixF32Slice::new($value)),
+        )
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Matrix4F32]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::MatrixF32Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`MatrixF64`] row-major, 4×4 transformation matrix argument.
@@ -871,21 +1059,38 @@ macro_rules! matrix_f32_slice {
 /// ```
 #[macro_export]
 macro_rules! matrix_f64 {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF64::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Matrix4F64> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::MatrixF64::new($value)),
+        )
+    }};
 }
 
 /// Create a [`MatrixF64Slice`] row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`f64`] values.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<[Matrix4F64]>`](crate::Attribute) constant.
 #[macro_export]
 macro_rules! matrix_f64_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new(
             $name,
             nsi::ArgData::from(nsi::MatrixF64Slice::new($value)),
         )
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[$crate::Matrix4F64]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::MatrixF64Slice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`String`] argument.
@@ -901,9 +1106,16 @@ macro_rules! matrix_f64_slice {
 /// ```
 #[macro_export]
 macro_rules! string {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::String::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<&'static str> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::String::new($value)),
+        )
+    }};
 }
 
 /// Create a [`String`] array argument.
@@ -924,9 +1136,16 @@ macro_rules! string {
 /// ```
 #[macro_export]
 macro_rules! string_slice {
-    ($name: tt, $value: expr) => {
+    ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::StringSlice::new($value)))
     };
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<[&'static str]> = $name;
+        nsi::Arg::new(
+            __ATTR_CHECK.name(),
+            nsi::ArgData::from(nsi::StringSlice::new($value)),
+        )
+    }};
 }
 
 /// Create a [`Reference`] argument.
@@ -963,7 +1182,10 @@ macro_rules! reference_stable {
 #[macro_export]
 macro_rules! reference_slice {
     ($name: tt, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::ReferenceSlice::new($value)))
+        nsi::Arg::new(
+            $name,
+            nsi::ArgData::from(nsi::ReferenceSlice::new($value)),
+        )
     };
 }
 

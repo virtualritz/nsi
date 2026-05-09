@@ -74,7 +74,7 @@ pub type Name = String;
 ///
 /// Lifetime-free -- implementors own or borrow their data as they see fit.
 /// Mirrors the published crate's internal `ArgDataMethods` + `Arg` metadata.
-pub trait Parameter {
+pub trait ParamValue {
     /// Parameter name.
     fn name(&self) -> &str;
 
@@ -197,7 +197,7 @@ pub trait Nsi: Send + Sync {
     /// `'call` is the transient borrow lifetime (data copied by C side).
     /// The context-bound lifetime (for ReferenceSlice/Callbacks) is baked
     /// into the implementor's concrete Arg type.
-    type Arg<'call>: Parameter
+    type Arg<'call>: ParamValue
     where
         Self: 'call;
 

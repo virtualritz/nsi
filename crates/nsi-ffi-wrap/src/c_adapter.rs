@@ -1,112 +1,113 @@
 //! C API adapter for [`Nsi`] trait implementations.
 //!
-//! This module provides [`FfiApiAdapter`], which wraps an [`Nsi`] implementation
-//! and manages the mapping between C API integer context handles and Rust
-//! context handles.
+//! The adapter takes a factory closure that constructs a fresh [`Nsi`] impl
+//! on each `NSIBegin` from C. Each constructed instance is stored under a
+//! generated integer ID; subsequent C calls dispatch through the trait
+//! methods of the right instance. `NSIEnd` removes the instance from the
+//! map; its `Drop` then releases any renderer-side state.
+//!
+//! There is **no** separate FFI-shape backend trait — the canonical
+//! [`Nsi`] (`self` _is_ the context) is the only NSI trait, and the handle
+//! mapping needed by the C API lives entirely inside this adapter.
 
-use crate::{
-    ArgSlice,
-    nsi_trait::{Action, NodeType, Nsi},
-};
+use crate::{Arg, ArgSlice};
+use ::nsi_trait::{Action, NodeType, Nsi};
 use std::{
     collections::HashMap,
     ffi::c_int,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicI32, Ordering},
     },
 };
 
-/// Adapter that exposes an [`Nsi`] implementation through a C-compatible interface.
+/// Adapter that exposes an [`Nsi`] implementation through the C API.
 ///
-/// The adapter manages a mapping from integer context IDs (as used by the C API)
-/// to the renderer's native handle type.
-///
-/// # Thread Safety
-///
-/// The adapter is thread-safe and can be used from multiple threads concurrently.
-/// It uses interior mutability to manage the context map.
+/// The adapter is constrained to backends whose `Arg<'a>` is
+/// [`Arg<'a>`](crate::Arg) -- the FFI-friendly parameter type that
+/// `nsi-ffi-wrap` produces from C `NSIParam` arrays. Pure-Rust callers
+/// that don't need to be exposed via C-FFI implement [`Nsi`] freely with
+/// any `Arg` type and don't go through this adapter.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use nsi_ffi_wrap::c_adapter::FfiApiAdapter;
+/// use nsi_ffi_wrap::{c_adapter::FfiApiAdapter, NodeType};
 ///
-/// // Create adapter wrapping a renderer implementation
-/// let adapter = FfiApiAdapter::new(MyRenderer::new());
+/// struct MyRenderer { /* ... */ }
+/// impl ::nsi_trait::Nsi for MyRenderer {
+///     type Arg<'call> = nsi_ffi_wrap::Arg<'call> where Self: 'call;
+///     /* ... method impls ... */
+/// }
 ///
-/// // Create a new context (returns integer ID for C API)
-/// let ctx_id = adapter.begin(None)?;
-///
-/// // Use the context...
-/// adapter.create(ctx_id, "mesh1", NodeType::Mesh, None)?;
-///
-/// // Clean up
-/// adapter.end(ctx_id)?;
+/// let adapter = FfiApiAdapter::<MyRenderer>::new(|| MyRenderer::new());
+/// let ctx = adapter.begin(None);
+/// adapter.create(ctx, "mesh1", NodeType::Mesh, None);
+/// adapter.end(ctx);
 /// ```
-pub struct FfiApiAdapter<T: Nsi> {
-    /// The underlying renderer implementation.
-    renderer: T,
-    /// Map from C API integer context IDs to renderer handles.
-    contexts: Mutex<HashMap<c_int, T::Handle>>,
+pub struct FfiApiAdapter<T>
+where
+    T: Nsi + 'static,
+    for<'a> T: Nsi<Arg<'a> = Arg<'a, 'a>>,
+{
+    /// Constructs a fresh `T` for each `NSIBegin` from C.
+    factory: Box<dyn Fn() -> T + Send + Sync>,
+    /// Map from C-side integer context IDs to live renderer instances.
+    contexts: Mutex<HashMap<c_int, Arc<T>>>,
     /// Counter for generating unique context IDs.
     next_id: AtomicI32,
 }
 
-impl<T: Nsi> FfiApiAdapter<T> {
-    /// Create a new adapter wrapping the given renderer.
-    pub fn new(renderer: T) -> Self {
+impl<T> FfiApiAdapter<T>
+where
+    T: Nsi + 'static,
+    for<'a> T: Nsi<Arg<'a> = Arg<'a, 'a>>,
+{
+    /// Create a new adapter with the given factory closure.
+    pub fn new<F>(factory: F) -> Self
+    where
+        F: Fn() -> T + Send + Sync + 'static,
+    {
         Self {
-            renderer,
+            factory: Box::new(factory),
             contexts: Mutex::new(HashMap::new()),
             // Start at 1; 0 is typically NSI_BAD_CONTEXT.
             next_id: AtomicI32::new(1),
         }
     }
 
-    /// Get a reference to the underlying renderer.
+    /// Look up a live `T` by its C API context ID, releasing the map lock.
     #[inline]
-    pub fn renderer(&self) -> &T {
-        &self.renderer
-    }
-
-    /// Look up a renderer handle by its C API context ID.
-    fn lookup_handle(&self, ctx: c_int) -> Option<T::Handle> {
+    fn lookup(&self, ctx: c_int) -> Option<Arc<T>> {
         self.contexts.lock().ok()?.get(&ctx).cloned()
     }
 
-    // ─── C API Equivalents ───────────────────────────────────────────────
+    // ─── C API equivalents ───────────────────────────────────────────────
 
-    /// Create a new rendering context.
-    ///
-    /// Returns a context ID for use with other C API functions.
-    /// Returns 0 (NSI_BAD_CONTEXT) on failure.
-    pub fn begin(&self, args: Option<&ArgSlice>) -> c_int {
-        match self.renderer.begin(args) {
-            Ok(handle) => {
-                let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-                if let Ok(mut contexts) = self.contexts.lock() {
-                    contexts.insert(id, handle);
-                    id
-                } else {
-                    // Lock poisoned.
-                    0
-                }
-            }
-            Err(_) => 0,
+    /// `NSIBegin` -- construct a new `T` and return its integer ID.
+    /// Returns 0 (`NSI_BAD_CONTEXT`) if the context map lock is poisoned.
+    pub fn begin(&self, _args: Option<&ArgSlice>) -> c_int {
+        // The canonical Nsi trait has no begin() — `self` is the context, so
+        // construction happens here via the factory. Begin args from C are
+        // ignored (3Delight does the same on its end).
+        let nsi = (self.factory)();
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        if let Ok(mut contexts) = self.contexts.lock() {
+            contexts.insert(id, Arc::new(nsi));
+            id
+        } else {
+            0
         }
     }
 
-    /// Destroy a rendering context.
+    /// `NSIEnd` -- remove the `T` from the map. Drop runs on last Arc release.
     pub fn end(&self, ctx: c_int) {
-        if let Ok(mut contexts) = self.contexts.lock()
-            && let Some(handle) = contexts.remove(&ctx)
-        {
-            let _ = self.renderer.end(&handle);
+        if let Ok(mut contexts) = self.contexts.lock() {
+            contexts.remove(&ctx);
         }
     }
 
-    /// Create a new node in the scene graph.
+    /// `NSICreate` -- create a node in the addressed context.
     pub fn create(
         &self,
         ctx: c_int,
@@ -114,26 +115,26 @@ impl<T: Nsi> FfiApiAdapter<T> {
         node_type: NodeType,
         args: Option<&ArgSlice>,
     ) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.create(&ctx_handle, handle, node_type, args);
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.create(handle, node_type.as_str(), args);
         }
     }
 
-    /// Delete a node from the scene graph.
+    /// `NSIDelete` -- delete a node.
     pub fn delete(&self, ctx: c_int, handle: &str, args: Option<&ArgSlice>) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.delete(&ctx_handle, handle, args);
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.delete(handle, args);
         }
     }
 
-    /// Set attributes on a node.
+    /// `NSISetAttribute` -- set attributes on a node.
     pub fn set_attribute(&self, ctx: c_int, handle: &str, args: &ArgSlice) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.set_attribute(&ctx_handle, handle, args);
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.set_attribute(handle, args);
         }
     }
 
-    /// Set attributes on a node at a specific time.
+    /// `NSISetAttributeAtTime` -- set time-sampled attributes on a node.
     pub fn set_attribute_at_time(
         &self,
         ctx: c_int,
@@ -141,24 +142,19 @@ impl<T: Nsi> FfiApiAdapter<T> {
         time: f64,
         args: &ArgSlice,
     ) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.set_attribute_at_time(
-                &ctx_handle,
-                handle,
-                time,
-                args,
-            );
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.set_attribute_at_time(handle, time, args);
         }
     }
 
-    /// Delete an attribute from a node.
+    /// `NSIDeleteAttribute` -- remove a single attribute by name.
     pub fn delete_attribute(&self, ctx: c_int, handle: &str, name: &str) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.delete_attribute(&ctx_handle, handle, name);
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.delete_attribute(handle, name);
         }
     }
 
-    /// Connect two nodes in the scene graph.
+    /// `NSIConnect` -- connect two nodes.
     pub fn connect(
         &self,
         ctx: c_int,
@@ -168,19 +164,12 @@ impl<T: Nsi> FfiApiAdapter<T> {
         to_attr: &str,
         args: Option<&ArgSlice>,
     ) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.connect(
-                &ctx_handle,
-                from,
-                from_attr,
-                to,
-                to_attr,
-                args,
-            );
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.connect(from, from_attr, to, to_attr, args);
         }
     }
 
-    /// Disconnect two nodes in the scene graph.
+    /// `NSIDisconnect` -- disconnect two nodes.
     pub fn disconnect(
         &self,
         ctx: c_int,
@@ -189,40 +178,49 @@ impl<T: Nsi> FfiApiAdapter<T> {
         to: &str,
         to_attr: &str,
     ) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.disconnect(
-                &ctx_handle,
-                from,
-                from_attr,
-                to,
-                to_attr,
-            );
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.disconnect(from, from_attr, to, to_attr);
         }
     }
 
-    /// Evaluate procedural nodes or Lua scripts.
+    /// `NSIEvaluate` -- evaluate a procedural / Lua block.
     pub fn evaluate(&self, ctx: c_int, args: Option<&ArgSlice>) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.evaluate(&ctx_handle, args);
+        if let Some(nsi) = self.lookup(ctx) {
+            // canonical Nsi::evaluate takes &[Self::Arg] not Option;
+            // pass an empty slice for None.
+            let empty: &[Arg<'_, '_>] = &[];
+            let a = args.unwrap_or(empty);
+            let _ = nsi.evaluate(a);
         }
     }
 
-    /// Control the rendering process.
+    /// `NSIRenderControl` -- start/stop/wait/etc.
     pub fn render_control(
         &self,
         ctx: c_int,
         action: Action,
         args: Option<&ArgSlice>,
     ) {
-        if let Some(ctx_handle) = self.lookup_handle(ctx) {
-            let _ = self.renderer.render_control(&ctx_handle, action, args);
+        if let Some(nsi) = self.lookup(ctx) {
+            let _ = nsi.render_control(action, args);
         }
     }
 }
 
-// Safety: FfiApiAdapter is Send + Sync because:
-// - T: Nsi requires Send + Sync
-// - contexts uses Mutex for interior mutability
-// - next_id uses AtomicI32
-unsafe impl<T: Nsi> Send for FfiApiAdapter<T> {}
-unsafe impl<T: Nsi> Sync for FfiApiAdapter<T> {}
+// Safety: every field is independently Send + Sync:
+// - `factory` is a Box<dyn Fn() + Send + Sync>
+// - `contexts` is a Mutex<HashMap<c_int, Arc<T>>>; T: Send + Sync via Nsi
+// - `next_id` is AtomicI32
+// The auto-derive would also work; declared explicitly for clarity.
+unsafe impl<T> Send for FfiApiAdapter<T>
+where
+    T: Nsi + 'static,
+    for<'a> T: Nsi<Arg<'a> = Arg<'a, 'a>>,
+{
+}
+unsafe impl<T> Sync for FfiApiAdapter<T>
+where
+    T: Nsi + 'static,
+    for<'a> T: Nsi<Arg<'a> = Arg<'a, 'a>>,
+{
+}

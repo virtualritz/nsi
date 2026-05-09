@@ -35,10 +35,7 @@ pub fn add_test_sphere(
     ];
     ctx.set_attribute(
         &xform_name,
-        &[nsi::matrix_f64!(
-            "transformationmatrix",
-            &transform_matrix
-        )],
+        &[nsi::matrix_f64!("transformationmatrix", &transform_matrix)],
     );
 
     // Sphere (using a subdivided cube)
@@ -183,10 +180,7 @@ pub fn add_area_light(
     ];
     ctx.set_attribute(
         &xform_name,
-        &[nsi::matrix_f64!(
-            "transformationmatrix",
-            &transform_matrix
-        )],
+        &[nsi::matrix_f64!("transformationmatrix", &transform_matrix)],
     );
 
     // Light geometry (quad)

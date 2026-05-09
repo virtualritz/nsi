@@ -45,11 +45,7 @@ macro_rules! define_nsi_renderer {
     ) => {
         // Re-export common types from nsi-ffi-wrap
         pub use $crate::{
-            FfiApi,
-            argument::*,
-            context::*,
-            node::*,
-            nsi_trait::{Action, NodeType, Nsi, NsiExt},
+            Action, FfiApi, NodeType, Nsi, argument::*, context::*, node::*,
         };
 
         #[cfg(feature = "output")]

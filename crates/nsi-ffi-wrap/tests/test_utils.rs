@@ -307,8 +307,10 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[width as i32, height as i32])
-            .array_len(2)],
+        &[
+            nsi::i32_slice!("resolution", &[width as i32, height as i32])
+                .array_len(2),
+        ],
     );
 }
 
@@ -366,17 +368,26 @@ fn save_png(path: &Path, render_data: &RenderData) -> Result<()> {
 
 /// Compare two PNG files and return the average pixel difference.
 fn compare_png_files(path1: &Path, path2: &Path) -> Result<f64> {
-    use std::fs::File;
-    use std::io::BufReader;
+    use std::{fs::File, io::BufReader};
 
     let decoder1 = png::Decoder::new(BufReader::new(File::open(path1)?));
     let mut reader1 = decoder1.read_info()?;
-    let mut buf1 = vec![0; reader1.output_buffer_size().expect("png buffer size unknown")];
+    let mut buf1 = vec![
+        0;
+        reader1
+            .output_buffer_size()
+            .expect("png buffer size unknown")
+    ];
     reader1.next_frame(&mut buf1)?;
 
     let decoder2 = png::Decoder::new(BufReader::new(File::open(path2)?));
     let mut reader2 = decoder2.read_info()?;
-    let mut buf2 = vec![0; reader2.output_buffer_size().expect("png buffer size unknown")];
+    let mut buf2 = vec![
+        0;
+        reader2
+            .output_buffer_size()
+            .expect("png buffer size unknown")
+    ];
     reader2.next_frame(&mut buf2)?;
 
     if buf1.len() != buf2.len() {
