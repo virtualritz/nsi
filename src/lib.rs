@@ -105,9 +105,19 @@
 //!         nsi::i32_slice!("nvertices", &[5; 12]),
 //!         // Render this as a subdivison surface.
 //!         nsi::string!("subdivision.scheme", "catmull-clark"),
-//!         // Crease each of our 30 edges a bit.
-//!         nsi::i32_slice!("subdivision.creasevertices", &face_index),
-//!         nsi::f32_slice!("subdivision.creasesharpness", &[10.; 30]),
+//!         // Crease each of the dodecahedron's 30 edges. Each edge is
+//!         // a pair (start, end) of vertex indices into `positions`,
+//!         // so this list is twice as long as `creasesharpness`.
+//!         nsi::i32_slice!(
+//!             "subdivision.creasevertices",
+//!             &[
+//!                 0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13,
+//!                 2, 16, 3, 11, 3, 13, 3, 17, 4, 8, 4, 14, 4, 18, 5, 9,
+//!                 5, 14, 5, 19, 6, 10, 6, 15, 6, 18, 7, 11, 7, 15, 7, 19,
+//!                 8, 10, 9, 11, 12, 14, 13, 15, 16, 17, 18, 19,
+//!             ]
+//!         ),
+//!         nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
 //!     ],
 //! );
 //! ```

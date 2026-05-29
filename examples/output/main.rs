@@ -1,7 +1,6 @@
 use exr::prelude::*;
 use nsi_ffi_wrap as nsi;
 use png;
-use polyhedron_ops as p_ops;
 use std::{
     fs::File,
     io::BufWriter,
@@ -178,17 +177,10 @@ pub fn main() {
         },
     );
 
-    // Create some geometry.
-    let mut polyhedron = p_ops::Polyhedron::tetrahedron();
-    polyhedron.meta(None, None, None, None, true);
-    polyhedron.normalize();
-    polyhedron.gyro(Some(1. / 3.), Some(0.1), true);
-    polyhedron.normalize();
-    polyhedron.kis(Some(-0.2), None, None, None, true);
-    polyhedron.normalize();
-
-    // The next call blocks until the render has finished.
-    nsi_render(32, &polyhedron, open, write, finish);
+    // Render a creased-subdivision dodecahedron — the same scene-graph
+    // shape used in the top-level crate doctest, inlined in `render.rs`
+    // so the example has no third-party-geometry dependency.
+    nsi_render(32, "dodecahedron", open, write, finish);
 
     // Get the accumulated pixel data.
     let buffers = Arc::try_unwrap(pixel_buffers)

@@ -1,4 +1,3 @@
-use crate::p_ops;
 use nsi_3delight as nsi_3dl;
 use nsi_ffi_wrap as nsi;
 use nsi_toolbelt as nsi_tb;
@@ -75,7 +74,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
     c.set_attribute(
         "ground_xform_0",
         &[nsi::matrix_f64!(
-            "TRANSFORMationmatrix",
+            "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0.,
                 1.,
@@ -129,7 +128,6 @@ fn nsi_reflective_ground(c: &nsi::Context) {
 }
 
 fn nsi_material(c: &nsi::Context, name: &str) {
-    // Particle attributes.
     let attribute_name = format!("{}_attrib", name);
     c.create(&attribute_name, nsi::ATTRIBUTES, None);
     c.connect(&attribute_name, None, name, "geometryattributes", None);
@@ -144,7 +142,6 @@ fn nsi_material(c: &nsi::Context, name: &str) {
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
             nsi::color!("i_color", &[1., 0.6, 0.3]),
-            //nsi::arg!("coating_thickness", 0.1),
             nsi::f32!("roughness", 0.01),
             nsi::f32!("specular_level", 1.0),
             nsi::f32!("metallic", 1.),
@@ -158,14 +155,74 @@ fn nsi_material(c: &nsi::Context, name: &str) {
     );
 }
 
+/// Build a creased-subdivision dodecahedron mesh node named `name`.
+///
+/// This is the same scene-graph shape that the top-level crate doc uses,
+/// inlined here so the example has no third-party-geometry dependency.
+fn nsi_dodecahedron(c: &nsi::Context, name: &str) {
+    // 12 regular pentagon faces, 5 vertices each.
+    let face_index: [i32; 60] = [
+        0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3, 17, 1,
+        12, 14, 5, 9, 2, 13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7, 15, 13, 4,
+        8, 10, 6, 18, 14, 5, 19, 18, 4, 5, 19, 7, 11, 9, 15, 7, 19, 18, 6,
+    ];
+
+    let phi: f32 = 0.5 * (1.0 + 5_f32.sqrt());
+    let phi_c: f32 = phi - 1.0;
+
+    let positions: [nsi::Point3F32; 20] = [
+        [1., 1., 1.],
+        [1., 1., -1.],
+        [1., -1., 1.],
+        [1., -1., -1.],
+        [-1., 1., 1.],
+        [-1., 1., -1.],
+        [-1., -1., 1.],
+        [-1., -1., -1.],
+        [0., phi_c, phi],
+        [0., phi_c, -phi],
+        [0., -phi_c, phi],
+        [0., -phi_c, -phi],
+        [phi_c, phi, 0.],
+        [phi_c, -phi, 0.],
+        [-phi_c, phi, 0.],
+        [-phi_c, -phi, 0.],
+        [phi, 0., phi_c],
+        [phi, 0., -phi_c],
+        [-phi, 0., phi_c],
+        [-phi, 0., -phi_c],
+    ];
+
+    // 30 unique edges of the dodecahedron, each as (start, end). Order
+    // doesn't matter; matches the corresponding sharpness slice 1-to-1.
+    let crease_edges: [i32; 60] = [
+        0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13, 2, 16, 3, 11, 3,
+        13, 3, 17, 4, 8, 4, 14, 4, 18, 5, 9, 5, 14, 5, 19, 6, 10, 6, 15, 6, 18,
+        7, 11, 7, 15, 7, 19, 8, 10, 9, 11, 12, 14, 13, 15, 16, 17, 18, 19,
+    ];
+
+    c.create(name, nsi::MESH, None);
+    c.set_attribute(
+        name,
+        &[
+            nsi::point_slice!(nsi::POSITION, &positions),
+            nsi::i32_slice!("P.indices", &face_index),
+            nsi::i32_slice!("nvertices", &[5; 12]),
+            nsi::string!("subdivision.scheme", "catmull-clark"),
+            nsi::i32_slice!("subdivision.creasevertices", &crease_edges),
+            nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
+        ],
+    );
+}
+
 pub(crate) fn nsi_render<'a>(
     samples: u32,
-    polyhedron: &p_ops::Polyhedron,
+    name: &str,
     open: nsi::output::OpenCallback,
     write: nsi::output::WriteCallback<'a, f32>,
     finish: nsi::output::FinishCallback<'a>,
 ) {
-    let ctx = nsi::Context::new(None) //&[nsi::string!("streamfilename", "stdout")])
+    let ctx = nsi::Context::new(None)
         .expect("Could not create NSI rendering context.");
 
     ctx.set_attribute(
@@ -178,7 +235,7 @@ pub(crate) fn nsi_render<'a>(
         ],
     );
 
-    nsi_camera(&ctx, &polyhedron.name(), open, write, finish);
+    nsi_camera(&ctx, name, open, write, finish);
 
     nsi_tb::append(
         &ctx,
@@ -196,14 +253,12 @@ pub(crate) fn nsi_render<'a>(
         .0,
     );
 
-    let name = polyhedron.to_nsi(&ctx, None, None, None, None);
-    nsi_tb::append(&ctx, nsi::ROOT, None, &name);
+    nsi_dodecahedron(&ctx, name);
+    nsi_tb::append(&ctx, nsi::ROOT, None, name);
 
-    nsi_material(&ctx, &name);
-
+    nsi_material(&ctx, name);
     nsi_reflective_ground(&ctx);
 
-    // And now, render it!
     ctx.render_control(nsi::Action::Start, None);
     ctx.render_control(nsi::Action::Wait, None);
 }
