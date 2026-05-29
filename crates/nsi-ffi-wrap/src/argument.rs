@@ -118,48 +118,48 @@ pub(crate) trait ArgDataMethods {
 pub enum ArgData<'a, 'b> {
     /// Single [`f32`] value.
     F32,
-    /// An `[`[`f32`]`]` slice.
+    /// An [`f32`] slice.
     F32Slice(F32Slice<'a>),
     /// Single [`f64`] value.
     F64,
-    /// An `[`[`f64`]`]` slice.
+    /// An [`f64`] slice.
     F64Slice(F64Slice<'a>),
     /// Single [`i32`] value.
     I32,
-    /// An `[`[`i32`]`]` slice.
+    /// An [`i32`] slice.
     I32Slice(I32Slice<'a>),
     /// Single [`i64`] value.
     I64,
-    /// An `[`[`i64`]`]` slice.
+    /// An [`i64`] slice.
     I64Slice(I64Slice<'a>),
     /// A [`String`].
     String(String),
-    /// A `[`[`String`]`]` slice.
+    /// A [`String`] slice.
     StringSlice(StringSlice),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
-    /// A flat `[`[`f32`]`]` slice of colors (`len % 3 == 0`).
+    /// A flat [`f32`] slice of colors (`len % 3 == 0`).
     ColorSlice(ColorSlice<'a>),
     /// Point, given as three [`f32`] values.
     Point(Point<'a>),
-    /// A flat `[`[`f32`]`]` slice of points (`len % 3 == 0`).
+    /// A flat [`f32`] slice of points (`len % 3 == 0`).
     PointSlice(PointSlice<'a>),
     /// Vector, given as three [`f32`] values.
     Vector(Vector<'a>),
-    /// A flat `[`[`f32`]`]` slice of vectors (`len % 3 == 0`).
+    /// A flat [`f32`] slice of vectors (`len % 3 == 0`).
     VectorSlice(VectorSlice<'a>),
     /// Normal vector, given as three [`f32`] values.
     Normal(Normal<'a>),
-    /// A flat `[`[`f32`]`]` slice of normals (`len % 3 == 0`).
+    /// A flat [`f32`] slice of normals (`len % 3 == 0`).
     NormalSlice(NormalSlice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
     MatrixF32(MatrixF32<'a>),
-    /// A flat `[`[`f32`]`]` slice of matrices (`len % 16 == 0`).
+    /// A flat [`f32`] slice of matrices (`len % 16 == 0`).
     MatrixF32Slice(MatrixF32Slice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`f64`] values.
     MatrixF64(MatrixF64<'a>),
-    /// A flat `[`[`f64`]`]` slice of matrices (`len % 16 == 0`).
+    /// A flat [`f64`] slice of matrices (`len % 16 == 0`).
     MatrixF64Slice(MatrixF64Slice<'a>),
     /// A slice of 4-component f32 points (xyzw).
     /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats — the
@@ -205,7 +205,7 @@ pub enum ArgData<'a, 'b> {
     /// drop(ctx);
     /// ```
     Reference(Reference<'b>),
-    /// A `[`[`Reference`]`]` slice.
+    /// A [`Reference`] slice.
     ReferenceSlice(ReferenceSlice<'b>),
     /// A callback.
     Callback(Callback<'b>),
