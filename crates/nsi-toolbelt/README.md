@@ -2,7 +2,7 @@
 
 <!-- cargo-rdme start -->
 
-## Convenience Methods for an ɴsɪ `Context`
+Convenience methods for an ɴsɪ context.
 
 Names of methods that create nodes are nouns. Methods than modify
 the node graph afterwards use verbs.

@@ -29,19 +29,38 @@
 //!
 //! Postfixes were stripped on `enum` and `struct` type names. E.g.:
 //!
-//! [`NSIParam_t`](https://github.com/virtualritz/nsi-sys/blob/f1f05da59b558f9dd18f7afd37aa82d72b73b7da/include/nsi.h#L69-L77)
-//! ⟶ [`NSIParam`]
+//! [`NSIParam_t`](https://github.com/virtualritz/nsi/blob/master/crates/nsi-sys/include/nsi.h#L69-L77)
+//! ⟶ [`NSIParam`](https://docs.rs/nsi-sys/latest/nsi_sys/struct.NSIParam.html)
 //!
-//! Prefixes and postfixes were stripped on `enum` variants. E.g.:
+//! `enum` variants were renamed to mirror Rust primitive type names where
+//! applicable (`Float` ⟶ `F32`, `Double` ⟶ `F64`, `Integer` ⟶ `I32`,
+//! `Matrix` ⟶ `MatrixF32`, `DoubleMatrix` ⟶ `MatrixF64`) and to drop the
+//! redundant `NSIType` / `NSI` prefix everywhere else. The full mapping for
+//! [`NSIType`](https://docs.rs/nsi-sys/latest/nsi_sys/enum.NSIType.html):
 //!
-//! [`NSIType_t`](https://github.com/virtualritz/nsi-sys/blob/f1f05da59b558f9dd18f7afd37aa82d72b73b7da/include/nsi.h#L27-L41)`::NSITypeInvalid`
-//! ⟶ [`NSIType`]`::Invalid`
+//! | C-API name            | Rust variant |
+//! |-----------------------|--------------|
+//! | `NSITypeInvalid`      | `Invalid`    |
+//! | `NSITypeFloat`        | `F32`        |
+//! | `NSITypeDouble`       | `F64`        |
+//! | `NSITypeInteger`      | `I32`        |
+//! | `NSITypeInt64`        | `I64`        |
+//! | `NSITypeString`       | `String`     |
+//! | `NSITypeColor`        | `Color`      |
+//! | `NSITypePoint`        | `Point`      |
+//! | `NSITypeVector`       | `Vector`     |
+//! | `NSITypeNormal`       | `Normal`     |
+//! | `NSITypeMatrix`       | `MatrixF32`  |
+//! | `NSITypeDoubleMatrix` | `MatrixF64`  |
+//! | `NSITypePointer`      | `Pointer`    |
 //!
 //! Rationale: make code using the bindings a bit less convoluted resp. easier
 //! to read.
 //!
-//! Finally, [`NSIParamFlags`] is a [`bitflags`](https://docs.rs/bitflags)
-//! `struct` that wraps the `NSIParam*` flags from the C-API for ergonomics.
+//! Finally,
+//! [`NSIParamFlags`](https://docs.rs/nsi-sys/latest/nsi_sys/struct.NSIParamFlags.html)
+//! is a [`bitflags`](https://docs.rs/bitflags) `struct` that wraps the
+//! `NSIParam*` flags from the C-API for ergonomics.
 //!
 //! # Compile- vs. Runtime
 //!

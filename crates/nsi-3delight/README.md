@@ -2,7 +2,7 @@
 
 <!-- cargo-rdme start -->
 
-## Nodal Scene Interface Helpers For 3Delight
+Helpers for using ɴsɪ with 3Delight.
 
 Shortcuts for instancing common nodes.
 

@@ -1,33 +1,45 @@
-# nsi-trait
+# `nsi-trait`
 
-Core traits and types for the [Nodal Scene Interface](https://nsi.readthedocs.io/) (ɴsɪ).
+[![Build](https://github.com/virtualritz/nsi/workflows/Build/badge.svg)](https://github.com/virtualritz/nsi/actions)
+[![Documentation](https://docs.rs/nsi-trait/badge.svg)](https://docs.rs/nsi-trait)
+[![Crate](https://img.shields.io/crates/v/nsi-trait.svg)](https://crates.io/crates/nsi-trait)
 
-This crate defines the renderer-agnostic abstractions used by the rest of
-the [`nsi`](https://crates.io/crates/nsi) ecosystem:
+<!-- cargo-rdme start -->
 
-- `Type` — `NSIType_t` mirror (`F32`, `F64`, `I32`, `I64`, `Color`,
-  `Point`, `Vector`, `Normal`, `MatrixF32`, `MatrixF64`, …) with values
-  binary-compatible with the C header.
-- `FfiParam` — a `repr(C)` parameter struct, layout-compatible with
-  `NSIParam_t`.
-- `Flags` — `NSIParam_t.flags` bits.
-- `Action` / `StoppingStatus` / `ErrorLevel` — render-control enums.
-- `Parameter` trait — what a single typed parameter looks like.
-- `Nsi` trait — the renderer surface (`create`, `delete`, `connect`,
-  `set_attribute`, …).
-- `NodeType` — every standard ɴsɪ node type, including `mesh`, `curves`,
-  `nurbs`, `volume`, the cameras, `outputdriver`, `outputlayer`, etc.
+Core traits and types for the Nodal Scene Interface -- ɴsɪ.
 
-This crate is `no_std`-friendly except for the optional `ustr` feature,
-which switches the `Name` alias to `ustr::Ustr` for cheap interned
-handles.
+This crate provides the fundamental abstractions for ɴsɪ without any FFI
+dependencies. It defines:
+
+- `Nsi` -- the core trait that rendering contexts implement (`self` _is_ the context)
+- `ParamValue` -- trait implemented by Rust values that can be expressed
+  as a single ɴsɪ `NSIParam_t` at the FFI boundary
+- [`Attribute<T>`](attribute::Attribute) and its alias [`Parameter<T>`](attribute::Parameter)
+  -- typed compile-time names
+- `Type` -- NSI data type discriminant (`#[repr(i32)]`, C-compatible)
+- `FfiParam` -- C-compatible parameter struct (`#[repr(C)]`)
+- `Flags` -- Parameter flags (PerFace, PerVertex, etc.)
+- `Name` -- Feature-gated string type (`ustr::Ustr` or `String`)
+- `Action` -- Render control actions
+- `NodeType` -- Enum of all standard node types
+- Node type constants (`ROOT`, `MESH`, etc.)
+- [`Attribute<T>`](attribute::Attribute) -- Typed attribute names with
+  per-name compile-time data-shape verification, plus standard attribute
+  constants ([`P`](attribute::P), [`FOV`](attribute::FOV), etc.)
+
+## Crate Organization
+
+This is a pure Rust crate with no FFI. For FFI wrapper functionality,
+see the `nsi-ffi-wrap` crate.
+
+<!-- cargo-rdme end -->
 
 ## License
 
-Licensed under either of
+Licensed under any of
 
 - Apache License, Version 2.0
-- MIT license
+- MIT License
 - zlib License
 
 at your option.
