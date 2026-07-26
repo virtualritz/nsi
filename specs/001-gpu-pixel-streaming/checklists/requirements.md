@@ -11,8 +11,8 @@ unticked until its evidence exists.
   acquirable images, errors, counters).
 - [x] Non-goals are explicit (`spec.md` "Non-Goals").
 - [x] Risks are named (`spec.md` "Risks").
-- [ ] All `[NEEDS CLARIFY]` markers resolved (3 remain -- see `spec.md`;
-  blocked on `/clarify`).
+- [x] All `[NEEDS CLARIFY]` markers resolved (`spec.md` -- four RESOLVED
+  entries dated 2026-07-26; none remain).
 
 ## Contract Quality
 

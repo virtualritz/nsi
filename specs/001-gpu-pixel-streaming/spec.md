@@ -127,20 +127,24 @@ resolution while dragging) never crashes or leaks.
   clients without GPU needs take no graphics dependencies.
 - R10: A 3Delight bridge implements the contract against today's only ɴsɪ
   renderer by uploading its display-driver buckets into the publication
-  images, preserving publication semantics. [NEEDS CLARIFY: is the bridge
-  v1 scope, or does v1 target only a future Rust backend? Bridge-in-v1
-  makes the contract testable against a real renderer now.]
+  images, preserving publication semantics. RESOLVED (2026-07-26): the
+  bridge is v1 scope -- the contract must be testable against a real
+  renderer from the start.
 
 ## Open Clarifications
 
-- [NEEDS CLARIFY: first GPU backend -- raw Vulkan via `ash`, `wgpu`
-  (external-memory import support varies per backend), or Vulkan-first with
-  a `wgpu` interop layer?]
-- [NEEDS CLARIFY: is cross-process/same-GPU (handle export over a local
-  socket) in v1, or is v1 in-process only with the vocabulary designed so
-  cross-process adds later without breakage?]
-- [NEEDS CLARIFY: platform priority -- Linux/Windows (Vulkan external
-  memory) first, macOS (Metal shared events/IOSurface) later?]
+- RESOLVED (2026-07-26): first GPU backend is Vulkan via `ash` on the
+  driver side, with a `wgpu-hal` interop helper for clients. Follows from
+  the shading direction decision (`research.md` D7): cross-vendor network
+  translation removes any CUDA/OptiX interop requirement, and `ash` is the
+  only stable Rust path to external memory + timeline semaphores.
+- RESOLVED (2026-07-26): cross-process/same-GPU is v1 scope -- the
+  `stream.channel` rendezvous with handle export ships in v1 and proves the
+  degradation story immediately (US3 is promoted to v1 alongside US1/US2).
+- RESOLVED (2026-07-26): platform priority is Linux first (Vulkan external
+  memory FD path), Windows next (Win32 handle variant), macOS deferred to
+  its own task (Metal shared events/IOSurface is a materially different
+  implementation).
 
 ## Risks
 

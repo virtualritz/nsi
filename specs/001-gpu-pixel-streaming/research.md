@@ -91,6 +91,39 @@ with a typed error.
 identifiers is forbidden. Auto-negotiation is opt-in, so a client that
 requires GPU residency finds out at open(), not from a profiler.
 
+## D7: Shading Direction For The Realtime Backend (Decided 2026-07-26)
+
+**Decision.** The future realtime backend translates ɴsɪ shader *networks*
+into portable GPU code (SPIR-V/WGSL) against a fixed closure vocabulary --
+the MaterialX-shadergen-shaped approach -- rather than executing arbitrary
+ᴏsʟ on the GPU. Closures remain the shading/integrator boundary; the
+supported node and closure set becomes its own contract surface (see
+`specs/README.md` coverage order).
+
+**Why.** ᴏsʟ's only GPU backend is the upstream LLVM-to-PTX/OptiX path
+(Sony Imageworks + NVIDIA; production-proven in Arnold GPU, Cycles, and
+Isotropix's Angie before the company folded) -- NVIDIA-only. No SPIR-V
+backend exists, and the hard part of writing one is the runtime contract
+(`texture()`, `trace()`, `getattribute()`, ustrings as renderer callbacks),
+not codegen. Network translation is cross-vendor today and matches how ɴsɪ
+is actually used: shader nodes form networks, and ɴsɪ's lights are emissive
+shaders, so the translated profile must include `emission()`.
+
+**Cost.** Arbitrary hand-written ᴏsʟ does not run on the realtime backend;
+it remains available via offline renderers (3Delight) through the same ɴsɪ
+scene. The closure/node vocabulary must be versioned and contracted.
+
+**Rejected.** (A) NVIDIA-only OptiX reuse -- proven but vendor-locked and
+drags CUDA interop into the transport. (C) Writing an ᴏsʟ→SPIR-V backend --
+the correct long-term answer, rejected for scope: runtime-callback design
+dwarfs this feature. (D) CPU shading with GPU display only -- zero shading
+compromise but concedes the realtime goal; remains the fallback posture via
+the bridge.
+
+**Consequence for this feature.** None on the wire contract; it resolved
+the first open clarification (Vulkan/`ash` driver side, no CUDA interop
+requirement).
+
 ## References
 
 - ɴsɪ spec, `outputdriver` node: <https://nsi.readthedocs.io/en/latest/nodes/outputdriver.html>

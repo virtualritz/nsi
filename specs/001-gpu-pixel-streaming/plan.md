@@ -31,8 +31,8 @@ shared-memory transport (`rustix`/equivalent), 3Delight bridge
 require 3Delight and `DELIGHT`; GPU tests run with validation layers where
 available.
 
-**Target Platform**: Linux and Windows first (Vulkan external memory +
-timeline semaphores); macOS deferred pending clarification.
+**Target Platform**: Linux first (Vulkan external memory FD), Windows next
+(Win32 handle variant); macOS deferred (Metal shared events/IOSurface).
 
 **Performance Goals**: acquire ≤ 100 µs and non-blocking; zero client-side
 CPU pixel copies on the GPU transport; bridge path at most one upload per
@@ -50,8 +50,9 @@ untouched for file/CPU consumers.
 - Evidence policy: both contract files include
   `Required Evidence Before Marking Complete`; all rows currently `Open`.
 - Scope: implementation sessions work one user story or contract row at a
-  time; three `[NEEDS CLARIFY]` markers in `spec.md` must be resolved via
-  `/clarify` before implementation starts.
+  time. All `[NEEDS CLARIFY]` markers were resolved 2026-07-26 (recorded
+  inline in `spec.md`): Vulkan/`ash` driver side, bridge in v1,
+  cross-process in v1, Linux → Windows → macOS.
 
 ## Project Structure
 

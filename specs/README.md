@@ -14,7 +14,13 @@ Surfaces on the path from "interactive" (the API's design target) to
    handoff via `Reference`-style arguments.
 3. Frame pacing and temporal semantics -- publication deadlines, edit-class
    fast paths across `synchronize`.
-4. Realtime backend -- an `Nsi`-trait renderer implementation consuming 1--3.
+4. Shading profile -- the fixed closure/node vocabulary for network
+   translation to SPIR-V (`002-shading-profile`; direction decided in
+   `001-gpu-pixel-streaming/research.md` D7; arbitrary ᴏsʟ stays offline).
+5. Realtime backend -- an `Nsi`-trait renderer implementation consuming
+   1--4.
+
+Directory numbers reflect creation order, not coverage order.
 
 ## Definition Of Covered
 

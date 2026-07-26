@@ -2,14 +2,14 @@
 
 Dependency-ordered. Every task is small enough for a single commit and names
 its evidence gate. Nothing may be ticked before its evidence ran (see
-contracts). Tasks T1--T3 are blocked on the `/clarify` pass resolving the
-three `[NEEDS CLARIFY]` markers in `spec.md`.
+contracts).
 
 ## Setup
 
-- [ ] T1: Resolve `[NEEDS CLARIFY]` markers (GPU backend, bridge-in-v1,
-  platform priority) and record answers in `spec.md`. Evidence: updated
-  spec with markers removed.
+- [x] T1: Resolve `[NEEDS CLARIFY]` markers (GPU backend, bridge-in-v1,
+  cross-process scope, platform priority) and record answers in `spec.md`.
+  Evidence: `spec.md` contains no `[NEEDS CLARIFY]` markers; four RESOLVED
+  entries dated 2026-07-26.
 - [ ] T2: Scaffold `crates/nsi-stream` (lib, error types, features:
   `vulkan`, `shm`, `delight-bridge`), wire into workspace. Evidence:
   `cargo build -p nsi-stream`.
@@ -39,7 +39,7 @@ three `[NEEDS CLARIFY]` markers in `spec.md`.
 - [ ] T9: `continuous` mode with per-bucket write fencing. Evidence:
   `publish_continuous_no_torn_bucket`.
 
-## User Story 3 -- CPU/Shm Degradation (P2)
+## User Story 3 -- CPU/Shm Degradation (promoted to v1, 2026-07-26)
 
 - [ ] T10: Transport negotiation (`auto` order, explicit-no-fallback,
   device-UUID check). Evidence: `transport_auto_negotiation`,
@@ -60,7 +60,7 @@ three `[NEEDS CLARIFY]` markers in `spec.md`.
   `resize_drain_safety`.
 - [ ] T15: Close/drain protocol. Evidence: `close_drain`.
 
-## Bridge (gated on T1 outcome)
+## Bridge (v1 scope per T1 resolution)
 
 - [ ] T16: 3Delight bridge -- ndspy-internal driver uploading buckets into
   publication images. Evidence: `bridge_publication` with `DELIGHT` set;
