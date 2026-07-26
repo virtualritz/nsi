@@ -1,0 +1,37 @@
+// Profile node `math_color` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// `op` is a uniform enumerant, not a runtime string: comparing it selects a
+// code path at shader-compile time. String *operations* -- concatenation,
+// formatting, pattern matching -- remain outside the profile.
+
+shader nsi_math_color
+    [[ string help = "Componentwise binary math on two colors." ]]
+(
+    color a = color(0.0)
+        [[ string help = "Left operand." ]],
+    color b = color(0.0)
+        [[ string help = "Right operand." ]],
+    string op = "add"
+        [[ string help = "One of add, subtract, multiply, divide, min, max.",
+           string widget = "popup",
+           string options = "add|subtract|multiply|divide|min|max" ]],
+    output color out_color = color(0.0)
+)
+{
+    if (op == "subtract")
+        out_color = a - b;
+    else if (op == "multiply")
+        out_color = a * b;
+    else if (op == "divide")
+        out_color = color(b[0] != 0.0 ? a[0] / b[0] : 0.0,
+                          b[1] != 0.0 ? a[1] / b[1] : 0.0,
+                          b[2] != 0.0 ? a[2] / b[2] : 0.0);
+    else if (op == "min")
+        out_color = min(a, b);
+    else if (op == "max")
+        out_color = max(a, b);
+    else
+        out_color = a + b;
+}

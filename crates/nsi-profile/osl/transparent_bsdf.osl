@@ -1,0 +1,17 @@
+// Profile node `transparent_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `transparent` closure: straight-through transmission,
+// no refraction, no absorption beyond the tint.
+
+shader nsi_transparent_bsdf
+    [[ string help = "Straight-through transmission." ]]
+(
+    color base_color = color(1.0)
+        [[ string help = "Transmission tint, [0, 1] per channel." ]],
+    output closure color out_bsdf = 0
+)
+{
+    out_bsdf = clamp(base_color, color(0.0), color(1.0)) * transparent();
+}

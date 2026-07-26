@@ -10,7 +10,7 @@ implement it as dual-target node definitions: ᴏsʟ references for offline
 renderers and SPIR-V emitters for realtime backends, with a loud validator
 and an image-comparison parity harness against 3Delight. Sketch status:
 this surface is specced second but implemented after feature 001; three
-`[NEEDS CLARIFY]` markers gate implementation.
+the former `[NEEDS CLARIFY]` markers were resolved 2026-07-26 (spec R2/R3/R4).
 
 ## Technical Context
 
@@ -46,10 +46,11 @@ excludes runtime-callback constructs (Non-Goals).
   activates when the pointer moves here.
 - Required artifacts: all eight present in this directory.
 - Evidence policy: `contracts/profile-conformance.md` includes
-  `Required Evidence Before Marking Complete`; all rows `Open`.
-- Scope: three `[NEEDS CLARIFY]` markers (closure list, MaterialX nodedefs
-  vs native, WGSL target) must be resolved via `/clarify` before
-  implementation.
+  `Required Evidence Before Marking Complete`; 2026-07-26: 6 rows
+  `Covered` with evidence, 3 `Open` (parity, emission parity, MaterialX).
+- Scope: the three formerly-open markers (closure list, MaterialX
+  nodedefs vs native, WGSL target) were resolved 2026-07-26 and recorded
+  in `spec.md` R2/R3/R4.
 
 ## Project Structure
 
@@ -79,7 +80,8 @@ crates/nsi-profile/           (new, this feature; name tentative)
 
 ## Execution Rules
 
-1. Resolve the three `[NEEDS CLARIFY]` markers before implementation.
+1. Resolve the three `[NEEDS CLARIFY]` markers before implementation
+   (done 2026-07-26, recorded in `spec.md` R2/R3/R4).
 2. Work one user story or one contract row at a time.
 3. Add or update tests from the contract invariants before ticking rows.
 4. Mark rows `Covered` only after the listed evidence commands ran.

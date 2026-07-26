@@ -1,0 +1,18 @@
+// Profile node `mix_color` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+
+shader nsi_mix_color
+    [[ string help = "Linear interpolation between two colors." ]]
+(
+    color a = color(0.0)
+        [[ string help = "Value at t = 0." ]],
+    color b = color(1.0)
+        [[ string help = "Value at t = 1." ]],
+    float t = 0.5
+        [[ string help = "Interpolant, clamped to [0, 1]." ]],
+    output color out_color = color(0.0)
+)
+{
+    out_color = mix(a, b, clamp(t, 0.0, 1.0));
+}

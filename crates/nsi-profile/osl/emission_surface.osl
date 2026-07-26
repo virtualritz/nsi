@@ -1,0 +1,22 @@
+// Profile node `emission_surface` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `emission` closure. NSI has no light nodes: every light
+// is geometry carrying this node, so area, spot, point, directional and
+// environment rigs are all expressed through it (US4).
+//
+// The closure weight is radiance in W/sr/m^2 and is not normalised.
+
+shader nsi_emission_surface
+    [[ string help = "Lambertian emitter." ]]
+(
+    color base_color = color(1.0)
+        [[ string help = "Emission color, linear RGB." ]],
+    float intensity = 1.0
+        [[ string help = "Radiance multiplier, W/sr/m^2." ]],
+    output closure color out_surface = 0
+)
+{
+    out_surface = (max(intensity, 0.0) * base_color) * emission();
+}

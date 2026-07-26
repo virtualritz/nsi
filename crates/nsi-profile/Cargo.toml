@@ -1,0 +1,20 @@
+[package]
+name = "nsi-profile"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+keywords = ["graphics", "rendering", "3d", "shading", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Versioned shading profile – the closure/node vocabulary of the Nodal Scene Interface – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-profile/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[dependencies]
+semver = "1"
+thiserror = "2"
+
+[package.metadata.docs.rs]
+all-features = true

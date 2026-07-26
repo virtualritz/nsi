@@ -1,0 +1,26 @@
+// Profile node `image` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Texture sampling *is* part of the profile: it is a renderer service with a
+// bounded contract, unlike `trace()` or `getattribute()`. The `v` coordinate
+// is flipped so that the origin is bottom-left, matching the GPU sampler
+// convention used by `glsl/image.glsl`.
+
+shader nsi_image
+    [[ string help = "Samples a texture file at a texture coordinate." ]]
+(
+    string filename = ""
+        [[ string help = "Texture file to sample.",
+           int wants_filename = 1 ]],
+    vector uv = vector(u, v, 0.0)
+        [[ string help = "Texture coordinate; defaults to the primary UV set." ]],
+    color default_color = color(0.0)
+        [[ string help = "Returned where the texture is missing." ]],
+    output color out_color = color(0.0)
+)
+{
+    out_color = texture(filename, uv[0], 1.0 - uv[1],
+                        "missingcolor", default_color,
+                        "missingalpha", 1.0);
+}

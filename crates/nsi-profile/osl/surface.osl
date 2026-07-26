@@ -1,0 +1,32 @@
+// Profile node `surface` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// The network terminal: it composes a scattering closure, an emissive
+// surface and an opacity into the closure assigned to `Ci`. Opacity below
+// one introduces the profile `transparent` closure, which is how cutouts are
+// expressed without a separate node.
+//
+// Declared as an OSL `surface` shader because it is the shader an NSI
+// `attributes` node binds to geometry; it also exposes `out_surface` so it
+// can be inspected by the translator's parity fixtures.
+
+surface nsi_surface
+    [[ string help = "Network terminal: scattering, emission and opacity." ]]
+(
+    closure color bsdf = 0
+        [[ string help = "Scattering closure." ]],
+    closure color emissive = 0
+        [[ string help = "Emissive surface closure." ]],
+    color opacity = color(1.0)
+        [[ string help = "Coverage, [0, 1] per channel." ]],
+    output closure color out_surface = 0
+)
+{
+    color coverage = clamp(opacity, color(0.0), color(1.0));
+
+    out_surface = coverage * (bsdf + emissive)
+                + (color(1.0) - coverage) * transparent();
+
+    Ci = out_surface;
+}

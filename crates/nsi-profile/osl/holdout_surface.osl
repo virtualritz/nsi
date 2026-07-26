@@ -1,0 +1,15 @@
+// Profile node `holdout_surface` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `holdout` closure: removes the surface from the beauty
+// result and punches alpha so a plate composites behind it.
+
+shader nsi_holdout_surface
+    [[ string help = "Holdout/matte surface." ]]
+(
+    output closure color out_surface = 0
+)
+{
+    out_surface = holdout();
+}
