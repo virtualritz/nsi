@@ -1,0 +1,34 @@
+[package]
+name = "nsi-stream"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+keywords = ["graphics", "rendering", "gpu", "streaming", "3d"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "GPU-resident pixel streaming for the Nodal Scene Interface – ɴsɪ."
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-stream/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[dependencies]
+ash = { version = "0.38", optional = true }
+nsi-trait = { version = "0.3", path = "../nsi-trait" }
+rustix = { version = "1", optional = true, features = [
+    "event",
+    "fs",
+    "mm",
+    "net",
+    "shm",
+] }
+thiserror = "2"
+
+[features]
+default = []
+# Shared-memory transport plus the `stream.channel` rendezvous.
+shm = ["dep:rustix"]
+# Vulkan (`ash`) GPU-resident transport.
+vulkan = ["dep:ash"]
+
+[package.metadata.docs.rs]
+all-features = true

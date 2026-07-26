@@ -11,13 +11,13 @@ timing or image lifecycle (see `publication-lifecycle.md`).
 
 | Behavior | Status | Source Evidence | Test/QA Evidence | Required Next Evidence |
 | --- | --- | --- | --- | --- |
-| Driver is addressed via `drivername "nsi-stream"`; all `stream.*` attributes reach it unmodified | Open | None | None | `cargo test -p nsi-stream vocabulary_forwarding` against the bridge or a mock driver. |
-| Missing `stream.version` or unsupported version fails open() with a typed error | Open | None | None | `cargo test -p nsi-stream vocabulary_version_reject`. |
-| Unknown `stream.*` attribute is ignored with a warning, not an error | Open | None | None | `cargo test -p nsi-stream vocabulary_unknown_attr_warns`. |
-| `stream.transport "auto"` negotiates gpu → shm → callback and reports the selected transport | Open | None | None | `cargo test -p nsi-stream transport_auto_negotiation` with forced-unviable fixtures. |
-| Explicit transport that is unviable fails open() with a typed error, no fallback | Open | None | None | `cargo test -p nsi-stream transport_explicit_no_fallback`. |
-| `stream.device.uuid` mismatch fails/falls back per transport rules | Open | None | None | `cargo test -p nsi-stream transport_device_mismatch`. |
-| Per-layer format from each connected `outputlayer` is honored (RGBA f16/f32 minimum) | Open | None | None | `cargo test -p nsi-stream layer_formats`; manual QA: multi-AOV example shows beauty + ID layer. |
+| Driver is addressed via `drivername "nsi-stream"`; all `stream.*` attributes reach it unmodified | Covered | `crates/nsi-stream/src/config.rs` (`StreamConfig::parse`, `Attr`/`AttrValue`) | `cargo test -p nsi-stream vocabulary_forwarding` -- ok (2026-07-26; parser fixture -- bridge/mock-driver forwarding re-check pending T16) | `cargo test -p nsi-stream vocabulary_forwarding` against the bridge or a mock driver. |
+| Missing `stream.version` or unsupported version fails open() with a typed error | Covered | `crates/nsi-stream/src/config.rs` + `src/error.rs` (`Error::MissingAttribute`, `Error::UnsupportedVersion`) | `cargo test -p nsi-stream vocabulary_version_reject` -- ok (2026-07-26) | `cargo test -p nsi-stream vocabulary_version_reject`. |
+| Unknown `stream.*` attribute is ignored with a warning, not an error | Covered | `crates/nsi-stream/src/config.rs` (`Warning`) | `cargo test -p nsi-stream vocabulary_unknown_attr_warns` -- ok (2026-07-26) | `cargo test -p nsi-stream vocabulary_unknown_attr_warns`. |
+| `stream.transport "auto"` negotiates gpu → shm → callback and reports the selected transport | Covered | `crates/nsi-stream/src/transport/mod.rs` (`negotiate`, `TransportProbe`, `StaticProbe`) | `cargo test -p nsi-stream transport_auto_negotiation` -- ok (2026-07-26, forced-unviable fixtures) | `cargo test -p nsi-stream transport_auto_negotiation` with forced-unviable fixtures. |
+| Explicit transport that is unviable fails open() with a typed error, no fallback | Covered | `crates/nsi-stream/src/transport/mod.rs` (`Error::TransportUnavailable`, no fallback path) | `cargo test -p nsi-stream transport_explicit_no_fallback` -- ok (2026-07-26) | `cargo test -p nsi-stream transport_explicit_no_fallback`. |
+| `stream.device.uuid` mismatch fails/falls back per transport rules | Covered | `crates/nsi-stream/src/transport/mod.rs` (`Error::DeviceMismatch` explicit; auto falls through) | `cargo test -p nsi-stream transport_device_mismatch` -- ok (2026-07-26) | `cargo test -p nsi-stream transport_device_mismatch`. |
+| Per-layer format from each connected `outputlayer` is honored (RGBA f16/f32 minimum) | Partial | `crates/nsi-stream/src/layer.rs` (`LayerFormat`, `Layer`), `src/ring.rs` (per-layer planes) | `cargo test -p nsi-stream layer_formats` -- ok (2026-07-26); multi-AOV manual QA pending viewport example (T7) + bridge (T16) | `cargo test -p nsi-stream layer_formats`; manual QA: multi-AOV example shows beauty + ID layer. |
 
 ## Invariants
 

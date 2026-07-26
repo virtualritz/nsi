@@ -1,0 +1,20 @@
+// Profile node `add_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Energy: the sum is deliberately *not* renormalised. Layering two
+// energy-conserving closures can exceed unity; that is the author's choice,
+// and both targets reproduce it identically.
+
+shader nsi_add_bsdf
+    [[ string help = "Sum of two scattering closures." ]]
+(
+    closure color a = 0
+        [[ string help = "First closure." ]],
+    closure color b = 0
+        [[ string help = "Second closure." ]],
+    output closure color out_bsdf = 0
+)
+{
+    out_bsdf = a + b;
+}

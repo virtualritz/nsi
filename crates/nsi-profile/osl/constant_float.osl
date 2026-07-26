@@ -1,0 +1,19 @@
+// Profile node `constant_float` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5). This is what an
+// offline renderer (3Delight) executes; the GLSL function in
+// `glsl/constant_float.glsl` is the GPU source of record for the same node.
+//
+// The shader identifier is prefixed `nsi_` so that node names may collide
+// with OSL type and closure keywords; the *file* name is the node name.
+
+shader nsi_constant_float
+    [[ string help = "A uniform float value." ]]
+(
+    float value = 0.0
+        [[ string help = "The value to output." ]],
+    output float out_float = 0.0
+)
+{
+    out_float = value;
+}

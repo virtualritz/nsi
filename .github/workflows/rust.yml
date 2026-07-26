@@ -24,3 +24,17 @@ jobs:
         with:
           command: build
           args: --features download_lib3delight,output,toolbelt,delight,jupyter"
+
+  # Contract tests for renderer-independent crates (no 3Delight needed).
+  # Test names are cited by the contract matrices in specs/.
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test nsi-profile
+        run: cargo test -p nsi-profile
+      - name: Test nsi-stream (shm)
+        run: cargo test -p nsi-stream --features shm
+      - name: Build nsi-stream (vulkan)
+        run: cargo build -p nsi-stream --features vulkan

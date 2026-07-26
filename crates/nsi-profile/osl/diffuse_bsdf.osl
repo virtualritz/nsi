@@ -1,0 +1,24 @@
+// Profile node `diffuse_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `diffuse` closure (Oren-Nayar). Reflectance integrates
+// to at most `base_color`; `roughness` is the Oren-Nayar sigma, and 0
+// reduces to Lambert.
+
+shader nsi_diffuse_bsdf
+    [[ string help = "Oren-Nayar diffuse reflection." ]]
+(
+    color base_color = color(0.18)
+        [[ string help = "Diffuse albedo, [0, 1] per channel." ]],
+    float roughness = 0.0
+        [[ string help = "Oren-Nayar sigma, [0, 1]." ]],
+    normal shading_normal = N
+        [[ string help = "Shading normal; defaults to N." ]],
+    output closure color out_bsdf = 0
+)
+{
+    out_bsdf = oren_nayar_diffuse_bsdf(normalize(shading_normal),
+                                       clamp(base_color, color(0.0), color(1.0)),
+                                       clamp(roughness, 0.0, 1.0));
+}

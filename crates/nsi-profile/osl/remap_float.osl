@@ -1,0 +1,24 @@
+// Profile node `remap_float` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+
+shader nsi_remap_float
+    [[ string help = "Affine remap of a float from one range to another." ]]
+(
+    float in_float = 0.0
+        [[ string help = "Value to remap." ]],
+    float inlow = 0.0
+        [[ string help = "Low end of the input range." ]],
+    float inhigh = 1.0
+        [[ string help = "High end of the input range." ]],
+    float outlow = 0.0
+        [[ string help = "Low end of the output range." ]],
+    float outhigh = 1.0
+        [[ string help = "High end of the output range." ]],
+    output float out_float = 0.0
+)
+{
+    float span = inhigh - inlow;
+    float t = (abs(span) > 1.0e-8) ? (in_float - inlow) / span : 0.0;
+    out_float = outlow + t * (outhigh - outlow);
+}

@@ -1,0 +1,14 @@
+// Profile node `constant_color` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+
+shader nsi_constant_color
+    [[ string help = "A uniform color value." ]]
+(
+    color value = color(0.5)
+        [[ string help = "The value to output, linear RGB." ]],
+    output color out_color = color(0.0)
+)
+{
+    out_color = value;
+}

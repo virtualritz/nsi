@@ -1,0 +1,17 @@
+// Profile node `uv` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Only the primary texture coordinate set is exposed in v1. Addressing
+// further sets would require `getattribute()`, which is excluded from the
+// profile (see the crate-level exclusion list); multiple UV sets are
+// deferred to a later profile version.
+
+shader nsi_uv
+    [[ string help = "The primary texture coordinate as (u, v, 0)." ]]
+(
+    output vector out_vector = vector(0.0)
+)
+{
+    out_vector = vector(u, v, 0.0);
+}

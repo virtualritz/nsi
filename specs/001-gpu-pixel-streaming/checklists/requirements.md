@@ -19,15 +19,18 @@ unticked until its evidence exists.
 - [x] Every important behavior has a contract row
   (`contracts/attribute-vocabulary.md`,
   `contracts/publication-lifecycle.md`).
-- [x] Every row is `Covered`, `Partial`, or `Open` (all currently `Open`).
-- [ ] `Covered` rows cite source evidence (none yet -- no implementation).
-- [ ] `Covered` rows cite test or manual QA evidence (none yet).
+- [x] Every row is `Covered`, `Partial`, or `Open` (2026-07-26: 16
+  `Covered`, 1 `Partial`, 1 `Open` across both matrices).
+- [x] `Covered` rows cite source evidence (`crates/nsi-stream/src/`
+  symbols per row, 2026-07-26).
+- [x] `Covered` rows cite test or manual QA evidence (exact
+  `cargo test -p nsi-stream` commands per row, run 2026-07-26).
 - [x] Required evidence is listed before work starts (both contract files).
 
 ## Implementation Readiness
 
-- [ ] Tasks are small enough for single commits (`tasks.md` drafted; verify
-  during `/analyze` after clarifications).
+- [x] Tasks are small enough for single commits (`tasks.md`; verified
+  during the 2026-07-26 `/analyze` pass).
 - [x] Persistence and migration behavior is documented (`data-model.md` --
   versioned wire contract, no disk state).
 - [x] Shared logic ownership is named (`nsi-stream` crate,

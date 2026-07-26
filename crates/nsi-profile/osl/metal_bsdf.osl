@@ -1,0 +1,50 @@
+// Profile node `metal_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `microfacet` closure with conductor Fresnel. The
+// artistic `base_color`/`edge_color` pair is converted to complex IOR with
+// the Gulbrandsen (2014) mapping, which both targets implement identically.
+
+shader nsi_metal_bsdf
+    [[ string help = "GGX conductor with artistic reflectivity parameters." ]]
+(
+    color base_color = color(0.95, 0.93, 0.88)
+        [[ string help = "Reflectivity at normal incidence, [0, 1)." ]],
+    color edge_color = color(1.0)
+        [[ string help = "Reflectivity at grazing incidence, [0, 1]." ]],
+    float roughness = 0.2
+        [[ string help = "Perceptual roughness, [0, 1]; alpha = roughness^2." ]],
+    float anisotropy = 0.0
+        [[ string help = "Tangential roughness stretch, [0, 1]." ]],
+    normal shading_normal = N
+        [[ string help = "Shading normal; defaults to N." ]],
+    vector tangent = normalize(dPdu)
+        [[ string help = "Anisotropy tangent; defaults to normalize(dPdu)." ]],
+    output closure color out_bsdf = 0
+)
+{
+    color r = clamp(base_color, color(0.0), color(0.99));
+    color g = clamp(edge_color, color(0.0), color(1.0));
+    color root_r = sqrt(r);
+
+    color eta_min = (color(1.0) - r) / (color(1.0) + r);
+    color eta_max = (color(1.0) + root_r) / (color(1.0) - root_r);
+    color eta = mix(eta_max, eta_min, g);
+
+    color eta_plus = eta + color(1.0);
+    color eta_minus = eta - color(1.0);
+    color k_squared = (eta_plus * eta_plus * r - eta_minus * eta_minus)
+                    / (color(1.0) - r);
+    color k = sqrt(max(k_squared, color(0.0)));
+
+    float alpha = clamp(roughness, 0.001, 1.0);
+    alpha = alpha * alpha;
+    float stretch = 1.0 - clamp(anisotropy, 0.0, 1.0) * 0.9;
+
+    out_bsdf = conductor_bsdf(normalize(shading_normal),
+                              normalize(tangent),
+                              alpha / stretch,
+                              alpha * stretch,
+                              eta, k, "ggx");
+}

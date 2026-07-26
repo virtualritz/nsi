@@ -94,17 +94,31 @@ re-authoring.
 
 - R1: The profile is versioned; networks declare (or are validated against)
   a profile version. Version negotiation failures are typed and loud.
-- R2: The closure set is fixed per version. [NEEDS CLARIFY: exact v1
-  closure list -- proposed baseline: `diffuse` (Oren-Nayar), `microfacet`
-  GGX (reflect/refract), conductor/dielectric parameterizations, `sheen`,
-  `emission`, `transparent`, `holdout`; decide whether subsurface is v1 or
-  v2.]
+- R2: The closure set is fixed per version. RESOLVED (2026-07-26): the v1
+  closure list is the proposed baseline -- `diffuse` (Oren-Nayar),
+  `microfacet` GGX (reflect and refract, with conductor and dielectric
+  Fresnel parameterizations), `sheen`, `emission`, `transparent`,
+  `holdout`. Subsurface is deferred to v2: it is the one closure whose GPU
+  evaluation strategy (diffusion vs. random-walk) would dictate integrator
+  architecture, which is coverage-order item 5, not this feature.
 - R3: The node set is derived from a MaterialX standard-library subset,
-  with ɴsɪ-native naming. [NEEDS CLARIFY: are profile nodes defined as
-  MaterialX nodedefs (reusing its shadergen infrastructure) or ɴsɪ-native
-  definitions with a MaterialX mapping layer?]
-- R4: Translation target is SPIR-V. [NEEDS CLARIFY: is a WGSL target
-  needed for `wgpu`-based backends, or is SPIR-V passthrough sufficient?]
+  with ɴsɪ-native naming. RESOLVED (2026-07-26): profile nodes are
+  ɴsɪ-native definitions with a MaterialX mapping layer (feature-gated
+  import, US5). Reusing MaterialX nodedefs/shadergen was rejected because
+  it drags the glslang GLSL-then-SPIR-V toolchain into the core path (see
+  Risks) and makes MaterialX a mandatory dependency of every backend;
+  ɴsɪ-native definitions keep one owner (constitution VII) and make the
+  MaterialX subset an interchange concern, not a foundation.
+- R4: Translation target is SPIR-V. RESOLVED (2026-07-26): SPIR-V
+  passthrough is sufficient for v1 -- the realtime backend is Vulkan-first
+  (001 resolution) and `wgpu` accepts SPIR-V passthrough on Vulkan. No WGSL
+  emitter in v1. Codegen stays behind a trait (`GpuEmitter`) so a WGSL or
+  native emitter can be added without touching NodeDefs: in v1 each NodeDef
+  carries a GLSL 4.60 function body as its GPU source of record, and the
+  translator assembles the network module source + ParameterBlock layout;
+  compilation of the assembled module to SPIR-V (via glslang/shaderc) is a
+  backend build step behind the same trait, so the profile crate itself
+  takes no compiler toolchain dependency.
 - R5: Every profile node ships an ᴏsʟ reference implementation; the
   reference set is what offline renderers execute (US2 parity).
 - R6: Each translated network yields a deterministic parameter-block layout

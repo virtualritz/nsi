@@ -1,0 +1,35 @@
+// Profile node `dielectric_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Emits the profile `microfacet` closure with dielectric Fresnel, carrying
+// both the reflect and the refract lobe. The reflection tint is fixed at
+// white: a dielectric's reflection is achromatic by construction, and
+// tinting it is what `metal_bsdf` is for.
+
+shader nsi_dielectric_bsdf
+    [[ string help = "GGX dielectric with reflection and refraction lobes." ]]
+(
+    float ior = 1.5
+        [[ string help = "Refractive index, >= 1." ]],
+    float roughness = 0.0
+        [[ string help = "Perceptual roughness, [0, 1]; alpha = roughness^2." ]],
+    color transmission_color = color(1.0)
+        [[ string help = "Tint of the refracted lobe, [0, 1] per channel." ]],
+    normal shading_normal = N
+        [[ string help = "Shading normal; defaults to N." ]],
+    vector tangent = normalize(dPdu)
+        [[ string help = "Anisotropy tangent; defaults to normalize(dPdu)." ]],
+    output closure color out_bsdf = 0
+)
+{
+    float alpha = clamp(roughness, 0.0, 1.0);
+    alpha = alpha * alpha;
+
+    out_bsdf = dielectric_bsdf(normalize(shading_normal),
+                               normalize(tangent),
+                               color(1.0),
+                               clamp(transmission_color, color(0.0), color(1.0)),
+                               alpha, alpha,
+                               max(ior, 1.0), "ggx");
+}

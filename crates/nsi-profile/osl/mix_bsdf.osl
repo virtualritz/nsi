@@ -1,0 +1,22 @@
+// Profile node `mix_bsdf` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Linear closure blend. Energy: the result integrates to at most the larger
+// of the two inputs, so a mix of energy-conserving closures conserves energy.
+
+shader nsi_mix_bsdf
+    [[ string help = "Linear interpolation between two scattering closures." ]]
+(
+    closure color a = 0
+        [[ string help = "Closure at t = 0." ]],
+    closure color b = 0
+        [[ string help = "Closure at t = 1." ]],
+    float t = 0.5
+        [[ string help = "Interpolant, clamped to [0, 1]." ]],
+    output closure color out_bsdf = 0
+)
+{
+    float w = clamp(t, 0.0, 1.0);
+    out_bsdf = (1.0 - w) * a + w * b;
+}

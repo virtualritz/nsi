@@ -19,6 +19,48 @@
 - **ValidationReport** -- per-scene: conforming | violations
   (node handle, construct, profile version consulted).
 
+## Profile v1 Tables (Frozen 2026-07-26)
+
+Owner: `crates/nsi-profile` (`src/closure.rs`, `src/v1.rs`,
+`src/registry.rs`). The registry in code is the machine-readable copy of
+record; this section is the human-readable freeze. Any change to these
+tables is a profile version bump (additive ⇒ minor, semantic/layout ⇒
+major).
+
+### ClosureDefs (v1)
+
+| Closure | Parameters | Semantic reference |
+| --- | --- | --- |
+| `diffuse` | `shading_normal` normal, `albedo` color [0,1], `roughness` float [0,1] (σ) | Oren-Nayar; integrates to ≤ albedo. |
+| `microfacet` | `shading_normal`, `tangent`, `roughness` [0,1], `anisotropy` [0,1], mode `reflect`\|`refract`, Fresnel `conductor{eta,k color}`\|`dielectric{ior ≥ 1}` | GGX, Smith shadowing. |
+| `sheen` | `shading_normal`, `albedo` color, `roughness` float | Retro-sheen fabric lobe. |
+| `emission` | weight color = radiance, W·sr⁻¹·m⁻² | ɴsɪ lights are geometry with `emission()`. |
+| `transparent` | weight color | Straight-through transmission. |
+| `holdout` | -- | Matte/holdout. |
+
+Subsurface is deferred to v2 (spec R2 resolution).
+
+### NodeDefs (v1, 18 nodes)
+
+Pattern/utility: `constant_float`, `constant_color`, `uv`, `image`,
+`mix_color`, `math_color` (op enumerant: add/multiply/min/max/…),
+`remap_float`, `normal_map`, `mix_bsdf`, `add_bsdf`.
+
+Material: `diffuse_bsdf`, `metal_bsdf` (conductor GGX), `dielectric_bsdf`
+(reflect+refract GGX), `sheen_bsdf`, `transparent_bsdf`,
+`emission_surface`, `holdout_surface`, `surface` (terminal:
+bsdf/emissive/opacity → Surface).
+
+Every NodeDef carries both targets (spec R5): an ᴏsʟ 1.12 reference
+(`osl/<node>.osl`) and a GLSL 4.60 GPU source (`glsl/<node>.glsl`), per
+the R4 resolution (SPIR-V compilation is a backend step behind the
+`GpuEmitter` trait). Port-naming rule: port names double as ɴsɪ attribute
+names and as parameter identifiers in both targets, so ᴏsʟ/GLSL keywords
+and closure built-in names are avoided (`shading_normal`, `base_color`,
+`emissive`, `out_bsdf`, …). The `uv` node has no UV-set index input --
+that would require `getattribute()`, which is on the normative exclusion
+list; multiple UV sets are deferred.
+
 ## Translation Pipeline
 
 ```text

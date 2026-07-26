@@ -1,0 +1,38 @@
+// Profile node `normal_map` -- NSI shading profile v1.
+//
+// OSL 1.12 reference implementation (requirement R5).
+//
+// Tangent-space normal decoding. The tangent frame is Gram-Schmidt
+// orthonormalised against the shading normal so that both targets build the
+// same basis.
+
+shader nsi_normal_map
+    [[ string help = "Decodes a tangent space normal map." ]]
+(
+    color in_color = color(0.5, 0.5, 1.0)
+        [[ string help = "Encoded normal, [0, 1] per channel." ]],
+    float strength = 1.0
+        [[ string help = "Scales the tangential deflection." ]],
+    normal shading_normal = N
+        [[ string help = "Frame normal; defaults to the shading normal." ]],
+    vector tangent = normalize(dPdu)
+        [[ string help = "Frame tangent; defaults to normalize(dPdu)." ]],
+    output normal out_normal = normal(0.0)
+)
+{
+    vector frame_n = normalize(vector(shading_normal[0],
+                                      shading_normal[1],
+                                      shading_normal[2]));
+    vector frame_t = tangent - frame_n * dot(frame_n, tangent);
+    float t_length = length(frame_t);
+    frame_t = (t_length > 1.0e-8) ? frame_t / t_length
+                                  : normalize(cross(frame_n, vector(0, 0, 1)));
+    vector frame_b = cross(frame_n, frame_t);
+
+    vector encoded = vector(in_color[0], in_color[1], in_color[2]) * 2.0 - 1.0;
+    vector decoded = frame_t * (encoded[0] * strength)
+                   + frame_b * (encoded[1] * strength)
+                   + frame_n * encoded[2];
+
+    out_normal = normal(normalize(decoded));
+}

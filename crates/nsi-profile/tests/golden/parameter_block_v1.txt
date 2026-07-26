@@ -1,0 +1,6 @@
+# nsi-profile ParameterBlock, std430, little-endian
+# offset size type handle.param
+0 12 color tex.default_color
+12 4 float mat.roughness
+16 12 color out.opacity
+total_size 32
