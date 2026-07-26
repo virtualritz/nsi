@@ -104,12 +104,17 @@
 //! - `shm` -- the shared-memory transport and the `stream.channel`
 //!   rendezvous (Unix).
 //! - `vulkan` -- the GPU-resident transport on `ash`.
+//! - `delight-bridge` -- the 3Delight bridge ([`bridge`]), which feeds the
+//!   ring from the renderer's display-driver callbacks (R10). This is the
+//!   one feature that pulls in `nsi-ffi-wrap`.
 //!
-//! Neither is on by default: a client that only needs the in-process path
-//! takes no graphics and no syscall dependencies (R9).
+//! None is on by default: a client that only needs the in-process path
+//! takes no graphics, no syscall and no FFI dependencies (R9).
 
 #![deny(missing_docs)]
 
+#[cfg(feature = "delight-bridge")]
+pub mod bridge;
 #[cfg(all(unix, feature = "shm"))]
 pub mod channel;
 pub mod config;

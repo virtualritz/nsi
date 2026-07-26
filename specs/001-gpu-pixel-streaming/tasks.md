@@ -84,4 +84,12 @@ contracts).
 
 - [ ] T16: 3Delight bridge -- ndspy-internal driver uploading buckets into
   publication images. Evidence: `bridge_publication` with `DELIGHT` set;
-  viewport-example manual QA against 3Delight.
+  viewport-example manual QA against 3Delight. Progress (2026-07-26):
+  bridge implemented (`crates/nsi-stream/src/bridge/mod.rs`, feature
+  `delight-bridge` over `nsi-ffi-wrap/output`'s ndspy-internal driver);
+  `cargo test -p nsi-stream --features delight-bridge bridge_publication`
+  with `DELIGHT` set -- ok against 3Delight 2.9.30. Remaining for the
+  tick: viewport-example manual QA (blocked on T7 + a display). Note:
+  the staged 2.9.30 download is the bare library (no `osl/` shaders), so
+  the fixture scene is an unshaded coverage quad; re-run with a full
+  3Delight install for a shaded fixture.

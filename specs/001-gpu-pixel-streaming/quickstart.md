@@ -4,9 +4,10 @@
 exists; the vocabulary/ring/negotiation/shm rows are covered by the test
 commands below (see the contract matrices for per-row evidence). Still
 pending: GPU validation-layer runs (needs a Vulkan-capable box), the
-viewport example (T7), and the 3Delight bridge (T16) -- the
-`delight-bridge` feature is not declared until T16 lands. Nothing here is
-evidence until it has actually been run.
+viewport example (T7), and the bridge's viewport manual QA (the
+`delight-bridge` feature and `bridge_publication` landed 2026-07-26,
+verified against 3Delight 2.9.30). Nothing here is evidence until it has
+actually been run.
 
 ## Build And Test
 

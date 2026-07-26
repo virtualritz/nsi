@@ -13,6 +13,9 @@ repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
 ash = { version = "0.38", optional = true }
+nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = [
+    "output",
+], optional = true }
 nsi-trait = { version = "0.3", path = "../nsi-trait" }
 rustix = { version = "1", optional = true, features = [
     "event",
@@ -25,6 +28,9 @@ thiserror = "2"
 
 [features]
 default = []
+# The 3Delight bridge: the renderer's ndspy-internal display driver uploading
+# buckets into the publication ring.
+delight-bridge = ["dep:nsi-ffi-wrap"]
 # Shared-memory transport plus the `stream.channel` rendezvous.
 shm = ["dep:rustix"]
 # Vulkan (`ash`) GPU-resident transport.

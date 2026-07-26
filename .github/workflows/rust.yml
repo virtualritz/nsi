@@ -38,3 +38,5 @@ jobs:
         run: cargo test -p nsi-stream --features shm
       - name: Build nsi-stream (vulkan)
         run: cargo build -p nsi-stream --features vulkan
+      - name: Build nsi-stream (delight-bridge)
+        run: cargo build -p nsi-stream --features delight-bridge
