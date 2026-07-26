@@ -248,3 +248,21 @@ Adopt conventional commit prefixes (`feat:`, `fix:`, `chore:`). Keep messages co
 3. **Public API**: Minimize public surface area; use `pub(crate)` liberally.
 4. **Error Types**: Define domain-specific error types with `thiserror`.
 5. **Tests**: Co-locate unit tests; integration tests in `tests/`.
+
+<!-- SPEC-DRIVEN DEVELOPMENT START -->
+Spec-driven development is enabled for this repository.
+
+Before creating or changing a feature surface:
+
+- Read `.blueprints/domain/spec-driven-development.md`.
+- Read the active spec pointer in `.specify/feature.json`, or the project
+  equivalent named here.
+- Read the current feature plan before editing code.
+- Work one user story or one contract row at a time.
+- Mark contract rows `Covered` only after source evidence and test/manual QA
+  evidence are present.
+
+Project-specific specs live in `specs/`. Shared rules and templates live in
+`.blueprints/`.
+<!-- SPEC-DRIVEN DEVELOPMENT END -->
+
