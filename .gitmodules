@@ -1,0 +1,3 @@
+[submodule ".blueprints"]
+	path = .blueprints
+	url = https://github.com/virtualritz/blueprints
