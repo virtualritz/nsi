@@ -1,8 +1,12 @@
 # Quickstart: GPU-Resident Pixel Streaming
 
-**Current status: spec only.** `crates/nsi-stream` does not exist yet; the
-commands below are the verification path once tasks in `tasks.md` land.
-Nothing here is evidence until it has actually been run.
+**Current status: core implemented (2026-07-26).** `crates/nsi-stream`
+exists; the vocabulary/ring/negotiation/shm rows are covered by the test
+commands below (see the contract matrices for per-row evidence). Still
+pending: GPU validation-layer runs (needs a Vulkan-capable box), the
+viewport example (T7), and the 3Delight bridge (T16) -- the
+`delight-bridge` feature is not declared until T16 lands. Nothing here is
+evidence until it has actually been run.
 
 ## Build And Test
 
