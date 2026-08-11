@@ -266,3 +266,13 @@ Project-specific specs live in `specs/`. Shared rules and templates live in
 `.blueprints/`.
 <!-- SPEC-DRIVEN DEVELOPMENT END -->
 
+## Shared Rust Rules
+
+- [Rust Agent Rules](.blueprints/lang/rust/AGENTS.md)
+- [Rust Testing](.blueprints/lang/rust/testing.md)
+- [Rust Numeric Performance](.blueprints/lang/rust/numeric-performance.md) --
+  **mandatory** for any change whose purpose is speed, or any refactor
+  touching a hot numeric path: consider occupancy, cutting the work, float
+  reassociation and portable SIMD, and record the decision, rejections
+  included.
+
