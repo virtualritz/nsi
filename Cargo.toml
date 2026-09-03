@@ -48,6 +48,8 @@ nsi-trait = { version = "0.3", path = "crates/nsi-trait" }
 [dev-dependencies]
 dl-openvdb-query = "0.1"
 exr = "1"
+log = "0.4"
+libc = "0.2"
 nsi-3delight = { version = "0.9", path = "crates/nsi-3delight" }
 nsi-toolbelt = { version = "0.9", path = "crates/nsi-toolbelt" }
 png = "0.18"
@@ -59,6 +61,11 @@ name = "interactive"
 [[example]]
 path = "examples/output/main.rs"
 name = "output"
+required-features = ["output"]
+
+[[example]]
+path = "examples/concurrent_interactive/main.rs"
+name = "concurrent_interactive"
 required-features = ["output"]
 
 [[example]]
