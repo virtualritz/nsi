@@ -17,14 +17,19 @@
 //! `Reference` is the exception: it is passed through, retained, and is
 //! why the recorder carries a context lifetime.
 
+/// ɴsɪ's root node handle.
+pub const ROOT: &str = ".root";
+
 mod edge;
 mod owned;
 mod recorder;
+mod resolve;
 mod scene;
 mod stream;
 
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
 pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
+pub use resolve::{Binding, IDENTITY};
 pub use scene::{Node, Scene};
 pub use stream::write_stream;
