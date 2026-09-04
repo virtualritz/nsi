@@ -15,6 +15,35 @@
 use core::ffi::{CStr, c_char, c_void};
 use nsi_trait::{ParamValue, Type};
 
+/// A raw host address recorded from an ɴsɪ `Reference` argument.
+///
+/// # Safety
+///
+/// `Send` and `Sync` are asserted on two grounds, both structural
+/// rather than hopeful:
+///
+/// 1. **The recorder never dereferences it.** A `HostPtr` is stored on
+///    the way in and handed back on the way out, nothing else. No data
+///    race is possible through a pointer that is never read.
+/// 2. **The pointee outlives everything.** The recorder's `Nsi` impl
+///    declares `Arg<'call, 'static>`, so the only `Reference` it can be
+///    handed is one whose data is `'static`. That is the same rule
+///    `nsi-ffi-wrap` applies -- `Reference`, `Callback` and
+///    `ReferenceSlice` are `Send`/`Sync` at `'static` and nowhere else.
+///
+/// The assertion lives on this newtype rather than on `Recorder` so it
+/// covers exactly the field that needs it. A blanket
+/// `unsafe impl Send for Recorder` would silently keep covering any
+/// non-`Send` field added later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct HostPtr(pub *const c_void);
+
+// SAFETY: see the type's documentation.
+unsafe impl Send for HostPtr {}
+// SAFETY: see the type's documentation.
+unsafe impl Sync for HostPtr {}
+
 /// An ɴsɪ argument's payload, owned.
 ///
 /// Variants are storage representations, not ɴsɪ types: colour, point,
@@ -31,7 +60,7 @@ pub enum OwnedData {
     /// API); it is not an object link and is never forwarded to a
     /// renderer as one. Stored so output-driver callbacks survive a
     /// replay. The recorder never dereferences these.
-    Reference(Vec<*const c_void>),
+    Reference(Vec<HostPtr>),
 }
 
 /// A recorded ɴsɪ argument.
@@ -89,7 +118,10 @@ impl OwnedArg {
                     )
                 }
                 Type::Reference => OwnedData::Reference(
-                    core::slice::from_raw_parts(c.data as *const *const c_void, scalars).to_vec(),
+                    core::slice::from_raw_parts(c.data as *const *const c_void, scalars)
+                        .iter()
+                        .map(|p| HostPtr(*p))
+                        .collect(),
                 ),
                 Type::Invalid => OwnedData::F32(Vec::new()),
             }

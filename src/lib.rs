@@ -19,8 +19,10 @@
 
 mod edge;
 mod owned;
+mod recorder;
 mod scene;
 
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
-pub use owned::{OwnedArg, OwnedData};
+pub use owned::{HostPtr, OwnedArg, OwnedData};
+pub use recorder::{Recorder, RenderState};
 pub use scene::{Node, Scene};
