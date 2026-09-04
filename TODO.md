@@ -1,9 +1,15 @@
 # `nsi` -- To Do
 
-- Change the signatures of array argument methods that accept tuples to take
-  slices of arrays. These can be cast to flat slices e.g. using the `slice_of_array` crate.
+Carried over from the (now removed) safety-audit notes; these are the items
+that were never closed.
 
-- Create a `nsi-traits` crate defining `Context` and `Argument` traits. This
-  way the whole implemetation for renderer exposing the C-API can be turned
-  into an `nsi-3delight` crate, based on a `nsi-ffi` template that any renderer
-  implemeting the C FFI can just clone to get a Rust wrapper.
+- **Understand the triple-`Box` callback pattern.** Output-driver callbacks use
+  `Box<Box<Box<dyn Fn…>>>` (`crates/nsi-ffi-wrap/src/output/mod.rs`). Double
+  boxing segfaults, triple boxing works, and nobody knows why -- the fat-pointer
+  rationale in the file's header comment only justifies a *double* box. Until
+  this is understood the `Box::leak` calls that avoid the resulting double-free
+  have to stay.
+
+- **Miri in CI.** No unsafe code path is currently validated under Miri.
+
+- **Fuzz the FFI boundary.** Malformed input and error paths are untested.
