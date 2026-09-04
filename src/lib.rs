@@ -17,6 +17,8 @@
 //! `Reference` is the exception: it is passed through, retained, and is
 //! why the recorder carries a context lifetime.
 
+mod edge;
 mod owned;
 
+pub use edge::{ClassifyError, Edge, EdgeKind, classify};
 pub use owned::{OwnedArg, OwnedData};
