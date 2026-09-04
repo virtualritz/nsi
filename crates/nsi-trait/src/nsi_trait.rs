@@ -197,9 +197,25 @@ pub trait Nsi: Send + Sync {
     /// `'call` is the transient borrow lifetime (data copied by C side).
     /// The context-bound lifetime (for ReferenceSlice/Callbacks) is baked
     /// into the implementor's concrete Arg type.
-    type Arg<'call>: ParamValue
-    where
-        Self: 'call;
+    ///
+    /// # No `where Self: 'call`
+    ///
+    /// That bound is deliberately absent. It would only be needed by an
+    /// implementor whose `Arg<'call>` borrows from `Self` -- something
+    /// like `type Arg<'call> = &'call Self`. No implementor does that,
+    /// and the bound actively breaks the ones that exist.
+    ///
+    /// With it, an implementor carrying its own lifetime cannot satisfy
+    /// the methods below. `impl<'a> Nsi for Context<'a>` needs
+    /// `Context<'a>: 'call` at every `Self::Arg<'_>` in a signature, and
+    /// `'call` there is a fresh late-bound lifetime that may outlive
+    /// `'a` -- so the obligation is unprovable (E0477). The only way to
+    /// keep the bound is to narrow every such impl to `'static`, which
+    /// forces `'static` on consumers for no benefit.
+    ///
+    /// Do not re-add it without an implementor that genuinely borrows
+    /// its `Arg` from `Self`.
+    type Arg<'call>: ParamValue;
 
     /// Error type for fallible operations.
     type Error: std::error::Error + Send + Sync + 'static;

@@ -62,6 +62,10 @@ pub use ::nsi_trait::*;
 // `pub(crate)` fields, so it has to live inside this crate.
 mod param_value;
 
+// `impl Nsi for Context`. Kept out of `context.rs` so the trait bridge
+// stays reviewable next to the `ParamValue` one.
+mod nsi_impl;
+
 pub mod c_adapter;
 pub use c_adapter::FfiApiAdapter;
 
