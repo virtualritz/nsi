@@ -19,6 +19,8 @@
 
 mod edge;
 mod owned;
+mod scene;
 
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
 pub use owned::{OwnedArg, OwnedData};
+pub use scene::{Node, Scene};
