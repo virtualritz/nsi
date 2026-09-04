@@ -5,6 +5,7 @@
 
 use nsi_ffi_wrap as nsi;
 use std::{
+    num::NonZeroUsize,
     panic::{self, AssertUnwindSafe},
     sync::{Arc, Mutex},
     thread,
@@ -43,7 +44,8 @@ fn callback_lifetime_management() {
         ctx.connect("screen", None, "camera", "screens", None);
         ctx.set_attribute(
             "screen",
-            &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
+            &[nsi::i32_slice!("resolution", &[32, 32])
+                .array_len(const { NonZeroUsize::new(2).unwrap() })],
         );
 
         ctx.create("beauty", nsi::OUTPUT_LAYER, None);
@@ -240,7 +242,8 @@ fn status_callback() {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
+        &[nsi::i32_slice!("resolution", &[32, 32])
+            .array_len(const { NonZeroUsize::new(2).unwrap() })],
     );
 
     // Start interactive render with callback
@@ -315,7 +318,8 @@ fn callback_panic_safety() {
     ctx.create("screen", nsi::SCREEN, None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
+        &[nsi::i32_slice!("resolution", &[32, 32])
+            .array_len(const { NonZeroUsize::new(2).unwrap() })],
     );
 
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);

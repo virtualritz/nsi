@@ -29,6 +29,7 @@ use nsi_ffi_wrap as nsi;
 use std::{
     env,
     io::Write,
+    num::NonZeroUsize,
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -191,7 +192,8 @@ fn build_scene(
     ctx.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[64, 64]).array_len(2),
+            nsi::i32_slice!("resolution", &[64, 64])
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
             nsi::i32!("oversampling", 4),
         ],
     );

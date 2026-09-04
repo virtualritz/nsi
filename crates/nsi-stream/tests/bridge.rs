@@ -20,7 +20,10 @@ use nsi_stream::{
     Attr, CallbackTransport, Extent, Layer, LayerFormat, Publication,
     PublishMode, StreamConfig, StreamState, bridge::DelightBridge,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, Mutex},
+};
 
 /// Small enough to render in seconds, large enough for several buckets.
 const EXTENT: Extent = Extent::new(64, 64);
@@ -143,7 +146,7 @@ fn render(bridge: &DelightBridge) -> bool {
             "resolution",
             &[EXTENT.width as i32, EXTENT.height as i32]
         )
-        .array_len(2)],
+        .array_len(const { NonZeroUsize::new(2).unwrap() })],
     );
 
     // One quad, big enough to cover the whole frame.

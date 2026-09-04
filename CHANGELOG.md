@@ -55,6 +55,11 @@
   family, and the full `trim-curves.*` group.
 - Internal `Type` variants renamed to Rust style (`Float` → `F32`,
   `Integer` → `I32`, `MatrixF32` etc.).
+- **Breaking:** `Arg::array_len` takes a `NonZeroUsize` instead of a `usize`.
+  The renderer is handed `data.len() / array_length` elements, so a zero
+  array length divided by zero at the FFI boundary. It is now unrepresentable
+  rather than checked. Call sites pass
+  `const { NonZeroUsize::new(N).unwrap() }`.
 
 ### `nsi` (root facade crate)
 

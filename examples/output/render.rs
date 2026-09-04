@@ -1,6 +1,7 @@
 use nsi_3delight as nsi_3dl;
 use nsi_ffi_wrap as nsi;
 use nsi_toolbelt as nsi_tb;
+use std::num::NonZeroUsize;
 
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
@@ -33,7 +34,8 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[128, 128]).array_len(2),
+            nsi::i32_slice!("resolution", &[128, 128])
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
             nsi::i32!("oversampling", 32),
         ],
     );

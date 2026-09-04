@@ -36,6 +36,7 @@ trait _Jupyter<'a> {
 /// // Setup a screen.
 /// # use nsi_ffi_wrap as nsi;
 /// # use nsi_jupyter::as_jupyter;
+/// # use std::num::NonZeroUsize;
 /// # let ctx = nsi::Context::new(None).unwrap();
 /// ctx.create("screen", nsi::SCREEN, None);
 /// ctx.connect("screen", None, "my_camera", "screens", None);
@@ -43,7 +44,8 @@ trait _Jupyter<'a> {
 ///     "screen",
 ///     &[
 ///         // Some 2:1 wide angle view.
-///         nsi::i32_slice!("resolution", &[1280, 640]).array_len(2),
+///         nsi::i32_slice!("resolution", &[1280, 640])
+///             .array_len(const { NonZeroUsize::new(2).unwrap() }),
 ///         // 20 antialiasing samples per pixel.
 ///         nsi::i32!("oversampling", 20),
 ///     ],

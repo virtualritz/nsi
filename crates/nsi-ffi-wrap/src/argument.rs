@@ -4,6 +4,7 @@ use nsi_sys::*;
 use std::{
     ffi::{CString, c_void},
     marker::PhantomData,
+    num::NonZeroUsize,
     pin::Pin,
 };
 use ustr::{Ustr, ustr};
@@ -23,7 +24,7 @@ pub(crate) fn get_c_param_vec(
                 name: arg.name.as_char_ptr(),
                 data: arg.data.as_c_ptr(),
                 type_: arg.data.type_() as _,
-                arraylength: arg.array_length as _,
+                arraylength: arg.array_length.get() as _,
                 count: (arg.data.len() / arg.array_length) as _,
                 flags: arg.flags as _,
             })
@@ -49,7 +50,7 @@ pub struct Arg<'a, 'b> {
     pub(crate) name: Ustr,
     pub(crate) data: ArgData<'a, 'b>,
     // Length of each element if an array type.
-    pub(crate) array_length: usize,
+    pub(crate) array_length: NonZeroUsize,
     // Number of elements.
     pub(crate) flags: i32,
 }
@@ -60,14 +61,18 @@ impl<'a, 'b> Arg<'a, 'b> {
         Arg {
             name: ustr(name),
             data,
-            array_length: 1,
+            array_length: NonZeroUsize::MIN,
             flags: 0,
         }
     }
 
     /// Sets the length of the argument for each element.
+    ///
+    /// The length is a [`NonZeroUsize`] because the number of elements
+    /// the renderer is handed is `data.len() / length` -- a zero length
+    /// has no meaning and would divide by zero.
     #[inline]
-    pub fn array_len(mut self, length: usize) -> Self {
+    pub fn array_len(mut self, length: NonZeroUsize) -> Self {
         self.array_length = length;
         self.flags |= NSIParamFlags::IsArray.bits();
         self
@@ -1271,4 +1276,46 @@ macro_rules! callback {
     ($name: tt, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::Callback::new($value)))
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `count` is `data.len() / array_length`. The divisor is a
+    /// [`NonZeroUsize`], so this can never divide by zero -- an
+    /// `array_len(0)` is not expressible.
+    #[test]
+    fn array_len_divides_element_count() {
+        let resolution = [1280, 720];
+        let args =
+            [
+                Arg::new(
+                    "resolution",
+                    ArgData::from(I32Slice::new(&resolution)),
+                )
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
+            ];
+
+        let (len, _ptr, params) = get_c_param_vec(Some(&args));
+
+        assert_eq!(1, len);
+        assert_eq!(2, params[0].arraylength);
+        assert_eq!(1, params[0].count);
+    }
+
+    /// The default is one element per array slot.
+    #[test]
+    fn default_array_len_is_one() {
+        let resolution = [1280, 720];
+        let args = [Arg::new(
+            "resolution",
+            ArgData::from(I32Slice::new(&resolution)),
+        )];
+
+        let (_len, _ptr, params) = get_c_param_vec(Some(&args));
+
+        assert_eq!(1, params[0].arraylength);
+        assert_eq!(2, params[0].count);
+    }
 }

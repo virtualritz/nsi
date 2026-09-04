@@ -1,5 +1,7 @@
 #[allow(unused_imports)]
 use crate as nsi;
+#[allow(unused_imports)]
+use std::num::NonZeroUsize;
 
 #[cfg(test)]
 #[test]
@@ -129,7 +131,8 @@ fn live_edit() {
     c.set_attribute(
         "s1",
         &[
-            nsi::i32_slice!("resolution", &[1280, 720]).array_len(2),
+            nsi::i32_slice!("resolution", &[1280, 720])
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
             nsi::i32!("oversampling", 16),
         ],
     );

@@ -7,6 +7,7 @@ use anyhow::{Context as _, Result};
 use nsi_ffi_wrap as nsi;
 use std::{
     env, fs,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
 };
@@ -308,7 +309,7 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
         "screen",
         &[
             nsi::i32_slice!("resolution", &[width as i32, height as i32])
-                .array_len(2),
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
         ],
     );
 }

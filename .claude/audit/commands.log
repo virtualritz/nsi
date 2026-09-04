@@ -807,3 +807,129 @@ chore: update command audit log
 Claude-Session: https://claude.ai/code/session_01N9BGWukJmJZEk9Ez5eNSX6
 EOF
 git log --oneline -3; echo "=== remaining ==="; git status --porcelain
+2026-09-03T16:01:48Z perl -0pi -e '
+s/use std::\{\n    ffi::\{CString, c_void\},\n    marker::PhantomData,\n    pin::Pin,\n\};/use std::{\n    ffi::{CString, c_void},\n    marker::PhantomData,\n    num::NonZeroUsize,\n    pin::Pin,\n};/;
+s/                arraylength: arg\.array_length as _,/                arraylength: arg.array_length.get() as _,/;
+s/    \/\/ Length of each element if an array type\.\n    pub\(crate\) array_length: usize,/    \/\/ Length of each element if an array type.\n    pub(crate) array_length: NonZeroUsize,/;
+s/            array_length: 1,/            array_length: NonZeroUsize::MIN,/;
+' crates/nsi-ffi-wrap/src/argument.rs && sed -n '1,12p;20,32p;48,56p;60,68p' crates/nsi-ffi-wrap/src/argument.rs
+2026-09-03T16:02:23Z timeout 600 cargo check -p nsi-ffi-wrap 2>&1 | tail -20
+2026-09-03T16:02:43Z timeout 900 cargo check --workspace --all-targets --features output 2>&1 | rg -A4 '^error\[E0308\]' | head -30
+2026-09-04T08:30:19Z cd /home/ritz/code/crates/nsi
+FILES="examples/volume/main.rs examples/concurrent_interactive/main.rs examples/output/render.rs examples/nurbs/main.rs crates/nsi-ffi-wrap/src/tests.rs crates/nsi-ffi-wrap/tests/test_utils.rs crates/nsi-ffi-wrap/tests/safety.rs crates/nsi-ffi-wrap/tests/test_callback_fix.rs crates/nsi-jupyter/src/lib.rs"
+perl -pi -e 's/\.array_len\((\d+)\)/.array_len(const { NonZeroUsize::new($1).unwrap() })/g' $FILES
+rg -n 'array_len' $FILES
+2026-09-04T08:30:27Z cd /home/ritz/code/crates/nsi
+files=(examples/volume/main.rs examples/concurrent_interactive/main.rs examples/output/render.rs examples/nurbs/main.rs crates/nsi-ffi-wrap/src/tests.rs crates/nsi-ffi-wrap/tests/test_utils.rs crates/nsi-ffi-wrap/tests/safety.rs crates/nsi-ffi-wrap/tests/test_callback_fix.rs crates/nsi-jupyter/src/lib.rs)
+perl -pi -e 's/\.array_len\((\d+)\)/.array_len(const { NonZeroUsize::new($1).unwrap() })/g' $files
+rg -n 'array_len' $files
+2026-09-04T08:30:55Z cd /home/ritz/code/crates/nsi
+for f in examples/volume/main.rs examples/concurrent_interactive/main.rs examples/output/render.rs examples/nurbs/main.rs crates/nsi-ffi-wrap/tests/test_utils.rs crates/nsi-ffi-wrap/tests/safety.rs crates/nsi-ffi-wrap/tests/test_callback_fix.rs; do echo "--- $f"; head -12 "$f"; done
+2026-09-04T08:31:04Z bat -P /home/ritz/code/crates/nsi/rustfmt.toml; echo "=== concurrent_interactive imports ==="; rg -n '^use ' examples/concurrent_interactive/main.rs | head; echo "=== nurbs imports ==="; rg -n '^use ' examples/nurbs/main.rs | head; echo "=== jupyter doc ctx ==="; sed -n '35,55p' crates/nsi-jupyter/src/lib.rs; echo "=== ffi tests.rs top ==="; sed -n '1,5p' crates/nsi-ffi-wrap/src/tests.rs
+2026-09-04T08:31:17Z cd /home/ritz/code/crates/nsi
+ins() { perl -0pi -e "s/\Q$2\E/$2\nuse std::num::NonZeroUsize;/" "$1"; }
+ins examples/volume/main.rs 'use nsi_toolbelt::*;'
+ins examples/output/render.rs 'use nsi_toolbelt as nsi_tb;'
+ins examples/nurbs/main.rs 'use nsi_ffi_wrap as nsi;'
+ins examples/concurrent_interactive/main.rs 'use nsi_ffi_wrap as nsi;'
+ins crates/nsi-ffi-wrap/tests/test_callback_fix.rs 'use nsi_ffi_wrap as nsi;'
+ins crates/nsi-ffi-wrap/tests/safety.rs 'use nsi_ffi_wrap as nsi;'
+ins crates/nsi-ffi-wrap/tests/test_utils.rs 'use nsi_ffi_wrap as nsi;'
+ins crates/nsi-ffi-wrap/src/tests.rs 'use crate as nsi;'
+perl -0pi -e 's{/// # use nsi_jupyter::as_jupyter;}{/// # use nsi_jupyter::as_jupyter;\n/// # use std::num::NonZeroUsize;}' crates/nsi-jupyter/src/lib.rs
+rg -n 'use std::num::NonZeroUsize' examples crates --type rust
+2026-09-04T08:31:23Z cd /home/ritz/code/crates/nsi; sed -n '1265,1274p' crates/nsi-ffi-wrap/src/argument.rs; echo "=== does argument.rs already have a test mod? ==="; rg -n 'mod tests|#\[test\]' crates/nsi-ffi-wrap/src/argument.rs | head
+2026-09-04T08:31:28Z cd /home/ritz/code/crates/nsi; tail -5 crates/nsi-ffi-wrap/src/argument.rs; echo "=== wc ==="; wc -l crates/nsi-ffi-wrap/src/argument.rs
+2026-09-04T08:31:36Z cd /home/ritz/code/crates/nsi; cat >> crates/nsi-ffi-wrap/src/argument.rs <<'EOF'
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `count` is `data.len() / array_length`. The divisor is a
+    /// [`NonZeroUsize`], so this can never divide by zero -- an
+    /// `array_len(0)` is not expressible.
+    #[test]
+    fn array_len_divides_element_count() {
+        let resolution = [1280, 720];
+        let args = [Arg::new(
+            "resolution",
+            ArgData::from(I32Slice::new(&resolution)),
+        )
+        .array_len(const { NonZeroUsize::new(2).unwrap() })];
+
+        let (len, _ptr, params) = get_c_param_vec(Some(&args));
+
+        assert_eq!(1, len);
+        assert_eq!(2, params[0].arraylength);
+        assert_eq!(1, params[0].count);
+    }
+
+    /// The default is one element per array slot.
+    #[test]
+    fn default_array_len_is_one() {
+        let resolution = [1280, 720];
+        let args = [Arg::new(
+            "resolution",
+            ArgData::from(I32Slice::new(&resolution)),
+        )];
+
+        let (_len, _ptr, params) = get_c_param_vec(Some(&args));
+
+        assert_eq!(1, params[0].arraylength);
+        assert_eq!(2, params[0].count);
+    }
+}
+EOF
+timeout 600 cargo test -p nsi-ffi-wrap --lib argument:: 2>&1 | tail -20
+2026-09-04T08:31:58Z cargo fmt --all 2>&1 | tail -5; git status --porcelain
+2026-09-04T08:32:09Z cd /home/ritz/code/crates/nsi
+git stash push -u -m "backup before revert" >/dev/null && git stash apply --index >/dev/null 2>&1 || git stash apply >/dev/null
+git status --porcelain | head -20; echo "=== stash list ==="; git stash list
+2026-09-04T08:32:12Z cd /home/ritz/code/crates/nsi
+git checkout -- crates/nsi-ffi-wrap/src/output/pixel_format.rs crates/nsi-ffi-wrap/tests/generate_test_image.rs
+git status --porcelain
+2026-09-04T08:32:15Z cd /home/ritz/code/crates/nsi; git diff -- examples crates/nsi-jupyter crates/nsi-ffi-wrap/src/tests.rs crates/nsi-ffi-wrap/tests
+2026-09-04T08:32:24Z cd /home/ritz/code/crates/nsi
+perl -0pi -e 's{                ctx_clone\n                    \.set_attribute\(&node_name, &\[nsi::i32!\("thread_id", i\)\]\);}{                ctx_clone.set_attribute(\n                    &node_name,\n                    &[nsi::i32!("thread_id", i)],\n                );}' crates/nsi-ffi-wrap/tests/safety.rs
+git diff --stat -- crates/nsi-ffi-wrap/tests/safety.rs; git diff -- crates/nsi-ffi-wrap/tests/safety.rs | rg -c 'thread_id' || echo "unrelated hunk gone"
+2026-09-04T08:33:07Z cd /home/ritz/code/crates/nsi; timeout 900 cargo check --workspace --all-targets --features output 2>&1 | rg '^(error|warning: unused|    Finished)' | head -20
+2026-09-04T09:00:25Z cd /home/ritz/code/crates/nsi; timeout 900 cargo check --workspace --all-targets --features output 2>&1 | rg -B2 -A6 'unused import: `std::num::NonZeroUsize`'
+2026-09-04T09:00:34Z cd /home/ritz/code/crates/nsi
+perl -0pi -e 's{^\#\[allow\(unused_imports\)\]\nuse crate as nsi;\nuse std::num::NonZeroUsize;}{#[allow(unused_imports)]\nuse crate as nsi;\n#[allow(unused_imports)]\nuse std::num::NonZeroUsize;}' crates/nsi-ffi-wrap/src/tests.rs
+head -5 crates/nsi-ffi-wrap/src/tests.rs
+timeout 900 cargo check --workspace --all-targets --features output 2>&1 | rg '^(error|warning: unused import: `std|    Finished)'
+2026-09-04T09:05:31Z cd /home/ritz/code/crates/nsi; timeout 900 cargo clippy --workspace --all-targets --features output -- -D warnings 2>&1 | rg '^(error|warning)' | head -20; echo "--- exit: ${pipestatus[1]:-?}"
+2026-09-04T09:05:59Z cd /home/ritz/code/crates/nsi
+git stash push -u -m "wip: nonzero array_len" >/dev/null && echo "stashed" && \
+timeout 900 cargo clippy --workspace --all-targets --features output -- -D warnings 2>&1 | rg '^error' | head -5
+echo "--- restoring ---"
+git stash pop 2>&1 | tail -3
+2026-09-04T09:06:12Z cd /home/ritz/code/crates/nsi; git status --porcelain; echo "=== unit tests ==="; timeout 600 cargo test -p nsi-ffi-wrap --lib argument:: 2>&1 | tail -6
+2026-09-04T09:06:17Z cd /home/ritz/code/crates/nsi; head -30 CHANGELOG.md
+2026-09-04T09:06:20Z cd /home/ritz/code/crates/nsi; rg -n '^### `nsi-ffi-wrap`' CHANGELOG.md | head -3; sed -n '30,60p' CHANGELOG.md
+2026-09-04T09:06:28Z cd /home/ritz/code/crates/nsi
+perl -0pi -e 's{(- Internal `Type` variants renamed to Rust style \(`Float` → `F32`,\n  `Integer` → `I32`, `MatrixF32` etc\.\)\.\n)}{$1- **Breaking:** `Arg::array_len` takes a `NonZeroUsize` instead of a `usize`.\n  The renderer is handed `data.len() / array_length` elements, so a zero\n  array length divided by zero at the FFI boundary. It is now unrepresentable\n  rather than checked. Call sites pass\n  `const \{ NonZeroUsize::new(N).unwrap() \}`.\n}' CHANGELOG.md
+sed -n '55,66p' CHANGELOG.md
+2026-09-04T09:06:39Z cd /home/ritz/code/crates/nsi
+git add -A -- ':!repro_shared' && git status --porcelain && git commit -q -F - <<'EOF'
+Make Arg::array_len take a NonZeroUsize
+
+`get_c_param_vec` computes `count` as `data.len() / array_length`, so
+`array_len(0)` reached a division by zero while forming `NSIParam`.
+
+Model the invariant in the type instead of checking it: `array_length`
+becomes a `NonZeroUsize` (defaulting to `NonZeroUsize::MIN`) and the
+public `array_len` takes one. `usize / NonZeroUsize` is std's panic-free
+`Div` impl, so the division site is unchanged and a zero divisor is no
+longer expressible.
+
+Breaking: call sites pass `const { NonZeroUsize::new(N).unwrap() }`,
+which rejects a literal zero at compile time with no runtime branch.
+
+Adds two unit tests covering the element-count arithmetic the divisor
+guards; they need no renderer present.
+
+Claude-Session: https://claude.ai/code/session_01N9BGWukJmJZEk9Ez5eNSX6
+EOF
+git log --oneline -1

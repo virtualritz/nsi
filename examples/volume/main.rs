@@ -1,6 +1,7 @@
 use dl_openvdb_query as vdbq;
 use nsi_3delight::*;
 use nsi_toolbelt::*;
+use std::num::NonZeroUsize;
 
 /// Downloaded from https://jangafx.com/software/embergen/download/free-vdb-animations/
 static VDB_ASSET: &str = "assets/embergen_gasoline_explosion_a_50.vdb";
@@ -68,7 +69,7 @@ pub fn main() {
                                 "emissionramp_color_curve_Knots",
                                 &[0.0, 0.09034268, 0.83800625, 1.0]
                             )
-                            .array_len(4),
+                            .array_len(const { NonZeroUsize::new(4).unwrap() }),
                             nsi::color_slice!(
                                 "emissionramp_color_curve_Colors",
                                 &[
@@ -78,12 +79,12 @@ pub fn main() {
                                     [1., 0.5935334, 0.061999976]
                                 ]
                             )
-                            .array_len(4),
+                            .array_len(const { NonZeroUsize::new(4).unwrap() }),
                             nsi::i32_slice!(
                                 "emissionramp_color_curve_Interp",
                                 &[3, 3, 3, 3,]
                             )
-                            .array_len(4),
+                            .array_len(const { NonZeroUsize::new(4).unwrap() }),
                         ]),
                     ),
                 )
@@ -144,7 +145,9 @@ pub fn main() {
                         nsi::node::SCREEN,
                         Some(&[
                             nsi::i32_slice!("resolution", &[1024, 512])
-                                .array_len(2),
+                                .array_len(
+                                    const { NonZeroUsize::new(2).unwrap() },
+                                ),
                             nsi::i32!("oversampling", 64),
                         ]),
                     ),

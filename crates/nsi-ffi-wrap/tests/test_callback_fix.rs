@@ -1,7 +1,10 @@
 //! Test to verify the callback memory management fix
 
 use nsi_ffi_wrap as nsi;
-use std::sync::{Arc, Mutex};
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn simple_callback() {
@@ -20,7 +23,8 @@ fn simple_callback() {
         ctx.connect("screen", None, "camera", "screens", None);
         ctx.set_attribute(
             "screen",
-            &[nsi::i32_slice!("resolution", &[32, 32]).array_len(2)],
+            &[nsi::i32_slice!("resolution", &[32, 32])
+                .array_len(const { NonZeroUsize::new(2).unwrap() })],
         );
 
         ctx.create("beauty", nsi::OUTPUT_LAYER, None);

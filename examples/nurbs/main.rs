@@ -52,6 +52,7 @@
 //!
 //! Run with: `cargo run --example nurbs`
 use nsi_ffi_wrap as nsi;
+use std::num::NonZeroUsize;
 
 fn main() {
     let ctx = nsi::Context::new(None).unwrap();
@@ -82,7 +83,8 @@ fn main() {
     ctx.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[512, 512]).array_len(2),
+            nsi::i32_slice!("resolution", &[512, 512])
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
             nsi::i32!("oversampling", 32),
         ],
     );
