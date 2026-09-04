@@ -76,7 +76,7 @@ impl<'a, 'b> ParamValue for Arg<'a, 'b> {
             // identical or the FFI fast path disagrees with the slow
             // one. `array_length` is `NonZeroUsize`, so this cannot
             // divide by zero.
-            count: self.data.len() / self.array_length.get(),
+            count: self.data.len() / self.array_length,
             flags: self.flags,
         })
     }

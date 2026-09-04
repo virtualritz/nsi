@@ -2,7 +2,7 @@
 
 // Needed for the example dode to build.
 extern crate self as nsi;
-use crate::{argument::*, *};
+use crate::*;
 #[allow(unused_imports)]
 use std::{
     ffi::{CStr, CString, c_char},
@@ -101,7 +101,6 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
         let (_, _, mut args_out) = to_c_param_vec(args);
-        let errorhandler_payload: *const c_void;
 
         let fn_pointer: nsi_sys::NSIErrorHandler = Some(
             error_handler
@@ -112,10 +111,9 @@ impl<'a> Context<'a> {
             && let Some(arg) =
                 args.iter().find(|arg| ustr("errorhandler") == arg.name)
         {
-            errorhandler_payload = arg.data.as_c_ptr();
-            // SAFETY: The NSI API copies the pointer value before returning,
-            // so taking the address of this stack slot is sufficient for
-            // the lifetime of the FFI call.
+            // `as_c_ptr` already yields the address of the pointer, which
+            // is what ɴsɪ reads a `Pointer` value out of. Taking its address
+            // again here would be one indirection too many.
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("errorhandler").as_char_ptr(),
                 data: &fn_pointer as *const _ as _,
@@ -126,7 +124,7 @@ impl<'a> Context<'a> {
             });
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("errorhandlerdata").as_char_ptr(),
-                data: &errorhandler_payload as *const _ as _,
+                data: arg.data.as_c_ptr(),
                 type_: NSIType::Pointer as _,
                 arraylength: 1,
                 count: 1,
@@ -552,7 +550,6 @@ impl<'a> Context<'a> {
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
         let (_, _, mut args_out) = to_c_param_vec(args);
-        let stopped_callback_payload: *const c_void;
 
         let fn_pointer: nsi_sys::NSIRenderStopped =
             Some(render_status as extern "C" fn(*mut c_void, c_int, c_int));
@@ -570,10 +567,7 @@ impl<'a> Context<'a> {
             && let Some(arg) =
                 args.iter().find(|arg| ustr("callback") == arg.name)
         {
-            stopped_callback_payload = arg.data.as_c_ptr();
-            // SAFETY: The NSI API copies the pointer value before returning,
-            // so taking the address of this stack slot is sufficient for
-            // the lifetime of the FFI call.
+            // See the `errorhandlerdata` note in `Context::new`.
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("stoppedcallback").as_char_ptr(),
                 data: &fn_pointer as *const _ as _,
@@ -584,7 +578,7 @@ impl<'a> Context<'a> {
             });
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("stoppedcallbackdata").as_char_ptr(),
-                data: &stopped_callback_payload as *const _ as _,
+                data: arg.data.as_c_ptr(),
                 type_: NSIType::Pointer as _,
                 arraylength: 1,
                 count: 1,

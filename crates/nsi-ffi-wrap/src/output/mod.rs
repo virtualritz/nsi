@@ -1,11 +1,10 @@
 #![cfg_attr(feature = "nightly", doc(cfg(feature = "output")))]
-// The triple-Box (`Box<Box<Box<dyn Fn…>>>`) pattern below is required for
-// crossing the C-FFI boundary: the outer Box turns the trait object into a
-// thin pointer, the middle Box is captured by ndspy as `void*`, and the
-// inner Box is what the user originally allocated. Clippy doesn't recognise
-// the FFI shape and flags it as `redundant_allocation`. Same for the `new`
-// constructor that returns a `*mut`-shaped state for ndspy to keep — it's
-// not idiomatic Rust but it IS the C-API contract.
+// The double-Box (`Box<Box<dyn Fn…>>`) pattern below is required for
+// crossing the C-FFI boundary: a `Box<dyn Fn…>` is a fat pointer, and the
+// outer Box makes it thin so it fits through `void*`. Clippy doesn't
+// recognise the FFI shape and flags it as `redundant_allocation`. Same for
+// the `new` constructor that returns a `*mut`-shaped state for ndspy to
+// keep — it's not idiomatic Rust but it IS the C-API contract.
 #![allow(clippy::redundant_allocation)]
 #![allow(clippy::new_ret_no_self)]
 //! Output driver callbacks.
@@ -417,24 +416,24 @@ pub trait FnQuery<'a> = dyn FnMut(Query) -> Error + 'a;
 
 /// Wrapper to pass an [`FnOpen`] closure to an
 /// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
-pub struct OpenCallback<'a>(Box<Box<Box<dyn FnOpen<'a>>>>);
+pub struct OpenCallback<'a>(Box<Box<dyn FnOpen<'a>>>);
 
-// Why do we need a triple Box here? Why does a Box<Box<T>> not suffice?
-// This is a known pattern for passing closures through FFI boundaries.
-// The issue is related to fat pointers (trait objects):
-// - Box<dyn Trait> is a fat pointer (16 bytes: data ptr + vtable ptr)
-// - Box<Box<dyn Trait>> is a thin pointer (8 bytes) to the fat pointer
-// - Box<Box<Box<dyn Trait>>> is a thin pointer to a thin pointer
+// A `Box<dyn Trait>` is a fat pointer (data + vtable), which cannot cross
+// the C boundary; one more `Box` makes it thin. That is the whole reason
+// for the double `Box` -- and, correspondingly, for `Box<Box<T>>` being
+// the type `extract_callback` reads back.
 //
-// When casting through *const c_void, type information is lost.
-// With double Box, reconstructing the fat pointer fails (segfault).
-// Triple Box ensures we always deal with thin pointers at the FFI boundary.
+// This used to be a *triple* `Box`, which was compensating for
+// `Callback::as_c_ptr` handing ɴsɪ the pointer where ɴsɪ expects the
+// address of the pointer. The renderer's extra dereference consumed the
+// extra layer. With the marshalling fixed, two layers are correct; see
+// `argument::pointer_marshalling_tests` and `ffi_round_trip_tests`.
 impl<'a> OpenCallback<'a> {
     pub fn new<F>(fn_open: F) -> Self
     where
         F: FnOpen<'a>,
     {
-        OpenCallback(Box::new(Box::new(Box::new(fn_open))))
+        OpenCallback(Box::new(Box::new(fn_open)))
     }
 }
 
@@ -453,14 +452,14 @@ impl CallbackPtr for OpenCallback<'_> {
 /// - `WriteCallback::<f32>` with `FERRIS_F32`
 /// - `WriteCallback::<u16>` with `FERRIS_U16`
 /// - etc.
-pub struct WriteCallback<'a, T: PixelType>(Box<Box<Box<dyn FnWrite<'a, T>>>>);
+pub struct WriteCallback<'a, T: PixelType>(Box<Box<dyn FnWrite<'a, T>>>);
 
 impl<'a, T: PixelType> WriteCallback<'a, T> {
     pub fn new<F>(fn_write: F) -> Self
     where
         F: FnWrite<'a, T>,
     {
-        WriteCallback(Box::new(Box::new(Box::new(fn_write))))
+        WriteCallback(Box::new(Box::new(fn_write)))
     }
 }
 
@@ -476,14 +475,14 @@ impl<T: PixelType> CallbackPtr for WriteCallback<'_, T> {
 ///
 /// **Note:** `FnFinish` does not receive pixel data. If you need the complete
 /// accumulated image, use [`AccumulatingCallbacks`] instead.
-pub struct FinishCallback<'a>(Box<Box<Box<dyn FnFinish<'a>>>>);
+pub struct FinishCallback<'a>(Box<Box<dyn FnFinish<'a>>>);
 
 impl<'a> FinishCallback<'a> {
     pub fn new<F>(fn_finish: F) -> Self
     where
         F: FnFinish<'a>,
     {
-        FinishCallback(Box::new(Box::new(Box::new(fn_finish))))
+        FinishCallback(Box::new(Box::new(fn_finish)))
     }
 }
 
@@ -502,20 +501,31 @@ struct DisplayData<'a, T: PixelType> {
     height: usize,
     pixel_format: PixelFormat,
     // NO pixel_data buffer - we pass buckets directly to callbacks
-    fn_write: Option<Box<Box<Box<dyn FnWrite<'a, T>>>>>,
-    fn_finish: Option<Box<Box<Box<dyn FnFinish<'a>>>>>,
+    // Non-owning: these point into the renderer's memory (see
+    // `extract_callback`). Dropping them would free memory we do not own.
+    fn_write: Option<*mut Box<dyn FnWrite<'a, T>>>,
+    fn_finish: Option<*mut Box<dyn FnFinish<'a>>>,
     // FIXME: unused atm.
-    fn_query: Option<Box<Box<Box<dyn FnQuery<'a>>>>>,
+    #[allow(dead_code)]
+    fn_query: Option<*mut Box<dyn FnQuery<'a>>>,
     // PhantomData to ensure T is used
     _phantom: std::marker::PhantomData<T>,
 }
 
+/// Reads a callback pointer back out of the parameters ndspy hands the
+/// driver.
+///
+/// `UserParameter::value` is a `void**`: it addresses the renderer's own
+/// copy of the pointer we passed to ɴsɪ. So we read the pointer *out of*
+/// that cell and return it without taking ownership -- the cell belongs to
+/// the renderer, and `Box::from_raw`-ing it frees memory we never
+/// allocated (`free(): invalid pointer`).
 fn extract_callback<T: ?Sized>(
     name: &str,
     type_: u8,
     len: usize,
     parameters: &[ndspy_sys::UserParameter],
-) -> Option<Box<Box<Box<T>>>> {
+) -> Option<*mut Box<T>> {
     for p in parameters.iter() {
         // SAFETY: Parameter names come from NSI API and should be valid C strings
         if p.name.is_null() {
@@ -531,11 +541,11 @@ fn extract_callback<T: ?Sized>(
             && len == p.valueCount as _
         {
             if !p.value.is_null() {
-                // SAFETY: p.value was created by Box::into_raw in the callback's to_ptr method
-                // The type cast is valid because we verified the parameter type matches
-                return Some(unsafe {
-                    Box::from_raw(p.value as *mut Box<Box<T>>)
-                });
+                // SAFETY: `value` addresses the renderer's copy of the
+                // pointer produced by the callback's `to_ptr`, and the
+                // parameter type has been verified above. We copy that
+                // pointer out; ownership stays with whoever allocated it.
+                return Some(unsafe { *(p.value as *const *mut Box<T>) });
             } else {
                 // Parameter exists but value is missing - exit quietly.
                 break;
@@ -611,19 +621,19 @@ pub(crate) extern "C" fn image_open<T: PixelType>(
 
         display_data.pixel_format = PixelFormat::new(format);
 
-        let error = if let Some(mut fn_open) =
+        let error = if let Some(fn_open) =
             extract_callback::<dyn FnOpen>("callback.open", b'p', 1, parameters)
         {
-            let error = fn_open(
+            // SAFETY: `fn_open` is the pointer the caller handed to ɴsɪ via
+            // `callback!`; it stays alive for as long as the node holds the
+            // attribute. We borrow it, we do not own it.
+            let fn_open = unsafe { &mut *fn_open };
+            fn_open(
                 &display_data.name,
                 width as _,
                 height as _,
                 &display_data.pixel_format,
-            );
-            // wtf?
-            Box::leak(fn_open);
-
-            error
+            )
         } else {
             Error::None
         };
@@ -785,7 +795,9 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
         };
 
         // Pass bucket directly to callback - NO memcpy, NO accumulation!
-        if let Some(ref mut fn_write) = display_data.fn_write {
+        if let Some(fn_write) = display_data.fn_write {
+            // SAFETY: borrowed, renderer-owned; see `extract_callback`.
+            let fn_write = unsafe { &mut *fn_write };
             fn_write(
                 &display_data.name,
                 display_data.width,
@@ -825,7 +837,9 @@ pub(crate) extern "C" fn image_close<T: PixelType>(
             unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData<T>) };
 
         // FnFinish receives no pixel data - user accumulates if needed
-        let error = if let Some(ref mut fn_finish) = display_data.fn_finish {
+        let error = if let Some(fn_finish) = display_data.fn_finish {
+            // SAFETY: borrowed, renderer-owned; see `extract_callback`.
+            let fn_finish = unsafe { &mut *fn_finish };
             fn_finish(
                 std::mem::take(&mut display_data.name),
                 display_data.width,
@@ -836,20 +850,10 @@ pub(crate) extern "C" fn image_close<T: PixelType>(
             Error::None
         };
 
-        // SAFETY: The callbacks were passed to us via FFI from Box::into_raw.
-        // They should be dropped when DisplayData is dropped, but this causes
-        // a double-free. This suggests the callbacks are being freed elsewhere,
-        // possibly by the renderer. For now, we leak them to prevent crashes.
-        // TODO: Investigate why double-free occurs and fix properly.
-        if let Some(fn_write) = display_data.fn_write.take() {
-            Box::leak(fn_write);
-        }
-        if let Some(fn_query) = display_data.fn_query.take() {
-            Box::leak(fn_query);
-        }
-        if let Some(fn_finish) = display_data.fn_finish.take() {
-            Box::leak(fn_finish);
-        }
+        // The callback fields are non-owning pointers into renderer memory,
+        // so there is nothing to release here. The double-free this block
+        // used to guard against was `extract_callback` claiming ownership
+        // of the renderer's pointer cell; see its documentation.
 
         error.into()
     }) {
@@ -993,5 +997,85 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
         );
 
         (write, finish)
+    }
+}
+
+/// End-to-end shape of a callback's journey through the FFI boundary.
+#[cfg(test)]
+mod ffi_round_trip_tests {
+    use super::*;
+    use crate::{Arg, ArgData, Callback, argument::to_c_param_vec};
+    use std::{cell::Cell, ffi::CString, rc::Rc};
+
+    /// Models what happens between `set_attribute` and `DspyImageOpen`:
+    ///
+    /// 1. ɴsɪ copies one `void*` **out of** `NSIParam::data` and keeps its
+    ///    own copy -- `data` addresses the value, it is not the value.
+    /// 2. ndspy hands the driver the address of *that copy*, so
+    ///    `UserParameter::value` is a `void**` into renderer memory.
+    ///
+    /// Step 2 is why the callback we reconstruct must never be dropped as
+    /// if we owned its outermost pointer: that pointer belongs to the
+    /// renderer. Here the renderer's copy lives on the stack, so freeing
+    /// it is detectable rather than merely unlucky.
+    #[test]
+    fn open_callback_survives_the_round_trip() {
+        let ran = Rc::new(Cell::new(false));
+        let flag = Rc::clone(&ran);
+
+        let args = [Arg::new(
+            "callback.open",
+            ArgData::from(Callback::new(OpenCallback::new(
+                move |_: &str, _: usize, _: usize, _: &PixelFormat| {
+                    flag.set(true);
+                    Error::None
+                },
+            ))),
+        )];
+        let (_, _, params) = to_c_param_vec(Some(&args));
+
+        // 1. The renderer's own copy of the pointer.
+        // SAFETY: `data` addresses one `NSITypePointer` value.
+        let renderer_copy: *const c_void =
+            unsafe { *(params[0].data as *const *const c_void) };
+
+        // 2. ndspy passes the address of that copy.
+        let name = CString::new("callback.open").unwrap();
+        let user_params = [ndspy_sys::UserParameter {
+            name: name.as_ptr(),
+            valueType: b'p' as _,
+            valueCount: 1,
+            value: &renderer_copy as *const *const c_void as *const c_void,
+            nbytes: core::mem::size_of::<*const c_void>() as _,
+        }];
+
+        let recovered = extract_callback::<dyn FnOpen>(
+            "callback.open",
+            b'p',
+            1,
+            &user_params,
+        )
+        .expect("the callback must be recoverable from the parameters");
+
+        {
+            // Borrow, exactly as the driver trampolines do. Owning this
+            // would free the renderer's cell.
+            // SAFETY: `recovered` is the pointer we handed to ɴsɪ above.
+            let callback = unsafe { &mut *recovered };
+            assert_eq!(
+                Error::None,
+                callback("beauty", 4, 4, &PixelFormat::default())
+            );
+        }
+        assert!(
+            ran.get(),
+            "the closure handed to ɴsɪ must be the one invoked"
+        );
+
+        // The round trip must be lossless: what comes back is the very
+        // pointer that went in, so its original owner can still reclaim it.
+        // Miri's leak check is the assertion here.
+        // SAFETY: nothing else owns this allocation.
+        drop(unsafe { Box::from_raw(recovered) });
     }
 }

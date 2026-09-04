@@ -490,8 +490,11 @@ impl<'a> ArgDataMethods for Reference<'a> {
         1
     }
 
+    /// `data` addresses the *array of values*, and for a pointer-typed
+    /// parameter the value is the pointer -- so this yields `&self.data`,
+    /// not `self.data`. Same contract as [`String::as_c_ptr`].
     fn as_c_ptr(&self) -> *const c_void {
-        self.data
+        &self.data as *const *const c_void as _
     }
 }
 
@@ -529,8 +532,10 @@ impl<'a> ArgDataMethods for Callback<'a> {
         1
     }
 
+    /// See [`Reference::as_c_ptr`] -- the renderer copies the pointer out
+    /// of the location `data` addresses, so `data` must be `&self.data`.
     fn as_c_ptr(&self) -> *const c_void {
-        self.data
+        &self.data as *const *const c_void as _
     }
 }
 
@@ -1317,5 +1322,74 @@ mod tests {
 
         assert_eq!(1, params[0].arraylength);
         assert_eq!(2, params[0].count);
+    }
+}
+
+/// Marshalling of pointer-typed parameters across the FFI boundary.
+///
+/// ɴsɪ's `NSIParam::data` points *at the array of values*, so for a
+/// `NSITypePointer` parameter with `count == 1` it must be the address of
+/// the pointer, not the pointer itself. `String::as_c_ptr` already does
+/// this (`&self.pointer`), and `Context` does it by hand for the status
+/// and error handlers (`data: &errorhandler_payload as *const _ as _`).
+/// These tests hold `Reference` and `Callback` to the same contract by
+/// performing the one read the renderer performs.
+#[cfg(test)]
+mod pointer_marshalling_tests {
+    use super::*;
+
+    /// Reads the single pointer value the renderer would copy out of a
+    /// parameter, exactly as ɴsɪ does for `NSITypePointer`.
+    fn value_read_by_renderer(param: &NSIParam) -> *const c_void {
+        assert_eq!(DataType::Reference as i32, param.type_);
+        assert_eq!(1, param.count);
+        // SAFETY: `data` must address a `*const c_void`; that is the
+        // property under test.
+        unsafe { *(param.data as *const *const c_void) }
+    }
+
+    #[test]
+    fn reference_marshals_the_address_not_the_contents() {
+        // A payload whose leading bytes are a recognisable non-address.
+        let payload = Box::new(0xdead_beef_cafe_f00d_u64);
+        let address = &*payload as *const u64 as *const c_void;
+
+        let args =
+            [Arg::new("payload", ArgData::from(Reference::new(&payload)))];
+        let (_, _, params) = to_c_param_vec(Some(&args));
+
+        assert_eq!(
+            address,
+            value_read_by_renderer(&params[0]),
+            "the renderer must receive the payload's address; receiving \
+             its first eight bytes means one dereference too few in \
+             `Reference::as_c_ptr`"
+        );
+    }
+
+    #[test]
+    fn callback_marshals_the_pointer_not_its_target() {
+        struct KnownPtr(*const c_void);
+        impl CallbackPtr for KnownPtr {
+            fn to_ptr(self) -> *const c_void {
+                self.0
+            }
+        }
+
+        let target = Box::new(0x1122_3344_5566_7788_u64);
+        let handed_to_nsi = &*target as *const u64 as *const c_void;
+
+        let args = [Arg::new(
+            "callback",
+            ArgData::from(Callback::new(KnownPtr(handed_to_nsi))),
+        )];
+        let (_, _, params) = to_c_param_vec(Some(&args));
+
+        assert_eq!(
+            handed_to_nsi,
+            value_read_by_renderer(&params[0]),
+            "the renderer must receive the pointer we handed to ɴsɪ, not \
+             the bytes it points at"
+        );
     }
 }

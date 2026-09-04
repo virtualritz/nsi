@@ -1,6 +1,5 @@
 use exr::prelude::*;
 use nsi_ffi_wrap as nsi;
-use png;
 use std::{
     fs::File,
     io::BufWriter,
