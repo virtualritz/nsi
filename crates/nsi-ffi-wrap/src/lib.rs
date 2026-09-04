@@ -58,6 +58,10 @@ pub use argument::*;
 // `nsi_ffi_wrap::P`, etc. without depending on `nsi-trait` directly.
 pub use ::nsi_trait::*;
 
+// Bridges `Arg` onto `nsi_trait::ParamValue`. Reaches into `Arg`'s
+// `pub(crate)` fields, so it has to live inside this crate.
+mod param_value;
+
 pub mod c_adapter;
 pub use c_adapter::FfiApiAdapter;
 
