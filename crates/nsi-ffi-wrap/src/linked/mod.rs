@@ -24,7 +24,7 @@ impl FfiApi for LinkedApi {
     fn NSIBegin(&self, nparams: c_int, params: *const NSIParam) -> NSIContext {
         // SAFETY: NSIBegin is an external C function from the NSI library.
         // The params pointer is valid for at least nparams elements as guaranteed
-        // by the caller through get_c_param_vec().
+        // by the caller through to_c_param_vec().
         unsafe { NSIBegin(nparams, params) }
     }
 
@@ -46,7 +46,7 @@ impl FfiApi for LinkedApi {
     ) {
         // SAFETY: NSICreate is an external C function from the NSI library.
         // All pointers (handle, type_, params) are valid as guaranteed by the
-        // caller through HandleString and get_c_param_vec().
+        // caller through HandleString and to_c_param_vec().
         unsafe { NSICreate(ctx, handle, type_, nparams, params) };
     }
 
@@ -116,7 +116,7 @@ impl FfiApi for LinkedApi {
     ) {
         // SAFETY: NSIConnect is an external C function from the NSI library.
         // All pointers are valid C strings or parameter arrays as guaranteed
-        // by HandleString, Ustr, and get_c_param_vec().
+        // by HandleString, Ustr, and to_c_param_vec().
         unsafe {
             NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params)
         };

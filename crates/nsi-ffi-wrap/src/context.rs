@@ -100,7 +100,7 @@ impl<'a> Context<'a> {
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
-        let (_, _, mut args_out) = get_c_param_vec(args);
+        let (_, _, mut args_out) = to_c_param_vec(args);
         let errorhandler_payload: *const c_void;
 
         let fn_pointer: nsi_sys::NSIErrorHandler = Some(
@@ -185,7 +185,7 @@ impl<'a> Context<'a> {
     ) {
         let handle = HandleString::from(handle);
         let node_type = ustr(node_type);
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
         NSI_API.NSICreate(
             self.0.context,
@@ -225,7 +225,7 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn delete(&self, handle: &str, args: Option<&ArgSlice<'_, 'a>>) {
         let handle = HandleString::from(handle);
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
         NSI_API.NSIDelete(
             self.0.context,
@@ -258,7 +258,7 @@ impl<'a> Context<'a> {
     #[inline]
     pub fn set_attribute(&self, handle: &str, args: &ArgSlice<'_, 'a>) {
         let handle = HandleString::from(handle);
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
         NSI_API.NSISetAttribute(
             self.0.context,
@@ -299,7 +299,7 @@ impl<'a> Context<'a> {
         args: &ArgSlice<'_, 'a>,
     ) {
         let handle = HandleString::from(handle);
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
         NSI_API.NSISetAttributeAtTime(
             self.0.context,
@@ -388,7 +388,7 @@ impl<'a> Context<'a> {
         let from_attr = ustr(from_attr.unwrap_or(""));
         let to = HandleString::from(to);
         let to_attr = ustr(to_attr);
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(args);
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
         NSI_API.NSIConnect(
             self.0.context,
@@ -489,7 +489,7 @@ impl<'a> Context<'a> {
     ///   before rendering begins.
     #[inline]
     pub fn evaluate(&self, args: &ArgSlice<'_, 'a>) {
-        let (args_len, args_ptr, _args_out) = get_c_param_vec(Some(args));
+        let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
         NSI_API.NSIEvaluate(self.0.context, args_len, args_ptr);
     }
@@ -551,7 +551,7 @@ impl<'a> Context<'a> {
         action: Action,
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
-        let (_, _, mut args_out) = get_c_param_vec(args);
+        let (_, _, mut args_out) = to_c_param_vec(args);
         let stopped_callback_payload: *const c_void;
 
         let fn_pointer: nsi_sys::NSIRenderStopped =

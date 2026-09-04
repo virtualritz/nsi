@@ -14,7 +14,7 @@ use ustr::{Ustr, ustr};
 use crate::*;
 
 #[inline(always)]
-pub(crate) fn get_c_param_vec(
+pub(crate) fn to_c_param_vec(
     args: Option<&ArgSlice>,
 ) -> (i32, *const NSIParam, Vec<NSIParam>) {
     let args = match args {
@@ -1297,7 +1297,7 @@ mod tests {
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
             ];
 
-        let (len, _ptr, params) = get_c_param_vec(Some(&args));
+        let (len, _ptr, params) = to_c_param_vec(Some(&args));
 
         assert_eq!(1, len);
         assert_eq!(2, params[0].arraylength);
@@ -1313,7 +1313,7 @@ mod tests {
             ArgData::from(I32Slice::new(&resolution)),
         )];
 
-        let (_len, _ptr, params) = get_c_param_vec(Some(&args));
+        let (_len, _ptr, params) = to_c_param_vec(Some(&args));
 
         assert_eq!(1, params[0].arraylength);
         assert_eq!(2, params[0].count);
