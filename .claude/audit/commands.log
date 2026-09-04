@@ -933,3 +933,22 @@ guards; they need no renderer present.
 Claude-Session: https://claude.ai/code/session_01N9BGWukJmJZEk9Ez5eNSX6
 EOF
 git log --oneline -1
+2026-09-04T09:07:17Z cd /home/ritz/code/crates/nsi; git log --oneline -6; echo "=== new call site ==="; sed -n '138,150p' crates/nsi-stream/tests/bridge.rs; rg -n '^use ' crates/nsi-stream/tests/bridge.rs | head
+2026-09-04T09:07:23Z cd /home/ritz/code/crates/nsi
+perl -0pi -e 's{use std::sync::\{Arc, Mutex\};}{use std::{\n    num::NonZeroUsize,\n    sync::{Arc, Mutex},\n};}' crates/nsi-stream/tests/bridge.rs
+perl -pi -e 's/\.array_len\((\d+)\)/.array_len(const { NonZeroUsize::new($1).unwrap() })/g' crates/nsi-stream/tests/bridge.rs
+cargo fmt -p nsi-stream 2>&1 | tail -3
+git diff --stat; git diff -- crates/nsi-stream/tests/bridge.rs
+2026-09-04T09:07:30Z cd /home/ritz/code/crates/nsi
+git stash push -u -m "backup before revert (nsi-stream fmt)" >/dev/null && git stash apply >/dev/null
+git checkout -- crates/nsi-stream/src/config.rs crates/nsi-stream/src/lib.rs
+git status --porcelain
+2026-09-04T09:07:34Z cd /home/ritz/code/crates/nsi; timeout 1200 cargo check --workspace --all-targets --features output 2>&1 | rg '^(error|warning: unused import|    Finished)' | head -20
+2026-09-04T09:08:03Z cd /home/ritz/code/crates/nsi
+timeout 600 cargo test -p nsi-ffi-wrap --lib argument:: 2>&1 | tail -4
+git add crates/nsi-stream/tests/bridge.rs && git commit -q --amend --no-edit && git log --oneline -2 && git status --porcelain
+2026-09-04T09:08:09Z cd /home/ritz/code/crates/nsi
+git add .claude/audit/commands.log && git commit -q -m "chore: update command audit log
+
+Claude-Session: https://claude.ai/code/session_01N9BGWukJmJZEk9Ez5eNSX6"
+git log --oneline origin/master..master; echo "=== push ==="; git push origin master 2>&1 | tail -6
