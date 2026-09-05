@@ -127,10 +127,43 @@ impl nsi_procedural::Procedural for MyProcedural {
 nsi_procedural::declare_procedural!(MyProcedural);
 ```
 
-`execute` takes `&self` with a `Sync` bound, not `&mut self`: the renderer
-may expand procedurals concurrently, and `&mut self` would force the shim
-to serialise every plugin behind a lock to protect state most plugins do
-not have. Interior mutability stays available to those that do.
+`execute` takes `&self` with a `Sync` bound, not `&mut self`: procedurals
+**are** expanded concurrently, so `&mut self` is not an option. Interior
+mutability stays available to plugins that need shared state.
+
+### Threading, and why the two crates differ here
+
+`PkThreadQuery` is **a 3Delight extension, not standard ndspy** -- the
+header says so at `ndspy.h:167`. Pixar's API has no thread negotiation:
+the renderer serialises calls into the driver. 3Delight added the query so
+a driver may opt *in* to concurrent buckets by answering
+`PtDspyThreadInfo.multithread = 1`.
+
+So concurrency is a property the driver **declares**, and the safe API
+ties the trait shape to that declaration:
+
+```rust
+trait DisplayDriver: Sized {
+    type Pixel: PixelType;
+    /// Answered to `PkThreadQuery`. Left `false`, the renderer serialises
+    /// `write`, which is what makes `&mut self` sound.
+    const MULTITHREAD: bool = false;
+    …
+}
+```
+
+- `MULTITHREAD = false` (the default): the renderer serialises, `write`
+  takes `&mut self`, and the author needs no synchronisation.
+- `MULTITHREAD = true`: the macro additionally requires `Self: Sync` and
+  `write` takes `&self`. A driver cannot promise concurrency without the
+  compiler holding it to it.
+
+Getting this wrong is not hypothetical. `nsi-ffi-wrap` today answers
+`multithread = 1` unconditionally (`output/mod.rs:732`) and then takes
+`&mut *fn_write` on a shared `Box<dyn FnWrite>` (`:822`), with no `Sync`
+bound on `WriteCallback::new`. If the renderer acts on that promise, two
+threads hold `&mut` to one `FnMut` at once. That is the bug this design
+is shaped to make unwritable.
 
 `ctx` is `&mut` because each `execute` call is handed its own
 `NSIContext_t`, so a fresh wrapper is constructed per call and nothing is
@@ -213,11 +246,12 @@ licensed 3Delight (see the licence-server note in `AGENTS.md`).
 
 ## Risks
 
-**Concurrent `execute`.** The design assumes the renderer may call
-`execute` on the same descriptor from several threads. If it does not,
-`&self` + `Sync` is merely conservative and costs nothing. If it does and
-we had chosen `&mut self`, every plugin would serialise. Confirm during
-implementation with a procedural that records its calling thread ids.
+**The in-process driver's `multithread = 1`.** Independent of these two
+crates, `nsi-ffi-wrap`'s FERRIS path makes a concurrency promise it does
+not honour (see Threading above). Whether to answer `0` -- correct, at a
+possible throughput cost -- or to require `Sync` write callbacks is a
+decision for that crate, not this design, but the two should not
+disagree.
 
 **`crate-type = ["cdylib"]` and the `.dpy` extension.** The renderer
 looks for a specific filename; Cargo produces `libfoo.so`. The examples
