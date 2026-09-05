@@ -19,8 +19,14 @@ because `Nsi` takes `&self` throughout. `Send + Sync`.
 
 | Field | Type | Ownership |
 | --- | --- | --- |
-| `nodes` | `IndexMap<String, Node>` | owned |
-| `edges` | `Vec<Edge>` | owned |
+| `nodes` | `IndexMap<String, Node>` | owned, private |
+| `edges` | `Vec<Edge>` | owned, private |
+| `by_from`, `by_to`, `by_to_attr` | `HashMap<_, Vec<usize>>` | derived indexes |
+
+The fields are private and `Scene` is `#[non_exhaustive]`: the indexes
+are an implementation detail, and exposing the tables would have frozen
+them before the index existed. Read through `nodes()`, `node()`,
+`edges()`, `edges_from()`, `edges_to()` and `edges_to_attr()`.
 
 `IndexMap` and `Vec` are load-bearing: insertion order is replay order,
 and the stream comparison in `contracts/stream.md` is meaningless if

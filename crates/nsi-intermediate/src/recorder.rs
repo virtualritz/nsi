@@ -65,6 +65,19 @@ impl Recorder {
         self.scene.lock().expect("scene mutex poisoned")
     }
 
+    /// Take the recorded scene, consuming the recorder.
+    ///
+    /// The alternative is `scene().clone()`, which deep-copies every
+    /// vertex buffer in the scene. A backend that is done recording
+    /// wants this one.
+    ///
+    /// # Panics
+    ///
+    /// If the scene mutex was poisoned by a panic while recording.
+    pub fn into_scene(self) -> Scene {
+        self.scene.into_inner().expect("scene mutex poisoned")
+    }
+
     /// The current render state.
     pub fn render_state(&self) -> RenderState {
         *self.state.lock().expect("state mutex poisoned")
@@ -203,8 +216,8 @@ mod tests {
         r.set_attribute("cam", &[nsi::f32!("fov", 45.0)]).unwrap();
 
         let scene = r.scene();
-        assert_eq!(scene.nodes["cam"].node_type, "perspectivecamera");
-        assert_eq!(scene.nodes["cam"].attrs["fov"].name, "fov");
+        assert_eq!(scene.node("cam").unwrap().node_type, "perspectivecamera");
+        assert_eq!(scene.node("cam").unwrap().attrs["fov"].name, "fov");
     }
 
     #[test]
@@ -264,13 +277,13 @@ mod tests {
         r.create("xf", "transform", None).unwrap();
         r.create("mesh", "mesh", None).unwrap();
         r.connect("mesh", None, "xf", "objects", None).unwrap();
-        assert_eq!(r.scene().edges.len(), 1);
+        assert_eq!(r.scene().edges().count(), 1);
 
         r.delete("xf", None).unwrap();
 
         let scene = r.scene();
-        assert!(!scene.nodes.contains_key("xf"));
-        assert!(scene.edges.is_empty());
+        assert!(!scene.node("xf").is_some());
+        assert!(scene.edges().next().is_none());
     }
 
     /// `Nsi::disconnect` removes the edge it names and leaves the rest.
@@ -285,8 +298,8 @@ mod tests {
         r.disconnect("a", None, ".root", "objects").unwrap();
 
         let scene = r.scene();
-        assert_eq!(scene.edges.len(), 1);
-        assert_eq!(scene.edges[0].from, "b");
+        assert_eq!(scene.edges().count(), 1);
+        assert_eq!(scene.edges().next().unwrap().from, "b");
     }
 
     /// An unmapped destination must fail on the way out as well as in.
@@ -335,8 +348,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(r.scene().edges[0].priority(), 7);
-        assert_eq!(r.scene().nodes.len(), 2);
+        assert_eq!(r.scene().edges().next().unwrap().priority(), 7);
+        assert_eq!(r.scene().len(), 2);
     }
 
     /// A `Reference` driven through the trait, which is the only path a
@@ -357,7 +370,7 @@ mod tests {
         .unwrap();
 
         let scene = r.scene();
-        match &scene.nodes["driver"].attrs["callbackdata"].data {
+        match &scene.node("driver").unwrap().attrs["callbackdata"].data {
             OwnedData::Reference(pointers) => {
                 assert_eq!(pointers.len(), 1);
                 assert_eq!(pointers[0].0 as usize, expected);
@@ -400,7 +413,7 @@ mod tests {
             r.set_attribute("driver", &[nsi::callback!("cb", Payload(1))])
                 .unwrap();
 
-            match &r.scene().nodes["driver"].attrs["cb"].data {
+            match &r.scene().node("driver").unwrap().attrs["cb"].data {
                 OwnedData::Reference(pointers) => {
                     assert_eq!(pointers.len(), 1);
                     assert!(!pointers[0].0.is_null(), "address recorded");

@@ -7,6 +7,7 @@
 use crate::{ALL, Edge, EdgeKind, OwnedArg, RecordError, classify};
 use core::cmp::Ordering;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 /// One ɴsɪ node.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -26,11 +27,28 @@ pub struct Node {
 
 /// The recorded scene graph.
 #[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Scene {
     /// Nodes by handle, in creation order.
-    pub nodes: IndexMap<String, Node>,
+    nodes: IndexMap<String, Node>,
     /// Classified connections, in connection order.
-    pub edges: Vec<Edge>,
+    edges: Vec<Edge>,
+    /// Edge positions keyed by source handle, and by destination.
+    ///
+    /// Resolution walks the graph per object, so without these every
+    /// hop of every walk scanned every edge -- quadratic in the scene,
+    /// which a production asset feels immediately. Rebuilt on removal
+    /// (rare) and appended to on `connect` (common).
+    by_from: HashMap<String, Vec<usize>>,
+    by_to: HashMap<String, Vec<usize>>,
+    /// Edge positions keyed by destination *and* destination attribute.
+    ///
+    /// `by_to` alone is not enough: a transform with twenty thousand
+    /// children has twenty thousand incoming `objects` edges, and
+    /// gathering attributes there would scan all of them once per
+    /// child. Keying on the attribute too makes that lookup
+    /// proportional to the matches rather than to the scene.
+    by_to_attr: HashMap<(String, String), Vec<usize>>,
 }
 
 impl Scene {
@@ -47,6 +65,90 @@ impl Scene {
     /// The classified connections, in connection order.
     pub fn edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.iter()
+    }
+
+    /// How many nodes the scene holds.
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Whether the scene holds no nodes.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    /// The connections *out of* `handle`, in connection order.
+    ///
+    /// Indexed, so this does not scan the scene.
+    pub fn edges_from<'a>(
+        &'a self,
+        handle: &str,
+    ) -> impl Iterator<Item = &'a Edge> + use<'a> {
+        self.indexed(&self.by_from, handle)
+    }
+
+    /// The connections *into* `handle`, in connection order.
+    ///
+    /// Indexed, so this does not scan the scene.
+    pub fn edges_to<'a>(
+        &'a self,
+        handle: &str,
+    ) -> impl Iterator<Item = &'a Edge> + use<'a> {
+        self.indexed(&self.by_to, handle)
+    }
+
+    /// The connections into `handle` through `to_attr`, in connection
+    /// order.
+    ///
+    /// Indexed on both, so this is proportional to the matches rather
+    /// than to the scene.
+    pub fn edges_to_attr<'a>(
+        &'a self,
+        handle: &str,
+        to_attr: &str,
+    ) -> impl Iterator<Item = &'a Edge> + use<'a> {
+        // `HashMap<(String, String), _>` cannot be probed with a pair of
+        // `&str` without allocating, and this is the hot path's key.
+        self.by_to_attr
+            .get(&(handle.to_string(), to_attr.to_string()))
+            .into_iter()
+            .flatten()
+            .map(|position| &self.edges[*position])
+    }
+
+    fn indexed<'a>(
+        &'a self,
+        index: &'a HashMap<String, Vec<usize>>,
+        handle: &str,
+    ) -> impl Iterator<Item = &'a Edge> + use<'a> {
+        index
+            .get(handle)
+            .into_iter()
+            .flatten()
+            .map(|position| &self.edges[*position])
+    }
+
+    /// Rebuild both edge indexes.
+    ///
+    /// Called after a removal, which shifts every later position.
+    fn reindex(&mut self) {
+        self.by_from.clear();
+        self.by_to.clear();
+        self.by_to_attr.clear();
+        for (position, edge) in self.edges.iter().enumerate() {
+            self.by_from
+                .entry(edge.from.clone())
+                .or_default()
+                .push(position);
+            self.by_to
+                .entry(edge.to.clone())
+                .or_default()
+                .push(position);
+            self.by_to_attr
+                .entry((edge.to.clone(), edge.kind.to_attr().to_string()))
+                .or_default()
+                .push(position);
+        }
     }
 
     /// Create a node.
@@ -103,6 +205,7 @@ impl Scene {
         } else {
             self.nodes.shift_remove(handle);
             self.edges.retain(|e| e.from != handle && e.to != handle);
+            self.reindex();
             Ok(())
         }
     }
@@ -232,12 +335,26 @@ impl Scene {
             edge.from == from && edge.to == to && edge.kind == kind
         }) {
             Some(existing) => existing.args = args,
-            None => self.edges.push(Edge {
-                from: from.to_string(),
-                to: to.to_string(),
-                kind,
-                args,
-            }),
+            None => {
+                self.by_from
+                    .entry(from.to_string())
+                    .or_default()
+                    .push(self.edges.len());
+                self.by_to
+                    .entry(to.to_string())
+                    .or_default()
+                    .push(self.edges.len());
+                self.by_to_attr
+                    .entry((to.to_string(), kind.to_attr().to_string()))
+                    .or_default()
+                    .push(self.edges.len());
+                self.edges.push(Edge {
+                    from: from.to_string(),
+                    to: to.to_string(),
+                    kind,
+                    args,
+                });
+            }
         }
 
         Ok(())
@@ -294,6 +411,7 @@ impl Scene {
 
             !matches
         });
+        self.reindex();
 
         Ok(())
     }

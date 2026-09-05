@@ -268,9 +268,9 @@ impl Scene {
                 return Err(ResolveError::Cycle { handle: current });
             }
 
-            let mut parents = self.edges.iter().filter(|edge| {
-                edge.from == current && edge.kind == EdgeKind::SceneMember
-            });
+            let mut parents = self
+                .edges_from(&current)
+                .filter(|edge| edge.kind == EdgeKind::SceneMember);
 
             if current == crate::ROOT {
                 chain.push(current);
@@ -279,9 +279,9 @@ impl Scene {
 
             // An instancing prototype is connected to an `instances`
             // node through `sourcemodels`, never to `.root` directly.
-            let mut instancers = self.edges.iter().filter(|edge| {
-                edge.from == current && edge.kind == EdgeKind::InstanceSource
-            });
+            let mut instancers = self
+                .edges_from(&current)
+                .filter(|edge| edge.kind == EdgeKind::InstanceSource);
 
             let Some(first) = parents.next().or_else(|| {
                 // `filter` here would consume the iterator even when the
@@ -379,7 +379,7 @@ impl Scene {
 
         let mut times = chain
             .iter()
-            .filter_map(|node| self.nodes.get(node))
+            .filter_map(|node| self.node(node))
             .flat_map(|node| node.time_attrs.iter())
             .filter(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
             .map(|(time, _)| *time)
@@ -447,7 +447,7 @@ impl Scene {
     /// Read before composing, because [`Scene::world_transform`] reads
     /// static attributes only and a motion-sampled node has none.
     fn has_motion_transform(&self, handle: &str) -> bool {
-        self.nodes.get(handle).is_some_and(|node| {
+        self.node(handle).is_some_and(|node| {
             node.time_attrs
                 .iter()
                 .any(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
@@ -496,13 +496,8 @@ impl Scene {
             .iter()
             .enumerate()
             .flat_map(|(depth, node)| {
-                self.edges
-                    .iter()
+                self.edges_to_attr(node, EdgeKind::AttributeBinding.to_attr())
                     .enumerate()
-                    .filter(move |(_, edge)| {
-                        edge.to == *node
-                            && edge.kind == EdgeKind::AttributeBinding
-                    })
                     .map(move |(order, edge)| {
                         (edge.priority(), depth, order, edge)
                     })
@@ -550,11 +545,7 @@ impl Scene {
             .iter()
             .enumerate()
             .flat_map(|(rank, (_, _, _, edge))| {
-                self.edges
-                    .iter()
-                    .filter(move |shader| {
-                        shader.to == edge.from && shader.kind == *kind
-                    })
+                self.edges_to_attr(&edge.from, kind.to_attr())
                     .map(move |shader| (shader.priority(), rank, shader))
             })
             // Highest priority, then earliest in the gathered order.
@@ -577,26 +568,19 @@ impl Scene {
     /// insertion order in `edges`, so AOV order is the order the
     /// consumer declared.
     pub fn render_outputs(&self) -> Vec<RenderOutput> {
-        self.edges
-            .iter()
+        self.edges()
             .filter(|edge| edge.kind == EdgeKind::Screen)
             .map(|screen_edge| {
                 let screen = &screen_edge.from;
                 let layers = self
-                    .edges
-                    .iter()
-                    .filter(|edge| {
-                        edge.to == *screen && edge.kind == EdgeKind::OutputLayer
-                    })
+                    .edges_to_attr(screen, EdgeKind::OutputLayer.to_attr())
                     .map(|layer_edge| OutputLayer {
                         handle: layer_edge.from.clone(),
                         drivers: self
-                            .edges
-                            .iter()
-                            .filter(|edge| {
-                                edge.to == layer_edge.from
-                                    && edge.kind == EdgeKind::OutputDriver
-                            })
+                            .edges_to_attr(
+                                &layer_edge.from,
+                                EdgeKind::OutputDriver.to_attr(),
+                            )
                             .map(|edge| edge.from.clone())
                             .collect(),
                     })
@@ -625,11 +609,7 @@ impl Scene {
     /// connection order.
     pub fn instance_sources(&self, instances: &str) -> Vec<String> {
         let mut sources = self
-            .edges
-            .iter()
-            .filter(|edge| {
-                edge.to == instances && edge.kind == EdgeKind::InstanceSource
-            })
+            .edges_to_attr(instances, EdgeKind::InstanceSource.to_attr())
             .enumerate()
             .map(|(order, edge)| (edge.index(), order, edge.from.clone()))
             .collect::<Vec<_>>();
@@ -644,7 +624,7 @@ impl Scene {
     /// `transformationmatrix` on a non-transform node is composed like
     /// any other. See `contracts/resolution.md`.
     fn local_transform(&self, handle: &str) -> Option<[f64; 16]> {
-        let node = self.nodes.get(handle)?;
+        let node = self.node(handle)?;
         matrix_of(node.attrs.get(TRANSFORMATION_MATRIX)?)
     }
 
@@ -658,7 +638,7 @@ impl Scene {
         handle: &str,
         time: f64,
     ) -> Result<Option<[f64; 16]>, ResolveError> {
-        let Some(node) = self.nodes.get(handle) else {
+        let Some(node) = self.node(handle) else {
             return Ok(None);
         };
 
