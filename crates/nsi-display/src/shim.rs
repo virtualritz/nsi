@@ -14,7 +14,7 @@ use nsi_ffi_wrap::output::{PixelFormat, PixelType};
 /// the symbols the renderer looks for.
 ///
 /// `write` takes `&mut self`, so the renderer is told to serialise
-/// buckets ([`PkThreadQuery`] is answered with `multithread = 0`). That
+/// buckets (`PkThreadQuery` is answered with `multithread = 0`). That
 /// is the standard ndspy contract.
 pub trait DisplayDriver: Sized + 'static {
     /// The scalar this driver wants its pixels in. The shim rewrites the
