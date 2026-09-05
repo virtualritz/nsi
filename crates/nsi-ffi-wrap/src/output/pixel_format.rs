@@ -246,70 +246,69 @@ impl PixelFormat {
         let mut depth = LayerDepth::OneChannel;
         let mut offset = 0;
 
-        PixelFormat(
-            // This loops through each format (channel), r, g, b, a etc.
-            format
-                .iter()
-                .enumerate()
-                .cycle()
-                .take(format.len() + 1)
-                .filter_map(|format| {
-                    // FIXME: add support for specifying AOV and detect type
-                    // for indexing (.r vs .x)
-                    // SAFETY: format.name should be a valid C string from the renderer
-                    let name = unsafe { CStr::from_ptr(format.1.name) }
-                        .to_str()
-                        .unwrap_or("<invalid>");
+        let is_single_channel = format.len() == 1;
+        let mut layers = format
+            .iter()
+            .enumerate()
+            .cycle()
+            .take(format.len() + 1)
+            .filter_map(|format| {
+                // FIXME: add support for specifying AOV and detect type
+                // for indexing (.r vs .x)
+                // SAFETY: format.name should be a valid C string from the renderer
+                let name = unsafe { CStr::from_ptr(format.1.name) }
+                    .to_str()
+                    .unwrap_or("<invalid>");
 
-                    let (layer_name, channel_id) =
-                        Self::split_into_layer_name_and_channel_id(name);
+                let (layer_name, channel_id) =
+                    Self::split_into_layer_name_and_channel_id(name);
 
-                    // A boundary between two layers will be when the postfix
-                    // is a combination of those above.
-                    if ["b", "z", "s", "a"].contains(&previous_channel_id)
-                        && ["r", "x", "s"].contains(&channel_id)
-                    {
-                        let tmp_layer_name = if previous_layer_name.is_empty() {
-                            "Ci"
-                        } else {
-                            previous_layer_name
-                        };
-                        previous_layer_name = layer_name;
-
-                        previous_channel_id = channel_id;
-
-                        let tmp_depth = depth;
-                        depth = LayerDepth::OneChannel;
-
-                        let tmp_offset = offset;
-                        offset = format.0;
-
-                        Some(Layer {
-                            name: tmp_layer_name.to_string(),
-                            depth: tmp_depth,
-                            offset: tmp_offset,
-                        })
+                // A boundary between two layers will be when the postfix
+                // is a combination of those above.
+                if ["b", "z", "s", "a"].contains(&previous_channel_id)
+                    && ["r", "x", "s"].contains(&channel_id)
+                {
+                    let tmp_layer_name = if previous_layer_name.is_empty() {
+                        "Ci"
                     } else {
-                        // Do we we have a lonely alpha -> it belongs to the
-                        // current layer.
-                        if layer_name.is_empty() && "a" == channel_id {
-                            depth = match &depth {
-                                LayerDepth::OneChannel => {
-                                    LayerDepth::OneChannelAndAlpha
-                                }
-                                LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                                LayerDepth::Vector => {
-                                    LayerDepth::VectorAndAlpha
-                                }
-                                LayerDepth::FourChannels => {
-                                    LayerDepth::FourChannelsAndAlpha
-                                }
-                                _ => unreachable!(),
-                            };
-                        }
-                        // Are we still on the same layer?
-                        else if layer_name == previous_layer_name {
-                            // We only check for first channel.
+                        previous_layer_name
+                    };
+                    previous_layer_name = layer_name;
+
+                    previous_channel_id = channel_id;
+
+                    let tmp_depth = depth;
+                    depth = LayerDepth::OneChannel;
+
+                    let tmp_offset = offset;
+                    offset = format.0;
+
+                    Some(Layer {
+                        name: tmp_layer_name.to_string(),
+                        depth: tmp_depth,
+                        offset: tmp_offset,
+                    })
+                } else {
+                    // Do we we have a lonely alpha -> it belongs to the
+                    // current layer.
+                    if layer_name.is_empty() && "a" == channel_id {
+                        depth = match &depth {
+                            LayerDepth::OneChannel => {
+                                LayerDepth::OneChannelAndAlpha
+                            }
+                            LayerDepth::Color => LayerDepth::ColorAndAlpha,
+                            LayerDepth::Vector => LayerDepth::VectorAndAlpha,
+                            LayerDepth::FourChannels => {
+                                LayerDepth::FourChannelsAndAlpha
+                            }
+                            _ => unreachable!(),
+                        };
+                    }
+                    // Are we still on the same layer?
+                    else if layer_name == previous_layer_name {
+                        // We only check for first channel, but only for multi-channel formats.
+                        // Single-channel formats should remain as OneChannel.
+                        if !is_single_channel {
                             match channel_id {
                                 "r" | "g" | "b" => depth = LayerDepth::Color,
                                 "x" | "y" | "z" => depth = LayerDepth::Vector,
@@ -333,17 +332,45 @@ impl PixelFormat {
                                 }
                                 _ => (),
                             }
-                            previous_layer_name = layer_name;
-                        // We have a new layer.
-                        } else {
-                            previous_layer_name = layer_name;
                         }
-                        previous_channel_id = channel_id;
-                        None
+                        previous_layer_name = layer_name;
+                    // We have a new layer.
+                    } else {
+                        previous_layer_name = layer_name;
                     }
-                })
-                .collect::<Vec<_>>(),
-        )
+                    previous_channel_id = channel_id;
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // If no layers were emitted (e.g., single-channel formats),
+        // emit the final accumulated layer.
+        if layers.is_empty() && !format.is_empty() {
+            let final_layer_name = if previous_layer_name.is_empty() {
+                "Ci"
+            } else {
+                previous_layer_name
+            };
+            layers.push(Layer {
+                name: final_layer_name.to_string(),
+                depth,
+                offset,
+            });
+        }
+
+        PixelFormat(layers)
+    }
+
+    /// Builds a `PixelFormat` from the format array ndspy hands a
+    /// display driver.
+    ///
+    /// Out-of-crate drivers (see the `nsi-display` crate) receive
+    /// `PtDspyDevFormat[]` in `DspyImageOpen` and need this to interpret
+    /// the buckets that follow.
+    #[inline]
+    pub fn from_ndspy(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
+        Self::new(format)
     }
 
     fn split_into_layer_name_and_channel_id(name: &str) -> (&str, &str) {
@@ -356,13 +383,12 @@ impl PixelFormat {
             // Reset iterator.
             split = name.rsplitn(2, '.');
         }
-        // Skip the middle part.
-        if split.next().is_some() {
-            // We know that if there is middle part we always have a prefix
-            // so we can safely unwrap here.
-            (split.next().unwrap(), postfix)
-        } else {
-            ("", postfix)
+        // Get the layer name if there are more parts.
+        // For 2-part names like "beauty.r", this is "beauty".
+        // For 3+ part names, this is the leftmost part (skipping middle).
+        match split.last() {
+            Some(prefix) => (prefix, postfix),
+            None => ("", postfix),
         }
     }
 
