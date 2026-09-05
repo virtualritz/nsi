@@ -51,10 +51,17 @@ unsafe impl Sync for HostPtr {}
 /// and are told apart by [`OwnedArg::type_tag`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum OwnedData {
+    /// `f32` scalars, flattened. Also holds colour, point, vector,
+    /// normal and 4x4 `f32` matrices; [`OwnedArg::type_tag`] tells them
+    /// apart.
     F32(Vec<f32>),
+    /// `f64` scalars, flattened. Also holds 4x4 `f64` matrices.
     F64(Vec<f64>),
+    /// 32-bit integers.
     I32(Vec<i32>),
+    /// 64-bit integers.
     I64(Vec<i64>),
+    /// Strings, copied out of their C representation.
     String(Vec<String>),
     /// Raw host pointers. ɴsɪ calls this `Reference` (`Pointer` in the C
     /// API); it is not an object link and is never forwarded to a
@@ -66,10 +73,17 @@ pub enum OwnedData {
 /// A recorded ɴsɪ argument.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OwnedArg {
+    /// The attribute name this argument sets.
     pub name: String,
+    /// The ɴsɪ type, which is what tells one [`OwnedData`] layout from
+    /// another sharing the same storage.
     pub type_tag: Type,
+    /// ɴsɪ's `array_len`. The C `count` field is `len / array_length`.
     pub array_length: usize,
+    /// ɴsɪ's argument flags: `per_vertex`, `per_face` and the like.
+    /// Recorded but not yet replayed; see `contracts/stream.md`.
     pub flags: i32,
+    /// The payload, copied unless it is a pointer.
     pub data: OwnedData,
 }
 

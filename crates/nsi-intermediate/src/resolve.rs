@@ -6,8 +6,8 @@
 //! resolves geometry to world space too. So the chain has to be
 //! composed here, once.
 
-use crate::{EdgeKind, OwnedData, Scene};
-use core::fmt;
+use crate::{EdgeKind, OwnedArg, OwnedData, Scene};
+use core::{cmp::Ordering, fmt};
 use std::collections::HashSet;
 
 /// A 4x4 identity, row-major.
@@ -28,7 +28,7 @@ const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
 /// about. Returning a matrix or a binding anyway would be the silent
 /// failure the crate exists to prevent: it renders, with the wrong
 /// answer.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ResolveError {
     /// A node is connected to more than one parent through `objects`.
     ///
@@ -58,6 +58,23 @@ pub enum ResolveError {
         /// The node the walk arrived at twice.
         handle: String,
     },
+    /// A node in the chain is motion-sampled, but has no sample at the
+    /// requested time.
+    ///
+    /// This crate does not interpolate between samples. Element-wise
+    /// interpolation of a matrix is wrong for anything containing a
+    /// rotation, and choosing a decomposition here would bake one
+    /// renderer's answer into every backend. Ask at a time in
+    /// [`Scene::motion_times`], or interpolate in the backend, where the
+    /// right decomposition is known.
+    MissingSampleAtTime {
+        /// The node with no sample at that time.
+        handle: String,
+        /// The time that was asked for.
+        time: f64,
+        /// The times that node does have, ascending.
+        available: Vec<f64>,
+    },
 }
 
 impl fmt::Display for ResolveError {
@@ -83,6 +100,16 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ transform chain revisits node {handle:?}; a cyclic \
                  scene has no world transform"
             ),
+            Self::MissingSampleAtTime {
+                handle,
+                time,
+                available,
+            } => write!(
+                f,
+                "ɴsɪ node {handle:?} has no transform sample at time \
+                 {time}; it has {available:?}, and this crate does not \
+                 interpolate between them"
+            ),
         }
     }
 }
@@ -105,6 +132,7 @@ pub struct Binding {
 /// written from it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderOutput {
+    /// The camera the screen is connected to.
     pub camera: String,
     /// The screen, which is what carries resolution and oversampling.
     pub screen: String,
@@ -115,6 +143,7 @@ pub struct RenderOutput {
 /// One AOV and the drivers it is written to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OutputLayer {
+    /// The `outputlayer` node's handle.
     pub handle: String,
     /// A layer may fan out to several drivers -- a file and a display,
     /// say -- so this is a list, in connection order.
@@ -225,6 +254,84 @@ impl Scene {
                 })
             }
         })
+    }
+
+    /// Every time at which a transform in `handle`'s chain is sampled,
+    /// ascending, deduplicated.
+    ///
+    /// Empty for a wholly static chain, which is the check a backend
+    /// makes to decide between [`Scene::world_transform`] and
+    /// [`Scene::world_transform_samples`].
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`].
+    pub fn motion_times(&self, handle: &str) -> Result<Vec<f64>, ResolveError> {
+        let chain = self.chain(handle)?;
+
+        let mut times = chain
+            .iter()
+            .filter_map(|node| self.nodes.get(node))
+            .flat_map(|node| node.time_attrs.iter())
+            .filter(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
+            .map(|(time, _)| *time)
+            .collect::<Vec<_>>();
+
+        // `total_cmp` throughout, matching how the samples were keyed.
+        times.sort_by(f64::total_cmp);
+        times.dedup_by(|a, b| a.total_cmp(b) == Ordering::Equal);
+
+        Ok(times)
+    }
+
+    /// Compose the transform chain applying to `handle` at `time`.
+    ///
+    /// A node with no motion samples is constant, so its static matrix
+    /// applies at every time. A node that *is* sampled contributes the
+    /// sample at exactly `time`, and having none there is an error
+    /// rather than an interpolation; see
+    /// [`ResolveError::MissingSampleAtTime`].
+    ///
+    /// A wholly static chain resolves at any time, and agrees with
+    /// [`Scene::world_transform`].
+    ///
+    /// # Errors
+    ///
+    /// Every variant of [`ResolveError`].
+    pub fn world_transform_at(
+        &self,
+        handle: &str,
+        time: f64,
+    ) -> Result<[f64; 16], ResolveError> {
+        let chain = self.chain(handle)?;
+
+        chain.iter().try_fold(IDENTITY, |matrix, node| {
+            Ok(match self.local_transform_at(node, time)? {
+                Some(local) => mul(matrix, local),
+                None => matrix,
+            })
+        })
+    }
+
+    /// The world transform of `handle` at each of its
+    /// [`Scene::motion_times`].
+    ///
+    /// This is the shape a renderer wants for motion blur: the sample
+    /// times, and the composed matrix at each. Empty for a static chain.
+    ///
+    /// # Errors
+    ///
+    /// Every variant of [`ResolveError`]. `MissingSampleAtTime` means
+    /// the chain mixes nodes sampled at different times, which has no
+    /// answer without interpolation.
+    pub fn world_transform_samples(
+        &self,
+        handle: &str,
+    ) -> Result<Vec<(f64, [f64; 16])>, ResolveError> {
+        self.motion_times(handle)?
+            .into_iter()
+            .map(|time| Ok((time, self.world_transform_at(handle, time)?)))
+            .collect()
     }
 
     /// Whether any motion sample on `handle` sets a transform.
@@ -389,15 +496,62 @@ impl Scene {
     /// any other. See `contracts/resolution.md`.
     fn local_transform(&self, handle: &str) -> Option<[f64; 16]> {
         let node = self.nodes.get(handle)?;
-        let arg = node.attrs.get(TRANSFORMATION_MATRIX)?;
-        match &arg.data {
-            OwnedData::F64(values) if values.len() == 16 => {
-                let mut matrix = [0.0; 16];
-                matrix.copy_from_slice(values);
-                Some(matrix)
+        matrix_of(node.attrs.get(TRANSFORMATION_MATRIX)?)
+    }
+
+    /// This node's matrix at `time`.
+    ///
+    /// A node with no transform samples is constant: its static matrix
+    /// applies at every time. A sampled node must have a sample at
+    /// exactly `time`; this crate does not interpolate.
+    fn local_transform_at(
+        &self,
+        handle: &str,
+        time: f64,
+    ) -> Result<Option<[f64; 16]>, ResolveError> {
+        let Some(node) = self.nodes.get(handle) else {
+            return Ok(None);
+        };
+
+        let mut sampled = node
+            .time_attrs
+            .iter()
+            .filter(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
+            .peekable();
+
+        if sampled.peek().is_none() {
+            Ok(self.local_transform(handle))
+        } else {
+            match sampled
+                .clone()
+                .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
+            {
+                Some((_, attrs)) => {
+                    Ok(matrix_of(&attrs[TRANSFORMATION_MATRIX]))
+                }
+                None => Err(ResolveError::MissingSampleAtTime {
+                    handle: handle.to_string(),
+                    time,
+                    available: sampled.map(|(t, _)| *t).collect(),
+                }),
             }
-            _ => None,
         }
+    }
+}
+
+/// A `transformationmatrix` argument as a row-major 4x4.
+///
+/// Non-`f64` matrices yield `None`: ɴsɪ documents the attribute as
+/// `doublematrix`, and silently reinterpreting an `f32` one would be
+/// worse than skipping it.
+fn matrix_of(arg: &OwnedArg) -> Option<[f64; 16]> {
+    match &arg.data {
+        OwnedData::F64(values) if values.len() == 16 => {
+            let mut matrix = [0.0; 16];
+            matrix.copy_from_slice(values);
+            Some(matrix)
+        }
+        _ => None,
     }
 }
 
@@ -594,6 +748,170 @@ mod tests {
         );
         scene.connect("xf", None, ".root", "objects").unwrap();
         assert_eq!(scene.world_transform("xf").unwrap()[12], 5.0);
+    }
+
+    /// The motion API's reason to exist: two samples give two different
+    /// world transforms, where `world_transform` refuses outright.
+    #[test]
+    fn a_sampled_chain_resolves_per_sample() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
+        scene.create("mesh", "mesh");
+        scene.connect("mesh", None, "xf", "objects").unwrap();
+        scene.connect("xf", None, ".root", "objects").unwrap();
+
+        assert_eq!(scene.world_transform_at("mesh", 0.0).unwrap()[12], 0.0);
+        assert_eq!(scene.world_transform_at("mesh", 1.0).unwrap()[12], 5.0);
+    }
+
+    /// A static node is constant, so it contributes at every time. This
+    /// is the common shape: a moving object under a fixed group.
+    #[test]
+    fn a_static_parent_composes_with_a_sampled_child() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform");
+        scene.set_attribute("grp", vec![translate(100.0, 0.0, 0.0)]);
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
+        scene.connect("xf", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
+
+        assert_eq!(scene.world_transform_at("xf", 0.0).unwrap()[12], 100.0);
+        assert_eq!(scene.world_transform_at("xf", 1.0).unwrap()[12], 105.0);
+    }
+
+    /// The union of every sample time in the chain, ascending and
+    /// deduplicated -- what a backend iterates to build motion blur.
+    #[test]
+    fn motion_times_are_the_union_of_the_chain() {
+        let mut scene = Scene::default();
+        // `inner` is walked first and its only time sorts last, so a
+        // merge that just concatenated the chain would come out
+        // unsorted. `0.0` appears on both, so it must also dedup.
+        scene.create("outer", "transform");
+        scene.set_attribute_at_time(
+            "outer",
+            0.5,
+            vec![translate(1.0, 0.0, 0.0)],
+        );
+        scene.set_attribute_at_time(
+            "outer",
+            0.0,
+            vec![translate(0.0, 0.0, 0.0)],
+        );
+        scene.create("inner", "transform");
+        scene.set_attribute_at_time(
+            "inner",
+            2.0,
+            vec![translate(0.0, 0.0, 0.0)],
+        );
+        scene.set_attribute_at_time(
+            "inner",
+            0.0,
+            vec![translate(0.0, 0.0, 0.0)],
+        );
+        scene.connect("inner", None, "outer", "objects").unwrap();
+        scene.connect("outer", None, ".root", "objects").unwrap();
+
+        assert_eq!(scene.motion_times("inner").unwrap(), vec![0.0, 0.5, 2.0]);
+    }
+
+    /// A static chain has no motion times, which is how a backend tells
+    /// the two cases apart.
+    #[test]
+    fn a_static_chain_has_no_motion_times() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
+        // A motion sample of something that is not a transform. The
+        // chain is still static as far as transforms go, and counting
+        // this would invent motion blur out of an animated colour.
+        scene.set_attribute_at_time(
+            "xf",
+            0.5,
+            vec![OwnedArg {
+                name: "unrelated".to_string(),
+                type_tag: Type::F64,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F64(vec![1.0]),
+            }],
+        );
+        scene.connect("xf", None, ".root", "objects").unwrap();
+
+        assert!(scene.motion_times("xf").unwrap().is_empty());
+        // And it resolves at any time, agreeing with the static answer.
+        assert_eq!(
+            scene.world_transform_at("xf", 0.25).unwrap(),
+            scene.world_transform("xf").unwrap()
+        );
+    }
+
+    /// `world_transform_samples` is the pair of the two: the times, and
+    /// the composed matrix at each.
+    #[test]
+    fn samples_pair_every_time_with_its_matrix() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time("xf", 0.5, vec![translate(2.0, 0.0, 0.0)]);
+        scene.connect("xf", None, ".root", "objects").unwrap();
+
+        let samples = scene.world_transform_samples("xf").unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].0, 0.0);
+        assert_eq!(samples[0].1[12], 0.0);
+        assert_eq!(samples[1].0, 0.5);
+        assert_eq!(samples[1].1[12], 2.0);
+    }
+
+    /// Asking a sampled node at a time it does not have is an error, not
+    /// an interpolation. Element-wise interpolation of a matrix is wrong
+    /// for anything with a rotation in it, and the right decomposition
+    /// is the backend's to choose.
+    #[test]
+    fn a_time_between_samples_is_an_error_not_an_interpolation() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
+        scene.connect("xf", None, ".root", "objects").unwrap();
+
+        assert_eq!(
+            scene.world_transform_at("xf", 0.5),
+            Err(ResolveError::MissingSampleAtTime {
+                handle: "xf".to_string(),
+                time: 0.5,
+                available: vec![0.0, 1.0],
+            })
+        );
+    }
+
+    /// A chain whose nodes are sampled at different times has no answer
+    /// without interpolation, and says so rather than composing a
+    /// mismatched pair.
+    #[test]
+    fn a_chain_sampled_at_different_times_is_an_error() {
+        let mut scene = Scene::default();
+        scene.create("outer", "transform");
+        scene.set_attribute_at_time(
+            "outer",
+            0.25,
+            vec![translate(1.0, 0.0, 0.0)],
+        );
+        scene.create("inner", "transform");
+        scene.set_attribute_at_time(
+            "inner",
+            0.75,
+            vec![translate(2.0, 0.0, 0.0)],
+        );
+        scene.connect("inner", None, "outer", "objects").unwrap();
+        scene.connect("outer", None, ".root", "objects").unwrap();
+
+        assert!(scene.world_transform_samples("inner").is_err());
     }
 
     /// ɴsɪ documents `transformationmatrix` as `doublematrix`. An `f32`

@@ -35,6 +35,8 @@
 //! `Reference` is the exception: it is passed through, retained, and is
 //! why the recorder carries a context lifetime.
 
+#![deny(missing_docs)]
+
 /// ɴsɪ's root node handle.
 pub const ROOT: &str = ".root";
 

@@ -11,6 +11,7 @@ use indexmap::IndexMap;
 /// One ɴsɪ node.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Node {
+    /// The ɴsɪ node type this handle was created with.
     pub node_type: String,
     /// Attributes set with `set_attribute`, keyed by name.
     pub attrs: IndexMap<String, OwnedArg>,
@@ -26,7 +27,9 @@ pub struct Node {
 /// The recorded scene graph.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Scene {
+    /// Nodes by handle, in creation order.
     pub nodes: IndexMap<String, Node>,
+    /// Classified connections, in connection order.
     pub edges: Vec<Edge>,
 }
 

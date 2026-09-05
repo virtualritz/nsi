@@ -10,9 +10,13 @@ use std::sync::{Mutex, MutexGuard};
 /// Where the render is in its lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RenderState {
+    /// Not rendering. The state before `Start` and after `Stop`.
     #[default]
     Idle,
+    /// Rendering.
     Running,
+    /// Started, then suspended. `Resume` returns it to
+    /// [`RenderState::Running`].
     Suspended,
 }
 
@@ -44,6 +48,7 @@ pub struct Recorder {
 }
 
 impl Recorder {
+    /// An empty recorder.
     pub fn new() -> Self {
         Self::default()
     }

@@ -42,14 +42,22 @@ pub enum EdgeKind {
     /// This maps 1:1 onto OSL's `ConnectShaders`, which is unsurprising:
     /// ɴsɪ was designed around OSL. Renderers whose references point at
     /// whole objects rather than attributes need an adapter here.
-    ShaderNetwork { from_port: String, to_port: String },
+    ShaderNetwork {
+        /// The output port named on the source node.
+        from_port: String,
+        /// The input port named on the destination node.
+        to_port: String,
+    },
 }
 
 /// A recorded, classified connection.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Edge {
+    /// The handle the connection is made from.
     pub from: String,
+    /// The handle the connection is made to.
     pub to: String,
+    /// What the connection means.
     pub kind: EdgeKind,
     /// The `"priority"` argument of the ɴsɪ `connect` call that made
     /// this edge, defaulting to `0`.
@@ -66,6 +74,7 @@ pub struct Edge {
 /// An ɴsɪ connection whose destination attribute has no mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassifyError {
+    /// The destination attribute that has no mapping.
     pub to_attr: String,
 }
 
