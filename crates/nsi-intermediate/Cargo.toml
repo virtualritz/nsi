@@ -2,6 +2,8 @@
 name = "nsi-intermediate"
 version = "0.1.0"
 edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Renderer-agnostic intermediate representation for the Nodal Scene Interface – ɴsɪ."
 repository = "https://github.com/virtualritz/nsi/"

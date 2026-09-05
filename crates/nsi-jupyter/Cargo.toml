@@ -3,13 +3,15 @@ name = "nsi-jupyter"
 version = "0.9.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Jypyter notebooks support for ɴsɪ."
 readme = "README.md"
 homepage = "https://www.3delight.com/"
-documentation = "https://docs.rs/nsi/"
+documentation = "https://docs.rs/nsi-jupyter/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]

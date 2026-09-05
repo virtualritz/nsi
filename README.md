@@ -21,11 +21,10 @@ than two minutes (wall time) using
 <!-- cargo-rdme start -->
 
 ## Nodal Scene Interface -- ɴsɪ
-
 A flexible, modern API for offline 3D renderers
 
 [Nsɪ](https://nsi.readthedocs.io/) is built around the concept of
-nodes. Each node has a _unique handle_ to identify it. It also has
+nodes. Each node has a *unique handle* to identify it. It also has
 a [type](node) which describes its intended function in the scene.
 
 Nodes are abstract containers for data. The interpretation depends
@@ -33,7 +32,7 @@ on the node type. Nodes can also be [connected to each
 other](https://nsi.readthedocs.io/en/latest/guidelines.html#basic-scene-anatomy)
 to express relationships.
 
-Data is stored on nodes as _attributes_. Each attribute has a name
+Data is stored on nodes as *attributes*. Each attribute has a name
 which is unique on the node and a type which describes the kind of
 data it holds (strings, integer numbers, floating point numbers,
 etc.). The standard ɴsɪ attribute names are exposed as typed
@@ -132,24 +131,23 @@ ctx.set_attribute(
         nsi::i32_slice!(
             "subdivision.creasevertices",
             &[
-                0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13,
-                2, 16, 3, 11, 3, 13, 3, 17, 4, 8, 4, 14, 4, 18, 5, 9,
-                5, 14, 5, 19, 6, 10, 6, 15, 6, 18, 7, 11, 7, 15, 7, 19,
-                8, 10, 9, 11, 12, 14, 13, 15, 16, 17, 18, 19,
+                0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13, 2,
+                16, 3, 11, 3, 13, 3, 17, 4, 8, 4, 14, 4, 18, 5, 9, 5, 14,
+                5, 19, 6, 10, 6, 15, 6, 18, 7, 11, 7, 15, 7, 19, 8, 10, 9,
+                11, 12, 14, 13, 15, 16, 17, 18, 19,
             ]
         ),
         nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
     ],
 );
 ```
-
 ### More Examples
 
 These can be found in the [`examples`](https://github.com/virtualritz/nsi/tree/master/examples)
 folder.
 
-_All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
-installation to run!_
+*All the examples in this crate require a (free) [3Delight](https://www.3delight.com/)
+installation to run!*
 
 #### Interactive
 
@@ -246,20 +244,20 @@ or use channels to stream pixels back to a main thread (see the
 
 ### Cargo Features
 
-- `output` -- Add support for streaming pixels from the renderer to the
+* `output` -- Add support for streaming pixels from the renderer to the
   calling context via closures.
 
-- [`jupyter`](https://docs.rs/nsi/latest/nsi/jupyter/) -- Add support for rendering to Jupyter notebooks (when using
+* [`jupyter`](https://docs.rs/nsi/latest/nsi/jupyter/) -- Add support for rendering to Jupyter notebooks (when using
   a [Rust Jupyter kernel](https://github.com/google/evcxr)).
 
-- [`toolbelt`](https://docs.rs/nsi/latest/nsi/toolbelt/) -- Add convenience methods that work with a `Context`.
+* [`toolbelt`](https://docs.rs/nsi/latest/nsi/toolbelt/) -- Add convenience methods that work with a `Context`.
 
-- [`delight`](https://docs.rs/nsi/latest/nsi/delight/) -- Add some nodes & shaders specific to 3Delight.
+* [`delight`](https://docs.rs/nsi/latest/nsi/delight/) -- Add some nodes & shaders specific to 3Delight.
 
-- `nightly` -- Enable some unstable features (suggested if you build with a
+* `nightly` -- Enable some unstable features (suggested if you build with a
   `nightly` toolchain)
 
-- `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node
+* `ustr_handles` -- use [`ustr`](https://crates.io/crates/ustr) for node
   handles. This will give a you a speed boost if your node names aren't
   changing while an app using ɴsɪ is running but is not advised otherwise
   (`ustr` are never freed).
@@ -271,7 +269,8 @@ build or loaded at runtime.
 
 By default the lib is loaded at runtime.
 
-- Load `lib3deligh` at runtime (default). This has several advantages:
+* Load `lib3deligh` at runtime (default). This has several advantages:
+
   1. If you ship your application or library you can ship it without the
      library. It can still run and will print an informative error if the
      library cannot be loaded.
@@ -279,13 +278,14 @@ By default the lib is loaded at runtime.
   2. A user can install an updated version of the renderer and stuff will
      ‘just work’.
 
-- Dynamically link against `lib3delight`.
-  - `lib3delight` becomes a dependency. If it cannot be found your lib/app
+* Dynamically link against `lib3delight`.
+
+  * `lib3delight` becomes a dependency. If it cannot be found your lib/app
     will not load/start.
 
-  - The feature is called `link_lib3delight`.
+  * The feature is called `link_lib3delight`.
 
-  - You should disable default features (they are not needed/used) in this
+  * You should disable default features (they are not needed/used) in this
     case:
 
     ```toml
@@ -293,11 +293,12 @@ By default the lib is loaded at runtime.
     nsi = { version = "0.7", default-features = false, features = ["link_lib3delight"] }
     ```
 
-- Download `lib3delight` during build.
-  - `lib3delight` is downloaded during build. Note that this may be an
+* Download `lib3delight` during build.
+
+  * `lib3delight` is downloaded during build. Note that this may be an
     outdated version. This feature mainly exists for CI purposes.
 
-  - The feature is called `download_lib3delight`.
+  * The feature is called `download_lib3delight`.
 
 <!-- cargo-rdme end -->
 

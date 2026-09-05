@@ -4,11 +4,13 @@ version = "0.9.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 build = "build.rs"
 edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
 license = "Apache-2.0 OR BSD-3-Clause OR MIT OR Zlib"
 description = "Auto-generated bindings for Illumination Research’s Nodal Scene Interface – ɴꜱɪ."
 readme = "README.md"
 documentation = "https://nsi.readthedocs.io/"
-repository = "https://github.com/virtualritz/nsi-sys/"
+repository = "https://github.com/virtualritz/nsi/"
 
 [badges]
 maintenance = { status = "passively-maintained" }

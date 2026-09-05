@@ -3,11 +3,21 @@ name = "nsi"
 version = "0.9.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Nodal Scene Interface for (offline) 3D renderers – ɴsɪ."
-exclude = [".github/**/*", "crates/**/*", "assets/**/*", "examples/**/*"]
+# Whitelist rather than blacklist: an `exclude` list silently shipped
+# `.claude/`, `.specify/`, `specs/`, the handoff notes and a JPEG.
+include = [
+    "src/**/*",
+    "/Cargo.toml",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE.md",
+]
 readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi/"
