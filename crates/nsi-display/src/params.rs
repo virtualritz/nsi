@@ -2,7 +2,6 @@
 
 use core::{
     ffi::{CStr, c_char, c_int},
-    marker::PhantomData,
     slice,
 };
 
@@ -13,13 +12,15 @@ use core::{
 #[derive(Copy, Clone)]
 pub struct Params<'a> {
     raw: &'a [ndspy_sys::UserParameter],
-    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Params<'a> {
     /// # Safety
     /// `raw` must point to `count` valid `UserParameter`s that outlive
-    /// `'a`, as ndspy guarantees for the duration of the call.
+    /// `'a`, as ndspy guarantees for the duration of the call. The data
+    /// referenced by each parameter's `name` and `value` pointers —
+    /// including, for string parameters, the `char*` those point to —
+    /// must also remain valid for `'a`.
     #[inline]
     pub unsafe fn from_raw(
         raw: *const ndspy_sys::UserParameter,
@@ -31,10 +32,7 @@ impl<'a> Params<'a> {
             // SAFETY: the caller guarantees `count` valid entries.
             unsafe { slice::from_raw_parts(raw, count as usize) }
         };
-        Self {
-            raw,
-            _marker: PhantomData,
-        }
+        Self { raw }
     }
 
     #[inline]
