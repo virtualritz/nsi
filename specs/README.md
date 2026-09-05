@@ -22,6 +22,25 @@ Surfaces on the path from "interactive" (the API's design target) to
 
 Directory numbers reflect creation order, not coverage order.
 
+## Surfaces
+
+| # | Surface | Status |
+| --- | --- | --- |
+| `001-gpu-pixel-streaming` | Pixel streaming/output contract | active |
+| `002-shading-profile` | Shading profile for network translation | -- |
+| `003-nsi-intermediate-representation` | The `nsi-intermediate` crate: the renderer-agnostic IR between ɴsɪ and any back end | implemented; `Partial` and `Open` rows remain |
+
+`003` arrived with the crate, which was extracted from `nsi-mitsuba`
+once a second backend made its renderer-agnosticism structural rather
+than notional. It is the reference implementation of the `Nsi` trait
+declared in `nsi-trait`, which is why it belongs beside it, and it is
+consumed by [`nsi-mitsuba`](https://github.com/virtualritz/nsi-mitsuba)
+and [`nsi-moonray`](https://github.com/virtualritz/nsi-moonray).
+
+Coverage-order item 5 above -- an `Nsi`-trait renderer implementation --
+is what those backend repositories are. `003` is the half of that work
+which is common to all of them.
+
 ## Definition Of Covered
 
 A surface is covered only when all of these are present:

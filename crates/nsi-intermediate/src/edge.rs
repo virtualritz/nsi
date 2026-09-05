@@ -64,7 +64,7 @@ impl fmt::Display for ClassifyError {
         write!(
             f,
             "unmapped ɴsɪ connection destination attribute {:?}; refusing \
-             to guess -- add a case to nsi_record::classify",
+             to guess -- add a case to nsi_intermediate::classify",
             self.to_attr
         )
     }

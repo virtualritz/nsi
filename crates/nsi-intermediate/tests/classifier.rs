@@ -1,4 +1,4 @@
-use nsi_record::{EdgeKind, classify};
+use nsi_intermediate::{EdgeKind, classify};
 
 #[test]
 fn scene_membership() {

@@ -1,10 +1,10 @@
 [package]
-name = "nsi-record"
+name = "nsi-intermediate"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0 OR Zlib"
-description = "Renderer-agnostic recorder for the Nodal Scene Interface – ɴsɪ."
-repository = "https://github.com/virtualritz/nsi-mitsuba/"
+description = "Renderer-agnostic intermediate representation for the Nodal Scene Interface – ɴsɪ."
+repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
 indexmap = "2"
@@ -13,12 +13,7 @@ indexmap = "2"
 # `nsi::point_slice!` family unchanged. Constructing an `Arg` loads no
 # renderer; the dynamic loader only runs on `Context::new`.
 #
-# Git rather than path so this repository builds on its own. Cargo.lock
-# pins the revision. To develop against a local `nsi`, add to the
-# workspace Cargo.toml:
-#
-#     [patch."https://github.com/virtualritz/nsi.git"]
-#     nsi-ffi-wrap = { path = "../nsi/crates/nsi-ffi-wrap" }
-#     nsi-trait = { path = "../nsi/crates/nsi-trait" }
-nsi-ffi-wrap = { git = "https://github.com/virtualritz/nsi.git" }
-nsi-trait = { git = "https://github.com/virtualritz/nsi.git" }
+# Path deps: this crate lives in the same workspace as what it depends
+# on, which is the whole point of it living here.
+nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap" }
+nsi-trait = { version = "0.3", path = "../nsi-trait" }

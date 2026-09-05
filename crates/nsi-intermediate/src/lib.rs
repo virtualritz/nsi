@@ -1,12 +1,30 @@
-//! A renderer-agnostic recorder for the Nodal Scene Interface.
+//! A renderer-agnostic intermediate representation for the Nodal Scene
+//! Interface.
 //!
-//! This crate records an ɴsɪ scene — nodes, attributes and classified
-//! connections — and replays it. Recording is pure Rust and needs no
-//! renderer present, and nothing here is specific to any one renderer.
+//! ɴsɪ is the front end and a renderer is the back end; this is what
+//! sits between them. It does the jobs an IR does — capture the
+//! incoming calls, classify and canonicalise them, lower ɴsɪ's graph
+//! semantics into flat facts a renderer can consume, and serialise the
+//! result for inspection.
 //!
-//! Backends consume a recorded scene and flush it into their own
-//! representation: `nsi-mitsuba` into Mitsuba `Properties`, a future
-//! `nsi-moonray` into `scene_rdl2` `SceneObject`s.
+//! Nothing here is specific to any one renderer, and none of it needs a
+//! renderer present to build or test.
+//!
+//! Backends consume a lowered scene and flush it into their own
+//! representation: [`nsi-mitsuba`] into Mitsuba `Properties`,
+//! [`nsi-moonray`] into `scene_rdl2` `SceneObject`s.
+//!
+//! # Naming
+//!
+//! The crate is spelled out in full so the name says what it is.
+//! Consumers who prefer the shorter idiom may alias it:
+//!
+//! ```ignore
+//! use nsi_intermediate as nsi_ir;
+//! ```
+//!
+//! [`nsi-mitsuba`]: https://github.com/virtualritz/nsi-mitsuba
+//! [`nsi-moonray`]: https://github.com/virtualritz/nsi-moonray
 //!
 //! # The ɴsɪ copy contract
 //!

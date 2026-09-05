@@ -6,7 +6,7 @@
 //! point — the two streams come from one source of truth.
 
 use nsi_ffi_wrap as nsi;
-use nsi_record::{Recorder, write_stream};
+use nsi_intermediate::{Recorder, write_stream};
 use nsi_trait::Nsi;
 
 /// One attribute per call, deliberately.
@@ -14,7 +14,7 @@ use nsi_trait::Nsi;
 /// The recorder holds scene state, not a call log, so it cannot know
 /// that three attributes arrived in one call rather than three. Setting
 /// them one at a time is what makes the two streams literally
-/// comparable; see `nsi_record::stream`.
+/// comparable; see `nsi_intermediate::stream`.
 fn build<'ctx, R>(ctx: &R) -> Result<(), R::Error>
 where
     R: Nsi + 'ctx,
@@ -91,7 +91,7 @@ fn canonicalise(stream: &str) -> Vec<String> {
 /// The gate. Needs 3Delight, which is what makes it meaningful.
 #[test]
 fn recorder_replays_what_3delight_writes() {
-    let path = std::env::temp_dir().join("nsi-record-gate.nsi");
+    let path = std::env::temp_dir().join("nsi-intermediate-gate.nsi");
     let _ = std::fs::remove_file(&path);
 
     {
