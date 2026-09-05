@@ -32,6 +32,26 @@ pub struct Binding {
     pub surface_shader: Option<String>,
 }
 
+/// One renderable output: a camera paired with a screen, and the AOVs
+/// written from it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderOutput {
+    pub camera: String,
+    /// The screen, which is what carries resolution and oversampling.
+    pub screen: String,
+    /// AOVs in connection order; may be empty.
+    pub layers: Vec<OutputLayer>,
+}
+
+/// One AOV and the drivers it is written to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputLayer {
+    pub handle: String,
+    /// A layer may fan out to several drivers -- a file and a display,
+    /// say -- so this is a list, in connection order.
+    pub drivers: Vec<String>,
+}
+
 /// Row-major 4x4 product, `a` then `b`.
 ///
 /// ɴsɪ uses the RenderMan row-vector convention: a point is a row and
@@ -126,6 +146,65 @@ impl Scene {
             attributes,
             surface_shader,
         })
+    }
+
+    /// Resolve ɴsɪ's output chain into what a renderer actually needs.
+    ///
+    /// ɴsɪ spreads this over four nodes and three connection classes —
+    /// `outputdriver -> outputlayer -> screen -> camera` — where both
+    /// targets want it collapsed: Mitsuba into a `Sensor` with a `Film`,
+    /// MoonRay into `RenderOutput`s. The walk is the same either way.
+    ///
+    /// One entry per screen, since a screen is what pairs a camera with
+    /// a resolution. A screen with no layers still yields an entry: the
+    /// camera and resolution are meaningful on their own.
+    ///
+    /// Layers and drivers come back in connection order, which is
+    /// insertion order in `edges`, so AOV order is the order the
+    /// consumer declared.
+    pub fn render_outputs(&self) -> Vec<RenderOutput> {
+        self.edges
+            .iter()
+            .filter(|edge| edge.kind == EdgeKind::Screen)
+            .map(|screen_edge| {
+                let screen = &screen_edge.from;
+                let layers = self
+                    .edges
+                    .iter()
+                    .filter(|edge| edge.to == *screen && edge.kind == EdgeKind::OutputLayer)
+                    .map(|layer_edge| OutputLayer {
+                        handle: layer_edge.from.clone(),
+                        drivers: self
+                            .edges
+                            .iter()
+                            .filter(|edge| {
+                                edge.to == layer_edge.from && edge.kind == EdgeKind::OutputDriver
+                            })
+                            .map(|edge| edge.from.clone())
+                            .collect(),
+                    })
+                    .collect();
+
+                RenderOutput {
+                    camera: screen_edge.to.clone(),
+                    screen: screen.clone(),
+                    layers,
+                }
+            })
+            .collect()
+    }
+
+    /// The prototypes an `instances` node draws from, in connection
+    /// order.
+    ///
+    /// Mitsuba turns these into a `shapegroup` referenced by `instance`
+    /// shapes; MoonRay into a `GeometrySet`. Both start from this list.
+    pub fn instance_sources(&self, instances: &str) -> Vec<String> {
+        self.edges
+            .iter()
+            .filter(|edge| edge.to == instances && edge.kind == EdgeKind::InstanceSource)
+            .map(|edge| edge.from.clone())
+            .collect()
     }
 
     /// This node's own matrix, if it is a transform carrying one.
@@ -334,5 +413,114 @@ mod binding_tests {
             let binding = scene.geometry_binding(mesh).expect("bound");
             assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
         }
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use crate::Scene;
+
+    /// The canonical ɴsɪ output chain:
+    /// driver -> layer -> screen -> camera.
+    fn scene_with_output() -> Scene {
+        let mut scene = Scene::default();
+        scene.create("cam", "perspectivecamera");
+        scene.create("scr", "screen");
+        scene.create("beauty", "outputlayer");
+        scene.create("drv", "outputdriver");
+        scene.connect("scr", None, "cam", "screens").unwrap();
+        scene
+            .connect("beauty", None, "scr", "outputlayers")
+            .unwrap();
+        scene
+            .connect("drv", None, "beauty", "outputdrivers")
+            .unwrap();
+        scene
+    }
+
+    #[test]
+    fn resolves_the_whole_output_chain() {
+        let scene = scene_with_output();
+        let outputs = scene.render_outputs();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].camera, "cam");
+        assert_eq!(outputs[0].screen, "scr");
+        assert_eq!(outputs[0].layers.len(), 1);
+        assert_eq!(outputs[0].layers[0].handle, "beauty");
+        assert_eq!(outputs[0].layers[0].drivers, vec!["drv".to_string()]);
+    }
+
+    /// A screen with no layers is still a render output -- the camera
+    /// and resolution are meaningful on their own.
+    #[test]
+    fn a_screen_without_layers_still_resolves() {
+        let mut scene = Scene::default();
+        scene.create("cam", "perspectivecamera");
+        scene.create("scr", "screen");
+        scene.connect("scr", None, "cam", "screens").unwrap();
+        let outputs = scene.render_outputs();
+        assert_eq!(outputs.len(), 1);
+        assert!(outputs[0].layers.is_empty());
+    }
+
+    /// Several AOVs on one screen, in connection order.
+    #[test]
+    fn multiple_layers_keep_connection_order() {
+        let mut scene = scene_with_output();
+        scene.create("depth", "outputlayer");
+        scene.connect("depth", None, "scr", "outputlayers").unwrap();
+        let outputs = scene.render_outputs();
+        let names: Vec<&str> = outputs[0]
+            .layers
+            .iter()
+            .map(|l| l.handle.as_str())
+            .collect();
+        assert_eq!(names, vec!["beauty", "depth"]);
+    }
+
+    /// One layer fanned out to two drivers -- a file and a display.
+    #[test]
+    fn a_layer_may_have_several_drivers() {
+        let mut scene = scene_with_output();
+        scene.create("drv2", "outputdriver");
+        scene
+            .connect("drv2", None, "beauty", "outputdrivers")
+            .unwrap();
+        let outputs = scene.render_outputs();
+        assert_eq!(outputs[0].layers[0].drivers, vec!["drv", "drv2"]);
+    }
+
+    #[test]
+    fn no_screen_means_no_outputs() {
+        let mut scene = Scene::default();
+        scene.create("cam", "perspectivecamera");
+        assert!(scene.render_outputs().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod instance_tests {
+    use crate::Scene;
+
+    #[test]
+    fn resolves_instance_source_models() {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances");
+        scene.create("proto_a", "mesh");
+        scene.create("proto_b", "mesh");
+        scene
+            .connect("proto_a", None, "inst", "sourcemodels")
+            .unwrap();
+        scene
+            .connect("proto_b", None, "inst", "sourcemodels")
+            .unwrap();
+        assert_eq!(scene.instance_sources("inst"), vec!["proto_a", "proto_b"]);
+    }
+
+    #[test]
+    fn an_instances_node_with_no_sources_is_empty() {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances");
+        assert!(scene.instance_sources("inst").is_empty());
     }
 }
