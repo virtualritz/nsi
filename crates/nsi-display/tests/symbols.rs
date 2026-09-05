@@ -47,5 +47,31 @@ fn the_declared_symbols_are_callable_through_c_signatures() {
         ndspy_sys::PtDspyImageHandle,
     ) -> ndspy_sys::PtDspyError = DspyImageClose;
 
-    assert!(!(open as usize == 0 || close as usize == 0));
+    // Types below are transcribed independently from the authoritative
+    // C header (ndspy.h), not derived from the macro under test —
+    // otherwise a shared mistake between macro and test would be
+    // invisible.
+    let data: unsafe extern "C" fn(
+        ndspy_sys::PtDspyImageHandle,
+        core::ffi::c_int,
+        core::ffi::c_int,
+        core::ffi::c_int,
+        core::ffi::c_int,
+        core::ffi::c_int,
+        *const u8,
+    ) -> ndspy_sys::PtDspyError = DspyImageData;
+
+    let query: unsafe extern "C" fn(
+        ndspy_sys::PtDspyImageHandle,
+        ndspy_sys::PtDspyQueryType,
+        core::ffi::c_int,
+        *mut core::ffi::c_void,
+    ) -> ndspy_sys::PtDspyError = DspyImageQuery;
+
+    assert!(
+        !(open as usize == 0
+            || close as usize == 0
+            || data as usize == 0
+            || query as usize == 0)
+    );
 }
