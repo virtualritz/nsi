@@ -31,26 +31,42 @@
 //! Record with [`Recorder`], which implements [`nsi_trait::Nsi`], then
 //! ask the [`Scene`] for facts rather than walking it yourself:
 //!
-//! ```ignore
+//! ```
+//! use nsi_intermediate::{Recorder, ResolveError};
+//! use nsi_trait::Nsi;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let recorder = Recorder::new();
-//! build_the_scene(&recorder)?;          // any generic ɴsɪ consumer.
-//! let scene = recorder.scene();
+//!
+//! // Any generic ɴsɪ consumer drives this; a renderer would too.
+//! recorder.create("mesh", "mesh", None)?;
+//! recorder.create("attr", "attributes", None)?;
+//! recorder.create("metal", "shader", None)?;
+//! recorder.connect("mesh", None, ".root", "objects", None)?;
+//! recorder.connect("attr", None, "mesh", "geometryattributes", None)?;
+//! recorder.connect("metal", None, "attr", "surfaceshader", None)?;
+//!
+//! let scene = recorder.into_scene(); // or `scene()` to borrow it.
 //!
 //! for output in scene.render_outputs() {
-//!     // one entry per screen, with its layers and drivers in order.
+//!     // One entry per screen, with its layers and drivers in order.
+//!     let _ = (&output.camera, &output.layers);
 //! }
 //!
-//! for (handle, node) in &scene.nodes {
-//!     if node.node_type != "mesh" {
-//!         continue;
-//!     }
+//! let meshes: Vec<String> = scene
+//!     .nodes()
+//!     .filter(|(_, node)| node.node_type == "mesh")
+//!     .map(|(handle, _)| handle.clone())
+//!     .collect();
 //!
+//! for handle in &meshes {
 //!     // Material, gathered along the whole path to `.root`.
 //!     if let Some(binding) = scene.geometry_binding(handle)? {
-//!         let shader = binding.surface_shader;
+//!         assert_eq!(binding.surface_shader.as_deref(), Some("metal"));
 //!         // `binding.attributes` is every `attributes` node on the
 //!         // path, in ɴsɪ's precedence order: take the first that
 //!         // defines the attribute you want.
+//!         assert_eq!(binding.attributes, vec!["attr".to_string()]);
 //!     }
 //!
 //!     // Transform. Ask whether it moves before asking where it is.
@@ -59,8 +75,17 @@
 //!     } else {
 //!         scene.world_transform_samples(handle)?
 //!     };
+//!     assert_eq!(matrices.len(), 1);
 //! }
+//! # Ok(())
+//! # }
 //! ```
+//!
+//! Borrowing the scene while recording is possible but narrow:
+//! [`Recorder::scene`] holds the lock every [`nsi_trait::Nsi`] method
+//! takes, so two of those calls in one expression deadlock. When
+//! recording is finished, [`Recorder::into_scene`] hands the scene over
+//! without copying it.
 //!
 //! # What it refuses to answer
 //!
@@ -79,7 +104,10 @@
 //! because their consumer is OSL rather than a graph walk. `evaluate`
 //! is a no-op: procedurals and Lua imply an execution model this
 //! surface does not define. An instanced node is detected and refused,
-//! not expanded into one transform per path.
+//! not expanded into one transform per path: asking a prototype for a
+//! world transform is [`ResolveError::Instanced`], because ɴsɪ gives an
+//! `instances` node one matrix per instance rather than one for the
+//! prototype.
 //!
 //! # The ɴsɪ copy contract
 //!
@@ -87,8 +115,10 @@
 //! copied during the call, so a caller may free its data as soon as the
 //! call returns. The recorder copies for the same reason a renderer
 //! does; it introduces no cost that a live context would not have paid.
-//! `Reference` is the exception: it is passed through, retained, and is
-//! why the recorder carries a context lifetime.
+//! `Reference` is the exception: it is passed through and retained,
+//! which is why its pointee must outlive the recorder -- see
+//! [`Recorder`] for why that is a `'static` bound rather than a
+//! lifetime parameter.
 
 #![deny(missing_docs)]
 
