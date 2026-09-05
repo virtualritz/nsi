@@ -1,4 +1,5 @@
-/target
+# Anchored `/target` missed nested crate target dirs.
+target/
 **/*.rs.bk
 Cargo.lock
 

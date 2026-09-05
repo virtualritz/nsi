@@ -5,26 +5,117 @@ extern crate self as nsi;
 use crate::*;
 #[allow(unused_imports)]
 use std::{
+    collections::HashMap,
     ffi::{CStr, CString, c_char},
     marker::PhantomData,
     ops::Drop,
     os::raw::{c_int, c_void},
+    sync::Mutex,
 };
 use triomphe::Arc;
-use ustr::ustr;
+use ustr::{Ustr, ustr};
 
 /// The actual context and a marker to hold on to callbacks
 /// (closures)/references passed via [`set_attribute()`] or the like.
 ///
 /// We wrap this in an [`Arc`] in [`Context`] to make sure drop() is only
 /// called when the last clone ceases existing.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 struct InnerContext<'a> {
     context: NSIContext,
+    /// The callbacks this context was handed, keyed by the node handle and
+    /// attribute name they were set on.
+    ///
+    /// A callback is a closure that has been turned into a raw pointer for
+    /// the renderer, so nothing else can free it. The context is the right
+    /// owner: it outlives every callback set on it, and its `Drop` runs
+    /// `NSIEnd`, after which the renderer can no longer reach them.
+    callbacks: Mutex<HashMap<(Ustr, Ustr), CallbackOwned>>,
+    /// Callbacks displaced by a later `set_attribute` on the same key.
+    ///
+    /// Not freed on the spot: a render may still be running with the old
+    /// pointer. They are reclaimed at the next `Stop`/`Wait` -- when no
+    /// render is in flight -- or when the context drops.
+    retired: Mutex<Vec<CallbackOwned>>,
     // _marker needs to be invariant in 'a.
     // See "Making a struct outlive a parameter given to a method of
     // that struct": https://stackoverflow.com/questions/62374326/.
     _marker: PhantomData<*mut &'a ()>,
+}
+
+/// A callback pointer the context owns, with the function that frees it.
+#[derive(Debug)]
+struct CallbackOwned {
+    data: *const c_void,
+    drop_fn: unsafe fn(*const c_void),
+}
+
+impl Drop for CallbackOwned {
+    fn drop(&mut self) {
+        // SAFETY: `data` came from the matching `CallbackPtr::to_ptr`, is
+        // reclaimed exactly once (this type is neither `Copy` nor `Clone`),
+        // and by construction the renderer can no longer reach it.
+        unsafe { (self.drop_fn)(self.data) }
+    }
+}
+
+// The context id alone identifies a context; the callback tables are
+// interior mutability and say nothing about identity.
+impl<'a> PartialEq for InnerContext<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.context == other.context
+    }
+}
+impl<'a> Eq for InnerContext<'a> {}
+impl<'a> core::hash::Hash for InnerContext<'a> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.context.hash(state);
+    }
+}
+
+impl<'a> InnerContext<'a> {
+    fn new(context: NSIContext) -> Self {
+        Self {
+            context,
+            callbacks: Mutex::new(HashMap::new()),
+            retired: Mutex::new(Vec::new()),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Takes ownership of every callback in `args`, keyed by `handle` and
+    /// the argument name. Anything it displaces is retired, not freed.
+    fn own_callbacks(&self, handle: &str, args: Option<&ArgSlice<'_, 'a>>) {
+        let Some(args) = args else { return };
+
+        let handle = ustr(handle);
+        let mut owned = self.callbacks.lock().unwrap();
+
+        args.iter()
+            .filter_map(|arg| match &arg.data {
+                ArgData::Callback(callback) => Some((arg.name, callback)),
+                _ => None,
+            })
+            .for_each(|(name, callback)| {
+                if let Some(displaced) = owned.insert(
+                    (handle, name),
+                    CallbackOwned {
+                        data: callback.data,
+                        drop_fn: callback.drop_fn,
+                    },
+                ) {
+                    self.retired.lock().unwrap().push(displaced);
+                }
+            });
+    }
+
+    /// Frees callbacks displaced by a later `set_attribute`.
+    ///
+    /// Only call this where no render can be using them -- after `Stop` or
+    /// `Wait` returns, or once `NSIEnd` has.
+    fn reclaim_retired(&self) {
+        self.retired.lock().unwrap().clear();
+    }
 }
 
 // Guaranteed by the C API.
@@ -34,7 +125,11 @@ unsafe impl<'a> Sync for InnerContext<'a> {}
 impl<'a> Drop for InnerContext<'a> {
     #[inline]
     fn drop(&mut self) {
+        // Order matters: the renderer may still reach a callback until
+        // `NSIEnd` returns, so free nothing before it does.
         NSI_API.NSIEnd(self.context);
+        self.callbacks.lock().unwrap().clear();
+        self.retired.lock().unwrap().clear();
     }
 }
 
@@ -55,6 +150,33 @@ impl<'a> Drop for InnerContext<'a> {
 /// context is dropped and this guarantee requires explicit lifetimes. When you
 /// use a context directly this is not an issue but when you want to reference
 /// it somewhere the same rules as with all references apply.
+///
+/// ## Memory & ownership: callbacks and references
+///
+/// A [`Callback`] is a closure turned into a raw pointer for the renderer,
+/// so it has to outlive the call that passes it. The **`Context` owns it**
+/// from that moment and frees it for you. There is nothing to manage, but
+/// two consequences are worth knowing:
+///
+/// * **A callback keeps its captures alive.** An output-driver write
+///   callback typically captures an `Arc` to your pixel buffer, so that
+///   buffer lives as long as the callback does. `Arc::try_unwrap` on
+///   something a live callback captured will therefore fail -- read it out
+///   under its lock instead.
+/// * **Re-setting an attribute retires the callback it displaces**, rather
+///   than freeing it on the spot: a render may still be running with the
+///   old pointer. Retired callbacks are freed at the next
+///   [`Action::Stop`] or [`Action::Wait`], and unconditionally when the
+///   context drops. So a long-lived context whose callbacks are swapped
+///   repeatedly -- switching output modes, say -- reclaims them each time
+///   it stops, and in the worst case holds one displaced set until then.
+///
+/// Everything is released when the `Context` drops, after `NSIEnd`, which
+/// is the first moment the renderer can no longer reach any of it.
+///
+/// A [`Reference`] is different: it points at data *you* own (the
+/// [`StableDeref`] bound means a `Box` or `Arc`), so the context never
+/// frees it and you must keep it alive for as long as the context.
 ///
 /// ## Let every thread that owns a `Context` finish before the process ends
 ///
@@ -93,10 +215,7 @@ impl<'a> From<Context<'a>> for NSIContext {
 impl<'a> From<NSIContext> for Context<'a> {
     #[inline]
     fn from(context: NSIContext) -> Self {
-        Self(Arc::new(InnerContext {
-            context,
-            _marker: PhantomData,
-        }))
+        Self(Arc::new(InnerContext::new(context)))
     }
 }
 
@@ -155,10 +274,11 @@ impl<'a> Context<'a> {
         if 0 == context {
             None
         } else {
-            Some(Self(Arc::new(InnerContext {
-                context,
-                _marker: PhantomData,
-            })))
+            let inner = InnerContext::new(context);
+            // The error handler is a callback like any other; the context
+            // owns it under a reserved key, since it belongs to no node.
+            inner.own_callbacks(".context", args);
+            Some(Self(Arc::new(inner)))
         }
     }
 
@@ -273,6 +393,8 @@ impl<'a> Context<'a> {
     /// * `args` -- A [`slice`](std::slice) of optional [`Arg`] arguments.
     #[inline]
     pub fn set_attribute(&self, handle: &str, args: &ArgSlice<'_, 'a>) {
+        self.0.own_callbacks(handle, Some(args));
+
         let handle = HandleString::from(handle);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
@@ -314,6 +436,8 @@ impl<'a> Context<'a> {
         time: f64,
         args: &ArgSlice<'_, 'a>,
     ) {
+        self.0.own_callbacks(handle, Some(args));
+
         let handle = HandleString::from(handle);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
@@ -604,11 +728,20 @@ impl<'a> Context<'a> {
             });
         }
 
+        self.0.own_callbacks(".context", args);
+
         NSI_API.NSIRenderControl(
             self.0.context,
             args_out.len() as _,
             args_out.as_ptr(),
         );
+
+        // `Stop` and `Wait` return only once the render is done, so any
+        // callback displaced by an earlier `set_attribute` is now
+        // unreachable and can be freed.
+        if matches!(action, Action::Stop | Action::Wait) {
+            self.0.reclaim_retired();
+        }
     }
 }
 
@@ -693,6 +826,12 @@ impl CallbackPtr for StatusCallback<'_> {
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnStatus<'static>>) });
+    }
 }
 
 // Trampoline function for the FnStatus callback.
@@ -710,10 +849,7 @@ pub(crate) extern "C" fn render_status(
             // ownership, so the pointer stays valid for the lifetime of the
             // context.
             let fn_status = unsafe { &*(payload as *mut Box<dyn FnStatus>) };
-            let ctx = Context(Arc::new(InnerContext {
-                context,
-                _marker: PhantomData,
-            }));
+            let ctx = Context(Arc::new(InnerContext::new(context)));
 
             fn_status(&ctx, status.into());
 
@@ -793,6 +929,12 @@ impl CallbackPtr for ErrorCallback<'_> {
     #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
+    }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnError<'static>>) });
     }
 }
 

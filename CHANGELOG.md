@@ -55,6 +55,18 @@
   family, and the full `trim-curves.*` group.
 - Internal `Type` variants renamed to Rust style (`Float` → `F32`,
   `Integer` → `I32`, `MatrixF32` etc.).
+- Callbacks passed to a context are now **owned and freed by that
+  context** instead of being leaked. Previously every `CallbackPtr::to_ptr`
+  did `Box::into_raw` and nothing ever reclaimed it, so each callback --
+  and everything its closure captured, typically an `Arc` to the caller's
+  pixel buffer -- was pinned for the life of the process. A consumer that
+  re-set callbacks on a long-lived context leaked a set every time.
+  `CallbackPtr` gains a `drop_ptr` companion to `to_ptr` (both
+  `#[doc(hidden)]`; implement it if you implement the trait by hand). A
+  callback displaced by a later `set_attribute` is retired rather than
+  freed on the spot, and reclaimed at the next `Stop`/`Wait` or when the
+  context drops -- a render may still be holding the old pointer. See the
+  ownership section on `Context`.
 - **Breaking:** `Arg::array_len` takes a `NonZeroUsize` instead of a `usize`.
   The renderer is handed `data.len() / array_length` elements, so a zero
   array length divided by zero at the FFI boundary. It is now unrepresentable

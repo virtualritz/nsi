@@ -502,6 +502,17 @@ pub trait CallbackPtr {
     #[doc(hidden)]
     #[allow(clippy::wrong_self_convention)]
     fn to_ptr(self) -> *const c_void;
+
+    /// Reclaims a pointer produced by [`to_ptr`](Self::to_ptr).
+    ///
+    /// The [`Context`] the callback is handed to owns it from that point
+    /// on and calls this once, after the renderer can no longer reach it.
+    ///
+    /// # Safety
+    /// `ptr` must have come from this same implementation's `to_ptr` and
+    /// must not have been reclaimed already.
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const c_void);
 }
 
 unsafe impl Send for Callback<'static> {}
@@ -510,7 +521,11 @@ unsafe impl Sync for Callback<'static> {}
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
 pub struct Callback<'a> {
-    data: *const c_void,
+    pub(crate) data: *const c_void,
+    /// Reclaims `data`. Carried alongside the pointer because the concrete
+    /// closure type is erased at the FFI boundary; the [`Context`] that
+    /// takes ownership needs this to free it correctly.
+    pub(crate) drop_fn: unsafe fn(*const c_void),
     _marker: PhantomData<&'a mut ()>,
 }
 
@@ -518,6 +533,7 @@ impl<'a> Callback<'a> {
     pub fn new<T: CallbackPtr>(data: T) -> Self {
         Self {
             data: data.to_ptr(),
+            drop_fn: T::drop_ptr,
             _marker: PhantomData,
         }
     }
@@ -1373,6 +1389,10 @@ mod pointer_marshalling_tests {
         impl CallbackPtr for KnownPtr {
             fn to_ptr(self) -> *const c_void {
                 self.0
+            }
+
+            unsafe fn drop_ptr(_ptr: *const c_void) {
+                // The test owns the target; nothing to reclaim here.
             }
         }
 

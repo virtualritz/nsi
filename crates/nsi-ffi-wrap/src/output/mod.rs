@@ -442,6 +442,14 @@ impl CallbackPtr for OpenCallback<'_> {
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
+        // The lifetime is erased here; drop glue lives in the vtable, so
+        // reclaiming through any lifetime runs the right destructor.
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnOpen<'static>>) });
+    }
 }
 /// Wrapper to pass an [`FnWrite`] closure to an
 /// [`OutputDriver`](crate::OUTPUT_DRIVER) node.
@@ -468,6 +476,14 @@ impl<T: PixelType> CallbackPtr for WriteCallback<'_, T> {
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
     }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe {
+            Box::from_raw(ptr as *mut Box<dyn FnWrite<'static, T>>)
+        });
+    }
 }
 
 /// Wrapper to pass an [`FnFinish`] closure to an
@@ -490,6 +506,12 @@ impl CallbackPtr for FinishCallback<'_> {
     #[doc(hidden)]
     fn to_ptr(self) -> *const core::ffi::c_void {
         Box::into_raw(self.0) as *const _ as _
+    }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnFinish<'static>>) });
     }
 }
 
