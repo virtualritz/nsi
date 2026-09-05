@@ -1,7 +1,7 @@
 //! A borrowed view over the parameters ndspy hands a driver.
 
 use core::{
-    ffi::{CStr, c_char, c_int, c_void},
+    ffi::{CStr, c_char, c_int},
     marker::PhantomData,
     slice,
 };
@@ -96,6 +96,7 @@ impl<'a> Params<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::ffi::c_void;
     use std::ffi::CString;
 
     /// A `Params` view borrows the renderer's array; it must read the
