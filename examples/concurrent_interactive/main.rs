@@ -441,6 +441,7 @@ fn main() -> ExitCode {
 
     let start = Instant::now();
     let mut probes: Vec<Arc<Probe>> = Vec::new();
+    let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
     let mut stop_txs: Vec<mpsc::Sender<()>> = Vec::new();
     let mut done_rxs: Vec<mpsc::Receiver<()>> = Vec::new();
 
@@ -467,7 +468,7 @@ fn main() -> ExitCode {
         };
 
         let _ = drive_main;
-        thread::spawn(drive);
+        handles.push(thread::spawn(drive));
         // Wait until this context has issued Start.
         let _ = started_rx.recv();
         logln(&format!(
@@ -571,33 +572,34 @@ fn main() -> ExitCode {
         logln("RESULT: PASS (all contexts produced pixels and tore down)");
     }
 
-    // Let 3Delight settle before the process ends.
+    // Join the render threads.
     //
-    // `render_control(Stop)` + `Wait` returning does NOT mean 3Delight is
-    // finished: it finishes on detached threads that can outlive our
-    // teardown. Ending the process out from under them is a SIGSEGV *after*
-    // a completely clean render -- "green suite, dead harness". akatela hit
-    // exactly this (`drain_teardowns`, called from its `on_exit`) and
-    // answers it the same way.
+    // The `done` message above only says the thread reached the end of its
+    // work -- it has NOT exited yet: it still has to drop its `Context`,
+    // which is what runs `NSIEnd`. Returning from `main` at that point
+    // leaves threads inside 3Delight while libc tears the process down,
+    // which is a SIGSEGV *after* a clean render. Measured: not joining
+    // crashed ~5/6 runs; joining does not crash.
     //
-    // Measured here: 0 ms reproduces the crash ~5/6 runs, 500 ms never does.
-    // A pure-C harness of the same shape -- in-process display driver,
-    // interactive + progressive, threaded driving, `exit()` without
-    // `NSIEnd` -- does NOT crash in 44 runs, so this is our exit path, not
-    // a renderer bug.
-    let settle = std::env::var("NSI_EXIT_DELAY_MS")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(500);
-    if settle > 0 {
-        thread::sleep(Duration::from_millis(settle));
+    // This is why the same shape in pure C never crashed -- it
+    // `pthread_join`s.
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    // Escape hatch kept for measuring the old behaviour: any non-zero value
+    // sleeps instead, which is what used to paper over the missing join.
+    if let Ok(ms) = std::env::var("NSI_EXIT_DELAY_MS")
+        && let Ok(ms) = ms.parse::<u64>()
+        && ms > 0
+    {
+        thread::sleep(Duration::from_millis(ms));
     }
 
     let _ = std::io::stdout().flush();
 
     // Deliberately NOT `std::process::exit()`. That skips every destructor,
-    // so a live `Context` never runs `NSIEnd` and the renderer is still
-    // mid-shutdown when libc tears the process down. Returning `ExitCode`
+    // so a live `Context` never runs `NSIEnd` at all. Returning `ExitCode`
     // gives the same exit status with destructors intact.
     if any_no_pixels || any_deadlock {
         ExitCode::FAILURE

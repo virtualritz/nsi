@@ -19,6 +19,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dirent.h>
+
+/* Number of live threads in this process. */
+static int nthreads(void)
+{
+    DIR *d = opendir("/proc/self/task");
+    if (!d) return -1;
+    int n = 0;
+    struct dirent *e;
+    while ((e = readdir(d)))
+        if (e->d_name[0] != '.') ++n;
+    closedir(d);
+    return n;
+}
 #include "nsi.h"
 #include "ndspy.h"
 
@@ -236,6 +250,12 @@ int main(int argc, char **argv)
     }
 
     printf("all contexts torn down (%d buckets)\n", g_buckets);
+    printf("threads immediately after Stop+Wait+NSIEnd returned: %d\n",
+           nthreads());
+    for (int ms = 100; ms <= 1000; ms *= 2) {
+        usleep(100 * 1000);
+        printf("  threads after +%d ms: %d\n", ms, nthreads());
+    }
     fflush(stdout);
 
     if (delay_ms > 0)

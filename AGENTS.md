@@ -133,13 +133,14 @@ git stash pop
 - AVOID using `unsafe` code unless absolutely necessary.
 
 - NEVER end a process with `std::process::exit` (or `abort`) while an
-  `nsi::Context` is alive. It runs no destructors, so `NSIEnd` never happens
-  and the renderer is still shutting down when libc tears the process down --
-  a SIGSEGV *after* a clean render, which reads as "green suite, dead
-  harness". Dropping the context is not enough either: `Stop` + `Wait` and
-  `NSIEnd` all return while 3Delight finishes on detached threads of its own,
-  so give it a moment to settle and return from `main` normally, using
-  `ExitCode` for a non-zero status. See `examples/concurrent_interactive`.
+  `nsi::Context` is alive, and ALWAYS join threads that own one. `NSIEnd`
+  runs in `Drop`: `process::exit` skips destructors entirely, and an
+  unjoined thread has not dropped its `Context` yet even after it has
+  signalled that it is done. Either way the process tears down while a
+  thread is still inside 3Delight -- a SIGSEGV *after* a clean render,
+  which reads as "green suite, dead harness". Return from `main` normally,
+  using `ExitCode` for a non-zero status. See
+  `examples/concurrent_interactive`.
 
 - AVOID return statements; structure functions with if ... if else ... else blocks instead.
 
