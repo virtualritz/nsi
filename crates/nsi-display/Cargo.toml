@@ -1,0 +1,21 @@
+[package]
+name = "nsi-display"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "display-driver", "plugin"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Write ɴsɪ display drivers in safe Rust."
+readme = "README.md"
+documentation = "https://docs.rs/nsi-display/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[dependencies]
+ndspy-sys = "0.2"
+nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = ["output"] }
+
+[package.metadata.docs.rs]
+all-features = true
