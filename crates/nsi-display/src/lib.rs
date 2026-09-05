@@ -1,5 +1,8 @@
 //! Write ɴsɪ display drivers in safe Rust.
 
+mod params;
+pub use params::Params;
+
 pub use nsi_ffi_wrap::output::{Error, PixelFormat, PixelType};
 
 /// The result an author's driver methods return.
