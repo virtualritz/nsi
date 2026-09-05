@@ -2,7 +2,7 @@
 //!
 //! `Nsi` takes `&self` everywhere, so the scene lives behind a `Mutex`.
 
-use crate::{ClassifyError, OwnedArg, Scene};
+use crate::{ClassifyError, OwnedArg, OwnedData, Scene};
 use nsi_ffi_wrap::Arg;
 use nsi_trait::{Action, Nsi};
 use std::sync::{Mutex, MutexGuard};
@@ -49,6 +49,13 @@ impl Recorder {
     }
 
     /// Borrow the recorded scene.
+    ///
+    /// # Deadlock
+    ///
+    /// The guard holds the only lock every [`Nsi`] method takes. Calling
+    /// one on the same recorder while a guard is alive deadlocks the
+    /// calling thread. Drop the guard, or scope it, before recording
+    /// again.
     pub fn scene(&self) -> MutexGuard<'_, Scene> {
         self.scene.lock().expect("scene mutex poisoned")
     }
@@ -60,6 +67,23 @@ impl Recorder {
 
     fn own(args: &[Arg<'_, 'static>]) -> Vec<OwnedArg> {
         args.iter().map(OwnedArg::from_param).collect()
+    }
+
+    /// ɴsɪ's `"priority"` connection argument, or `0` when absent.
+    ///
+    /// [`Scene::geometry_binding`] needs it to choose between an
+    /// `attributes` node bound to a geometry and one inherited from an
+    /// ancestor, so it is the one `connect` argument that is recorded.
+    fn priority_of(args: Option<&[Arg<'_, 'static>]>) -> i32 {
+        args.unwrap_or_default()
+            .iter()
+            .map(OwnedArg::from_param)
+            .find(|arg| arg.name == "priority")
+            .and_then(|arg| match arg.data {
+                OwnedData::I32(ref values) => values.first().copied(),
+                _ => None,
+            })
+            .unwrap_or(0)
     }
 }
 
@@ -118,15 +142,19 @@ impl Nsi for Recorder {
         Ok(())
     }
 
+    /// `args` is read for `"priority"` only. `"value"` and
+    /// `"strength"` are dropped; see `contracts/recording.md`.
     fn connect(
         &self,
         from: &str,
         from_attr: Option<&str>,
         to: &str,
         to_attr: &str,
-        _args: Option<&[Self::Arg<'_>]>,
+        args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        self.scene().connect(from, from_attr, to, to_attr)
+        let priority = Self::priority_of(args);
+        self.scene()
+            .connect_with_priority(from, from_attr, to, to_attr, priority)
     }
 
     fn disconnect(
@@ -170,6 +198,7 @@ impl Nsi for Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::OwnedData;
     use nsi_ffi_wrap as nsi;
     use nsi_trait::{Action, Nsi};
 
@@ -233,5 +262,161 @@ mod tests {
     fn recorder_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Recorder>();
+    }
+
+    /// `Nsi::delete`, not `Scene::delete`. The trait method is the only
+    /// one a consumer can reach, and nothing else drives it.
+    #[test]
+    fn delete_through_the_trait_removes_the_node_and_its_edges() {
+        let r = Recorder::new();
+        r.create("xf", "transform", None).unwrap();
+        r.create("mesh", "mesh", None).unwrap();
+        r.connect("mesh", None, "xf", "objects", None).unwrap();
+        assert_eq!(r.scene().edges.len(), 1);
+
+        r.delete("xf", None).unwrap();
+
+        let scene = r.scene();
+        assert!(!scene.nodes.contains_key("xf"));
+        assert!(scene.edges.is_empty());
+    }
+
+    /// `Nsi::disconnect` removes the edge it names and leaves the rest.
+    #[test]
+    fn disconnect_through_the_trait_removes_one_edge() {
+        let r = Recorder::new();
+        r.create("a", "transform", None).unwrap();
+        r.create("b", "transform", None).unwrap();
+        r.connect("a", None, ".root", "objects", None).unwrap();
+        r.connect("b", None, ".root", "objects", None).unwrap();
+
+        r.disconnect("a", None, ".root", "objects").unwrap();
+
+        let scene = r.scene();
+        assert_eq!(scene.edges.len(), 1);
+        assert_eq!(scene.edges[0].from, "b");
+    }
+
+    /// An unmapped destination must fail on the way out as well as in.
+    /// Classifying is how `disconnect` finds the edge to remove, so a
+    /// destination it cannot classify cannot be a silent no-op.
+    #[test]
+    fn an_unmapped_disconnect_is_an_error() {
+        let r = Recorder::new();
+        let err = r.disconnect("a", None, "b", "nonsense").unwrap_err();
+        assert_eq!(err.to_attr, "nonsense");
+    }
+
+    /// `evaluate` is a no-op by decision, not omission: procedurals and
+    /// Lua imply an execution model this crate does not define. See the
+    /// `spec.md` non-goal.
+    #[test]
+    fn evaluate_is_a_recorded_no_op() {
+        let r = Recorder::new();
+        r.create("cam", "perspectivecamera", None).unwrap();
+        let before = r.scene().clone();
+
+        r.evaluate(&[nsi::string!("filename", "proc.lua")]).unwrap();
+
+        assert_eq!(*r.scene(), before, "evaluate changed the scene");
+    }
+
+    /// ɴsɪ's `"priority"` is the one `connect` argument that survives,
+    /// because `geometry_binding` needs it to choose between an
+    /// inherited binding and a direct one.
+    #[test]
+    fn connect_records_the_priority_argument() {
+        let r = Recorder::new();
+        r.create("attr", "attributes", None).unwrap();
+        r.create("mesh", "mesh", None).unwrap();
+        r.connect(
+            "attr",
+            None,
+            "mesh",
+            "geometryattributes",
+            Some(&[nsi::i32!("priority", 7)]),
+        )
+        .unwrap();
+
+        assert_eq!(r.scene().edges[0].priority, 7);
+        assert_eq!(r.scene().nodes.len(), 2);
+    }
+
+    /// A `Reference` driven through the trait, which is the only path a
+    /// consumer has and the only one where the `'static` pin on the
+    /// `Arg` GAT applies. `owned::tests` calls `from_param` directly and
+    /// so proves the marshalling but not this.
+    #[test]
+    fn a_reference_through_the_trait_records_the_host_address() {
+        static PAYLOAD: u64 = 0xdead_beef_cafe_f00d;
+        let expected = &raw const PAYLOAD as usize;
+
+        let r = Recorder::new();
+        r.create("driver", "outputdriver", None).unwrap();
+        r.set_attribute(
+            "driver",
+            &[nsi::reference_stable!("callbackdata", &PAYLOAD)],
+        )
+        .unwrap();
+
+        let scene = r.scene();
+        match &scene.nodes["driver"].attrs["callbackdata"].data {
+            OwnedData::Reference(pointers) => {
+                assert_eq!(pointers.len(), 1);
+                assert_eq!(pointers[0].0 as usize, expected);
+            }
+            other => panic!("expected Reference, got {other:?}"),
+        }
+    }
+
+    /// A `Callback` argument leaks its payload, and this pins that as a
+    /// known limitation rather than letting it stay invisible.
+    ///
+    /// `Callback::type_` reports `Type::Reference`, so the recorder
+    /// cannot tell one from a plain `Reference`, and `Callback::drop_fn`
+    /// is `pub(crate)` to `nsi-ffi-wrap`, so it could not call it even
+    /// if it could. A `Context` takes ownership and frees it; a
+    /// `Recorder` records the address and nothing more. See
+    /// `contracts/recording.md`.
+    #[test]
+    fn a_callback_records_its_address_and_leaks_its_payload() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static RECLAIMED: AtomicUsize = AtomicUsize::new(0);
+
+        struct Payload(u64);
+
+        impl nsi::CallbackPtr for Payload {
+            fn to_ptr(self) -> *const std::ffi::c_void {
+                Box::into_raw(Box::new(self)).cast()
+            }
+
+            unsafe fn drop_ptr(ptr: *const std::ffi::c_void) {
+                let payload = unsafe { Box::from_raw(ptr as *mut Payload) };
+                RECLAIMED.fetch_add(payload.0 as usize, Ordering::SeqCst);
+            }
+        }
+
+        {
+            let r = Recorder::new();
+            r.create("driver", "outputdriver", None).unwrap();
+            r.set_attribute("driver", &[nsi::callback!("cb", Payload(1))])
+                .unwrap();
+
+            match &r.scene().nodes["driver"].attrs["cb"].data {
+                OwnedData::Reference(pointers) => {
+                    assert_eq!(pointers.len(), 1);
+                    assert!(!pointers[0].0.is_null(), "address recorded");
+                }
+                other => panic!("expected Reference, got {other:?}"),
+            }
+        }
+
+        assert_eq!(
+            RECLAIMED.load(Ordering::SeqCst),
+            0,
+            "a Recorder cannot reclaim a Callback payload; if this ever \
+             becomes 1, the leak is fixed and the contract row must change"
+        );
     }
 }

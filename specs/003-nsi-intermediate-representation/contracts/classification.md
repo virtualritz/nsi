@@ -27,12 +27,15 @@ which is why every class carries its own row.
 | An unknown destination is rejected, not guessed | Covered | `edge.rs` `ClassifyError` | `classifier::unknown_to_attr_is_rejected` | -- |
 | Rejection propagates out of `Scene::connect` | Covered | `scene.rs` `connect` returns `Result` | `scene::tests::connect_rejects_an_unmapped_destination` | -- |
 | Rejection propagates out of `Nsi::connect` | Covered | `recorder.rs` `connect` | `recorder::tests::an_unmapped_connection_is_an_error` | -- |
-| `classify` and `stream::to_attr_of` stay inverse | Partial | `edge.rs` `classify`, `stream.rs` `to_attr_of` | `stream_roundtrip` exercises `objects` and a shader-network edge only | Extend the roundtrip fixture to include every non-shader class, or add a property test asserting `to_attr_of(classify(a)) == a` for each. |
+| `classify` and `stream::to_attr_of` stay inverse | Covered | `edge.rs` `classify`, `stream.rs` `to_attr_of` | `stream_roundtrip::recorder_replays_what_3delight_writes`; the fixture now connects `objects`, `geometryattributes`, `surfaceshader`, `sourcemodels`, `screens`, `outputlayers`, `outputdrivers` and a shader-network edge, and 3Delight's own stream is the expectation for each | -- |
+| `Some("")` is not a source port | Covered | `edge.rs` `classify` filters the empty string before the port branch | `classifier::an_empty_source_port_is_not_a_port`, and `stream_roundtrip` drives one through 3Delight | -- |
 
 ## Invariants
 
 - Classification depends only on `from_attr` and `to_attr`, never on
   node types. ɴsɪ permits connections the node types would not imply.
+- A `from_attr` of `None` and of `Some("")` classify identically. ɴsɪ
+  documents both as connecting the `from` node itself.
 - `to_attr_of` is the inverse of `classify` for every non-shader class.
   These two functions must change together.
 
@@ -45,7 +48,6 @@ which is why every class carries its own row.
 ## Required Evidence Before Marking Complete
 
 - `cargo test -p nsi-intermediate --test classifier`
-- To close the inverse row: extend `tests/stream_roundtrip.rs` `build`
-  with `geometryattributes`, `surfaceshader`, `sourcemodels`, `screens`,
-  `outputlayers` and `outputdrivers` edges, and confirm the stream still
-  matches 3Delight's.
+- `cargo test -p nsi-intermediate --test stream_roundtrip`, which is
+  what holds `classify` and `to_attr_of` inverse over every non-shader
+  class. It needs 3Delight; see `quickstart.md`.

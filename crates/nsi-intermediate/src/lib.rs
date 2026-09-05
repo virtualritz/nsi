@@ -48,6 +48,6 @@ mod stream;
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
 pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
-pub use resolve::{Binding, IDENTITY, OutputLayer, RenderOutput};
+pub use resolve::{Binding, IDENTITY, OutputLayer, RenderOutput, ResolveError};
 pub use scene::{Node, Scene};
 pub use stream::write_stream;

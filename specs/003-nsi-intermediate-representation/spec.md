@@ -17,6 +17,9 @@ renderer present and test it without one.
   payload is copied and remains valid after the call returns.
 - Given a `Reference` argument, when it is recorded, then the host
   address is stored rather than the data it points at.
+- Given a `Callback` argument, when it is recorded, then its address is
+  stored and its payload leaks, because a recorder cannot reclaim one.
+  See R14.
 
 ### User Story 2: Know What A Connection Means (P1)
 
@@ -30,6 +33,9 @@ reference.
   destination attribute into exactly one known class.
 - Given a destination attribute with no mapping, when it is recorded,
   then the call fails rather than defaulting to a guess.
+- Given a source attribute of `Some("")`, when it is recorded, then it
+  classifies as if it were `None`, because ɴsɪ documents the two as
+  equivalent.
 
 ### User Story 3: Receive Resolved Facts, Not Graph Semantics (P1)
 
@@ -43,9 +49,14 @@ material binding.
   requested, then the chain is composed in ɴsɪ's row-vector order.
 - Given `shader -> attributes -> geometry`, when a geometry's binding is
   requested, then the shader is resolved through the intermediate node.
+- Given `attributes` bound to an ancestor transform, when a geometry's
+  binding is requested, then the inherited binding is found.
 - Given `outputdriver -> outputlayer -> screen -> camera`, when render
   outputs are requested, then one entry per screen is produced with its
   layers and drivers in connection order.
+- Given a scene with no single correct answer -- more than one parent, a
+  cycle, or a motion-sampled transform -- when resolution is requested,
+  then it fails with a typed error rather than returning a matrix.
 
 ### User Story 4: Prove Fidelity Against A Real Renderer (P2)
 
@@ -57,7 +68,7 @@ demonstrated rather than asserted.
 
 - Given one scene-building function driving both a 3Delight `apistream`
   context and the recorder, when both streams are canonicalised, then
-  they are equal.
+  they are equal, for a scene meeting the preconditions in R10.
 
 ## Non-Goals
 
@@ -69,6 +80,8 @@ demonstrated rather than asserted.
 - Shader-network resolution. `ShaderNetwork` edges are classified and
   carried with ports intact, because their consumer is OSL, not a graph
   walk.
+- Resolving an instanced node to its per-path transforms. Multi-parent
+  is detected and rejected, not expanded; see R11.
 
 ## Requirements
 
@@ -78,13 +91,39 @@ demonstrated rather than asserted.
 - R4: `Type::Reference` stores the host address, never its contents, and
   is never forwarded to a renderer as an object link.
 - R5: Connection classification is exhaustive; an unknown destination
-  attribute is an error.
+  attribute is an error. A `from_attr` of `Some("")` is `None`.
 - R6: Node and attribute order is insertion order.
 - R7: Motion samples are stored separately from static attributes and
-  sorted by time.
+  sorted by time. Sample times are keyed by a *total* order, so a `NaN`
+  time matches itself and `-0.0` is distinct from `0.0`.
 - R8: Transform chains compose in row-vector order.
-- R9: A malformed scene containing a cycle must not hang the resolver.
-- R10: A recorded scene replays as an ɴsɪ stream equal to 3Delight's.
+- R9: A malformed scene containing a cycle must not hang the resolver,
+  and must not answer it either: it is a typed error.
+- R10: A recorded scene replays as an ɴsɪ stream equal to 3Delight's,
+  **for a scene that meets the recorder's preconditions**: one attribute
+  per call, a node's static attributes set before its motion samples, no
+  repeated `create`, and no `delete`, `delete_attribute` or `disconnect`.
+  A recorder holds scene state and 3Delight's `apistream` is a call log;
+  outside those preconditions the two differ by construction.
+- R11: A node with more than one `objects` parent is ɴsɪ's lightweight
+  instancing. Resolving a single world transform for one is a typed
+  error, not an answer for whichever parent was connected first.
+- R12: `geometryattributes` bound to an ancestor transform is inherited
+  by its descendants. Among candidates the winner is: highest
+  `"priority"`, then nearest the geometry, then connection order.
+- R13: A motion-sampled `transformationmatrix` is a typed error until
+  per-sample composition exists. Returning the static transform would
+  hand a motion-blurred scene back its unblurred pose.
+- R14: A `Callback` argument leaks its payload. `Callback::type_`
+  reports `Type::Reference`, so a recorder cannot distinguish one, and
+  `Callback::drop_fn` is `pub(crate)` to `nsi-ffi-wrap`, so it could not
+  reclaim one. This is an accepted limitation, not an oversight.
+- R15: `Recorder::scene` returns a guard over the lock every `Nsi`
+  method takes. Calling one while a guard is alive deadlocks. This is
+  documented on the method rather than designed away.
+- R16: Of the arguments ɴsɪ allows on `connect`, only `"priority"` is
+  recorded, because R12 needs it. `"value"` and `"strength"` are
+  dropped, as are the arguments to `create` and `delete`.
 
 ## Risks
 
@@ -98,8 +137,17 @@ demonstrated rather than asserted.
 - **Pointer marshalling drift.** `Reference::as_c_ptr` yields a pointer
   to the pointer. Dereferencing one level too few or too many is
   invisible, because a pointer is opaque either way. Mitigated by a test
-  asserting the recorded address equals a known payload's.
+  asserting the recorded address equals a known payload's, driven
+  through `Nsi::set_attribute` rather than the marshalling alone.
 - **Grouping loss.** A recorder holds scene state, not a call log, so
   attribute-to-call grouping is discarded. Stream comparison therefore
-  requires one attribute per call. Accepted: a renderer only ever sees
+  requires the R10 preconditions. Accepted: a renderer only ever sees
   final values.
+- **A fixture-shaped fidelity gate.** R10 is proven by one scene. Every
+  behaviour it does not exercise -- argument flags, float formatting,
+  `Reference` payloads -- is unproven however green the gate is. Named
+  per row in `contracts/stream.md` rather than folded into R10.
+- **Silently ignored call parameters.** ɴsɪ's `recursive` delete and
+  connection `strength` change what a scene means, and are dropped. R16
+  makes that a decision; the `Open` rows in `contracts/recording.md`
+  make it a tracked one.

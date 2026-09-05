@@ -5,10 +5,11 @@
 //! meaningless.
 
 use crate::{ClassifyError, Edge, OwnedArg, classify};
+use core::cmp::Ordering;
 use indexmap::IndexMap;
 
 /// One ɴsɪ node.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Node {
     pub node_type: String,
     /// Attributes set with `set_attribute`, keyed by name.
@@ -23,7 +24,7 @@ pub struct Node {
 }
 
 /// The recorded scene graph.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Scene {
     pub nodes: IndexMap<String, Node>,
     pub edges: Vec<Edge>,
@@ -65,15 +66,23 @@ impl Scene {
     ) {
         let node = self.nodes.entry(handle.to_string()).or_default();
 
-        let slot = match node.time_attrs.iter().position(|(t, _)| *t == time) {
+        // `total_cmp`, not `==`. A sample time arrives from a caller
+        // and ɴsɪ does not validate it: under `==` a NaN time never
+        // matches itself, so every repeat appends another sample and the
+        // vector grows without bound, and `-0.0 == 0.0` silently merges
+        // two distinct keys. A total order has neither failure.
+        let slot = match node
+            .time_attrs
+            .iter()
+            .position(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
+        {
             Some(index) => index,
             None => {
-                // Insertion sort keeps samples ordered without needing a
-                // total order on f64.
+                // Insertion sort keeps the samples in `total_cmp` order.
                 let index = node
                     .time_attrs
                     .iter()
-                    .position(|(t, _)| *t > time)
+                    .position(|(t, _)| t.total_cmp(&time) == Ordering::Greater)
                     .unwrap_or(node.time_attrs.len());
                 node.time_attrs.insert(index, (time, IndexMap::new()));
                 index
@@ -96,7 +105,7 @@ impl Scene {
         }
     }
 
-    /// Classify and record a connection.
+    /// Classify and record a connection at the default priority.
     ///
     /// An unmapped destination propagates rather than being recorded as
     /// a guess.
@@ -107,11 +116,28 @@ impl Scene {
         to: &str,
         to_attr: &str,
     ) -> Result<(), ClassifyError> {
+        self.connect_with_priority(from, from_attr, to, to_attr, 0)
+    }
+
+    /// Classify and record a connection carrying ɴsɪ's `"priority"`.
+    ///
+    /// [`Scene::geometry_binding`] reads it when one geometry inherits
+    /// an `attributes` node from more than one level of its transform
+    /// chain.
+    pub fn connect_with_priority(
+        &mut self,
+        from: &str,
+        from_attr: Option<&str>,
+        to: &str,
+        to_attr: &str,
+        priority: i32,
+    ) -> Result<(), ClassifyError> {
         let kind = classify(from_attr, to_attr)?;
         self.edges.push(Edge {
             from: from.to_string(),
             to: to.to_string(),
             kind,
+            priority,
         });
         Ok(())
     }
@@ -125,6 +151,9 @@ impl Scene {
         to_attr: &str,
     ) -> Result<(), ClassifyError> {
         let kind = classify(from_attr, to_attr)?;
+        // `priority` is not part of an edge's identity: ɴsɪ's
+        // `disconnect` names four things, and priority is not one of
+        // them.
         self.edges
             .retain(|e| !(e.from == from && e.to == to && e.kind == kind));
         Ok(())
@@ -224,5 +253,98 @@ mod tests {
         let err = scene.connect("a", None, "b", "nonsense").unwrap_err();
         assert_eq!(err.to_attr, "nonsense");
         assert!(scene.edges.is_empty());
+    }
+
+    /// `delete_attribute` walks the motion samples too. Only the static
+    /// path was proven before, and the two are separate tables.
+    #[test]
+    fn delete_attribute_removes_from_every_time_sample() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute("xf", vec![arg("t", 9.0)]);
+        scene.set_attribute_at_time("xf", 0.0, vec![arg("t", 0.0)]);
+        scene.set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![arg("t", 1.0), arg("keep", 2.0)],
+        );
+
+        scene.delete_attribute("xf", "t");
+
+        let node = &scene.nodes["xf"];
+        assert!(!node.attrs.contains_key("t"), "static copy removed");
+        for (time, attrs) in &node.time_attrs {
+            assert!(!attrs.contains_key("t"), "sample at {time} still has it");
+        }
+        assert!(node.time_attrs[1].1.contains_key("keep"));
+    }
+
+    /// `disconnect` removes the edge it names and leaves the others.
+    #[test]
+    fn disconnect_removes_only_the_named_edge() {
+        let mut scene = Scene::default();
+        scene.connect("a", None, ".root", "objects").unwrap();
+        scene.connect("b", None, ".root", "objects").unwrap();
+
+        scene.disconnect("a", None, ".root", "objects").unwrap();
+
+        assert_eq!(scene.edges.len(), 1);
+        assert_eq!(scene.edges[0].from, "b");
+    }
+
+    /// Classification is how `disconnect` identifies the edge, so an
+    /// unmapped destination cannot be a silent no-op.
+    #[test]
+    fn disconnect_rejects_an_unmapped_destination() {
+        let mut scene = Scene::default();
+        let err = scene.disconnect("a", None, "b", "nonsense").unwrap_err();
+        assert_eq!(err.to_attr, "nonsense");
+    }
+
+    /// `priority` is not part of an edge's identity: ɴsɪ's `disconnect`
+    /// names four things and priority is not one of them.
+    #[test]
+    fn disconnect_ignores_priority() {
+        let mut scene = Scene::default();
+        scene
+            .connect_with_priority("attr", None, "m", "geometryattributes", 5)
+            .unwrap();
+        scene
+            .disconnect("attr", None, "m", "geometryattributes")
+            .unwrap();
+        assert!(scene.edges.is_empty());
+    }
+
+    /// A sample time is caller data and ɴsɪ does not validate it. Under
+    /// `==` a NaN never matches itself, so every repeat would append
+    /// another sample and the vector would grow without bound.
+    #[test]
+    fn a_nan_sample_time_matches_itself() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", f64::NAN, vec![arg("t", 0.0)]);
+        scene.set_attribute_at_time("xf", f64::NAN, vec![arg("t", 1.0)]);
+
+        let samples = &scene.nodes["xf"].time_attrs;
+        assert_eq!(samples.len(), 1, "one key, not one per call");
+        assert_eq!(samples[0].1["t"].data, OwnedData::F32(vec![1.0]));
+    }
+
+    /// `-0.0` and `0.0` are distinct sample keys under a total order,
+    /// where `==` would merge them.
+    #[test]
+    fn negative_zero_is_a_distinct_sample_time() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![arg("t", 1.0)]);
+        scene.set_attribute_at_time("xf", -0.0, vec![arg("t", 2.0)]);
+
+        let times: Vec<f64> = scene.nodes["xf"]
+            .time_attrs
+            .iter()
+            .map(|(t, _)| *t)
+            .collect();
+        assert_eq!(times.len(), 2);
+        assert!(times[0].is_sign_negative(), "-0.0 sorts first");
     }
 }

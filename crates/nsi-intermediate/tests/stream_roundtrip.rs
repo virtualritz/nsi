@@ -39,8 +39,57 @@ where
     ctx.set_attribute("m", &[nsi::f64!("d", 0.5f64)])?;
 
     ctx.create("xf", "transform", None)?;
+
+    // Matrices. `transformationmatrix` is `doublematrix`; the `f32` form
+    // is `matrix`, and the two emit different type names for the same
+    // sixteen numbers.
+    #[rustfmt::skip]
+    let m64 = [
+        1.0f64, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        1.0, 2.0, 3.0, 1.0,
+    ];
+    ctx.set_attribute("xf", &[nsi::matrix_f64!("transformationmatrix", &m64)])?;
+    #[rustfmt::skip]
+    let m32 = [
+        2.0f32, 0.0, 0.0, 0.0,
+        0.0, 2.0, 0.0, 0.0,
+        0.0, 0.0, 2.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ];
+    ctx.set_attribute("xf", &[nsi::matrix_f32!("othermatrix", &m32)])?;
+
+    // After the static attributes, deliberately: `write_stream` emits a
+    // node's `attrs` before its `time_attrs`, so a fixture that
+    // interleaved them would diverge on ordering alone. See the
+    // "What this is not" note in `nsi_intermediate::stream`.
     ctx.set_attribute_at_time("xf", 0.5, &[nsi::f64!("t", 1.0)])?;
+
+    // Every non-shader connection class, so the classifier and the
+    // emitter are held to being inverse over all of them rather than
+    // over `objects` alone.
+    ctx.create("mesh", "mesh", None)?;
+    ctx.create("attr", "attributes", None)?;
+    ctx.create("shader", "shader", None)?;
+    ctx.create("inst", "instances", None)?;
+    ctx.create("scr", "screen", None)?;
+    ctx.create("layer", "outputlayer", None)?;
+    ctx.create("drv", "outputdriver", None)?;
+
     ctx.connect("xf", None, ".root", "objects", None)?;
+    ctx.connect("attr", None, "mesh", "geometryattributes", None)?;
+    ctx.connect("shader", None, "attr", "surfaceshader", None)?;
+    ctx.connect("mesh", None, "inst", "sourcemodels", None)?;
+    ctx.connect("scr", None, "cam", "screens", None)?;
+    ctx.connect("layer", None, "scr", "outputlayers", None)?;
+    ctx.connect("drv", None, "layer", "outputdrivers", None)?;
+
+    // ɴsɪ documents `Some("")` as equivalent to `None`. 3Delight writes
+    // the same empty source port for both, so a recorder that read it as
+    // a port name would diverge here.
+    ctx.connect("mesh", Some(""), "xf", "objects", None)?;
+
     ctx.connect("s1", Some("outColor"), "s2", "inColor", None)?;
     Ok(())
 }

@@ -14,7 +14,7 @@
 use core::fmt;
 
 /// What an ɴsɪ connection means, once classified.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeKind {
     /// `X -> .root "objects"`, or a transform chain link. Membership and
     /// hierarchy share one ɴsɪ attribute; which one an edge is depends
@@ -46,15 +46,25 @@ pub enum EdgeKind {
 }
 
 /// A recorded, classified connection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Edge {
     pub from: String,
     pub to: String,
     pub kind: EdgeKind,
+    /// The `"priority"` argument of the ɴsɪ `connect` call that made
+    /// this edge, defaulting to `0`.
+    ///
+    /// ɴsɪ documents it as deciding "in which order the nodes should be
+    /// considered when evaluating the value of an attribute", which is
+    /// why [`Scene::geometry_binding`] reads it. Only
+    /// [`EdgeKind::AttributeBinding`] edges consult it today.
+    ///
+    /// [`Scene::geometry_binding`]: crate::Scene::geometry_binding
+    pub priority: i32,
 }
 
 /// An ɴsɪ connection whose destination attribute has no mapping.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClassifyError {
     pub to_attr: String,
 }
@@ -74,15 +84,18 @@ impl core::error::Error for ClassifyError {}
 
 /// Classify a connection by its destination attribute.
 ///
-/// A `from_attr` means the source names an output port, which only
-/// happens for shader-network edges.
+/// A *named* `from_attr` means the source names an output port, which
+/// only happens for shader-network edges. `Some("")` is not a name:
+/// ɴsɪ documents it as equivalent to `None`, meaning the `from` node
+/// itself is connected, so it classifies by destination like any other
+/// node-level connection.
 pub fn classify(
     from_attr: Option<&str>,
     to_attr: &str,
 ) -> Result<EdgeKind, ClassifyError> {
     // A named source port is always a shader network edge, whatever the
     // destination is called.
-    if let Some(from_port) = from_attr {
+    if let Some(from_port) = from_attr.filter(|port| !port.is_empty()) {
         return Ok(EdgeKind::ShaderNetwork {
             from_port: from_port.to_string(),
             to_port: to_attr.to_string(),

@@ -7,6 +7,8 @@
 //! composed here, once.
 
 use crate::{EdgeKind, OwnedData, Scene};
+use core::fmt;
+use std::collections::HashSet;
 
 /// A 4x4 identity, row-major.
 #[rustfmt::skip]
@@ -20,8 +22,75 @@ pub const IDENTITY: [f64; 16] = [
 /// The ɴsɪ attribute holding a transform node's matrix.
 const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
 
+/// Why a scene could not be resolved into flat facts.
+///
+/// Every variant is a scene ɴsɪ permits but this crate refuses to guess
+/// about. Returning a matrix or a binding anyway would be the silent
+/// failure the crate exists to prevent: it renders, with the wrong
+/// answer.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ResolveError {
+    /// A node is connected to more than one parent through `objects`.
+    ///
+    /// That is ɴsɪ's lightweight instancing: the node appears once per
+    /// path, each with its own world transform. A single matrix cannot
+    /// describe it, so resolving one is refused rather than silently
+    /// answering for whichever parent was connected first.
+    MultipleParents {
+        /// The node with more than one parent.
+        handle: String,
+        /// Every parent, in connection order.
+        parents: Vec<String>,
+    },
+    /// A node in the chain carries a motion-sampled
+    /// `transformationmatrix`.
+    ///
+    /// Composing per sample is not implemented, and answering with the
+    /// static transform would hand a motion-blurred scene back its
+    /// unblurred pose.
+    MotionSampledTransform {
+        /// The node whose transform is motion-sampled.
+        handle: String,
+    },
+    /// The transform chain revisits a node. ɴsɪ does not forbid a cycle;
+    /// no correct answer exists for one.
+    Cycle {
+        /// The node the walk arrived at twice.
+        handle: String,
+    },
+}
+
+impl fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MultipleParents { handle, parents } => write!(
+                f,
+                "ɴsɪ node {handle:?} has {} parents ({}); that is \
+                 instancing, which has one world transform per path, not \
+                 one overall",
+                parents.len(),
+                parents.join(", ")
+            ),
+            Self::MotionSampledTransform { handle } => write!(
+                f,
+                "ɴsɪ node {handle:?} has a motion-sampled \
+                 transformationmatrix; per-sample composition is not \
+                 implemented and the static transform would be the wrong \
+                 answer"
+            ),
+            Self::Cycle { handle } => write!(
+                f,
+                "ɴsɪ transform chain revisits node {handle:?}; a cyclic \
+                 scene has no world transform"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for ResolveError {}
+
 /// What an ɴsɪ `attributes` node resolves to for one piece of geometry.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Binding {
     /// The `attributes` node handle. Its remaining attributes --
     /// visibility flags in particular -- are read by the backend, which
@@ -34,7 +103,7 @@ pub struct Binding {
 
 /// One renderable output: a camera paired with a screen, and the AOVs
 /// written from it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderOutput {
     pub camera: String,
     /// The screen, which is what carries resolution and oversampling.
@@ -44,7 +113,7 @@ pub struct RenderOutput {
 }
 
 /// One AOV and the drivers it is written to.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OutputLayer {
     pub handle: String,
     /// A layer may fan out to several drivers -- a file and a display,
@@ -73,44 +142,101 @@ fn mul(a: [f64; 16], b: [f64; 16]) -> [f64; 16] {
 }
 
 impl Scene {
+    /// The chain from `handle` up to `.root`, nearest first.
+    ///
+    /// `handle` is the first entry and `.root` is not an entry. Every
+    /// walk up the `objects` hierarchy goes through here, so the three
+    /// scenes with no single answer -- more than one parent, a cycle --
+    /// are rejected in one place rather than each caller re-deriving
+    /// them.
+    fn chain(&self, handle: &str) -> Result<Vec<String>, ResolveError> {
+        let mut chain = Vec::new();
+        let mut seen = HashSet::new();
+        let mut current = handle.to_string();
+
+        loop {
+            if !seen.insert(current.clone()) {
+                return Err(ResolveError::Cycle { handle: current });
+            }
+
+            let mut parents = self.edges.iter().filter(|edge| {
+                edge.from == current && edge.kind == EdgeKind::SceneMember
+            });
+
+            let Some(first) = parents.next() else {
+                chain.push(current);
+                break;
+            };
+
+            // ɴsɪ's lightweight instancing. Refuse rather than answer
+            // for whichever parent happened to be connected first.
+            let rest = parents.map(|edge| edge.to.clone()).collect::<Vec<_>>();
+            if !rest.is_empty() {
+                let parents =
+                    core::iter::once(first.to.clone()).chain(rest).collect();
+                return Err(ResolveError::MultipleParents {
+                    handle: current,
+                    parents,
+                });
+            }
+
+            let parent = first.to.clone();
+            chain.push(current);
+            if parent == crate::ROOT {
+                break;
+            }
+            current = parent;
+        }
+
+        Ok(chain)
+    }
+
     /// Compose the transform chain applying to `handle`, from the node
     /// itself up to `.root`.
     ///
-    /// Includes `handle`'s own matrix when it is a transform node, so
-    /// asking about a transform and asking about its child differ by
-    /// exactly that node's matrix.
+    /// Includes `handle`'s own matrix when it carries one, so asking
+    /// about a transform and asking about its child differ by exactly
+    /// that node's matrix.
     ///
     /// Non-`f64` matrices are ignored: ɴsɪ's `transformationmatrix` is
     /// documented as `doublematrix`, and silently reinterpreting an
     /// `f32` one would be worse than skipping it.
-    pub fn world_transform(&self, handle: &str) -> [f64; 16] {
-        let mut matrix = IDENTITY;
-        let mut current = handle;
-        // ɴsɪ does not forbid a cycle. Bound the walk by the node count
-        // so a malformed scene cannot hang a render.
-        let mut budget = self.nodes.len() + 1;
+    ///
+    /// # Errors
+    ///
+    /// Every variant of [`ResolveError`]. Each is a scene with no single
+    /// correct world transform, and each would otherwise be answered
+    /// with a plausible wrong matrix.
+    pub fn world_transform(
+        &self,
+        handle: &str,
+    ) -> Result<[f64; 16], ResolveError> {
+        let chain = self.chain(handle)?;
 
-        loop {
-            if let Some(local) = self.local_transform(current) {
-                matrix = mul(matrix, local);
+        chain.iter().try_fold(IDENTITY, |matrix, node| {
+            if self.has_motion_transform(node) {
+                Err(ResolveError::MotionSampledTransform {
+                    handle: node.clone(),
+                })
+            } else {
+                Ok(match self.local_transform(node) {
+                    Some(local) => mul(matrix, local),
+                    None => matrix,
+                })
             }
+        })
+    }
 
-            budget = match budget.checked_sub(1) {
-                Some(remaining) if remaining > 0 => remaining,
-                _ => break,
-            };
-
-            let parent = self.edges.iter().find(|edge| {
-                edge.from == current && edge.kind == EdgeKind::SceneMember
-            });
-
-            match parent {
-                Some(edge) if edge.to != crate::ROOT => current = &edge.to,
-                _ => break,
-            }
-        }
-
-        matrix
+    /// Whether any motion sample on `handle` sets a transform.
+    ///
+    /// Read before composing, because [`Scene::world_transform`] reads
+    /// static attributes only and a motion-sampled node has none.
+    fn has_motion_transform(&self, handle: &str) -> bool {
+        self.nodes.get(handle).is_some_and(|node| {
+            node.time_attrs
+                .iter()
+                .any(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
+        })
     }
 
     /// Dissolve the `attributes` node bound to a piece of geometry.
@@ -123,32 +249,72 @@ impl Scene {
     /// One `attributes` node may bind to many shapes, so this resolves
     /// per geometry rather than producing a single owner.
     ///
-    /// Returns `None` for geometry with no `attributes` bound. The
-    /// attributes handle is returned rather than its contents because
-    /// what else lives on that node — visibility flags above all — is
-    /// encoded differently by each renderer, and inventing a common
-    /// shape for it here would be guesswork.
-    pub fn geometry_binding(&self, geometry: &str) -> Option<Binding> {
-        let attributes = self
-            .edges
-            .iter()
-            .find(|edge| {
-                edge.to == geometry && edge.kind == EdgeKind::AttributeBinding
-            })
-            .map(|edge| edge.from.clone())?;
+    /// # Inheritance
+    ///
+    /// ɴsɪ binds `geometryattributes` to a transform as readily as to a
+    /// geometry, and a binding on a transform applies to everything
+    /// beneath it. So the whole chain up to `.root` is searched, not
+    /// just the geometry itself, and the winner is picked by:
+    ///
+    /// 1. highest `"priority"`, ɴsɪ's own tie-breaker;
+    /// 2. then the binding nearest the geometry, the more specific one;
+    /// 3. then connection order.
+    ///
+    /// Returns `Ok(None)` for geometry with nothing bound anywhere in
+    /// its chain. The attributes handle is returned rather than its
+    /// contents because what else lives on that node — visibility flags
+    /// above all — is encoded differently by each renderer, and
+    /// inventing a common shape for it here would be guesswork.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`],
+    /// from walking the chain. A motion-sampled transform does not
+    /// affect which attributes bind, so it is not an error here.
+    pub fn geometry_binding(
+        &self,
+        geometry: &str,
+    ) -> Result<Option<Binding>, ResolveError> {
+        let chain = self.chain(geometry)?;
 
-        let surface_shader = self
-            .edges
+        let winner = chain
             .iter()
-            .find(|edge| {
-                edge.to == attributes && edge.kind == EdgeKind::SurfaceShader
+            .enumerate()
+            .flat_map(|(depth, node)| {
+                self.edges
+                    .iter()
+                    .enumerate()
+                    .filter(move |(_, edge)| {
+                        edge.to == *node
+                            && edge.kind == EdgeKind::AttributeBinding
+                    })
+                    .map(move |(order, edge)| {
+                        (edge.priority, depth, order, edge)
+                    })
             })
-            .map(|edge| edge.from.clone());
+            // Highest priority, then nearest the geometry, then first
+            // connected. `depth` and `order` reverse because `max_by`
+            // wants the largest and those two want the smallest.
+            .max_by(|a, b| {
+                a.0.cmp(&b.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2))
+            });
 
-        Some(Binding {
-            attributes,
-            surface_shader,
-        })
+        Ok(winner.map(|(_, _, _, edge)| {
+            let attributes = edge.from.clone();
+            let surface_shader = self
+                .edges
+                .iter()
+                .find(|edge| {
+                    edge.to == attributes
+                        && edge.kind == EdgeKind::SurfaceShader
+                })
+                .map(|edge| edge.from.clone());
+
+            Binding {
+                attributes,
+                surface_shader,
+            }
+        }))
     }
 
     /// Resolve ɴsɪ's output chain into what a renderer actually needs.
@@ -215,7 +381,12 @@ impl Scene {
             .collect()
     }
 
-    /// This node's own matrix, if it is a transform carrying one.
+    /// This node's own matrix, if it carries one.
+    ///
+    /// The node *type* is never consulted, matching classification: ɴsɪ
+    /// permits attributes the node type would not imply, and a
+    /// `transformationmatrix` on a non-transform node is composed like
+    /// any other. See `contracts/resolution.md`.
     fn local_transform(&self, handle: &str) -> Option<[f64; 16]> {
         let node = self.nodes.get(handle)?;
         let arg = node.attrs.get(TRANSFORMATION_MATRIX)?;
@@ -232,7 +403,7 @@ impl Scene {
 
 #[cfg(test)]
 mod tests {
-    use crate::{OwnedArg, OwnedData, Scene};
+    use crate::{OwnedArg, OwnedData, ResolveError, Scene};
     use nsi_trait::Type;
 
     /// A 4x4 row-major translation, the shape ɴsɪ stores in
@@ -275,7 +446,7 @@ mod tests {
     fn a_node_with_no_transforms_is_identity() {
         let mut scene = Scene::default();
         scene.create("mesh", "mesh");
-        assert_eq!(scene.world_transform("mesh"), super::IDENTITY);
+        assert_eq!(scene.world_transform("mesh").unwrap(), super::IDENTITY);
     }
 
     #[test]
@@ -287,7 +458,7 @@ mod tests {
         scene.connect("mesh", None, "xf", "objects").unwrap();
         scene.connect("xf", None, ".root", "objects").unwrap();
 
-        let m = scene.world_transform("mesh");
+        let m = scene.world_transform("mesh").unwrap();
         assert_eq!(&m[12..15], &[1.0, 2.0, 3.0]);
     }
 
@@ -304,7 +475,7 @@ mod tests {
         scene.connect("inner", None, "outer", "objects").unwrap();
         scene.connect("outer", None, ".root", "objects").unwrap();
 
-        let m = scene.world_transform("mesh");
+        let m = scene.world_transform("mesh").unwrap();
         assert_eq!(m[12], 11.0);
     }
 
@@ -325,7 +496,7 @@ mod tests {
         scene.connect("inner", None, "outer", "objects").unwrap();
         scene.connect("outer", None, ".root", "objects").unwrap();
 
-        let m = scene.world_transform("mesh");
+        let m = scene.world_transform("mesh").unwrap();
         assert_eq!(m[0], 2.0, "scale survives");
         assert_eq!(m[12], 10.0, "translation is not scaled");
     }
@@ -337,18 +508,121 @@ mod tests {
         scene.create("xf", "transform");
         scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
         scene.connect("xf", None, ".root", "objects").unwrap();
-        assert_eq!(scene.world_transform("xf")[12], 5.0);
+        assert_eq!(scene.world_transform("xf").unwrap()[12], 5.0);
     }
 
-    /// A cycle must not hang the resolver. ɴsɪ does not forbid one.
+    /// A cycle must not hang the resolver, and must not answer either.
+    /// ɴsɪ does not forbid one; no correct transform exists for it.
     #[test]
-    fn a_cycle_terminates() {
+    fn a_cycle_is_an_error() {
         let mut scene = Scene::default();
         scene.create("a", "transform");
         scene.create("b", "transform");
         scene.connect("a", None, "b", "objects").unwrap();
         scene.connect("b", None, "a", "objects").unwrap();
-        let _ = scene.world_transform("a");
+        assert_eq!(
+            scene.world_transform("a"),
+            Err(ResolveError::Cycle {
+                handle: "a".to_string()
+            })
+        );
+    }
+
+    /// Two `objects` parents is ɴsɪ's lightweight instancing: the node
+    /// exists once per path, each with its own world transform. One
+    /// matrix cannot say that, so refusing beats answering for whichever
+    /// parent was connected first.
+    #[test]
+    fn more_than_one_parent_is_an_error() {
+        let mut scene = Scene::default();
+        scene.create("left", "transform");
+        scene.set_attribute("left", vec![translate(1.0, 0.0, 0.0)]);
+        scene.create("right", "transform");
+        scene.set_attribute("right", vec![translate(9.0, 0.0, 0.0)]);
+        scene.create("mesh", "mesh");
+        scene.connect("mesh", None, "left", "objects").unwrap();
+        scene.connect("mesh", None, "right", "objects").unwrap();
+
+        assert_eq!(
+            scene.world_transform("mesh"),
+            Err(ResolveError::MultipleParents {
+                handle: "mesh".to_string(),
+                parents: vec!["left".to_string(), "right".to_string()],
+            })
+        );
+    }
+
+    /// `world_transform` reads static attributes only, so a
+    /// motion-sampled chain has no static matrix to read. Answering
+    /// identity would hand a motion-blurred scene back an unblurred
+    /// pose, so it is an error until per-sample composition exists.
+    #[test]
+    fn a_motion_sampled_transform_is_an_error() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
+        scene.create("mesh", "mesh");
+        scene.connect("mesh", None, "xf", "objects").unwrap();
+        scene.connect("xf", None, ".root", "objects").unwrap();
+
+        assert_eq!(
+            scene.world_transform("mesh"),
+            Err(ResolveError::MotionSampledTransform {
+                handle: "xf".to_string()
+            })
+        );
+    }
+
+    /// A static transform on a node that also carries unrelated motion
+    /// samples still resolves; only a sampled *transform* is refused.
+    #[test]
+    fn motion_samples_of_other_attributes_do_not_block_resolution() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
+        scene.set_attribute_at_time(
+            "xf",
+            0.5,
+            vec![OwnedArg {
+                name: "unrelated".to_string(),
+                type_tag: Type::F64,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F64(vec![1.0]),
+            }],
+        );
+        scene.connect("xf", None, ".root", "objects").unwrap();
+        assert_eq!(scene.world_transform("xf").unwrap()[12], 5.0);
+    }
+
+    /// ɴsɪ documents `transformationmatrix` as `doublematrix`. An `f32`
+    /// one is skipped rather than reinterpreted, and this pins that the
+    /// skip is deliberate: the same numbers as `MatrixF64` resolve, as
+    /// `MatrixF32` they do not.
+    #[test]
+    fn a_non_f64_matrix_is_skipped_not_reinterpreted() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform");
+        #[rustfmt::skip]
+        let m = vec![
+            1.0f32, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            7.0, 0.0, 0.0, 1.0,
+        ];
+        scene.set_attribute(
+            "xf",
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::MatrixF32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(m),
+            }],
+        );
+        scene.connect("xf", None, ".root", "objects").unwrap();
+        assert_eq!(scene.world_transform("xf").unwrap(), super::IDENTITY);
     }
 }
 
@@ -374,7 +648,7 @@ mod binding_tests {
     #[test]
     fn dissolves_attributes_to_a_shader() {
         let scene = scene_with_material();
-        let binding = scene.geometry_binding("mesh").expect("bound");
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
         assert_eq!(binding.attributes, "attr");
         assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
     }
@@ -383,7 +657,7 @@ mod binding_tests {
     fn unbound_geometry_has_no_binding() {
         let mut scene = Scene::default();
         scene.create("mesh", "mesh");
-        assert!(scene.geometry_binding("mesh").is_none());
+        assert!(scene.geometry_binding("mesh").unwrap().is_none());
     }
 
     /// An attributes node with no shader still binds -- it may carry
@@ -396,7 +670,7 @@ mod binding_tests {
         scene
             .connect("attr", None, "mesh", "geometryattributes")
             .unwrap();
-        let binding = scene.geometry_binding("mesh").expect("bound");
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
         assert_eq!(binding.attributes, "attr");
         assert!(binding.surface_shader.is_none());
     }
@@ -418,9 +692,94 @@ mod binding_tests {
                 .unwrap();
         }
         for mesh in ["a", "b", "c"] {
-            let binding = scene.geometry_binding(mesh).expect("bound");
+            let binding = scene.geometry_binding(mesh).unwrap().expect("bound");
             assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
         }
+    }
+
+    /// ɴsɪ binds `geometryattributes` to a transform as readily as to a
+    /// geometry, and a binding on a transform applies to everything
+    /// beneath it. Resolving only direct edges would leave every shape
+    /// under a bound transform unmaterialled.
+    #[test]
+    fn a_binding_on_an_ancestor_transform_is_inherited() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform");
+        scene.create("mesh", "mesh");
+        scene.create("attr", "attributes");
+        scene.create("shader", "shader");
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
+        scene
+            .connect("attr", None, "grp", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("shader", None, "attr", "surfaceshader")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.attributes, "attr");
+        assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
+    }
+
+    /// At equal priority the more specific binding wins: the one on the
+    /// geometry beats the one it inherits from its parent.
+    #[test]
+    fn the_nearest_binding_wins_at_equal_priority() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform");
+        scene.create("mesh", "mesh");
+        scene.create("outer", "attributes");
+        scene.create("own", "attributes");
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene
+            .connect("outer", None, "grp", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("own", None, "mesh", "geometryattributes")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.attributes, "own");
+    }
+
+    /// ɴsɪ's `"priority"` overrides proximity -- that is what it is for.
+    /// The ancestor's binding wins over the geometry's own.
+    #[test]
+    fn priority_beats_proximity() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform");
+        scene.create("mesh", "mesh");
+        scene.create("outer", "attributes");
+        scene.create("own", "attributes");
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene
+            .connect_with_priority(
+                "outer",
+                None,
+                "grp",
+                "geometryattributes",
+                10,
+            )
+            .unwrap();
+        scene
+            .connect("own", None, "mesh", "geometryattributes")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.attributes, "outer");
+    }
+
+    /// A cyclic chain has no binding either -- the walk that finds
+    /// ancestors is the same one that composes transforms.
+    #[test]
+    fn a_cycle_is_an_error_for_bindings_too() {
+        let mut scene = Scene::default();
+        scene.create("a", "transform");
+        scene.create("b", "transform");
+        scene.connect("a", None, "b", "objects").unwrap();
+        scene.connect("b", None, "a", "objects").unwrap();
+        assert!(scene.geometry_binding("a").is_err());
     }
 }
 
@@ -503,6 +862,32 @@ mod output_tests {
         let mut scene = Scene::default();
         scene.create("cam", "perspectivecamera");
         assert!(scene.render_outputs().is_empty());
+    }
+
+    /// Two cameras, two screens. Every other test uses one, which would
+    /// not catch a resolver that collapsed them.
+    #[test]
+    fn multiple_screens_yield_one_output_each() {
+        let mut scene = Scene::default();
+        for (cam, scr, layer) in [
+            ("cam_a", "scr_a", "beauty_a"),
+            ("cam_b", "scr_b", "beauty_b"),
+        ] {
+            scene.create(cam, "perspectivecamera");
+            scene.create(scr, "screen");
+            scene.create(layer, "outputlayer");
+            scene.connect(scr, None, cam, "screens").unwrap();
+            scene.connect(layer, None, scr, "outputlayers").unwrap();
+        }
+
+        let outputs = scene.render_outputs();
+        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs[0].camera, "cam_a");
+        assert_eq!(outputs[0].screen, "scr_a");
+        assert_eq!(outputs[0].layers[0].handle, "beauty_a");
+        assert_eq!(outputs[1].camera, "cam_b");
+        assert_eq!(outputs[1].screen, "scr_b");
+        assert_eq!(outputs[1].layers[0].handle, "beauty_b");
     }
 }
 

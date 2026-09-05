@@ -62,3 +62,21 @@ fn unknown_to_attr_is_rejected() {
     let err = classify(None, "somethingnobodyimplemented").unwrap_err();
     assert!(err.to_string().contains("somethingnobodyimplemented"));
 }
+
+/// ɴsɪ documents `Some("")` as equivalent to `None`: both connect the
+/// `from` node itself rather than one of its output ports. Treating the
+/// empty string as a port name would classify every such connection as a
+/// shader network edge, whatever its destination said.
+#[test]
+fn an_empty_source_port_is_not_a_port() {
+    assert_eq!(
+        classify(Some(""), "objects").unwrap(),
+        EdgeKind::SceneMember
+    );
+    assert_eq!(
+        classify(Some(""), "surfaceshader").unwrap(),
+        EdgeKind::SurfaceShader
+    );
+    // And it still rejects, rather than falling back to a network edge.
+    assert!(classify(Some(""), "nonsense").is_err());
+}
