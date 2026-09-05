@@ -28,7 +28,9 @@
 //!
 //! // What the driver does with them.
 //! let (config, warnings) = StreamConfig::parse(&attributes)?;
-//! warnings.iter().for_each(|warning| eprintln!("nsi-stream: {warning}"));
+//! warnings
+//!     .iter()
+//!     .for_each(|warning| eprintln!("nsi-stream: {warning}"));
 //!
 //! let layers = vec![Layer::rgba("beauty", "Ci", LayerFormat::RgbaF16)];
 //! let driver = StreamDriver::open(

@@ -94,10 +94,10 @@ pub fn main() {
                     let dst_idx = (image_y * full_width + image_x) * channels;
 
                     // Copy f32 data for EXR output
-                    for c in 0..channels {
-                        buffers.f32_data[dst_idx + c] =
-                            bucket_data[src_idx + c];
-                    }
+                    buffers.f32_data[dst_idx..dst_idx + channels]
+                        .copy_from_slice(
+                            &bucket_data[src_idx..src_idx + channels],
+                        );
 
                     // Quantize to u8 with sRGB conversion for PNG output
                     let alpha = if channels > 3 {
@@ -113,15 +113,12 @@ pub fn main() {
                         // yield wrong results for pixels with
                         // non-opaque alpha. Furthermore PNG wants
                         // unpremultiplied pixels.
-                        buffers.u8_data[dst_idx + 0] =
-                            (linear_to_srgb(bucket_data[src_idx + 0] / alpha)
-                                * 255.0) as u8;
-                        buffers.u8_data[dst_idx + 1] =
-                            (linear_to_srgb(bucket_data[src_idx + 1] / alpha)
-                                * 255.0) as u8;
-                        buffers.u8_data[dst_idx + 2] =
-                            (linear_to_srgb(bucket_data[src_idx + 2] / alpha)
-                                * 255.0) as u8;
+                        for c in 0..3 {
+                            buffers.u8_data[dst_idx + c] = (linear_to_srgb(
+                                bucket_data[src_idx + c] / alpha,
+                            ) * 255.0)
+                                as u8;
+                        }
                         if channels > 3 {
                             buffers.u8_data[dst_idx + 3] =
                                 (alpha * 255.0) as u8;
@@ -158,7 +155,7 @@ pub fn main() {
                 // probably branch depending on pixel_format[n].depth()
                 // (and do so outside this closure, ofc).
                 (
-                    buffers.f32_data[index + 0],
+                    buffers.f32_data[index],
                     buffers.f32_data[index + 1],
                     buffers.f32_data[index + 2],
                     buffers.f32_data[index + 3],
@@ -166,7 +163,7 @@ pub fn main() {
             };
 
             // We write the raw f32 data out as an OpenEXR.
-            write_rgba_file(name.clone() + ".exr", width, height, &sample)
+            write_rgba_file(name.clone() + ".exr", width, height, sample)
                 .unwrap();
 
             // Remember the name for writing the PNG below.
@@ -181,22 +178,25 @@ pub fn main() {
     // so the example has no third-party-geometry dependency.
     nsi_render(32, "dodecahedron", open, write, finish);
 
-    // Get the accumulated pixel data.
-    let buffers = Arc::try_unwrap(pixel_buffers)
-        .expect("Failed to unwrap pixel buffers")
-        .into_inner()
-        .unwrap();
+    // Take the accumulated pixel data out of the shared buffer.
+    //
+    // NOT `Arc::try_unwrap`: the open/write/finish closures each hold a
+    // clone, and a callback handed to the renderer is deliberately leaked
+    // (it has to outlive the node that references it), so the strong count
+    // never falls back to 1 and `try_unwrap` can only ever fail.
+    let buffers = std::mem::replace(
+        &mut *pixel_buffers.lock().unwrap(),
+        PixelBuffers::new(),
+    );
 
-    let name = Arc::try_unwrap(output_name)
-        .expect("Failed to unwrap output name")
-        .into_inner()
-        .unwrap();
+    // Same again: the finish closure holds a clone and is leaked with it.
+    let name = output_name.lock().unwrap().clone();
 
     // Write out the display-referred, u8 quantized data we prepared
     // in the write closure above as a PNG.
     let path = format!("{}.png", name);
     let file = File::create(Path::new(&path)).unwrap();
-    let ref mut writer = BufWriter::new(file);
+    let writer = &mut BufWriter::new(file);
 
     let mut encoder =
         png::Encoder::new(writer, buffers.width as u32, buffers.height as u32);

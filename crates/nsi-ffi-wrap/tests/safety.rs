@@ -174,10 +174,8 @@ fn thread_safety() {
                 // Each thread creates its own node
                 let node_name = format!("thread_node_{}", i);
                 ctx_clone.create(&node_name, nsi::ATTRIBUTES, None);
-                ctx_clone.set_attribute(
-                    &node_name,
-                    &[nsi::i32!("thread_id", i)],
-                );
+                ctx_clone
+                    .set_attribute(&node_name, &[nsi::i32!("thread_id", i)]);
             })
         })
         .collect();

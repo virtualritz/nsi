@@ -19,11 +19,11 @@
 //!   * `NSI_SYNC`           (default 1)   — issue a `Synchronize` after `Start`.
 //!   * `NSI_STATUS`         (default 1)   — pass a status `callback` to `Start`.
 //!   * `NSI_DRIVE`          (default thread) — `thread` = per-ctx thread,
-//!                                          `main` = drive everything on main.
+//!     `main` = drive everything on main.
 //!   * `NSI_RENDERTHREADS`  (unset)       — set `.global` `renderthreads` if given.
 //!   * `NSI_FIRST_BUCKET_TIMEOUT` (default 20) — seconds to wait for buckets.
 //!   * `NSI_TEARDOWN_TIMEOUT`     (default 8)  — seconds before declaring a
-//!                                               teardown deadlock.
+//!     teardown deadlock.
 
 use nsi_ffi_wrap as nsi;
 use std::{
@@ -302,6 +302,9 @@ fn build_scene(
 /// Build a context (with an error handler) + scene, then run the full render
 /// lifecycle. Returns once `Start` (+ `Synchronize`) is issued via `started`,
 /// then blocks until `stop_rx` fires, runs `Stop` + `Wait`, and signals `done`.
+// One parameter per moving part of a context's lifecycle; bundling them into
+// a struct would only move the same list one level down.
+#[allow(clippy::too_many_arguments)]
 fn drive_context(
     label: String,
     image_name: String,

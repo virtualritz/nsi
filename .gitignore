@@ -1,3 +1,8 @@
 /target
 **/*.rs.bk
 Cargo.lock
+
+# Example render output.
+/dodecahedron.exr
+/dodecahedron.png
+/repro_shared

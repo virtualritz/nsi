@@ -373,7 +373,6 @@ impl Default for StreamConfig {
 impl StreamConfig {
     /// Default ring size when `stream.ring` is not set.
     pub const DEFAULT_RING: usize = 3;
-
     /// Smallest legal ring size (R3).
     pub const MIN_RING: usize = 2;
 
