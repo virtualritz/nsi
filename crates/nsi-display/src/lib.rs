@@ -6,6 +6,11 @@ pub use params::Params;
 mod bucket;
 pub use bucket::Bucket;
 
+mod shim;
+pub use shim::DisplayDriver;
+#[doc(hidden)]
+pub use shim::{shim_close, shim_data, shim_open, shim_query};
+
 pub use nsi_ffi_wrap::output::{Error, PixelFormat, PixelType};
 
 /// The result an author's driver methods return.
