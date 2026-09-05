@@ -190,6 +190,37 @@ mod tests {
         assert_eq!(owned.data, OwnedData::I32(vec![1280, 720]));
     }
 
+    /// The alignment check against `nsi`'s pointer-marshalling
+    /// contract (fixed upstream in 20ae58c).
+    ///
+    /// `Reference::as_c_ptr` yields `&self.data`, not `self.data` --
+    /// `data` addresses the array of values, and for a pointer-typed
+    /// parameter the value *is* the pointer. So the recorder must
+    /// dereference exactly one level to recover the host address.
+    /// One level too few and it would store the pointee's first eight
+    /// bytes; one too many and it would follow into the payload.
+    #[test]
+    fn records_a_reference_as_the_address_not_its_contents() {
+        let payload = Box::new(0xdead_beef_cafe_f00d_u64);
+        let expected = &*payload as *const u64 as usize;
+
+        let arg = nsi::reference!("outputdriver", &payload);
+        let owned = OwnedArg::from_param(&arg);
+
+        assert_eq!(owned.type_tag, Type::Reference);
+        match &owned.data {
+            OwnedData::Reference(pointers) => {
+                assert_eq!(pointers.len(), 1);
+                assert_eq!(
+                    pointers[0].0 as usize,
+                    expected,
+                    "recorder must store the payload's address"
+                );
+            }
+            other => panic!("expected Reference, got {other:?}"),
+        }
+    }
+
     #[test]
     fn owns_a_string() {
         let arg = nsi::string!("shaderfilename", "dlPrincipled");
