@@ -95,8 +95,7 @@ impl Nsi for Recorder {
         handle: &str,
         _args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        self.scene().delete(handle);
-        Ok(())
+        self.scene().delete(handle)
     }
 
     fn set_attribute(

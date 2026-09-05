@@ -20,6 +20,10 @@ where
     R: Nsi + 'ctx,
     for<'call> R: Nsi<Arg<'call> = nsi::Arg<'call, 'ctx>>,
 {
+    // `.global` is reserved: it carries attributes but is never
+    // declared, so a stream that emits `Create ".global" ""` diverges.
+    ctx.set_attribute(".global", &[nsi::i32!("renderatlowpriority", 1)])?;
+
     ctx.create("cam", "perspectivecamera", None)?;
     ctx.set_attribute("cam", &[nsi::f32!("fov", 45.0)])?;
     ctx.set_attribute("cam", &[nsi::string!("name", "hello")])?;
@@ -115,6 +119,11 @@ where
         "floats",
         &[nsi::reference_stable!("callbackdata", &PAYLOAD)],
     )?;
+
+    // An empty slice: 3Delight writes `[ ]`, so the bracket rule is
+    // "exactly one scalar is bare", not "more than one is bracketed".
+    let nothing: [f32; 0] = [];
+    ctx.set_attribute("floats", &[nsi::f32_slice!("empty", &nothing)])?;
 
     // A sample time that also discriminates the two formatters.
     ctx.set_attribute_at_time("floats", 1.0 / 3.0, &[nsi::f64!("t", 1.0)])?;

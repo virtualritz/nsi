@@ -71,6 +71,17 @@ pub enum ResolveError {
         /// The node that does not reach `.root`.
         handle: String,
     },
+    /// The node is an instancing prototype, so it has no single world
+    /// transform.
+    ///
+    /// A prototype reaches the scene through an `instances` node, and
+    /// ɴsɪ gives that node "a transformation matrix for each instance".
+    /// Answering with the instancer's own transform would put every
+    /// instance in the same, wrong place.
+    Instanced {
+        /// The `instances` node the prototype is connected to.
+        instancer: String,
+    },
     /// A node in the chain is motion-sampled, but has no sample at the
     /// requested time.
     ///
@@ -118,6 +129,12 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ node {handle:?} is not connected to {root:?}, so it \
                  is not in the scene and has no world transform",
                 root = crate::ROOT
+            ),
+            Self::Instanced { instancer } => write!(
+                f,
+                "ɴsɪ node is an instancing prototype of {instancer:?}, \
+                 which carries one transform per instance; there is no \
+                 single world transform for it"
             ),
             Self::MissingSampleAtTime {
                 handle,
@@ -222,6 +239,26 @@ impl Scene {
     /// node that never reaches the root -- are rejected in one place
     /// rather than each caller re-deriving them.
     fn chain(&self, handle: &str) -> Result<Vec<String>, ResolveError> {
+        self.chain_inner(handle, true)
+    }
+
+    /// The chain, refusing to pass through an `instances` node.
+    ///
+    /// Attribute gathering continues through one; transform composition
+    /// cannot, because an `instances` node holds one matrix per
+    /// instance rather than one for the prototype.
+    fn transform_chain(
+        &self,
+        handle: &str,
+    ) -> Result<Vec<String>, ResolveError> {
+        self.chain_inner(handle, false)
+    }
+
+    fn chain_inner(
+        &self,
+        handle: &str,
+        through_instances: bool,
+    ) -> Result<Vec<String>, ResolveError> {
         let mut chain = Vec::new();
         let mut seen = HashSet::new();
         let mut current = handle.to_string();
@@ -240,24 +277,40 @@ impl Scene {
                 break;
             }
 
+            // An instancing prototype is connected to an `instances`
+            // node through `sourcemodels`, never to `.root` directly.
+            let mut instancers = self.edges.iter().filter(|edge| {
+                edge.from == current && edge.kind == EdgeKind::InstanceSource
+            });
+
             let Some(first) = parents.next().or_else(|| {
-                // An instancing prototype is connected to an
-                // `instances` node through `sourcemodels`, never to
-                // `.root` directly. Its attributes are still gathered
-                // through that node, so the walk continues there rather
-                // than calling the prototype detached.
-                self.edges.iter().find(|edge| {
-                    edge.from == current
-                        && edge.kind == EdgeKind::InstanceSource
-                })
+                // `filter` here would consume the iterator even when the
+                // caller does not want it followed.
+                if through_instances {
+                    instancers.next()
+                } else {
+                    None
+                }
             }) else {
+                if let Some(edge) = instancers.next() {
+                    // Reached only through an `instances` node, and the
+                    // caller wants a transform. There is one per
+                    // instance, not one for the prototype.
+                    return Err(ResolveError::Instanced {
+                        instancer: edge.to.clone(),
+                    });
+                }
                 // No parent at all, and we never reached the root.
                 return Err(ResolveError::Detached { handle: current });
             };
 
-            // ɴsɪ's lightweight instancing. Refuse rather than answer
-            // for whichever parent happened to be connected first.
-            let rest = parents.map(|edge| edge.to.clone()).collect::<Vec<_>>();
+            // A prototype shared by two instancers has as little of a
+            // single answer as a node with two parents.
+            let others = instancers.map(|edge| edge.to.clone());
+            let rest = parents
+                .map(|edge| edge.to.clone())
+                .chain(others)
+                .collect::<Vec<_>>();
             if !rest.is_empty() {
                 let parents =
                     core::iter::once(first.to.clone()).chain(rest).collect();
@@ -295,7 +348,7 @@ impl Scene {
         &self,
         handle: &str,
     ) -> Result<[f64; 16], ResolveError> {
-        let chain = self.chain(handle)?;
+        let chain = self.transform_chain(handle)?;
 
         chain.iter().try_fold(IDENTITY, |matrix, node| {
             if self.has_motion_transform(node) {
@@ -322,7 +375,7 @@ impl Scene {
     ///
     /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`].
     pub fn motion_times(&self, handle: &str) -> Result<Vec<f64>, ResolveError> {
-        let chain = self.chain(handle)?;
+        let chain = self.transform_chain(handle)?;
 
         let mut times = chain
             .iter()
@@ -358,7 +411,7 @@ impl Scene {
         handle: &str,
         time: f64,
     ) -> Result<[f64; 16], ResolveError> {
-        let chain = self.chain(handle)?;
+        let chain = self.transform_chain(handle)?;
 
         chain.iter().try_fold(IDENTITY, |matrix, node| {
             Ok(match self.local_transform_at(node, time)? {
@@ -563,14 +616,25 @@ impl Scene {
     ///
     /// Mitsuba turns these into a `shapegroup` referenced by `instance`
     /// shapes; MoonRay into a `GeometrySet`. Both start from this list.
+    /// ɴsɪ: connections "must have an integer index attribute if there
+    /// are several, so the models effectively form an ordered list", and
+    /// an `instances` node's `modelindices` "is matched to the index
+    /// attribute of the model connection". So the list is ordered by
+    /// that index, not by connection order -- a backend indexes into it.
+    /// Connections without one share index `0` and keep their relative
+    /// connection order.
     pub fn instance_sources(&self, instances: &str) -> Vec<String> {
-        self.edges
+        let mut sources = self
+            .edges
             .iter()
             .filter(|edge| {
                 edge.to == instances && edge.kind == EdgeKind::InstanceSource
             })
-            .map(|edge| edge.from.clone())
-            .collect()
+            .enumerate()
+            .map(|(order, edge)| (edge.index(), order, edge.from.clone()))
+            .collect::<Vec<_>>();
+        sources.sort_by_key(|(index, order, _)| (*index, *order));
+        sources.into_iter().map(|(_, _, from)| from).collect()
     }
 
     /// This node's own matrix, if it carries one.
@@ -1067,6 +1131,14 @@ mod binding_tests {
     use crate::{OwnedArg, OwnedData, Scene};
     use nsi_trait::Type;
 
+    /// An ɴsɪ `"index"` connection argument.
+    fn index_arg(value: i32) -> OwnedArg {
+        OwnedArg {
+            name: "index".to_string(),
+            ..priority(value)
+        }
+    }
+
     /// An ɴsɪ `"priority"` connection argument.
     fn priority(value: i32) -> OwnedArg {
         OwnedArg {
@@ -1347,7 +1419,76 @@ mod binding_tests {
 
         let binding = scene.geometry_binding("proto").unwrap().expect("bound");
         assert_eq!(binding.surface_shader.as_deref(), Some("metal"));
-        assert!(scene.world_transform("proto").is_ok());
+    }
+
+    /// ...but it has no single world transform. ɴsɪ gives an
+    /// `instances` node "a transformation matrix for each instance", so
+    /// answering with the instancer's own would put every instance in
+    /// the same wrong place. Attributes gather through it; transforms
+    /// stop at it.
+    #[test]
+    fn a_prototype_has_no_single_world_transform() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform").unwrap();
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto", "mesh").unwrap();
+        scene.connect("xf", None, ".root", "objects").unwrap();
+        scene.connect("inst", None, "xf", "objects").unwrap();
+        scene
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+
+        assert_eq!(
+            scene.world_transform("proto"),
+            Err(crate::ResolveError::Instanced {
+                instancer: "inst".to_string()
+            })
+        );
+    }
+
+    /// A prototype shared by two instancers has as little of a single
+    /// answer as a node with two parents.
+    #[test]
+    fn a_prototype_of_two_instancers_is_ambiguous() {
+        let mut scene = Scene::default();
+        scene.create("proto", "mesh").unwrap();
+        for inst in ["one", "two"] {
+            scene.create(inst, "instances").unwrap();
+            scene.connect(inst, None, ".root", "objects").unwrap();
+            scene.connect("proto", None, inst, "sourcemodels").unwrap();
+        }
+
+        assert!(matches!(
+            scene.geometry_binding("proto"),
+            Err(crate::ResolveError::MultipleParents { .. })
+        ));
+    }
+
+    /// ɴsɪ orders instancing prototypes by the connection's `index`
+    /// attribute, which `modelindices` then selects into -- not by
+    /// connection order.
+    #[test]
+    fn instance_sources_are_ordered_by_their_index_attribute() {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances").unwrap();
+        for (handle, index) in [("third", 2), ("first", 0), ("second", 1)] {
+            scene.create(handle, "mesh").unwrap();
+            scene
+                .connect_with_args(
+                    handle,
+                    None,
+                    "inst",
+                    "sourcemodels",
+                    vec![priority(0), index_arg(index)],
+                )
+                .unwrap();
+        }
+
+        assert_eq!(
+            scene.instance_sources("inst"),
+            vec!["first", "second", "third"],
+            "connection order was third, first, second"
+        );
     }
 
     /// `attributes` is ordered by ɴsɪ's precedence, and the shader must

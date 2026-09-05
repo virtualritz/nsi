@@ -93,7 +93,10 @@ demonstrated rather than asserted.
 - R5: Connection classification is exhaustive; an unknown destination
   attribute is an error. A `from_attr` of `Some("")` is `None`. All
   three ɴsɪ shader slots -- `surfaceshader`, `displacementshader`,
-  `volumeshader` -- are classified.
+  `volumeshader` -- are classified, as are `members`, `lightset` and
+  `shaderattributes`: ɴsɪ's documented light-set workflow connects
+  lights to a `set` node and that node to an `outputlayer`, and
+  rejecting either destination made the whole workflow unrecordable.
 - R6: Node and attribute order is insertion order.
 - R7: Motion samples are stored separately from static attributes and
   sorted by time. Sample times are keyed by a *total* order, so a `NaN`
@@ -158,20 +161,31 @@ demonstrated rather than asserted.
   Both handles must already exist: "the nodes on which the connection is
   performed must exist". `.root` and `.global` are reserved and need no
   `create`.
-- R19: `disconnect` honours `.all` in all four positions, which is what
-  ɴsɪ means by "the handle for either node, as well as any or all of the
-  attributes, may be the special value `.all`".
+- R19: `disconnect` honours `.all` in all four positions -- the *source
+  attribute* included, which is what ɴsɪ means by "the handle for either
+  node, as well as any or all of the attributes".
 - R20: A node not connected to `.root` is not in the scene, and
   resolving one is an error rather than identity: ɴsɪ says such a node
   "won't affect the render in any way". An instancing prototype reaches
-  the scene through its `instances` node and is not detached.
+  the scene through its `instances` node, so its attributes gather
+  normally -- but it has no single world transform, because ɴsɪ gives an
+  `instances` node "a transformation matrix for each instance". Asking
+  for one is an error, not the instancer's own matrix.
+- R23: `.root` and `.global` are reserved. They need no `create`, they
+  are never declared in a replayed stream, and deleting one is an error:
+  ɴsɪ says "it is not possible to delete the root or the global node",
+  and deleting `.root` here would strip every membership edge.
+- R24: Instancing prototypes are ordered by the `"index"` argument of
+  their connection, which is what an `instances` node's `modelindices`
+  selects into -- not by connection order.
 - R21: A replayed stream is escaped. A string carrying a quote or a
   newline must not close its literal, because the reader would parse the
   remainder as further statements.
 - R22: Doubles replay as C's `%.17g`, which is what 3Delight writes.
   Argument flags replay as the letter prefixes it writes inside the type
   name. A `Reference` argument's parameter line is omitted, its
-  statement kept.
+  statement kept. Exactly one scalar is written bare; everything else is
+  bracketed, an empty slice included, which 3Delight writes as `[ ]`.
 
 ## Risks
 

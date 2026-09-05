@@ -123,8 +123,17 @@ fn trim_zeros(value: &str) -> String {
 
 /// Write `scene` as an ɴsɪ stream.
 pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
-    for (handle, node) in &scene.nodes {
-        writeln!(out, "Create {} {}", quoted(handle), quoted(&node.node_type))?;
+    for (handle, node) in scene.nodes() {
+        // ɴsɪ's reserved handles "don't need to be created using
+        // NSICreate", and 3Delight writes no `Create` for them.
+        if !crate::is_reserved(handle) {
+            writeln!(
+                out,
+                "Create {} {}",
+                quoted(handle),
+                quoted(&node.node_type)
+            )?;
+        }
 
         for arg in node.attrs.values() {
             writeln!(out, "SetAttribute {}", quoted(handle))?;
@@ -144,12 +153,12 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
         }
     }
 
-    for edge in &scene.edges {
+    for edge in scene.edges() {
         let (from_port, to_port) = match &edge.kind {
             EdgeKind::ShaderNetwork { from_port, to_port } => {
                 (from_port.as_str(), to_port.as_str())
             }
-            other => ("", to_attr_of(other)),
+            other => ("", other.to_attr()),
         };
         writeln!(
             out,
@@ -167,25 +176,6 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
     }
 
     Ok(())
-}
-
-/// The ɴsɪ destination attribute an [`EdgeKind`] came from.
-///
-/// Inverse of [`crate::classify`]; the two must stay in step.
-fn to_attr_of(kind: &EdgeKind) -> &'static str {
-    match kind {
-        EdgeKind::SceneMember => "objects",
-        EdgeKind::AttributeBinding => "geometryattributes",
-        EdgeKind::SurfaceShader => "surfaceshader",
-        EdgeKind::DisplacementShader => "displacementshader",
-        EdgeKind::VolumeShader => "volumeshader",
-        EdgeKind::InstanceSource => "sourcemodels",
-        EdgeKind::Screen => "screens",
-        EdgeKind::OutputLayer => "outputlayers",
-        EdgeKind::OutputDriver => "outputdrivers",
-        // Handled by the caller, which has the port names.
-        EdgeKind::ShaderNetwork { .. } => "",
-    }
 }
 
 /// Write one attribute line: two-space indent, name, type, count, data.
@@ -206,10 +196,14 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
         element_count(arg)
     )?;
 
-    // 3Delight brackets whenever there is more than one scalar, and
-    // leaves a lone scalar bare.
+    // 3Delight leaves exactly one scalar bare and brackets everything
+    // else -- an empty slice included, which it writes as `[ ]`.
     let scalars = scalar_count(arg);
-    if scalars > 1 {
+    if scalars == 0 {
+        // No values, so no separating space either.
+        return writeln!(out, "[ ]");
+    }
+    if scalars != 1 {
         write!(out, "[ ")?;
     }
 
@@ -230,7 +224,7 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
         OwnedData::Reference(_) => {}
     }
 
-    if scalars > 1 {
+    if scalars != 1 {
         write!(out, " ]")?;
     }
     writeln!(out)
@@ -355,6 +349,60 @@ mod tests {
         ] {
             assert_eq!(format_f64(value), expected, "for {value}");
         }
+    }
+
+    /// ɴsɪ's `.global` "doesn't need to be created using NSICreate",
+    /// and 3Delight declares neither reserved handle. Emitting one
+    /// produces a `Create ".global" ""` that no renderer wrote -- and
+    /// every real scene sets `.global`.
+    #[test]
+    fn the_reserved_handles_are_never_declared() {
+        let mut scene = Scene::default();
+        scene.set_attribute(
+            crate::GLOBAL,
+            vec![OwnedArg {
+                name: "renderatlowpriority".to_string(),
+                type_tag: Type::I32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::I32(vec![1]),
+            }],
+        );
+
+        let mut out = Vec::new();
+        write_stream(&scene, &mut out).expect("write");
+        let text = String::from_utf8(out).expect("utf-8");
+
+        assert!(
+            !text.contains("Create"),
+            "no Create for a reserved handle:\n{text}"
+        );
+        assert!(text.contains("SetAttribute \".global\""));
+    }
+
+    /// 3Delight writes an empty slice as `[ ]`, not as nothing. The rule
+    /// is "exactly one scalar is bare", not "more than one is
+    /// bracketed".
+    #[test]
+    fn an_empty_slice_still_brackets() {
+        let mut scene = Scene::default();
+        scene.create("m", "mesh").unwrap();
+        scene.set_attribute(
+            "m",
+            vec![OwnedArg {
+                name: "empty".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(Vec::new()),
+            }],
+        );
+
+        let mut out = Vec::new();
+        write_stream(&scene, &mut out).expect("write");
+        let text = String::from_utf8(out).expect("utf-8");
+
+        assert!(text.contains("[ ]"), "empty slice brackets:\n{text}");
     }
 
     /// A quote closes the literal and a newline ends the statement, so

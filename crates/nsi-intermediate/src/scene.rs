@@ -34,6 +34,21 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// The nodes, by handle, in creation order.
+    pub fn nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
+        self.nodes.iter()
+    }
+
+    /// One node by handle.
+    pub fn node(&self, handle: &str) -> Option<&Node> {
+        self.nodes.get(handle)
+    }
+
+    /// The classified connections, in connection order.
+    pub fn edges(&self) -> impl Iterator<Item = &Edge> {
+        self.edges.iter()
+    }
+
     /// Create a node.
     ///
     /// # Errors
@@ -74,9 +89,22 @@ impl Scene {
     ///
     /// `shift_remove` rather than `swap_remove`: insertion order is the
     /// replay order and must survive a delete.
-    pub fn delete(&mut self, handle: &str) {
-        self.nodes.shift_remove(handle);
-        self.edges.retain(|e| e.from != handle && e.to != handle);
+    ///
+    /// # Errors
+    ///
+    /// [`RecordError::Reserved`] for `.root` or `.global`. ɴsɪ: "it is
+    /// not possible to delete the root or the global node." Deleting
+    /// `.root` here would strip every membership edge in the scene.
+    pub fn delete(&mut self, handle: &str) -> Result<(), RecordError> {
+        if crate::is_reserved(handle) {
+            Err(RecordError::Reserved {
+                handle: handle.to_string(),
+            })
+        } else {
+            self.nodes.shift_remove(handle);
+            self.edges.retain(|e| e.from != handle && e.to != handle);
+            Ok(())
+        }
     }
 
     /// Whether `handle` names something a connection may refer to.
@@ -239,25 +267,31 @@ impl Scene {
         };
 
         let from_port = from_attr.unwrap_or_default();
+        let any_port = from_port == ALL;
 
         self.edges.retain(|edge| {
+            let port_matches = any_port
+                || match &edge.kind {
+                    EdgeKind::ShaderNetwork {
+                        from_port: port, ..
+                    } => port == from_port,
+                    _ => from_port.is_empty(),
+                };
+
+            let attr_matches = match &kind {
+                // A named `to_attr` fixes the class outright, unless the
+                // source port is `.all` -- then only the destination
+                // attribute is being matched.
+                Some(kind) if !any_port => &edge.kind == kind,
+                Some(kind) => edge.kind.to_attr() == kind.to_attr(),
+                None => true,
+            };
+
             let matches = (from == ALL || edge.from == from)
                 && (to == ALL || edge.to == to)
-                && match &kind {
-                    Some(kind) => &edge.kind == kind,
-                    // `to_attr` is `.all`: the source port still has to
-                    // match unless it too is `.all`.
-                    None => {
-                        from_port == ALL
-                            || match &edge.kind {
-                                EdgeKind::ShaderNetwork {
-                                    from_port: port,
-                                    ..
-                                } => port == from_port,
-                                _ => from_port.is_empty(),
-                            }
-                    }
-                };
+                && port_matches
+                && attr_matches;
+
             !matches
         });
 
@@ -335,7 +369,7 @@ mod tests {
         scene
             .connect("mesh", None, "xf", "objects")
             .expect("known attribute");
-        scene.delete("xf");
+        scene.delete("xf").unwrap();
         assert!(!scene.nodes.contains_key("xf"));
         assert!(scene.edges.is_empty());
     }
@@ -602,6 +636,47 @@ mod tests {
         scene.create("xf", "transform").unwrap();
         assert!(scene.connect("xf", None, crate::ROOT, "objects").is_ok());
         assert!(scene.connect("xf", None, crate::GLOBAL, "objects").is_ok());
+    }
+
+    /// ɴsɪ puts `.all` in *four* positions, the source attribute
+    /// included. Classifying `Some(".all")` as a port name makes it
+    /// match nothing, so the call is a silent no-op.
+    #[test]
+    fn disconnect_all_matches_every_source_attribute() {
+        let mut scene = Scene::default();
+        scene.create("s1", "shader").unwrap();
+        scene.create("s2", "shader").unwrap();
+        scene
+            .connect("s1", Some("outColor"), "s2", "inColor")
+            .unwrap();
+        scene
+            .connect("s1", Some("outAlpha"), "s2", "inColor")
+            .unwrap();
+
+        scene
+            .disconnect("s1", Some(crate::ALL), "s2", "inColor")
+            .unwrap();
+
+        assert!(scene.edges.is_empty(), "every source port matched");
+    }
+
+    /// ɴsɪ: "it is not possible to delete the root or the global node."
+    /// Deleting `.root` here would strip every membership edge in the
+    /// scene, quietly detaching everything.
+    #[test]
+    fn the_reserved_nodes_cannot_be_deleted() {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform").unwrap();
+        scene.connect("xf", None, crate::ROOT, "objects").unwrap();
+
+        assert_eq!(
+            scene.delete(crate::ROOT),
+            Err(RecordError::Reserved {
+                handle: crate::ROOT.to_string()
+            })
+        );
+        assert_eq!(scene.edges.len(), 1, "the scene is intact");
+        assert!(scene.delete(crate::GLOBAL).is_err());
     }
 
     /// ɴsɪ: re-`create` "does nothing if all other parameters match the

@@ -80,3 +80,40 @@ fn an_empty_source_port_is_not_a_port() {
     // And it still rejects, rather than falling back to a network edge.
     assert!(classify(Some(""), "nonsense").is_err());
 }
+
+/// ɴsɪ's documented light-set workflow connects lights to a `set` node,
+/// then that node to an `outputlayer`'s `lightset`. Rejecting either
+/// destination made the whole workflow unrecordable -- and a MoonRay
+/// `LightSet` is exactly this shape.
+#[test]
+fn set_membership_and_light_sets() {
+    assert_eq!(classify(None, "members").unwrap(), EdgeKind::SetMember);
+    assert_eq!(classify(None, "lightset").unwrap(), EdgeKind::LightSet);
+    assert_eq!(
+        classify(None, "shaderattributes").unwrap(),
+        EdgeKind::ShaderAttributes
+    );
+}
+
+/// `to_attr` is the inverse of `classify`, and the two must change
+/// together. This is the property the stream roundtrip proves for the
+/// classes it drives; this proves it for all of them.
+#[test]
+fn to_attr_inverts_classify_for_every_class() {
+    for name in [
+        "objects",
+        "geometryattributes",
+        "surfaceshader",
+        "displacementshader",
+        "volumeshader",
+        "sourcemodels",
+        "members",
+        "lightset",
+        "shaderattributes",
+        "screens",
+        "outputlayers",
+        "outputdrivers",
+    ] {
+        assert_eq!(classify(None, name).unwrap().to_attr(), name);
+    }
+}

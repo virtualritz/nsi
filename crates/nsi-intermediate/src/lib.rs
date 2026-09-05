@@ -100,6 +100,15 @@ pub const ROOT: &str = ".root";
 /// Reserved like [`ROOT`]: it need not be created.
 pub const GLOBAL: &str = ".global";
 
+/// Whether `handle` is one of ɴsɪ's reserved handles.
+///
+/// ɴsɪ: `.root` and `.global` "don't need to be created using
+/// NSICreate". They carry attributes and connections like any node, but
+/// a stream never declares them.
+pub fn is_reserved(handle: &str) -> bool {
+    handle == ROOT || handle == GLOBAL
+}
+
 /// ɴsɪ's wildcard handle and attribute name.
 ///
 /// `NSIDisconnect` accepts it for either node handle and for either

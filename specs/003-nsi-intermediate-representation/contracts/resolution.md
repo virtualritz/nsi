@@ -25,7 +25,9 @@ failed. A wrong world transform renders. A wrong material renders.
 | A cycle is a typed error, not a hang and not an answer | Covered | `resolve.rs` `chain` visited set | `resolve::tests::a_cycle_is_an_error`; `binding_tests::a_cycle_is_an_error_for_bindings_too` | Only a two-node cycle entered from inside it is proven. A self-loop and a node hanging off a cycle are correct by reading, not by test. |
 | More than one parent is a typed error | Covered | `resolve.rs` `chain` | `resolve::tests::more_than_one_parent_is_an_error`, naming both parents | -- |
 | A detached node is an error, not identity | Covered | `resolve.rs` `chain` `Detached` | `resolve::tests::a_detached_node_is_an_error_not_identity`, `detachment_is_reported_at_the_node_that_fails_to_reach_root` | -- |
-| An instancing prototype is not detached | Covered | `resolve.rs` `chain` follows `InstanceSource` | `binding_tests::an_instancing_prototype_is_not_detached` | -- |
+| An instancing prototype gathers attributes through its instancer | Covered | `resolve.rs` `chain` follows `InstanceSource` | `binding_tests::an_instancing_prototype_is_not_detached` | -- |
+| A prototype has no single world transform | Covered | `resolve.rs` `transform_chain` refuses to pass an `instances` node; `ResolveError::Instanced` | `binding_tests::a_prototype_has_no_single_world_transform`. Answering with the instancer's own matrix put every instance in the same wrong place. | -- |
+| A prototype of two instancers is ambiguous | Covered | `resolve.rs` `chain_inner` counts instancers as parents | `binding_tests::a_prototype_of_two_instancers_is_ambiguous` | -- |
 | A non-`f64` matrix is ignored, not reinterpreted | Covered | `resolve.rs` `matrix_of` matches `OwnedData::F64` only | `resolve::tests::a_non_f64_matrix_is_skipped_not_reinterpreted` | -- |
 | Motion-sampled transforms compose per sample | Covered | `resolve.rs` `world_transform_at`, `local_transform_at` | `resolve::tests::a_sampled_chain_resolves_per_sample`, `a_static_parent_composes_with_a_sampled_child` | -- |
 | A static node contributes at every time | Covered | `resolve.rs` `local_transform_at` | `resolve::tests::a_static_parent_composes_with_a_sampled_child`, `a_static_chain_has_no_motion_times` | -- |
@@ -49,11 +51,13 @@ failed. A wrong world transform renders. A wrong material renders.
 | Layer order is connection order | Covered | `resolve.rs` iterates `edges` in order | `output_tests::multiple_layers_keep_connection_order` | -- |
 | A layer may fan out to several drivers | Covered | `resolve.rs` `render_outputs` | `output_tests::a_layer_may_have_several_drivers` | -- |
 | Multiple screens yield multiple outputs | Covered | `resolve.rs` iterates every `Screen` edge | `output_tests::multiple_screens_yield_one_output_each` | -- |
-| Instance sources resolve in connection order | Covered | `resolve.rs` `instance_sources` | `instance_tests::resolves_instance_source_models` | -- |
+| Instance sources are ordered by their `index` argument | Covered | `resolve.rs` `instance_sources` sorts on `Edge::index` | `binding_tests::instance_sources_are_ordered_by_their_index_attribute`, whose connection order differs from its index order | -- |
+| Instance sources without an index keep connection order | Covered | `resolve.rs` sort key is `(index, order)` | `instance_tests::resolves_instance_source_models` | -- |
 | An instanced node resolves to one transform per path | Open | `resolve.rs` `chain` rejects multi-parent | None | ɴsɪ's lightweight instancing has one world transform per path. The error is the honest stop-gap; decide the shape -- `Vec<[f64; 16]>` or a path-qualified handle -- then test a two-parent fixture. |
 | `transformationmatrices` / `modelindices` on an `instances` node | Open | Not resolved; `matrix_of` requires exactly 16 values | None | ɴsɪ gives an `instances` node "a transformation matrix for each instance" and an optional model selector. `instance_sources` returns prototypes only, so a backend cannot place the instances. |
 | `INTERPOLATE_LINEAR` is honoured for a sampled transform | Open | `local_transform_at` requires an exact sample | None | ɴsɪ has a per-argument flag saying linear interpolation is intended. Where it is set, interpolating is the caller's stated wish rather than this crate's guess. |
 | Deforming geometry (`P` sampled) is resolvable | Open | `motion_times` is transform-only | None | A mesh whose `P` is sampled under a static transform reports no motion times. A backend needs the sample times of an arbitrary attribute. |
+| Resolution is linear in the scene | Open | `resolve.rs` `chain` scans every edge per hop; `geometry_binding` per chain node | None | Measured at roughly O(nodes x edges): a 20k-mesh scene takes minutes. An adjacency index built on `connect` fixes it, and needs `Scene`'s fields private first. |
 | Node types are never consulted | Partial | `resolve.rs` reads attributes, not types | Implicit in every test | Under the ɴsɪ documentation draft, `sourcemodels` is renamed `objects`, which would make `objects` mean two different things depending on the destination node's type. See `research.md` D10. |
 
 ## Invariants

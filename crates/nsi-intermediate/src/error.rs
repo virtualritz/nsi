@@ -16,6 +16,13 @@ use core::fmt;
 pub enum RecordError {
     /// A connection whose destination attribute has no mapping.
     Classify(ClassifyError),
+    /// A call tried to delete one of ɴsɪ's reserved nodes.
+    ///
+    /// ɴsɪ: "it is not possible to delete the root or the global node."
+    Reserved {
+        /// The reserved handle.
+        handle: String,
+    },
     /// A `connect` or `disconnect` named a handle that does not exist.
     ///
     /// ɴsɪ: "the nodes on which the connection is performed must
@@ -47,6 +54,10 @@ impl fmt::Display for RecordError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Classify(error) => error.fmt(f),
+            Self::Reserved { handle } => write!(
+                f,
+                "ɴsɪ node {handle:?} is reserved and cannot be deleted"
+            ),
             Self::UnknownHandle { handle } => write!(
                 f,
                 "ɴsɪ connection names node {handle:?}, which does not \
@@ -71,7 +82,9 @@ impl core::error::Error for RecordError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Classify(error) => Some(error),
-            Self::UnknownHandle { .. } | Self::TypeMismatch { .. } => None,
+            Self::Reserved { .. }
+            | Self::UnknownHandle { .. }
+            | Self::TypeMismatch { .. } => None,
         }
     }
 }

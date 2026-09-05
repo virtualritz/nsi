@@ -30,7 +30,7 @@ about such a scene. This is not a caveat on the gate; it is its domain.
 | A recorded scene replays as 3Delight's stream, within the preconditions | Covered | `stream.rs` `write_stream` | `stream_roundtrip::recorder_replays_what_3delight_writes`, against live 3Delight 2.9.207 | -- |
 | Scalar, string, colour, `int64` and `double` types emit correctly | Covered | `stream.rs` `base_type_name` | same test; `build` includes each | -- |
 | `array_len` emits as `type[n]` with count divided | Covered | `stream.rs` `type_name`, `element_count` | same test; `resolution` with `array_len(2)` | -- |
-| A lone scalar is bare, more than one is bracketed | Covered | `stream.rs` `write_arg` | same test | -- |
+| Exactly one scalar is bare; everything else is bracketed | Covered | `stream.rs` `write_arg` | `stream_roundtrip` carries an empty slice, which 3Delight writes as `[ ]`; `stream::tests::an_empty_slice_still_brackets`. The rule was "more than one is bracketed", which wrote an empty slice as nothing at all. | -- |
 | Motion samples emit as `SetAttributeAtTime` | Covered | `stream.rs` `write_stream` | same test; `build` sets one at `t=0.5` | -- |
 | Every connection class emits correctly | Covered | `stream.rs` `to_attr_of` and the port branch | same test; the fixture drives all seven non-shader classes, a shader-network edge, and a `Some("")` source port | -- |
 | Matrices emit as `matrix` / `doublematrix` | Covered | `stream.rs` `base_type_name` | same test; `build` sets a `matrix_f64!` `transformationmatrix` and a `matrix_f32!` `othermatrix`, and 3Delight's own stream is the expectation | -- |
@@ -42,6 +42,8 @@ about such a scene. This is not a caveat on the gate; it is its domain.
 | `connect` arguments emit | Covered | `stream.rs` writes `edge.args` under the `Connect` | `stream_roundtrip` connects with `"priority"`, which 3Delight writes as an indented parameter line | -- |
 | Strings are escaped | Covered | `stream.rs` `quoted` | `stream::tests::a_string_cannot_inject_a_statement`, `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`; `stream_roundtrip` carries a value holding a quote and a newline | -- |
 | Non-UTF-8 string bytes replay | Open | `owned.rs` `to_string_lossy` | None | The byte is lost at recording, not at replay; see `recording.md`. |
+
+| The reserved handles are never declared | Covered | `stream.rs` skips `Create` for `crate::is_reserved` | `stream::tests::the_reserved_handles_are_never_declared`; `stream_roundtrip` sets `.global`, which 3Delight never declares | -- |
 
 ## Invariants
 

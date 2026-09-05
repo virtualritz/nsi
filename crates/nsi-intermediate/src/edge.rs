@@ -11,7 +11,7 @@
 //! prevent: a misclassified connection does not fail loudly, it renders,
 //! with materials on the wrong shapes or output routed nowhere.
 
-use crate::OwnedArg;
+use crate::{OwnedArg, OwnedData};
 use core::fmt;
 
 /// What an ɴsɪ connection means, once classified.
@@ -36,6 +36,14 @@ pub enum EdgeKind {
     VolumeShader,
     /// `geo -> instances "sourcemodels"`.
     InstanceSource,
+    /// `node -> set "members"`. A `set` node groups nodes so one
+    /// connection stands for many.
+    SetMember,
+    /// `set -> outputlayer "lightset"`. ɴsɪ's documented light-set
+    /// workflow connects lights to a `set`, then the set here.
+    LightSet,
+    /// `shaderattributes -> geometry|transform "shaderattributes"`.
+    ShaderAttributes,
     /// `screen -> camera "screens"`.
     Screen,
     /// `outputlayer -> screen "outputlayers"`.
@@ -75,6 +83,31 @@ pub struct Edge {
     pub args: Vec<OwnedArg>,
 }
 
+impl EdgeKind {
+    /// The ɴsɪ destination attribute this class came from.
+    ///
+    /// Inverse of [`classify`] for every class but
+    /// [`EdgeKind::ShaderNetwork`], whose destination is a port name the
+    /// caller already holds. The two must change together.
+    pub fn to_attr(&self) -> &str {
+        match self {
+            Self::SceneMember => "objects",
+            Self::AttributeBinding => "geometryattributes",
+            Self::SurfaceShader => "surfaceshader",
+            Self::DisplacementShader => "displacementshader",
+            Self::VolumeShader => "volumeshader",
+            Self::InstanceSource => "sourcemodels",
+            Self::SetMember => "members",
+            Self::LightSet => "lightset",
+            Self::ShaderAttributes => "shaderattributes",
+            Self::Screen => "screens",
+            Self::OutputLayer => "outputlayers",
+            Self::OutputDriver => "outputdrivers",
+            Self::ShaderNetwork { to_port, .. } => to_port,
+        }
+    }
+}
+
 impl Edge {
     /// ɴsɪ's `"priority"` connection argument, or `0` when absent.
     ///
@@ -84,14 +117,27 @@ impl Edge {
     ///
     /// [`Scene::geometry_binding`]: crate::Scene::geometry_binding
     pub fn priority(&self) -> i32 {
+        self.integer_argument("priority")
+    }
+
+    /// ɴsɪ's `"index"` connection argument, or `0` when absent.
+    ///
+    /// ɴsɪ: connections to `sourcemodels` "must have an integer index
+    /// attribute if there are several, so the models effectively form an
+    /// ordered list", and an `instances` node's `modelindices` "is
+    /// matched to the index attribute of the model connection".
+    pub fn index(&self) -> i32 {
+        self.integer_argument("index")
+    }
+
+    /// One integer connection argument, or `0` when absent.
+    fn integer_argument(&self, name: &str) -> i32 {
         self.args
             .iter()
-            .find(|arg| arg.name == "priority")
+            .find(|arg| arg.name == name)
             .and_then(|arg| match &arg.data {
-                crate::OwnedData::I32(values) => values.first().copied(),
-                crate::OwnedData::I64(values) => {
-                    values.first().map(|v| *v as i32)
-                }
+                OwnedData::I32(values) => values.first().copied(),
+                OwnedData::I64(values) => values.first().map(|v| *v as i32),
                 _ => None,
             })
             .unwrap_or(0)
@@ -145,6 +191,9 @@ pub fn classify(
         "displacementshader" => EdgeKind::DisplacementShader,
         "volumeshader" => EdgeKind::VolumeShader,
         "sourcemodels" => EdgeKind::InstanceSource,
+        "members" => EdgeKind::SetMember,
+        "lightset" => EdgeKind::LightSet,
+        "shaderattributes" => EdgeKind::ShaderAttributes,
         "screens" => EdgeKind::Screen,
         "outputlayers" => EdgeKind::OutputLayer,
         "outputdrivers" => EdgeKind::OutputDriver,
