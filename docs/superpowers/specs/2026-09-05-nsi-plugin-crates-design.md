@@ -158,12 +158,13 @@ trait DisplayDriver: Sized {
   `write` takes `&self`. A driver cannot promise concurrency without the
   compiler holding it to it.
 
-Getting this wrong is not hypothetical. `nsi-ffi-wrap` today answers
-`multithread = 1` unconditionally (`output/mod.rs:732`) and then takes
-`&mut *fn_write` on a shared `Box<dyn FnWrite>` (`:822`), with no `Sync`
-bound on `WriteCallback::new`. If the renderer acts on that promise, two
-threads hold `&mut` to one `FnMut` at once. That is the bug this design
-is shaped to make unwritable.
+Getting this wrong is not hypothetical: `nsi-ffi-wrap` had exactly this
+bug. It answered `multithread = 1` while taking `&mut` to a shared
+`FnMut`, with no `Sync` bound anywhere. Fixed by making `FnWrite` be
+`Fn + Sync` and both `image_write` borrows shared -- Miri's race detector
+found a *second* race the first fix missed, on `DisplayData` itself.
+Neither existing example needed changing: both already used interior
+mutability. This design makes that class of bug unwritable.
 
 `ctx` is `&mut` because each `execute` call is handed its own
 `NSIContext_t`, so a fresh wrapper is constructed per call and nothing is
@@ -246,12 +247,11 @@ licensed 3Delight (see the licence-server note in `AGENTS.md`).
 
 ## Risks
 
-**The in-process driver's `multithread = 1`.** Independent of these two
-crates, `nsi-ffi-wrap`'s FERRIS path makes a concurrency promise it does
-not honour (see Threading above). Whether to answer `0` -- correct, at a
-possible throughput cost -- or to require `Sync` write callbacks is a
-decision for that crate, not this design, but the two should not
-disagree.
+**Feature-gating the bound was considered and rejected.** Cargo features
+must be additive; a `multithreaded_buckets` feature would add a *bound*,
+so any crate in the graph enabling it would break every other crate's
+non-`Sync` closures through feature unification. The bound is
+unconditional.
 
 **`crate-type = ["cdylib"]` and the `.dpy` extension.** The renderer
 looks for a specific filename; Cargo produces `libfoo.so`. The examples

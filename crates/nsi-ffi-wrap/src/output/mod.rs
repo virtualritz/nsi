@@ -318,7 +318,7 @@ trait FnOpen<'a> = FnMut(
 ///     ],
 /// );
 /// ```
-pub trait FnWrite<'a, T: PixelType>: FnMut(
+pub trait FnWrite<'a, T: PixelType>: Fn(
         // Filename.
         &str,
         // Full image width.
@@ -338,11 +338,12 @@ pub trait FnWrite<'a, T: PixelType>: FnMut(
         // Bucket pixel data (NOT the full image!).
         &[T],
     ) -> Error
+    + Sync
     + 'a {}
 
 #[doc(hidden)]
 impl<'a, T: PixelType, F> FnWrite<'a, T> for F where
-    F: FnMut(
+    F: Fn(
             &str,
             usize,
             usize,
@@ -353,6 +354,7 @@ impl<'a, T: PixelType, F> FnWrite<'a, T> for F where
             &PixelFormat,
             &[T],
         ) -> Error
+        + Sync
         + 'a
 {
 }
@@ -795,8 +797,12 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
         if image_handle_ptr.is_null() {
             return Error::BadParameters.into();
         }
+        // Shared, not exclusive. We answer `multithread = 1`, so the
+        // renderer may be inside this call on another thread; `&mut` here
+        // would be two exclusive references to one `DisplayData`. Every
+        // field read below is just that -- a read.
         let display_data =
-            unsafe { &mut *(image_handle_ptr as *mut DisplayData<T>) };
+            unsafe { &*(image_handle_ptr as *const DisplayData<T>) };
 
         let channels = display_data.pixel_format.channels();
         let bucket_width = (x_max_plus_one - x_min) as usize;
@@ -818,8 +824,13 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
 
         // Pass bucket directly to callback - NO memcpy, NO accumulation!
         if let Some(fn_write) = display_data.fn_write {
+            // Shared, not exclusive: we answer `multithread = 1` to
+            // `PkThreadQuery`, so the renderer may be inside this call on
+            // another thread right now. `FnWrite` is `Fn + Sync` for
+            // exactly that reason -- taking `&mut` here would be two
+            // exclusive references to one closure.
             // SAFETY: borrowed, renderer-owned; see `extract_callback`.
-            let fn_write = unsafe { &mut *fn_write };
+            let fn_write = unsafe { &*fn_write };
             fn_write(
                 &display_data.name,
                 display_data.width,
@@ -1037,7 +1048,15 @@ mod ffi_round_trip_tests {
     use super::*;
     use crate::{Arg, ArgData, Callback, argument::to_c_param_vec};
     use nsi_sys::NSIParam;
-    use std::{cell::Cell, ffi::CString, rc::Rc};
+    use std::{
+        cell::Cell,
+        ffi::CString,
+        rc::Rc,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
 
     /// One ɴsɪ parameter as it reaches a display driver.
     ///
@@ -1134,17 +1153,156 @@ mod ffi_round_trip_tests {
         drop(unsafe { Box::from_raw(recovered) });
     }
 
+    /// We answer `PkThreadQuery` with `multithread = 1`, so prove we
+    /// honour it: drive `image_write` from two threads at once on one
+    /// handle.
+    ///
+    /// `PkThreadQuery` is a 3Delight extension (`ndspy.h:167`) -- standard
+    /// ndspy has no thread negotiation and the renderer serialises calls
+    /// into the driver. Opting in is what makes `FnWrite: Fn + Sync`
+    /// necessary: `image_write` takes a *shared* reference to one closure
+    /// that two threads may be inside simultaneously. Taking `&mut` there
+    /// -- which this crate did until this test existed -- is two exclusive
+    /// references to the same `FnMut`.
+    ///
+    /// Run under Miri, whose data-race detector is the actual assertion:
+    ///
+    /// ```text
+    /// cargo +nightly miri test -p nsi-ffi-wrap --features output --lib \
+    ///     -- concurrent_buckets
+    /// ```
+    #[test]
+    fn concurrent_buckets_are_honoured_not_just_advertised() {
+        let mut info = ndspy_sys::PtDspyThreadInfo { multithread: 0 };
+        let error = image_query(
+            core::ptr::null_mut(),
+            ndspy_sys::PtDspyQueryType::Thread,
+            core::mem::size_of::<ndspy_sys::PtDspyThreadInfo>() as _,
+            &mut info as *mut _ as *mut c_void,
+        );
+        assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
+        assert_eq!(
+            1, info.multithread,
+            "we advertise concurrent buckets; the rest of this test is \
+             what earns the right to"
+        );
+
+        let seen = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&seen);
+
+        let args = [Arg::new(
+            "callback.write",
+            ArgData::from(Callback::new(WriteCallback::<f32>::new(
+                move |_: &str,
+                      _: usize,
+                      _: usize,
+                      _: usize,
+                      _: usize,
+                      _: usize,
+                      _: usize,
+                      _: &PixelFormat,
+                      pixels: &[f32]| {
+                    assert!(pixels.iter().all(|p| *p == 0.5));
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    Error::None
+                },
+            ))),
+        )];
+        let params = through_the_renderer(&args);
+        let user_params: Vec<_> = params
+            .iter()
+            .map(RendererParam::as_user_parameter)
+            .collect();
+
+        let layer_name = CString::new("beauty.000").unwrap();
+        let mut format = [ndspy_sys::PtDspyDevFormat {
+            name: layer_name.as_ptr(),
+            type_: 0,
+        }];
+        let mut flags = ndspy_sys::PtFlagStuff { flags: 0 };
+        let filename = CString::new("render").unwrap();
+        let driver = CString::new("ferris_f32").unwrap();
+        let mut handle: ndspy_sys::PtDspyImageHandle = core::ptr::null_mut();
+
+        assert_eq!(
+            ndspy_sys::PtDspyError::None as u32,
+            image_open::<f32>(
+                &mut handle,
+                driver.as_ptr(),
+                filename.as_ptr(),
+                4,
+                4,
+                user_params.len() as _,
+                user_params.as_ptr(),
+                format.len() as _,
+                format.as_mut_ptr(),
+                &mut flags,
+            ) as u32
+        );
+
+        let channels = PixelFormat::new(&format).channels();
+        let bucket = vec![0.5f32; 2 * 2 * channels];
+
+        // The renderer hands different regions to different threads; the
+        // handle and the closure behind it are shared. Carried in a
+        // newtype rather than as a `usize`, which would launder away the
+        // pointer's provenance and blind Miri to exactly what we are
+        // asking it to check.
+        struct Shared(ndspy_sys::PtDspyImageHandle);
+        // SAFETY: this is the renderer's contract under `multithread = 1`
+        // -- the handle is used from several threads at once.
+        unsafe impl Sync for Shared {}
+        let shared = Shared(handle);
+
+        std::thread::scope(|scope| {
+            for y in 0..2 {
+                let bucket = &bucket;
+                let shared = &shared;
+                scope.spawn(move || {
+                    let error = image_write::<f32>(
+                        shared.0,
+                        0,
+                        2,
+                        y * 2,
+                        y * 2 + 2,
+                        core::mem::size_of::<f32>() as _,
+                        bucket.as_ptr() as *const u8,
+                    );
+                    assert_eq!(
+                        ndspy_sys::PtDspyError::None as u32,
+                        error as u32
+                    );
+                });
+            }
+        });
+
+        assert_eq!(
+            2,
+            seen.load(Ordering::SeqCst),
+            "both concurrent buckets must reach the callback"
+        );
+
+        assert_eq!(
+            ndspy_sys::PtDspyError::None as u32,
+            image_close::<f32>(handle) as u32
+        );
+        // SAFETY: reclaim the one callback we handed over.
+        unsafe { WriteCallback::<f32>::drop_ptr(*params[0].cell) };
+    }
+
     /// The whole driver lifecycle, through the real trampolines: open, a
     /// bucket of pixels, then close. Nothing here calls out through the C
     /// API, so Miri executes every step and checks the memory it touches.
     #[test]
     fn the_driver_lifecycle_is_sound_end_to_end() {
         let opened = Rc::new(Cell::new(false));
-        let buckets = Rc::new(Cell::new(0usize));
+        // Not `Rc<Cell<_>>`: `FnWrite` is `Fn + Sync`, because the
+        // renderer may call the write path concurrently.
+        let buckets = Arc::new(AtomicUsize::new(0));
         let finished = Rc::new(Cell::new(false));
 
         let open_flag = Rc::clone(&opened);
-        let write_count = Rc::clone(&buckets);
+        let write_count = Arc::clone(&buckets);
         let finish_flag = Rc::clone(&finished);
 
         let args = [
@@ -1179,7 +1337,7 @@ mod ffi_round_trip_tests {
                             pixels.len()
                         );
                         assert!(pixels.iter().all(|p| *p == 0.5));
-                        write_count.set(write_count.get() + 1);
+                        write_count.fetch_add(1, Ordering::SeqCst);
                         Error::None
                     },
                 ))),
@@ -1244,7 +1402,11 @@ mod ffi_round_trip_tests {
             bucket.as_ptr() as *const u8,
         );
         assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
-        assert_eq!(1, buckets.get(), "the write callback must have run once");
+        assert_eq!(
+            1,
+            buckets.load(Ordering::SeqCst),
+            "the write callback must have run once"
+        );
 
         let error = image_close::<f32>(handle);
         assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
