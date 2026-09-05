@@ -1,14 +1,17 @@
 # `nsi` -- To Do
 
-- **Crash at process exit on the OIDN path.** With `interactive = 1` 3Delight
-  dispatches OIDN denoising to the GPU, and the process segfaults _after_ the
-  render completes and tears down cleanly (`RESULT: PASS`, then exit 139).
-  Reproduces with `examples/concurrent_interactive`; `NSI_DENOISE=0` is always
-  clean. **Pre-existing and unrelated to the FFI marshalling fix** -- measured
-  interleaved on the same machine, `master` and the fix both crash 8/8 with
-  denoising on and 0/4 with it off. The rate also swings with machine state
-  (the same binary was 1/4 earlier in the day and 12/12 later), so measure
-  interleaved or not at all. Never reproduces under `gdb`, so it is a race.
+- **Crash at process exit, root-caused.** `render_control(Stop)` + `Wait`
+  and `NSIEnd` all return while 3Delight is still finishing on detached
+  threads of its own. Ending the process out from under them is a SIGSEGV
+  *after* a clean render. `examples/concurrent_interactive` now waits before
+  returning (`NSI_EXIT_DELAY_MS`, default 500 ms; set it to `0` to reproduce)
+  and returns `ExitCode` instead of calling `std::process::exit`, which had
+  been skipping every destructor. Not a renderer bug: a pure-C harness of the
+  same shape -- in-process `DspyRegisterDriver` driver, interactive +
+  progressive, denoising, threaded driving, `exit()` with and without
+  `NSIEnd` -- did not crash once in 44 runs while the Rust harness crashed
+  in the same window. What remains is deciding whether `nsi` should offer a
+  real drain (akatela's `drain_teardowns`) rather than a sleep.
 
 - **Widen the Miri round-trip coverage.** `ffi_round_trip_tests` models the
   `FnOpen` journey only. `FnWrite` / `FnFinish` and a repeated

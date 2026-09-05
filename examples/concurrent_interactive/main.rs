@@ -30,6 +30,7 @@ use std::{
     env,
     io::Write,
     num::NonZeroUsize,
+    process::ExitCode,
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -384,7 +385,7 @@ fn drive_context(
     // ctx dropped here -> NSIEnd.
 }
 
-fn main() {
+fn main() -> ExitCode {
     // Block SIGUSR1 in the main thread *before* any other thread (ours or
     // 3Delight's) is spawned, so they all inherit the block. 3Delight runs a
     // dedicated thread that `sigwait`s on SIGUSR1 to dump stack traces; if any
@@ -570,9 +571,37 @@ fn main() {
         logln("RESULT: PASS (all contexts produced pixels and tore down)");
     }
 
-    // Flush before exit: process::exit() does not flush block-buffered stdout
-    // (which is what happens when output is piped/redirected), and a wedged
-    // render thread would otherwise keep the process alive.
+    // Let 3Delight settle before the process ends.
+    //
+    // `render_control(Stop)` + `Wait` returning does NOT mean 3Delight is
+    // finished: it finishes on detached threads that can outlive our
+    // teardown. Ending the process out from under them is a SIGSEGV *after*
+    // a completely clean render -- "green suite, dead harness". akatela hit
+    // exactly this (`drain_teardowns`, called from its `on_exit`) and
+    // answers it the same way.
+    //
+    // Measured here: 0 ms reproduces the crash ~5/6 runs, 500 ms never does.
+    // A pure-C harness of the same shape -- in-process display driver,
+    // interactive + progressive, threaded driving, `exit()` without
+    // `NSIEnd` -- does NOT crash in 44 runs, so this is our exit path, not
+    // a renderer bug.
+    let settle = std::env::var("NSI_EXIT_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(500);
+    if settle > 0 {
+        thread::sleep(Duration::from_millis(settle));
+    }
+
     let _ = std::io::stdout().flush();
-    std::process::exit(if any_no_pixels || any_deadlock { 1 } else { 0 });
+
+    // Deliberately NOT `std::process::exit()`. That skips every destructor,
+    // so a live `Context` never runs `NSIEnd` and the renderer is still
+    // mid-shutdown when libc tears the process down. Returning `ExitCode`
+    // gives the same exit status with destructors intact.
+    if any_no_pixels || any_deadlock {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }

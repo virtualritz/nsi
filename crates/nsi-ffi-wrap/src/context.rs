@@ -56,6 +56,25 @@ impl<'a> Drop for InnerContext<'a> {
 /// use a context directly this is not an issue but when you want to reference
 /// it somewhere the same rules as with all references apply.
 ///
+/// ## Never end the process with [`std::process::exit`]
+///
+/// `process::exit` runs no destructors. A live `Context` therefore never
+/// runs `NSIEnd`, and the renderer is still mid-shutdown when libc tears
+/// the process down -- a `SIGSEGV` *after* a completely clean render.
+///
+/// Dropping the `Context` is necessary but not sufficient: `NSIEnd`, and
+/// `render_control(Stop)` + `Wait` before it, return while 3Delight is
+/// still finishing on **detached threads of its own**. Ending the process
+/// out from under those threads crashes just the same, which is why
+/// `abort`, a panic in `main`, and a bare `return` from `main` with
+/// teardown handed to a detached thread are all equally unsafe here.
+///
+/// Return from `main` normally -- with [`std::process::ExitCode`] if you
+/// need a specific status -- and give the renderer a moment to settle
+/// first. See `examples/concurrent_interactive`, which waits before
+/// returning, and note that a pure-C harness of the same shape does not
+/// crash: this hazard is on our side of the FFI boundary, not 3Delight's.
+///
 /// ## Further Reading
 /// See the [ɴꜱɪ documentation on context
 /// handling](https://nsi.readthedocs.io/en/latest/c-api.html#context-handling).
