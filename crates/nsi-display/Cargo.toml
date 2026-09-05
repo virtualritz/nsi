@@ -17,5 +17,13 @@ repository = "https://github.com/virtualritz/nsi/"
 ndspy-sys = "0.2"
 nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = ["output"] }
 
+[dev-dependencies]
+nsi = { version = "0.9", path = "../..", features = ["output"] }
+png = "0.18"
+
+[[example]]
+name = "png_driver"
+crate-type = ["cdylib"]
+
 [package.metadata.docs.rs]
 all-features = true
