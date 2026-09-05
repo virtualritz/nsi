@@ -66,27 +66,39 @@ asserted. Recorded from `Type::Reference`; never dereferenced.
 | `priority` | `i32` | ɴsɪ's `"priority"` connect argument, `0` when absent. Read only by `geometry_binding`. Not part of edge identity: `disconnect` ignores it. |
 
 `EdgeKind` is one of `SceneMember`, `AttributeBinding`, `SurfaceShader`,
-`InstanceSource`, `Screen`, `OutputLayer`, `OutputDriver`,
-`ShaderNetwork { from_port, to_port }`.
+`DisplacementShader`, `VolumeShader`, `InstanceSource`, `Screen`,
+`OutputLayer`, `OutputDriver`, `ShaderNetwork { from_port, to_port }`.
 
 ### Resolved views
 
-`Binding { attributes, surface_shader }`,
+`Binding { attributes: Vec<String>, surface_shader, displacement_shader,
+volume_shader }` -- a list, because ɴsɪ considers *every* `attributes`
+node on the path;
 `RenderOutput { camera, screen, layers }`,
 `OutputLayer { handle, drivers }`. Produced on demand; not stored.
 
+### `RecordError`
+
+Why a recording call failed: `Classify`, `UnknownHandle { handle }`,
+`TypeMismatch { handle, existing, requested }`. One type across every
+`Nsi` method, so a consumer matches on one thing.
+
 ### `ResolveError`
 
-The three scenes ɴsɪ permits and this crate refuses to answer for:
-`MultipleParents { handle, parents }`, `MotionSampledTransform { handle }`
-and `Cycle { handle }`. Returned by `world_transform`; the first and
-third by `geometry_binding` too, since both walk the same chain.
+The scenes ɴsɪ permits and this crate refuses to answer for:
+`MultipleParents { handle, parents }`, `Cycle { handle }`,
+`Detached { handle }`, `MotionSampledTransform { handle }` and
+`MissingSampleAtTime { handle, time, available }`. Returned by
+`world_transform*`; the graph-shaped ones by `geometry_binding` too,
+since both walk the same chain.
 
 ### Constants
 
-`ROOT` (`".root"`) is ɴsɪ's root handle, the terminator of every chain
-walk. `IDENTITY` is a row-major 4x4 identity, the transform of a node
-with no matrices above it.
+`ROOT` (`".root"`) is ɴsɪ's root handle and the last entry of every
+chain walk. `GLOBAL` (`".global"`) is the options node. Both are
+reserved: ɴsɪ says they "don't need to be created". `ALL` (`".all"`) is
+the `disconnect` wildcard. `IDENTITY` is a row-major 4x4 identity, the
+transform of a node with no matrices above it.
 
 ## Derives
 
@@ -94,11 +106,20 @@ with no matrices above it.
 
 | Type | `PartialEq` | `Eq` / `Hash` | Why |
 | --- | --- | --- | --- |
-| `EdgeKind`, `Edge`, `ClassifyError`, `ResolveError`, `Binding`, `RenderOutput`, `OutputLayer`, `HostPtr`, `RenderState` | yes | yes | No float fields. `HostPtr` hashes the address, which is what it is. |
+| `EdgeKind`, `ClassifyError`, `RecordError`, `Binding`, `RenderOutput`, `OutputLayer`, `HostPtr`, `RenderState` | yes | yes | No float fields. `HostPtr` hashes the address, which is what it is. |
 | `OwnedArg`, `OwnedData` | yes | **no** | Both carry `f32`/`f64` payloads. See `research.md` D7. |
+| `Edge` | yes | **no** | Carries its connection arguments, which are `OwnedArg`. |
+| `ResolveError` | yes | **no** | `MissingSampleAtTime` carries the requested time and the available ones. |
 | `Node`, `Scene` | yes | **no** | Transitively contain `OwnedArg`. `PartialEq` alone still lets a test assert a whole scene is unchanged, which is how the `evaluate` no-op is proven. |
 
 `Copy` where derivable: `HostPtr`, `RenderState`.
+
+`#[non_exhaustive]` on `RecordError`, `ResolveError`, `EdgeKind`,
+`OwnedData` and `Binding`. Each grew a variant or a field during review,
+and each will grow again: ɴsɪ has more node types, more shader slots and
+more rules than this surface enforces. Marking them now means enforcing
+the next rule is not a breaking change for a backend that matches on
+them.
 
 ## Wire Formats
 

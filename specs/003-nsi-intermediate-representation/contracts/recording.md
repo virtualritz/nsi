@@ -27,18 +27,20 @@ connection classification (`classification.md`), graph resolution
 | `delete` removes the node and its edges | Covered | `scene.rs` `delete`, `recorder.rs` `delete` | `scene::tests::delete_removes_the_node_and_its_edges` and `recorder::tests::delete_through_the_trait_removes_the_node_and_its_edges` | -- |
 | `delete_attribute` removes one key, statics and samples | Covered | `scene.rs` `delete_attribute` walks `time_attrs` | `scene::tests::delete_attribute_removes_one_key`, `delete_attribute_removes_from_every_time_sample` | -- |
 | `disconnect` removes a recorded edge | Covered | `scene.rs` `disconnect`, `recorder.rs` `disconnect` | `scene::tests::disconnect_removes_only_the_named_edge`, `disconnect_rejects_an_unmapped_destination`, `disconnect_ignores_priority`; `recorder::tests::disconnect_through_the_trait_removes_one_edge`, `an_unmapped_disconnect_is_an_error` | -- |
-| `connect` records `"priority"` | Covered | `recorder.rs` `priority_of`, `scene.rs` `connect_with_priority` | `recorder::tests::connect_records_the_priority_argument` | -- |
+| `connect` records every argument, not just `"priority"` | Covered | `edge.rs` `Edge::args` / `Edge::priority`; `recorder.rs` `connect` | `recorder::tests::connect_records_the_priority_argument` | -- |
 | `render_control` drives the state machine | Covered | `recorder.rs` `render_control` | `recorder::tests::render_control_drives_the_state_machine`, `wait_and_synchronize_do_not_change_state` | -- |
 | `evaluate` is a recorded no-op | Covered | `recorder.rs` `evaluate` returns `Ok(())`; the decision is a `spec.md` non-goal | `recorder::tests::evaluate_is_a_recorded_no_op`, asserting the scene is unchanged | -- |
-| `connect` drops `"value"` and `"strength"` | Open | `recorder.rs` `priority_of` reads one name | None | `strength > 0` blocks a recursive `delete` in ɴsɪ. Decide whether that matters before a backend relies on it, then test or document. |
+| `"value"` and `"strength"` survive recording | Covered | `edge.rs` `Edge::args` keeps the arguments whole | `recorder::tests::connect_records_the_priority_argument` proves the vector is carried; `stream_roundtrip` replays a prioritised connection against 3Delight | -- |
 | `delete` drops its arguments, `recursive` included | Open | `recorder.rs` `delete` ignores `_args` | None | ɴsɪ's `recursive` delete removes a subgraph. Implement it or state the limitation as a non-goal. |
 | `create` drops its arguments | Open | `recorder.rs` `create` ignores `_args` | None | Determine whether any ɴsɪ `create` argument is load-bearing. |
-| `set_attribute` on an uncreated handle fabricates a node | Open | `scene.rs` `entry().or_default()` | None | ɴsɪ requires the node to exist. Silent fabrication is the fallback the blueprint forbids; make it a typed error, then test that `stream.rs` no longer emits a `Create` for it. |
-| `disconnect` with `.all` wildcards | Open | `scene.rs` `disconnect` classifies `to_attr` first | None | `NSIDisconnect` accepts `.all` for `to` and `to_attr`; today that fails `classify`, so a legal call errors. Support it or declare it a non-goal with its own error. |
-| Edge identity and duplicate connections | Open | `scene.rs` `connect` pushes unconditionally | None | ɴsɪ says re-creating a connection is not an error. A repeat currently doubles the layer in `render_outputs`. Define `(from, from_attr, to, to_attr)` as a set key and test the repeat. |
-| Non-UTF-8 strings survive recording | Open | `owned.rs` `to_string_lossy` | None | `to_string_lossy` replaces invalid bytes, so R3 "copied" is false for them and the stream would differ from 3Delight's. Decide: `Vec<u8>` storage, or a documented ASCII/UTF-8 precondition. |
-| `Type::Invalid` is not silently an empty `F32` | Open | `owned.rs` `Type::Invalid => OwnedData::F32(Vec::new())` | None | A silent fallback. Reject it, or add an `OwnedData::Invalid`. |
-| A `ParamValue` whose `as_c_param` is `None` | Open | `owned.rs` `.expect("nsi-ffi-wrap Arg always yields a C view")` | None | `from_param` is generic and `nsi-trait` documents `None` as legal, so a non-`Arg` implementor panics. Narrow the bound or return a `Result`. |
+| A connection to an uncreated handle is refused | Covered | `scene.rs` `is_known`, `RecordError::UnknownHandle` | `scene::tests::connecting_an_uncreated_handle_is_an_error`, `the_reserved_handles_need_no_create` | -- |
+| `set_attribute` on an uncreated handle still fabricates one | Open | `scene.rs` `entry().or_default()` | None | `connect` now refuses unknown handles; `set_attribute` does not, so a typo still invents a node that replay emits as an empty `Create`. Reserve `.root`/`.global`, then make the rest an error. |
+| `disconnect` honours `.all` in all four positions | Covered | `scene.rs` `disconnect`, `lib.rs` `ALL` | `scene::tests::disconnect_all_matches_every_source` (ɴsɪ's own documented example), `disconnect_all_matches_destinations_and_attributes`, `disconnect_with_an_all_attribute_is_not_a_classify_error` | -- |
+| A repeated `connect` updates rather than duplicates | Covered | `scene.rs` `connect_with_args` matches on `(from, to, kind)` | `scene::tests::a_repeated_connect_updates_rather_than_duplicates`; without it the node reads as having two parents and its whole subtree fails to resolve | -- |
+| Re-`create` with a different type is refused | Covered | `scene.rs` `create`, `RecordError::TypeMismatch` | `scene::tests::recreating_with_a_different_type_is_an_error`, `recreating_with_the_same_type_is_a_no_op` | -- |
+| The two setters replace each other per name | Covered | `scene.rs` `set_attribute` clears samples; `set_attribute_at_time` clears the static value | `scene::tests::a_static_set_clears_the_motion_samples_of_that_name`, `a_sampled_set_clears_the_static_value_of_that_name` | -- |
+| Non-UTF-8 strings survive recording | Open | `owned.rs` `to_string_lossy` | None | 3Delight round-trips the raw byte as an escape; this crate replaces it with U+FFFD at *recording* time, so it is gone before replay could escape it. The boundary is upstream: `nsi-ffi-wrap` `String::new` takes `Into<Vec<u8>>`. Making that `AsRef<str>` renders non-UTF-8 unrepresentable rather than checked, and this row becomes a note. |
+| A foreign `ParamValue` panics or falls back | Open | `owned.rs` `.expect(...)`, `Type::Invalid => F32(vec![])` | None | Neither is reachable through `Recorder`: the `Arg` GAT pins it to `nsi_ffi_wrap::Arg`, whose `as_c_param` never returns `None` and which has no `Invalid`. Both need a *foreign* implementor of the `pub` `OwnedArg::from_param`. Narrow it to `pub(crate)` and drop this row, or return a `Result`. |
 
 ## Invariants
 
@@ -58,8 +60,10 @@ connection classification (`classification.md`), graph resolution
   continuing from an unknown state.
 - **Deadlock.** `Recorder::scene` returns a guard over the lock every
   `Nsi` method takes. Recording through the same `Recorder` while a
-  guard is alive deadlocks the calling thread. Documented on the method;
-  not designed away.
+  guard is alive deadlocks the calling thread, with no diagnostic. It is
+  easier to hit than it looks: two calls in *one expression*, as in
+  `r.scene().nodes.len() + r.scene().edges.len()`, hold two guards at
+  once and block forever. Documented on the method; not designed away.
 - **A malformed `Reference`** cannot be detected. A pointer is opaque;
   the recorder stores what it is given.
 - **A leaked `Callback`.** Accepted, per R14.

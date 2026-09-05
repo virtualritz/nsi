@@ -14,7 +14,10 @@ R10 names the preconditions and every row below inherits them:
 - One attribute per `set_attribute` call.
 - A node's static attributes set before its motion samples, because
   `write_stream` emits `attrs` before `time_attrs` per node.
-- No repeated `create` for one handle.
+- No repeated `create` for one handle: 3Delight logs the second call and
+  a recorder holds one node.
+- Every `create` and `set_attribute` before every `connect`, because
+  replay emits a scene's nodes before its edges.
 - No `delete`, `delete_attribute` or `disconnect`.
 
 Outside these the two differ by construction, and the gate says nothing
@@ -31,12 +34,14 @@ about such a scene. This is not a caveat on the gate; it is its domain.
 | Motion samples emit as `SetAttributeAtTime` | Covered | `stream.rs` `write_stream` | same test; `build` sets one at `t=0.5` | -- |
 | Every connection class emits correctly | Covered | `stream.rs` `to_attr_of` and the port branch | same test; the fixture drives all seven non-shader classes, a shader-network edge, and a `Some("")` source port | -- |
 | Matrices emit as `matrix` / `doublematrix` | Covered | `stream.rs` `base_type_name` | same test; `build` sets a `matrix_f64!` `transformationmatrix` and a `matrix_f32!` `othermatrix`, and 3Delight's own stream is the expectation | -- |
-| Floats format as 3Delight formats them | Partial | `stream.rs` `write_scalars` uses Rust `Display` | The fixture's values (`45`, `0.1`, `0.5`, `1280`, matrix entries) agree with 3Delight's `printf` | Rust's `Display` and C's `printf` are different algorithms that happen to agree on short decimals. Add a value that discriminates -- `1e-7`, `0.1f32` widened, a large `f64` -- and see which is right. |
-| Sample *times* format as 3Delight formats them | Partial | `stream.rs` `SetAttributeAtTime` writes `{time}` via `Display` | Only `0.5` is exercised | Same as above, for the time field. |
-| Argument flags emit correctly | Open | `owned.rs` records `flags`; `stream.rs` never writes them | None | `per_vertex`, `per_face` and `linear_interpolation` are recorded and dropped on replay. Determine how 3Delight writes them, then emit them. |
-| A `Reference` argument | Open | `stream.rs` `OwnedData::Reference => {}` omits the payload but `write_arg` has already written the header | None | The current output is a `"name" "pointer" 1 ` line with no value, which is malformed. Whether 3Delight omits the whole statement or writes something is **an assumption either way**; capture a 3Delight stream containing a `Reference` and match it. |
-| A repeated `create` | Open | `scene.rs` `create` updates in place | None | 3Delight logs a second `Create`; the recorder has one node. Observed while extending the fixture. Document as a precondition or reconcile. |
-| `connect` arguments emit | Open | `stream.rs` writes no arguments on `Connect` | None | `"priority"` is now recorded but never replayed, so a prioritised scene diverges. Emit it. |
+| Doubles format as 3Delight formats them | Covered | `stream.rs` `format_f64`, C `%.17g` | `stream::tests::doubles_format_the_way_3delight_writes_them` pins the captured values; `stream_roundtrip` drives `0.1`, `1/3`, `1e-7`, `1e20` and `-0.0` through live 3Delight | -- |
+| Sample *times* format the same way | Covered | `stream.rs` writes the time through `format_f64` | `stream_roundtrip` sets a sample at `1.0 / 3.0`, which the two formatters render differently | -- |
+| Argument flags emit correctly | Covered | `stream.rs` `flag_prefix`, letters inside the type name | `stream_roundtrip` sets `per_vertex`, `per_face` and `linear_interpolation`, which 3Delight writes as `"v point"`, `"f float"` and `"l float"` | -- |
+| A `Reference` argument omits its parameter line | Covered | `stream.rs` `write_arg` returns before the header | `stream_roundtrip` sets one; 3Delight keeps the `SetAttribute` statement and writes no parameter. The previous behaviour emitted a header with no value, which is malformed. | -- |
+| A repeated `create` | Covered | `scene.rs` `create` is a no-op for a matching type and an error otherwise | `scene::tests::recreating_with_the_same_type_is_a_no_op`. 3Delight logs the repeated call and the recorder does not, so this stays an R10 precondition. | -- |
+| `connect` arguments emit | Covered | `stream.rs` writes `edge.args` under the `Connect` | `stream_roundtrip` connects with `"priority"`, which 3Delight writes as an indented parameter line | -- |
+| Strings are escaped | Covered | `stream.rs` `quoted` | `stream::tests::a_string_cannot_inject_a_statement`, `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`; `stream_roundtrip` carries a value holding a quote and a newline | -- |
+| Non-UTF-8 string bytes replay | Open | `owned.rs` `to_string_lossy` | None | The byte is lost at recording, not at replay; see `recording.md`. |
 
 ## Invariants
 

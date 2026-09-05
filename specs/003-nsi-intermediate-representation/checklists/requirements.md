@@ -30,24 +30,27 @@ Checks that this spec set does not overclaim.
 - [x] No row is `Covered` on the strength of the suite passing alone;
       each names the test that proves it.
 - [x] Known gaps are `Open`, not omitted. The ones that matter:
-      - per-sample motion transforms (`world_transform_at`), which is
-        now a loud error rather than a wrong answer;
-      - per-path transforms for an instanced node, likewise;
-      - `set_attribute` on an uncreated handle, which fabricates one;
-      - `disconnect` with `.all`, a legal ɴsɪ call that errors;
-      - edge identity, so a repeated `connect` doubles a layer;
-      - `Reference` in the stream, still an assumption;
-      - float formatting, which agrees with 3Delight by luck;
-      - argument flags and `connect` arguments, recorded and dropped;
-      - non-UTF-8 strings and `Type::Invalid`, both silent fallbacks.
+      - per-path transforms for an instanced node, and an `instances`
+        node's own `transformationmatrices`;
+      - `INTERPOLATE_LINEAR` on a sampled transform, which ɴsɪ provides
+        and this crate ignores;
+      - deforming geometry, whose sampled `P` reports no motion times;
+      - `set_attribute` on an uncreated handle, which still fabricates
+        one even though `connect` no longer does;
+      - non-UTF-8 strings, lost at recording rather than at replay;
+      - `recursive` delete;
+      - the attribute vocabulary, legacy versus documentation draft.
 - [x] `Covered` rows state what they do **not** prove where that is not
       obvious: `recorder_is_send_and_sync` proves the auto-trait and not
       the soundness argument behind it.
 - [x] The fidelity gate's domain is stated as preconditions rather than
       implied to be general. Outside them the recorder and 3Delight
       differ by construction.
-- [x] A rule that was chosen rather than observed says so: `priority`'s
-      direction and tie-break are `Partial` pending a 3Delight check.
+- [x] A rule that was chosen rather than quoted says so. Two rounds of
+      review found this surface inventing semantics `nsi.pdf` already
+      defines, so every requirement now quotes the specification where
+      one exists, and `research.md` D8 records the entry that was itself
+      wrong rather than quietly correcting it.
 - [x] `stream.md` records that a missing 3Delight is a failed
       prerequisite, not a pass.
 - [x] Accepted limitations are stated as such: grouping loss in

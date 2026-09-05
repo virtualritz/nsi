@@ -91,11 +91,16 @@ demonstrated rather than asserted.
 - R4: `Type::Reference` stores the host address, never its contents, and
   is never forwarded to a renderer as an object link.
 - R5: Connection classification is exhaustive; an unknown destination
-  attribute is an error. A `from_attr` of `Some("")` is `None`.
+  attribute is an error. A `from_attr` of `Some("")` is `None`. All
+  three ɴsɪ shader slots -- `surfaceshader`, `displacementshader`,
+  `volumeshader` -- are classified.
 - R6: Node and attribute order is insertion order.
 - R7: Motion samples are stored separately from static attributes and
   sorted by time. Sample times are keyed by a *total* order, so a `NaN`
-  time matches itself and `-0.0` is distinct from `0.0`.
+  time matches itself and `-0.0` is distinct from `0.0`. The two setters
+  replace each other per name, as ɴsɪ requires: "Setting an attribute
+  using this function replaces any value previously set by
+  `NSISetAttribute` or `NSISetAttributeAtTime`."
 - R8: Transform chains compose in row-vector order.
 - R9: A malformed scene containing a cycle must not hang the resolver,
   and must not answer it either: it is a typed error.
@@ -108,12 +113,29 @@ demonstrated rather than asserted.
 - R11: A node with more than one `objects` parent is ɴsɪ's lightweight
   instancing. Resolving a single world transform for one is a typed
   error, not an answer for whichever parent was connected first.
-- R12: `geometryattributes` bound to an ancestor transform is inherited
-  by its descendants. Among candidates the winner is: highest
-  `"priority"`, then nearest the geometry, then connection order.
-- R13: A motion-sampled `transformationmatrix` is a typed error until
-  per-sample composition exists. Returning the static transform would
-  hand a motion-blurred scene back its unblurred pose.
+- R12: Attributes are gathered along the whole path, "starting from the
+  geometric primitive, through all the transform nodes it is connected
+  to, until the scene root is reached" -- `.root` included, since ɴsɪ
+  describes it as "much like a transform node" carrying its own
+  `geometryattributes`.
+
+  *Every* `attributes` node on that path is kept, because ɴsɪ says so:
+  "one attributes node can set object visibility and another can set the
+  surface shader ... and will all be considered". They are ordered by
+  ɴsɪ's rule -- "the definition with the highest priority is selected.
+  In case of conflicting priorities, the definition that is the closest
+  to the geometric primitive" -- and connection order breaks a remaining
+  tie. Each shader slot resolves by the priority of its own connection,
+  which ɴsɪ calls "useful for overriding a shader from higher in the
+  scene graph", and agrees with that same order.
+- R13: A motion-sampled `transformationmatrix` resolves per sample.
+  `motion_times` gives the chain's sample times, `world_transform_at` one
+  composed matrix, and `world_transform_samples` the pair. A node with no
+  samples is constant and contributes at every time. Nothing is ever
+  interpolated: element-wise interpolation of a matrix is wrong for
+  anything containing a rotation, so a time between samples is an error
+  naming the times that exist. `world_transform` remains the static
+  accessor and still refuses a sampled chain.
 - R14: A `Callback` argument leaks its payload. `Callback::type_`
   reports `Type::Reference`, so a recorder cannot distinguish one, and
   `Callback::drop_fn` is `pub(crate)` to `nsi-ffi-wrap`, so it could not
@@ -121,9 +143,35 @@ demonstrated rather than asserted.
 - R15: `Recorder::scene` returns a guard over the lock every `Nsi`
   method takes. Calling one while a guard is alive deadlocks. This is
   documented on the method rather than designed away.
-- R16: Of the arguments ɴsɪ allows on `connect`, only `"priority"` is
-  recorded, because R12 needs it. `"value"` and `"strength"` are
-  dropped, as are the arguments to `create` and `delete`.
+- R16: Every `connect` argument is recorded whole, so `"strength"` --
+  which blocks a recursive delete -- and `"value"` survive for a backend,
+  and replay emits what was passed. The arguments to `create` and
+  `delete` are still dropped.
+- R17: A node's identity is its handle. Re-`create` with the same type is
+  a no-op and with a different type an error, because ɴsɪ says it
+  "does nothing if all other parameters match ... Otherwise, it emits an
+  error".
+- R18: A connection's identity is `(from, from_attr, to, to_attr)`.
+  Repeating one updates its arguments rather than recording a second
+  edge, because ɴsɪ says "it is not an error to create a connection
+  which already exists" -- and a duplicate would read as a second parent.
+  Both handles must already exist: "the nodes on which the connection is
+  performed must exist". `.root` and `.global` are reserved and need no
+  `create`.
+- R19: `disconnect` honours `.all` in all four positions, which is what
+  ɴsɪ means by "the handle for either node, as well as any or all of the
+  attributes, may be the special value `.all`".
+- R20: A node not connected to `.root` is not in the scene, and
+  resolving one is an error rather than identity: ɴsɪ says such a node
+  "won't affect the render in any way". An instancing prototype reaches
+  the scene through its `instances` node and is not detached.
+- R21: A replayed stream is escaped. A string carrying a quote or a
+  newline must not close its literal, because the reader would parse the
+  remainder as further statements.
+- R22: Doubles replay as C's `%.17g`, which is what 3Delight writes.
+  Argument flags replay as the letter prefixes it writes inside the type
+  name. A `Reference` argument's parameter line is omitted, its
+  statement kept.
 
 ## Risks
 
@@ -147,7 +195,15 @@ demonstrated rather than asserted.
   behaviour it does not exercise -- argument flags, float formatting,
   `Reference` payloads -- is unproven however green the gate is. Named
   per row in `contracts/stream.md` rather than folded into R10.
-- **Silently ignored call parameters.** ɴsɪ's `recursive` delete and
-  connection `strength` change what a scene means, and are dropped. R16
-  makes that a decision; the `Open` rows in `contracts/recording.md`
-  make it a tracked one.
+- **Silently ignored call parameters.** ɴsɪ's `recursive` delete is
+  still dropped. R16 makes that a decision; the `Open` row in
+  `contracts/recording.md` makes it a tracked one.
+- **Reading the wrapper rather than the specification.** Two review
+  rounds found this surface inventing semantics ɴsɪ already defines,
+  because the `nsi-ffi-wrap` docstrings summarise where `nsi.pdf`
+  states. Every requirement above now quotes the specification, and a
+  rule that is chosen rather than quoted says so.
+- **Non-UTF-8 strings are still lossy.** `to_string_lossy` replaces
+  invalid bytes at *recording* time, so the byte is gone before replay
+  can escape it. 3Delight round-trips it as `\xE9`. Tracked as an `Open`
+  row; it needs byte storage, not an escaping change.

@@ -89,28 +89,63 @@ them with `f64::total_cmp`. Under `==` a `NaN` time never matches
 itself, so every repeat appends another sample and the vector grows
 without bound.
 
-### D8: `priority` beats proximity, and the direction is unverified
+### D8: `priority` is documented, and the first version of this entry
+was wrong
 
-ɴsɪ documents `connect`'s `"priority"` as indicating "in which order the
-nodes should be considered when evaluating the value of an attribute".
-It does not say whether a higher number wins, nor how ties break.
+An earlier draft recorded that ɴsɪ "does not say whether a higher number
+wins, nor how ties break", and marked the row `Partial` on that basis.
+That was true of the `nsi-ffi-wrap` docstring and false of the
+specification, which states: "the definition with the highest priority
+is selected. In case of conflicting priorities, the definition that is
+the closest to the geometric primitive (i.e. the furthest from the root)
+is selected."
 
-`geometry_binding` implements: highest priority, then nearest the
-geometry, then connection order. Higher-wins matches the ordinary
-reading of the word and 3Delight's behaviour as understood, but it has
-**not** been observed against the renderer, so the row in
-`contracts/resolution.md` is `Partial` and says so.
+The implemented rule -- priority, then proximity -- happened to match.
+The reasoning did not, and a row was `Partial` for a reason that did not
+exist.
 
-The mechanism -- recording `priority` on the edge, ordering candidates
-by it -- is right whichever way the comparison points. Only the
-comparison would change.
+**The lesson is the entry.** This surface is built against a published
+specification, and two review rounds found it inventing semantics that
+`nsi.pdf` already defines, because the Rust wrapper's docstrings
+summarise where the specification states. Read `nsi.pdf` first. Where a
+rule here is chosen rather than quoted, the contract row says so.
+
+Connection order remains the third tie-break and is *not* in the
+specification, which instead says such nodes "will all be considered" --
+which is why `Binding::attributes` is a list rather than a winner.
+
+### D10: The legacy attribute spelling, not the documentation draft
+
+The ɴsɪ documentation draft renames most attributes:
+`geometryattributes` to `attributes`, `surfaceshader` to
+`shader.surface`, `transformationmatrix` to `matrix`, and -- on an
+`instances` node -- `sourcemodels` to `objects`.
+
+This crate keeps the legacy spelling, because that is what the renderer
+it is verified against writes: 3Delight 2.9.207 emits `surfaceshader`
+and `geometryattributes` in its own `apistream` output, and the stream
+gate compares against that.
+
+**The rename that matters is `sourcemodels` to `objects`.** Under the
+draft, `objects` would mean scene membership on a transform and an
+instancing source on an `instances` node, so classification could no
+longer depend on the destination attribute alone -- and
+`contracts/classification.md`'s invariant "never on node types" would
+have to go. The other renames fail loudly, because `classify` rejects an
+unknown destination. That one fails silently: the walk would treat an
+`instances` node as a parent transform.
+
+**Rejected:** supporting both spellings now. Two vocabularies with no
+renderer to test the second against is a guess wearing a compatibility
+shim.
 
 ### D9: Refusing beats a plausible wrong matrix
 
-Three scenes have no single world transform: more than one `objects`
-parent, a cycle, and a motion-sampled `transformationmatrix`. Each was
-previously answered -- with the first parent's chain, with whatever
-composed before a budget ran out, and with the static pose.
+Several scenes have no single world transform: more than one `objects`
+parent, a cycle, a node that never reaches `.root`, and -- before the
+motion API -- a sampled `transformationmatrix`. Each was previously
+answered: with the first parent's chain, with whatever composed before a
+budget ran out, with identity, and with the static pose.
 
 All three are silent. A wrong matrix renders. The blueprint forbids
 silent fallback on required data, so all three became `ResolveError`

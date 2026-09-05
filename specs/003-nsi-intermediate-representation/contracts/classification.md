@@ -21,6 +21,7 @@ which is why every class carries its own row.
 | `objects` is scene membership | Covered | `edge.rs` `classify` | `classifier::scene_membership` | -- |
 | `geometryattributes` is an attribute binding | Covered | `edge.rs` `classify` | `classifier::geometry_attributes_dissolve` | -- |
 | `surfaceshader` is a material reference | Covered | `edge.rs` `classify` | `classifier::surface_shader_is_a_material_reference` | -- |
+| `displacementshader` and `volumeshader` are shader references | Covered | `edge.rs` `classify` | `binding_tests::displacement_and_volume_shaders_resolve_too`; before this both were rejected, so no displaced or volumetric scene could be recorded | -- |
 | `sourcemodels` is an instance source | Covered | `edge.rs` `classify` | `classifier::instancing_source_models` | -- |
 | `screens`, `outputlayers`, `outputdrivers` are output routing | Covered | `edge.rs` `classify` | `classifier::output_chain` | -- |
 | A named source port is a shader-network edge | Covered | `edge.rs` `classify` early return on `from_attr` | `classifier::a_named_output_port_is_a_shader_network_edge` | -- |

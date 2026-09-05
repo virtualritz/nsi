@@ -1,12 +1,29 @@
 [package]
 name = "nsi-intermediate"
 version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
 rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
 description = "Renderer-agnostic intermediate representation for the Nodal Scene Interface – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-intermediate/"
 repository = "https://github.com/virtualritz/nsi/"
+# Whitelist rather than blacklist, as the workspace root does: an
+# `exclude` list once shipped `.claude/` inside this very crate. The
+# stream gate is excluded deliberately -- it needs 3Delight and a
+# licence server, so shipping it makes `cargo test` fail for anyone who
+# installs the package without a renderer.
+include = [
+    "src/**/*",
+    "tests/classifier.rs",
+    "/Cargo.toml",
+    "/README.md",
+]
 
 [dependencies]
 indexmap = "2"
@@ -19,3 +36,6 @@ indexmap = "2"
 # on, which is the whole point of it living here.
 nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap" }
 nsi-trait = { version = "0.3", path = "../nsi-trait" }
+
+[package.metadata.docs.rs]
+all-features = true

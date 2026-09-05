@@ -3,9 +3,10 @@
 Landed tasks are kept as the record of what shipped. Open tasks are the
 `Partial` and `Open` contract rows, and nothing else.
 
-Counts below are the modules as they stand: `owned` 5, `scene` 13,
-`recorder` 13, `resolve` 26 (across `tests`, `binding_tests`,
-`output_tests`, `instance_tests`), `classifier` 8, `stream_roundtrip` 1.
+Counts below are the modules as they stand: `owned` 5, `scene` 23,
+`recorder` 13, `stream` 3, `resolve` 41 (19 `tests`, 14 `binding_tests`,
+6 `output_tests`, 2 `instance_tests`), `classifier` 8,
+`stream_roundtrip` 1. Lib total 85; 94 with the integration tests.
 
 ## User Story 1: Record An ɴsɪ Scene (P1)
 
@@ -43,20 +44,29 @@ Counts below are the modules as they stand: `owned` 5, `scene` 13,
 - [x] T1.12 Key motion samples on a total order.
       Evidence: `scene::tests::a_nan_sample_time_matches_itself`,
       `negative_zero_is_a_distinct_sample_time`. Spec: R7.
-- [ ] T1.13 `set_attribute` on an uncreated handle is a typed error.
-      Gate: `contracts/recording.md` uncreated-handle row. It currently
-      fabricates a node, and `stream.rs` then emits a `Create` 3Delight
-      never wrote.
-- [ ] T1.14 `disconnect` with `.all` for `to` and `to_attr`.
-      Gate: `contracts/recording.md` `.all` row. A legal ɴsɪ call today
-      fails `classify`.
-- [ ] T1.15 Define edge identity as `(from, from_attr, to, to_attr)`.
-      Gate: `contracts/recording.md` edge-identity row. A repeated
-      `connect` doubles a layer in `render_outputs`.
-- [ ] T1.16 Decide `recursive` delete and connection `strength`.
-      Gate: the two `Open` ignored-argument rows.
-- [ ] T1.17 Decide non-UTF-8 strings and `Type::Invalid`.
-      Gate: the two `Open` `owned.rs` rows. Both are silent fallbacks.
+- [x] T1.13a `connect` refuses an uncreated handle.
+      Evidence: `scene::tests::connecting_an_uncreated_handle_is_an_error`,
+      `the_reserved_handles_need_no_create`. Spec: R18.
+- [ ] T1.13b `set_attribute` on an uncreated handle still fabricates
+      one. Gate: `contracts/recording.md` uncreated-handle row.
+- [x] T1.14 `disconnect` honours `.all` in all four positions.
+      Evidence: `scene::tests::disconnect_all_matches_every_source`,
+      `disconnect_all_matches_destinations_and_attributes`,
+      `disconnect_with_an_all_attribute_is_not_a_classify_error`.
+      Spec: R19.
+- [x] T1.15 Edge identity is `(from, from_attr, to, to_attr)`; a repeat
+      updates rather than duplicates.
+      Evidence: `scene::tests::a_repeated_connect_updates_rather_than_duplicates`.
+      Spec: R18.
+- [x] T1.16a Connection arguments survive whole, `"strength"` and
+      `"value"` included. Evidence: `edge.rs` `Edge::args`;
+      `recorder::tests::connect_records_the_priority_argument`.
+      Spec: R16.
+- [ ] T1.16b `recursive` delete is still dropped.
+- [ ] T1.17 Non-UTF-8 strings. The loss is at recording, not replay:
+      the boundary is `nsi-ffi-wrap` `String::new`, which takes
+      `Into<Vec<u8>>`. Making it `AsRef<str>` renders the bad case
+      unrepresentable. Gate: `contracts/recording.md`.
 
 ## User Story 2: Know What A Connection Means (P1)
 
@@ -99,17 +109,20 @@ Counts below are the modules as they stand: `owned` 5, `scene` 13,
       `priority_beats_proximity`;
       `recorder::tests::connect_records_the_priority_argument`.
       Spec: R12.
-- [ ] T3.5b **`world_transform_at(handle, time)`.** The API decision,
-      then a two-sample chain. Requires deciding interpolation between
-      samples. Gate: `contracts/resolution.md` motion row. Still the
-      largest known gap; it is now loud rather than wrong.
+- [x] T3.5b `world_transform_at`, `motion_times` and
+      `world_transform_samples`. Decided: never interpolate, because
+      element-wise interpolation of a matrix is wrong for anything with
+      a rotation in it. An unsampled time is an error naming the times
+      that exist. Evidence: `resolve::tests` motion cases, 7. Spec: R13.
 - [ ] T3.11 Per-path transforms for an instanced node.
       Gate: `contracts/resolution.md` instancing row. T3.8 refuses the
       case; this answers it.
-- [ ] T3.12 Confirm `priority`'s direction and tie-break against
-      3Delight. Gate: `contracts/resolution.md` `priority` row, which is
-      `Partial` because the rule is chosen, not observed.
-- [ ] T3.13 Decide whether `surfaceshader` honours `priority` too.
+- [x] T3.12 `priority`'s direction and tie-break are in `nsi.pdf`, not
+      merely plausible: highest wins, then closest to the geometry. The
+      question was answered by reading the specification. See
+      `research.md` D8.
+- [x] T3.13 Every shader slot honours its connection's `priority`.
+      Evidence: `binding_tests::a_surfaceshader_connection_priority_wins`.
 
 ## User Story 4: Fidelity (P2)
 
@@ -123,14 +136,51 @@ Counts below are the modules as they stand: `owned` 5, `scene` 13,
       them while extending the fixture: static attributes must precede
       motion samples, and a handle must not be `create`d twice.
       Spec: R10; `contracts/stream.md` Preconditions.
-- [ ] T4.3 Determine whether 3Delight emits `Reference` arguments.
-      Gate: `contracts/stream.md` `Reference` row. The current output
-      writes a header with no value, which is malformed either way.
-- [ ] T4.5 Discriminate Rust `Display` from C `printf` float formatting.
-      Gate: the two `Partial` float rows. The fixture's values agree by
-      luck, not by construction.
-- [ ] T4.6 Emit argument flags (`per_vertex`, `per_face`,
-      `linear_interpolation`). Gate: `contracts/stream.md` flags row.
-      They are recorded and dropped.
-- [ ] T4.7 Emit `connect` arguments, `"priority"` above all. It is now
-      recorded but never replayed, so a prioritised scene diverges.
+- [x] T4.3 3Delight keeps the statement and omits the parameter line.
+      Evidence: `stream_roundtrip` carries a `Reference`.
+- [x] T4.5 Doubles are C `%.17g`; Rust `Display` differs on four of
+      five probe values. Evidence:
+      `stream::tests::doubles_format_the_way_3delight_writes_them`, and
+      the roundtrip fixture's discriminating values.
+- [x] T4.6 Flags are letter prefixes inside the type name.
+      Evidence: `stream_roundtrip` sets all three.
+- [x] T4.7 Connection arguments emit as indented lines under `Connect`.
+      Evidence: `stream_roundtrip` connects with `"priority"`.
+
+## Found By Review, Round 2
+
+Every item here is quoted from `nsi.pdf`. Each was implemented, not
+merely specced; see the commit `follow ɴsɪ's own rules`.
+
+- [x] T5.1 Gather **every** `attributes` node on the path, not one.
+      Evidence: `binding_tests::every_attributes_node_on_the_path_is_gathered`.
+      Spec: R12.
+- [x] T5.2 Include `.root` in the chain.
+      Evidence: `binding_tests::a_binding_on_the_root_is_gathered`.
+- [x] T5.3 The shader agrees with the gathered order.
+      Evidence: `binding_tests::the_shader_agrees_with_the_gathered_order`.
+- [x] T5.4 Classify `displacementshader` and `volumeshader`.
+      Evidence: `binding_tests::displacement_and_volume_shaders_resolve_too`.
+- [x] T5.5 The two setters replace each other per name.
+      Evidence: `scene::tests::a_static_set_clears_the_motion_samples_of_that_name`,
+      `a_sampled_set_clears_the_static_value_of_that_name`. Spec: R7.
+- [x] T5.6 Re-`create` with a different type is an error.
+      Evidence: `scene::tests::recreating_with_a_different_type_is_an_error`.
+      Spec: R17.
+- [x] T5.7 A detached node is an error, and a prototype is not detached.
+      Evidence: `resolve::tests::a_detached_node_is_an_error_not_identity`,
+      `binding_tests::an_instancing_prototype_is_not_detached`. Spec: R20.
+- [x] T5.8 Escape strings on replay.
+      Evidence: `stream::tests::a_string_cannot_inject_a_statement`,
+      `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`.
+      Spec: R21.
+- [x] T5.9 `RecordError`, `#[non_exhaustive]`, as the one recorder error.
+- [ ] T5.10 Per-path transforms for an instanced node, and an
+      `instances` node's `transformationmatrices` / `modelindices`.
+      Gate: two `Open` rows in `contracts/resolution.md`.
+- [ ] T5.11 Honour `INTERPOLATE_LINEAR` on a sampled transform.
+- [ ] T5.12 Sample times of an arbitrary attribute, for deforming
+      geometry whose `P` is sampled under a static transform.
+- [ ] T5.13 Decide the attribute vocabulary: legacy or the documentation
+      draft. `sourcemodels` to `objects` is the rename that fails
+      silently. See `research.md` D10.
