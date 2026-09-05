@@ -1,0 +1,24 @@
+[package]
+name = "nsi-record"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Renderer-agnostic recorder for the Nodal Scene Interface – ɴsɪ."
+repository = "https://github.com/virtualritz/nsi-mitsuba/"
+
+[dependencies]
+indexmap = "2"
+# `nsi-ffi-wrap` is here for its `Arg` type only -- it is the shared
+# argument currency across backends, so consumers keep using the
+# `nsi::point_slice!` family unchanged. Constructing an `Arg` loads no
+# renderer; the dynamic loader only runs on `Context::new`.
+#
+# Git rather than path so this repository builds on its own. Cargo.lock
+# pins the revision. To develop against a local `nsi`, add to the
+# workspace Cargo.toml:
+#
+#     [patch."https://github.com/virtualritz/nsi.git"]
+#     nsi-ffi-wrap = { path = "../nsi/crates/nsi-ffi-wrap" }
+#     nsi-trait = { path = "../nsi/crates/nsi-trait" }
+nsi-ffi-wrap = { git = "https://github.com/virtualritz/nsi.git" }
+nsi-trait = { git = "https://github.com/virtualritz/nsi.git" }
