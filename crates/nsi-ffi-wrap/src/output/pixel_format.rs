@@ -215,8 +215,7 @@ impl LayerDepth {
 ///     |_: String,
 ///      _: usize,
 ///      _: usize,
-///      pixel_format: nsi::output::PixelFormat,
-///      _: Vec<f32>| {
+///      pixel_format: nsi::output::PixelFormat| {
 ///         // Dump all layer descriptions to stdout.
 ///         for layer in &*pixel_format {
 ///             println!("{:?}", layer);

@@ -180,6 +180,17 @@ pub enum ArgData<'a, 'b> {
     ///
     /// ```
     /// # use nsi_ffi_wrap as nsi;
+    /// struct Payload {
+    ///     some_data: u32,
+    /// }
+    ///
+    /// // The referenced data must be declared BEFORE the context: the
+    /// // context borrows it for its own lifetime, so it has to outlive
+    /// // the context and therefore be dropped after it.
+    /// //
+    /// // Heap allocation gives the payload a stable address.
+    /// let payload = Box::new(Payload { some_data: 42 });
+    ///
     /// let ctx = nsi::Context::new(None).unwrap();
     ///
     /// // Lots of scene setup omitted ...
@@ -189,25 +200,15 @@ pub enum ArgData<'a, 'b> {
     /// ctx.create("driver", nsi::OUTPUT_DRIVER, None);
     /// ctx.connect("driver", None, "beauty", "outputdrivers", None);
     ///
-    /// struct Payload {
-    ///     some_data: u32,
-    /// }
-    ///
-    /// // Must use heap allocation for stable address
-    /// let payload = Box::new(Payload { some_data: 42 });
     /// ctx.set_attribute(
     ///     "driver",
     ///     &[
     ///         nsi::string!("drivername", "custom_driver"),
     ///         // Payload gets sent as raw pointer through
-    ///         // the FFI boundary. The Box ensures stable address.
+    ///         // the FFI boundary.
     ///         nsi::reference!("payload", &payload),
     ///     ],
     /// );
-    ///
-    /// // We need to explicitly call drop here as
-    /// // ctx's lifetime is pegged to that of payload.
-    /// drop(ctx);
     /// ```
     Reference(Reference<'b>),
     /// A [`Reference`] slice.
