@@ -3,6 +3,9 @@
 mod params;
 pub use params::Params;
 
+mod bucket;
+pub use bucket::Bucket;
+
 pub use nsi_ffi_wrap::output::{Error, PixelFormat, PixelType};
 
 /// The result an author's driver methods return.
