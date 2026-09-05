@@ -40,3 +40,32 @@ jobs:
         run: cargo build -p nsi-stream --features vulkan
       - name: Build nsi-stream (delight-bridge)
         run: cargo build -p nsi-stream --features delight-bridge
+
+  # Miri over the unsafe FFI marshalling and the display-driver lifecycle.
+  #
+  # The driver trampolines never call out through the C API, so Miri can
+  # execute open -> write -> close in full and check every pointer it
+  # touches, plus leaks. The three tests filtered out here (`tests::*`)
+  # `dlopen` lib3delight, which Miri cannot do.
+  #
+  # Both aliasing models are run: Stacked Borrows is the default, Tree
+  # Borrows is stricter about the raw-pointer patterns this crate uses.
+  miri:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Miri
+        run: |
+          rustup toolchain install nightly --component miri
+          cargo +nightly miri setup
+      - name: Miri (stacked borrows)
+        run: >
+          cargo +nightly miri test -p nsi-ffi-wrap --features output --lib --
+          pointer_marshalling ffi_round_trip argument::tests param_value
+      - name: Miri (tree borrows)
+        env:
+          MIRIFLAGS: -Zmiri-tree-borrows
+        run: >
+          cargo +nightly miri test -p nsi-ffi-wrap --features output --lib --
+          pointer_marshalling ffi_round_trip argument::tests param_value

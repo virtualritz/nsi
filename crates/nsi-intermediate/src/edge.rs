@@ -76,7 +76,10 @@ impl core::error::Error for ClassifyError {}
 ///
 /// A `from_attr` means the source names an output port, which only
 /// happens for shader-network edges.
-pub fn classify(from_attr: Option<&str>, to_attr: &str) -> Result<EdgeKind, ClassifyError> {
+pub fn classify(
+    from_attr: Option<&str>,
+    to_attr: &str,
+) -> Result<EdgeKind, ClassifyError> {
     // A named source port is always a shader network edge, whatever the
     // destination is called.
     if let Some(from_port) = from_attr {

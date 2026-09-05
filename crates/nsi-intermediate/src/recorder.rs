@@ -67,7 +67,6 @@ impl Nsi for Recorder {
     /// `'call` is the transient borrow. The context-bound lifetime is
     /// `'static`; see the type's documentation for why.
     type Arg<'call> = Arg<'call, 'static>;
-
     type Error = ClassifyError;
 
     fn create(
@@ -80,12 +79,20 @@ impl Nsi for Recorder {
         Ok(())
     }
 
-    fn delete(&self, handle: &str, _args: Option<&[Self::Arg<'_>]>) -> Result<(), Self::Error> {
+    fn delete(
+        &self,
+        handle: &str,
+        _args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
         self.scene().delete(handle);
         Ok(())
     }
 
-    fn set_attribute(&self, handle: &str, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
+    fn set_attribute(
+        &self,
+        handle: &str,
+        args: &[Self::Arg<'_>],
+    ) -> Result<(), Self::Error> {
         let owned = Self::own(args);
         self.scene().set_attribute(handle, owned);
         Ok(())
@@ -102,7 +109,11 @@ impl Nsi for Recorder {
         Ok(())
     }
 
-    fn delete_attribute(&self, handle: &str, name: &str) -> Result<(), Self::Error> {
+    fn delete_attribute(
+        &self,
+        handle: &str,
+        name: &str,
+    ) -> Result<(), Self::Error> {
         self.scene().delete_attribute(handle, name);
         Ok(())
     }

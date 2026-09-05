@@ -1023,23 +1023,69 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
 }
 
 /// End-to-end shape of a callback's journey through the FFI boundary.
+///
+/// The driver trampolines are pure Rust -- they never call out through the
+/// C API -- so Miri can execute the whole lifecycle, which is what makes
+/// these a proof rather than a smoke test. Run them with:
+///
+/// ```text
+/// cargo +nightly miri test -p nsi-ffi-wrap --features output --lib -- \
+///     pointer_marshalling ffi_round_trip
+/// ```
 #[cfg(test)]
 mod ffi_round_trip_tests {
     use super::*;
     use crate::{Arg, ArgData, Callback, argument::to_c_param_vec};
+    use nsi_sys::NSIParam;
     use std::{cell::Cell, ffi::CString, rc::Rc};
 
-    /// Models what happens between `set_attribute` and `DspyImageOpen`:
+    /// One ɴsɪ parameter as it reaches a display driver.
+    ///
+    /// Models the two hops between `set_attribute` and `DspyImageOpen`:
     ///
     /// 1. ɴsɪ copies one `void*` **out of** `NSIParam::data` and keeps its
     ///    own copy -- `data` addresses the value, it is not the value.
     /// 2. ndspy hands the driver the address of *that copy*, so
     ///    `UserParameter::value` is a `void**` into renderer memory.
     ///
-    /// Step 2 is why the callback we reconstruct must never be dropped as
-    /// if we owned its outermost pointer: that pointer belongs to the
-    /// renderer. Here the renderer's copy lives on the stack, so freeing
-    /// it is detectable rather than merely unlucky.
+    /// Verified against lib3delight 2.9.208 with a probe driver.
+    struct RendererParam {
+        name: CString,
+        /// The renderer's own copy of the pointer. Boxed so its address is
+        /// stable and distinct from ours, exactly like renderer memory.
+        cell: Box<*const c_void>,
+    }
+
+    impl RendererParam {
+        fn new(name: &str, param: &NSIParam) -> Self {
+            // SAFETY: `data` addresses one `NSITypePointer` value.
+            let value = unsafe { *(param.data as *const *const c_void) };
+            Self {
+                name: CString::new(name).unwrap(),
+                cell: Box::new(value),
+            }
+        }
+
+        fn as_user_parameter(&self) -> ndspy_sys::UserParameter {
+            ndspy_sys::UserParameter {
+                name: self.name.as_ptr(),
+                valueType: b'p' as _,
+                valueCount: 1,
+                value: &*self.cell as *const *const c_void as *const c_void,
+                nbytes: core::mem::size_of::<*const c_void>() as _,
+            }
+        }
+    }
+
+    /// Marshals `args` and returns them as the driver would see them.
+    fn through_the_renderer(args: &[Arg]) -> Vec<RendererParam> {
+        let (_, _, params) = to_c_param_vec(Some(args));
+        args.iter()
+            .zip(params.iter())
+            .map(|(arg, param)| RendererParam::new(arg.name.as_str(), param))
+            .collect()
+    }
+
     #[test]
     fn open_callback_survives_the_round_trip() {
         let ran = Rc::new(Cell::new(false));
@@ -1054,22 +1100,9 @@ mod ffi_round_trip_tests {
                 },
             ))),
         )];
-        let (_, _, params) = to_c_param_vec(Some(&args));
-
-        // 1. The renderer's own copy of the pointer.
-        // SAFETY: `data` addresses one `NSITypePointer` value.
-        let renderer_copy: *const c_void =
-            unsafe { *(params[0].data as *const *const c_void) };
-
-        // 2. ndspy passes the address of that copy.
-        let name = CString::new("callback.open").unwrap();
-        let user_params = [ndspy_sys::UserParameter {
-            name: name.as_ptr(),
-            valueType: b'p' as _,
-            valueCount: 1,
-            value: &renderer_copy as *const *const c_void as *const c_void,
-            nbytes: core::mem::size_of::<*const c_void>() as _,
-        }];
+        let seen = through_the_renderer(&args);
+        let user_params: Vec<_> =
+            seen.iter().map(RendererParam::as_user_parameter).collect();
 
         let recovered = extract_callback::<dyn FnOpen>(
             "callback.open",
@@ -1099,5 +1132,140 @@ mod ffi_round_trip_tests {
         // Miri's leak check is the assertion here.
         // SAFETY: nothing else owns this allocation.
         drop(unsafe { Box::from_raw(recovered) });
+    }
+
+    /// The whole driver lifecycle, through the real trampolines: open, a
+    /// bucket of pixels, then close. Nothing here calls out through the C
+    /// API, so Miri executes every step and checks the memory it touches.
+    #[test]
+    fn the_driver_lifecycle_is_sound_end_to_end() {
+        let opened = Rc::new(Cell::new(false));
+        let buckets = Rc::new(Cell::new(0usize));
+        let finished = Rc::new(Cell::new(false));
+
+        let open_flag = Rc::clone(&opened);
+        let write_count = Rc::clone(&buckets);
+        let finish_flag = Rc::clone(&finished);
+
+        let args = [
+            Arg::new(
+                "callback.open",
+                ArgData::from(Callback::new(OpenCallback::new(
+                    move |_: &str, w: usize, h: usize, _: &PixelFormat| {
+                        assert_eq!((4, 4), (w, h));
+                        open_flag.set(true);
+                        Error::None
+                    },
+                ))),
+            ),
+            Arg::new(
+                "callback.write",
+                ArgData::from(Callback::new(WriteCallback::<f32>::new(
+                    move |_: &str,
+                          _: usize,
+                          _: usize,
+                          x_min: usize,
+                          x_max: usize,
+                          y_min: usize,
+                          y_max: usize,
+                          format: &PixelFormat,
+                          pixels: &[f32]| {
+                        // The bucket must be exactly the region announced,
+                        // one f32 per channel per pixel.
+                        assert_eq!(
+                            (x_max - x_min)
+                                * (y_max - y_min)
+                                * format.channels(),
+                            pixels.len()
+                        );
+                        assert!(pixels.iter().all(|p| *p == 0.5));
+                        write_count.set(write_count.get() + 1);
+                        Error::None
+                    },
+                ))),
+            ),
+            Arg::new(
+                "callback.finish",
+                ArgData::from(Callback::new(FinishCallback::new(
+                    move |_: String, _: usize, _: usize, _: PixelFormat| {
+                        finish_flag.set(true);
+                        Error::None
+                    },
+                ))),
+            ),
+        ];
+        let seen = through_the_renderer(&args);
+        let user_params: Vec<_> =
+            seen.iter().map(RendererParam::as_user_parameter).collect();
+
+        // One single-channel layer, named the way ndspy names them.
+        let layer_name = CString::new("beauty.000").unwrap();
+        let mut format = [ndspy_sys::PtDspyDevFormat {
+            name: layer_name.as_ptr(),
+            type_: 0,
+        }];
+        let mut flags = ndspy_sys::PtFlagStuff { flags: 0 };
+        let filename = CString::new("render").unwrap();
+        let driver = CString::new("ferris_f32").unwrap();
+        let mut handle: ndspy_sys::PtDspyImageHandle = core::ptr::null_mut();
+
+        let error = image_open::<f32>(
+            &mut handle,
+            driver.as_ptr(),
+            filename.as_ptr(),
+            4,
+            4,
+            user_params.len() as _,
+            user_params.as_ptr(),
+            format.len() as _,
+            format.as_mut_ptr(),
+            &mut flags,
+        );
+        assert_eq!(
+            ndspy_sys::PtDspyError::None as u32,
+            error as u32,
+            "image_open must accept the parameters"
+        );
+        assert!(opened.get(), "the open callback must have run");
+        assert!(!handle.is_null(), "image_open must hand back a handle");
+
+        // One 2x2 bucket, sized from the format the driver settled on.
+        // Getting this wrong is a buffer overread, which is precisely the
+        // kind of thing running this under Miri is meant to catch.
+        let channels = PixelFormat::new(&format).channels();
+        let bucket = vec![0.5f32; 2 * 2 * channels];
+        let error = image_write::<f32>(
+            handle,
+            0,
+            2,
+            0,
+            2,
+            core::mem::size_of::<f32>() as _,
+            bucket.as_ptr() as *const u8,
+        );
+        assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
+        assert_eq!(1, buckets.get(), "the write callback must have run once");
+
+        let error = image_close::<f32>(handle);
+        assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
+        assert!(finished.get(), "the finish callback must have run");
+
+        // Reclaim what we handed over -- the context does this in real use.
+        // Miri's leak check verifies we get all of it back, and that
+        // `image_close` did not free the renderer's memory on the way.
+        for param in &seen {
+            // SAFETY: each cell holds the pointer we produced above, and
+            // each is reclaimed exactly once.
+            unsafe {
+                let ptr = *param.cell;
+                if param.name.as_c_str() == c"callback.open" {
+                    OpenCallback::drop_ptr(ptr);
+                } else if param.name.as_c_str() == c"callback.write" {
+                    WriteCallback::<f32>::drop_ptr(ptr);
+                } else {
+                    FinishCallback::drop_ptr(ptr);
+                }
+            }
+        }
     }
 }

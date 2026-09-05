@@ -100,10 +100,9 @@ impl Scene {
                 _ => break,
             };
 
-            let parent = self
-                .edges
-                .iter()
-                .find(|edge| edge.from == current && edge.kind == EdgeKind::SceneMember);
+            let parent = self.edges.iter().find(|edge| {
+                edge.from == current && edge.kind == EdgeKind::SceneMember
+            });
 
             match parent {
                 Some(edge) if edge.to != crate::ROOT => current = &edge.to,
@@ -133,13 +132,17 @@ impl Scene {
         let attributes = self
             .edges
             .iter()
-            .find(|edge| edge.to == geometry && edge.kind == EdgeKind::AttributeBinding)
+            .find(|edge| {
+                edge.to == geometry && edge.kind == EdgeKind::AttributeBinding
+            })
             .map(|edge| edge.from.clone())?;
 
         let surface_shader = self
             .edges
             .iter()
-            .find(|edge| edge.to == attributes && edge.kind == EdgeKind::SurfaceShader)
+            .find(|edge| {
+                edge.to == attributes && edge.kind == EdgeKind::SurfaceShader
+            })
             .map(|edge| edge.from.clone());
 
         Some(Binding {
@@ -171,14 +174,17 @@ impl Scene {
                 let layers = self
                     .edges
                     .iter()
-                    .filter(|edge| edge.to == *screen && edge.kind == EdgeKind::OutputLayer)
+                    .filter(|edge| {
+                        edge.to == *screen && edge.kind == EdgeKind::OutputLayer
+                    })
                     .map(|layer_edge| OutputLayer {
                         handle: layer_edge.from.clone(),
                         drivers: self
                             .edges
                             .iter()
                             .filter(|edge| {
-                                edge.to == layer_edge.from && edge.kind == EdgeKind::OutputDriver
+                                edge.to == layer_edge.from
+                                    && edge.kind == EdgeKind::OutputDriver
                             })
                             .map(|edge| edge.from.clone())
                             .collect(),
@@ -202,7 +208,9 @@ impl Scene {
     pub fn instance_sources(&self, instances: &str) -> Vec<String> {
         self.edges
             .iter()
-            .filter(|edge| edge.to == instances && edge.kind == EdgeKind::InstanceSource)
+            .filter(|edge| {
+                edge.to == instances && edge.kind == EdgeKind::InstanceSource
+            })
             .map(|edge| edge.from.clone())
             .collect()
     }

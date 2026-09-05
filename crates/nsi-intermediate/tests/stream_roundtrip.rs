@@ -104,7 +104,8 @@ fn recorder_replays_what_3delight_writes() {
         build(&ctx).expect("3Delight build failed");
     } // Context::drop calls NSIEnd, which flushes.
 
-    let reference = canonicalise(&std::fs::read_to_string(&path).expect("stream written"));
+    let reference =
+        canonicalise(&std::fs::read_to_string(&path).expect("stream written"));
 
     let recorder = Recorder::new();
     build(&recorder).expect("recorder build failed");

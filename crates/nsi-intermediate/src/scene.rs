@@ -57,7 +57,12 @@ impl Scene {
     }
 
     /// Set attributes at one motion sample, keeping samples time-sorted.
-    pub fn set_attribute_at_time(&mut self, handle: &str, time: f64, args: Vec<OwnedArg>) {
+    pub fn set_attribute_at_time(
+        &mut self,
+        handle: &str,
+        time: f64,
+        args: Vec<OwnedArg>,
+    ) {
         let node = self.nodes.entry(handle.to_string()).or_default();
 
         let slot = match node.time_attrs.iter().position(|(t, _)| *t == time) {

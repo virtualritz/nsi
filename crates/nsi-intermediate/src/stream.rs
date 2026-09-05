@@ -113,7 +113,8 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
         OwnedData::I32(v) => write_scalars(out, v)?,
         OwnedData::I64(v) => write_scalars(out, v)?,
         OwnedData::String(v) => {
-            let quoted: Vec<String> = v.iter().map(|s| format!(r#""{s}""#)).collect();
+            let quoted: Vec<String> =
+                v.iter().map(|s| format!(r#""{s}""#)).collect();
             write!(out, "{}", quoted.join(" "))?;
         }
         // Host pointers have no stream representation; 3Delight omits
@@ -127,7 +128,10 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
     writeln!(out)
 }
 
-fn write_scalars<W: Write, T: std::fmt::Display>(out: &mut W, values: &[T]) -> io::Result<()> {
+fn write_scalars<W: Write, T: std::fmt::Display>(
+    out: &mut W,
+    values: &[T],
+) -> io::Result<()> {
     let joined: Vec<String> = values
         .iter()
         .map(std::string::ToString::to_string)

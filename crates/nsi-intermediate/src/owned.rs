@@ -98,30 +98,44 @@ impl OwnedArg {
                 | Type::Vector
                 | Type::Normal
                 | Type::MatrixF32 => OwnedData::F32(
-                    core::slice::from_raw_parts(c.data as *const f32, scalars).to_vec(),
+                    core::slice::from_raw_parts(c.data as *const f32, scalars)
+                        .to_vec(),
                 ),
                 Type::F64 | Type::MatrixF64 => OwnedData::F64(
-                    core::slice::from_raw_parts(c.data as *const f64, scalars).to_vec(),
+                    core::slice::from_raw_parts(c.data as *const f64, scalars)
+                        .to_vec(),
                 ),
                 Type::I32 => OwnedData::I32(
-                    core::slice::from_raw_parts(c.data as *const i32, scalars).to_vec(),
+                    core::slice::from_raw_parts(c.data as *const i32, scalars)
+                        .to_vec(),
                 ),
                 Type::I64 => OwnedData::I64(
-                    core::slice::from_raw_parts(c.data as *const i64, scalars).to_vec(),
+                    core::slice::from_raw_parts(c.data as *const i64, scalars)
+                        .to_vec(),
                 ),
                 Type::String => {
-                    let ptrs = core::slice::from_raw_parts(c.data as *const *const c_char, scalars);
+                    let ptrs = core::slice::from_raw_parts(
+                        c.data as *const *const c_char,
+                        scalars,
+                    );
                     OwnedData::String(
                         ptrs.iter()
-                            .map(|p| CStr::from_ptr(*p).to_string_lossy().into_owned())
+                            .map(|p| {
+                                CStr::from_ptr(*p)
+                                    .to_string_lossy()
+                                    .into_owned()
+                            })
                             .collect(),
                     )
                 }
                 Type::Reference => OwnedData::Reference(
-                    core::slice::from_raw_parts(c.data as *const *const c_void, scalars)
-                        .iter()
-                        .map(|p| HostPtr(*p))
-                        .collect(),
+                    core::slice::from_raw_parts(
+                        c.data as *const *const c_void,
+                        scalars,
+                    )
+                    .iter()
+                    .map(|p| HostPtr(*p))
+                    .collect(),
                 ),
                 Type::Invalid => OwnedData::F32(Vec::new()),
             }
@@ -212,8 +226,7 @@ mod tests {
             OwnedData::Reference(pointers) => {
                 assert_eq!(pointers.len(), 1);
                 assert_eq!(
-                    pointers[0].0 as usize,
-                    expected,
+                    pointers[0].0 as usize, expected,
                     "recorder must store the payload's address"
                 );
             }
