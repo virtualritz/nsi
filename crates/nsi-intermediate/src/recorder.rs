@@ -2,13 +2,13 @@
 //!
 //! `Nsi` takes `&self` everywhere, so the scene lives behind a `Mutex`.
 
-use crate::{ClassifyError, OwnedArg, OwnedData, Scene};
+use crate::{OwnedArg, RecordError, Scene};
 use nsi_ffi_wrap::Arg;
 use nsi_trait::{Action, Nsi};
 use std::sync::{Mutex, MutexGuard};
 
 /// Where the render is in its lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum RenderState {
     /// Not rendering. The state before `Start` and after `Stop`.
     #[default]
@@ -73,30 +73,13 @@ impl Recorder {
     fn own(args: &[Arg<'_, 'static>]) -> Vec<OwnedArg> {
         args.iter().map(OwnedArg::from_param).collect()
     }
-
-    /// ɴsɪ's `"priority"` connection argument, or `0` when absent.
-    ///
-    /// [`Scene::geometry_binding`] needs it to choose between an
-    /// `attributes` node bound to a geometry and one inherited from an
-    /// ancestor, so it is the one `connect` argument that is recorded.
-    fn priority_of(args: Option<&[Arg<'_, 'static>]>) -> i32 {
-        args.unwrap_or_default()
-            .iter()
-            .map(OwnedArg::from_param)
-            .find(|arg| arg.name == "priority")
-            .and_then(|arg| match arg.data {
-                OwnedData::I32(ref values) => values.first().copied(),
-                _ => None,
-            })
-            .unwrap_or(0)
-    }
 }
 
 impl Nsi for Recorder {
     /// `'call` is the transient borrow. The context-bound lifetime is
     /// `'static`; see the type's documentation for why.
     type Arg<'call> = Arg<'call, 'static>;
-    type Error = ClassifyError;
+    type Error = RecordError;
 
     fn create(
         &self,
@@ -104,8 +87,7 @@ impl Nsi for Recorder {
         node_type: &str,
         _args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        self.scene().create(handle, node_type);
-        Ok(())
+        self.scene().create(handle, node_type)
     }
 
     fn delete(
@@ -147,8 +129,9 @@ impl Nsi for Recorder {
         Ok(())
     }
 
-    /// `args` is read for `"priority"` only. `"value"` and
-    /// `"strength"` are dropped; see `contracts/recording.md`.
+    /// Every connection argument is recorded. Resolution reads only
+    /// `"priority"`, but `"strength"` and `"value"` survive for a
+    /// backend that wants them, and for replay.
     fn connect(
         &self,
         from: &str,
@@ -157,9 +140,9 @@ impl Nsi for Recorder {
         to_attr: &str,
         args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        let priority = Self::priority_of(args);
+        let args = args.map(Self::own).unwrap_or_default();
         self.scene()
-            .connect_with_priority(from, from_attr, to, to_attr, priority)
+            .connect_with_args(from, from_attr, to, to_attr, args)
     }
 
     fn disconnect(
@@ -203,7 +186,7 @@ impl Nsi for Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::OwnedData;
+    use crate::{ClassifyError, OwnedData};
     use nsi_ffi_wrap as nsi;
     use nsi_trait::{Action, Nsi};
 
@@ -231,7 +214,12 @@ mod tests {
         r.create("a", "transform", None).unwrap();
         r.create("b", "transform", None).unwrap();
         let err = r.connect("a", None, "b", "nonsense", None).unwrap_err();
-        assert_eq!(err.to_attr, "nonsense");
+        assert_eq!(
+            err,
+            RecordError::Classify(ClassifyError {
+                to_attr: "nonsense".to_string()
+            })
+        );
     }
 
     #[test]
@@ -309,7 +297,12 @@ mod tests {
     fn an_unmapped_disconnect_is_an_error() {
         let r = Recorder::new();
         let err = r.disconnect("a", None, "b", "nonsense").unwrap_err();
-        assert_eq!(err.to_attr, "nonsense");
+        assert_eq!(
+            err,
+            RecordError::Classify(ClassifyError {
+                to_attr: "nonsense".to_string()
+            })
+        );
     }
 
     /// `evaluate` is a no-op by decision, not omission: procedurals and
@@ -343,7 +336,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(r.scene().edges[0].priority, 7);
+        assert_eq!(r.scene().edges[0].priority(), 7);
         assert_eq!(r.scene().nodes.len(), 2);
     }
 

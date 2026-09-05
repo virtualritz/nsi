@@ -35,7 +35,7 @@ use nsi_trait::{ParamValue, Type};
 /// covers exactly the field that needs it. A blanket
 /// `unsafe impl Send for Recorder` would silently keep covering any
 /// non-`Send` field added later.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct HostPtr(pub *const c_void);
 
@@ -50,6 +50,7 @@ unsafe impl Sync for HostPtr {}
 /// vector, normal and 4x4 `f32` matrices all live in [`OwnedData::F32`]
 /// and are told apart by [`OwnedArg::type_tag`].
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum OwnedData {
     /// `f32` scalars, flattened. Also holds colour, point, vector,
     /// normal and 4x4 `f32` matrices; [`OwnedArg::type_tag`] tells them

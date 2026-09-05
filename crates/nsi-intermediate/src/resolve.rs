@@ -6,7 +6,7 @@
 //! resolves geometry to world space too. So the chain has to be
 //! composed here, once.
 
-use crate::{EdgeKind, OwnedArg, OwnedData, Scene};
+use crate::{Edge, EdgeKind, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
 use std::collections::HashSet;
 
@@ -29,6 +29,7 @@ const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
 /// failure the crate exists to prevent: it renders, with the wrong
 /// answer.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ResolveError {
     /// A node is connected to more than one parent through `objects`.
     ///
@@ -56,6 +57,18 @@ pub enum ResolveError {
     /// no correct answer exists for one.
     Cycle {
         /// The node the walk arrived at twice.
+        handle: String,
+    },
+    /// The node is not connected to `.root`, directly or through
+    /// transforms.
+    ///
+    /// ɴsɪ: "A node can exist in an nsi context without being connected
+    /// to the root node but in that case it won't affect the render in
+    /// any way." It has no world transform and no gathered attributes,
+    /// and answering identity would put unrendered geometry at the
+    /// origin.
+    Detached {
+        /// The node that does not reach `.root`.
         handle: String,
     },
     /// A node in the chain is motion-sampled, but has no sample at the
@@ -100,6 +113,12 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ transform chain revisits node {handle:?}; a cyclic \
                  scene has no world transform"
             ),
+            Self::Detached { handle } => write!(
+                f,
+                "ɴsɪ node {handle:?} is not connected to {root:?}, so it \
+                 is not in the scene and has no world transform",
+                root = crate::ROOT
+            ),
             Self::MissingSampleAtTime {
                 handle,
                 time,
@@ -118,14 +137,33 @@ impl core::error::Error for ResolveError {}
 
 /// What an ɴsɪ `attributes` node resolves to for one piece of geometry.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct Binding {
-    /// The `attributes` node handle. Its remaining attributes --
-    /// visibility flags in particular -- are read by the backend, which
-    /// knows how its renderer encodes them.
-    pub attributes: String,
-    /// The shader reached through `surfaceshader`, when there is one.
-    /// An `attributes` node carrying only visibility has none.
+    /// Every `attributes` node gathered along the path, in ɴsɪ's
+    /// precedence order: highest connection priority first, then
+    /// nearest the geometry.
+    ///
+    /// ɴsɪ gathers attributes along the whole path and considers
+    /// *every* node on it -- "one attributes node can set object
+    /// visibility and another can set the surface shader" -- so this is
+    /// a list, not a winner. A backend looking for one attribute takes
+    /// the first node in this list that defines it.
+    ///
+    /// The handles are returned rather than their contents because what
+    /// lives on them -- visibility flags above all -- is encoded
+    /// differently by each renderer, and inventing a common shape for it
+    /// here would be guesswork.
+    pub attributes: Vec<String>,
+    /// The shader reached through `surfaceshader`, resolved across every
+    /// gathered node by the same rule, using the priority of the
+    /// `surfaceshader` connection itself.
+    ///
+    /// `None` when nothing on the path sets one.
     pub surface_shader: Option<String>,
+    /// The `displacementshader`, resolved the same way.
+    pub displacement_shader: Option<String>,
+    /// The `volumeshader`, resolved the same way.
+    pub volume_shader: Option<String>,
 }
 
 /// One renderable output: a camera paired with a screen, and the AOVs
@@ -171,13 +209,18 @@ fn mul(a: [f64; 16], b: [f64; 16]) -> [f64; 16] {
 }
 
 impl Scene {
-    /// The chain from `handle` up to `.root`, nearest first.
+    /// The chain from `handle` up to and including `.root`, nearest
+    /// first.
     ///
-    /// `handle` is the first entry and `.root` is not an entry. Every
-    /// walk up the `objects` hierarchy goes through here, so the three
-    /// scenes with no single answer -- more than one parent, a cycle --
-    /// are rejected in one place rather than each caller re-deriving
-    /// them.
+    /// `.root` *is* an entry. ɴsɪ gathers attributes "until the scene
+    /// root is reached", and describes the root as "much like a
+    /// transform node" with its own `objects` and `geometryattributes`,
+    /// so a scene-wide `attributes` node bound to it must be found.
+    ///
+    /// Every walk up the `objects` hierarchy goes through here, so the
+    /// scenes with no single answer -- more than one parent, a cycle, a
+    /// node that never reaches the root -- are rejected in one place
+    /// rather than each caller re-deriving them.
     fn chain(&self, handle: &str) -> Result<Vec<String>, ResolveError> {
         let mut chain = Vec::new();
         let mut seen = HashSet::new();
@@ -192,9 +235,24 @@ impl Scene {
                 edge.from == current && edge.kind == EdgeKind::SceneMember
             });
 
-            let Some(first) = parents.next() else {
+            if current == crate::ROOT {
                 chain.push(current);
                 break;
+            }
+
+            let Some(first) = parents.next().or_else(|| {
+                // An instancing prototype is connected to an
+                // `instances` node through `sourcemodels`, never to
+                // `.root` directly. Its attributes are still gathered
+                // through that node, so the walk continues there rather
+                // than calling the prototype detached.
+                self.edges.iter().find(|edge| {
+                    edge.from == current
+                        && edge.kind == EdgeKind::InstanceSource
+                })
+            }) else {
+                // No parent at all, and we never reached the root.
+                return Err(ResolveError::Detached { handle: current });
             };
 
             // ɴsɪ's lightweight instancing. Refuse rather than answer
@@ -211,9 +269,6 @@ impl Scene {
 
             let parent = first.to.clone();
             chain.push(current);
-            if parent == crate::ROOT {
-                break;
-            }
             current = parent;
         }
 
@@ -346,45 +401,45 @@ impl Scene {
         })
     }
 
-    /// Dissolve the `attributes` node bound to a piece of geometry.
+    /// Gather the `attributes` nodes gathered along a geometry's path,
+    /// and the surface shader they resolve to.
     ///
-    /// ɴsɪ routes material through an intermediate node —
-    /// `shader -> attributes -> geometry` — that neither target renderer
+    /// ɴsɪ routes material through an intermediate node --
+    /// `shader -> attributes -> geometry` -- that no target renderer
     /// has. Mitsuba wants a `bsdf` on the shape; MoonRay wants a `Layer`
-    /// entry. Both need the same two-hop walk, so it happens here once.
+    /// entry. Both need the same walk, so it happens here once.
     ///
-    /// One `attributes` node may bind to many shapes, so this resolves
-    /// per geometry rather than producing a single owner.
+    /// # Gathering
     ///
-    /// # Inheritance
+    /// ɴsɪ gathers attribute values "along the path starting from the
+    /// geometric primitive, through all the transform nodes it is
+    /// connected to, until the scene root is reached", and *every*
+    /// `attributes` node on that path is considered: "one attributes
+    /// node can set object visibility and another can set the surface
+    /// shader". So this returns all of them, ordered by ɴsɪ's own rule
+    /// -- "the definition with the highest priority is selected. In case
+    /// of conflicting priorities, the definition that is the closest to
+    /// the geometric primitive" -- and a backend takes the first that
+    /// defines the attribute it wants.
     ///
-    /// ɴsɪ binds `geometryattributes` to a transform as readily as to a
-    /// geometry, and a binding on a transform applies to everything
-    /// beneath it. So the whole chain up to `.root` is searched, not
-    /// just the geometry itself, and the winner is picked by:
-    ///
-    /// 1. highest `"priority"`, ɴsɪ's own tie-breaker;
-    /// 2. then the binding nearest the geometry, the more specific one;
-    /// 3. then connection order.
-    ///
-    /// Returns `Ok(None)` for geometry with nothing bound anywhere in
-    /// its chain. The attributes handle is returned rather than its
-    /// contents because what else lives on that node — visibility flags
-    /// above all — is encoded differently by each renderer, and
-    /// inventing a common shape for it here would be guesswork.
+    /// Returns `Ok(None)` for geometry with nothing bound anywhere on
+    /// its path.
     ///
     /// # Errors
     ///
-    /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`],
-    /// from walking the chain. A motion-sampled transform does not
-    /// affect which attributes bind, so it is not an error here.
+    /// [`ResolveError::MultipleParents`], [`ResolveError::Cycle`] or
+    /// [`ResolveError::Detached`], from walking the path. A
+    /// motion-sampled transform does not affect which attributes bind,
+    /// so it is not an error here.
     pub fn geometry_binding(
         &self,
         geometry: &str,
     ) -> Result<Option<Binding>, ResolveError> {
         let chain = self.chain(geometry)?;
 
-        let winner = chain
+        // (priority, depth, connection order, handle) for every
+        // `attributes` node anywhere on the path.
+        let mut gathered = chain
             .iter()
             .enumerate()
             .flat_map(|(depth, node)| {
@@ -396,32 +451,62 @@ impl Scene {
                             && edge.kind == EdgeKind::AttributeBinding
                     })
                     .map(move |(order, edge)| {
-                        (edge.priority, depth, order, edge)
+                        (edge.priority(), depth, order, edge)
                     })
             })
-            // Highest priority, then nearest the geometry, then first
-            // connected. `depth` and `order` reverse because `max_by`
-            // wants the largest and those two want the smallest.
-            .max_by(|a, b| {
-                a.0.cmp(&b.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2))
-            });
+            .collect::<Vec<_>>();
 
-        Ok(winner.map(|(_, _, _, edge)| {
-            let attributes = edge.from.clone();
-            let surface_shader = self
-                .edges
-                .iter()
-                .find(|edge| {
-                    edge.to == attributes
-                        && edge.kind == EdgeKind::SurfaceShader
-                })
-                .map(|edge| edge.from.clone());
+        // Highest priority first, then nearest the geometry, then
+        // connection order.
+        gathered.sort_by(|a, b| {
+            b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+        });
 
-            Binding {
-                attributes,
-                surface_shader,
-            }
-        }))
+        if gathered.is_empty() {
+            Ok(None)
+        } else {
+            // A shader connection carries its own priority, "used in
+            // the same way as for regular attributes".
+            let shader = |kind: &EdgeKind| self.shader_on(&gathered, kind);
+
+            Ok(Some(Binding {
+                surface_shader: shader(&EdgeKind::SurfaceShader),
+                displacement_shader: shader(&EdgeKind::DisplacementShader),
+                volume_shader: shader(&EdgeKind::VolumeShader),
+                attributes: gathered
+                    .iter()
+                    .map(|(_, _, _, edge)| edge.from.clone())
+                    .collect(),
+            }))
+        }
+    }
+
+    /// The shader of one kind reached from any gathered `attributes`
+    /// node, by ɴsɪ's precedence.
+    ///
+    /// Ranked by the *connection's* priority first -- ɴsɪ calls that
+    /// "useful for overriding a shader from higher in the scene graph"
+    /// -- then by the gathered order, so this agrees with
+    /// [`Binding::attributes`] rather than disagreeing with it.
+    fn shader_on(
+        &self,
+        gathered: &[(i32, usize, usize, &Edge)],
+        kind: &EdgeKind,
+    ) -> Option<String> {
+        gathered
+            .iter()
+            .enumerate()
+            .flat_map(|(rank, (_, _, _, edge))| {
+                self.edges
+                    .iter()
+                    .filter(move |shader| {
+                        shader.to == edge.from && shader.kind == *kind
+                    })
+                    .map(move |shader| (shader.priority(), rank, shader))
+            })
+            // Highest priority, then earliest in the gathered order.
+            .min_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)))
+            .map(|(_, _, shader)| shader.from.clone())
     }
 
     /// Resolve ɴsɪ's output chain into what a renderer actually needs.
@@ -599,16 +684,49 @@ mod tests {
     #[test]
     fn a_node_with_no_transforms_is_identity() {
         let mut scene = Scene::default();
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
         assert_eq!(scene.world_transform("mesh").unwrap(), super::IDENTITY);
+    }
+
+    /// ɴsɪ: "A node can exist in an nsi context without being connected
+    /// to the root node but in that case it won't affect the render in
+    /// any way." Answering identity would put unrendered geometry at the
+    /// origin of a backend that iterates `scene.nodes`.
+    #[test]
+    fn a_detached_node_is_an_error_not_identity() {
+        let mut scene = Scene::default();
+        scene.create("mesh", "mesh").unwrap();
+        assert_eq!(
+            scene.world_transform("mesh"),
+            Err(ResolveError::Detached {
+                handle: "mesh".to_string()
+            })
+        );
+    }
+
+    /// A node under a transform that is itself detached is detached too;
+    /// the walk reports the node that failed to reach the root.
+    #[test]
+    fn detachment_is_reported_at_the_node_that_fails_to_reach_root() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        assert_eq!(
+            scene.world_transform("mesh"),
+            Err(ResolveError::Detached {
+                handle: "grp".to_string()
+            })
+        );
     }
 
     #[test]
     fn a_single_transform_applies_to_its_child() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute("xf", vec![translate(1.0, 2.0, 3.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "xf", "objects").unwrap();
         scene.connect("xf", None, ".root", "objects").unwrap();
 
@@ -620,11 +738,11 @@ mod tests {
     #[test]
     fn nested_transforms_compose() {
         let mut scene = Scene::default();
-        scene.create("outer", "transform");
+        scene.create("outer", "transform").unwrap();
         scene.set_attribute("outer", vec![translate(10.0, 0.0, 0.0)]);
-        scene.create("inner", "transform");
+        scene.create("inner", "transform").unwrap();
         scene.set_attribute("inner", vec![translate(1.0, 0.0, 0.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "inner", "objects").unwrap();
         scene.connect("inner", None, "outer", "objects").unwrap();
         scene.connect("outer", None, ".root", "objects").unwrap();
@@ -641,11 +759,11 @@ mod tests {
     #[test]
     fn child_transform_applies_before_parent() {
         let mut scene = Scene::default();
-        scene.create("outer", "transform");
+        scene.create("outer", "transform").unwrap();
         scene.set_attribute("outer", vec![translate(10.0, 0.0, 0.0)]);
-        scene.create("inner", "transform");
+        scene.create("inner", "transform").unwrap();
         scene.set_attribute("inner", vec![scale(2.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "inner", "objects").unwrap();
         scene.connect("inner", None, "outer", "objects").unwrap();
         scene.connect("outer", None, ".root", "objects").unwrap();
@@ -659,7 +777,7 @@ mod tests {
     #[test]
     fn a_transforms_own_matrix_is_included() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
         scene.connect("xf", None, ".root", "objects").unwrap();
         assert_eq!(scene.world_transform("xf").unwrap()[12], 5.0);
@@ -670,8 +788,8 @@ mod tests {
     #[test]
     fn a_cycle_is_an_error() {
         let mut scene = Scene::default();
-        scene.create("a", "transform");
-        scene.create("b", "transform");
+        scene.create("a", "transform").unwrap();
+        scene.create("b", "transform").unwrap();
         scene.connect("a", None, "b", "objects").unwrap();
         scene.connect("b", None, "a", "objects").unwrap();
         assert_eq!(
@@ -689,11 +807,11 @@ mod tests {
     #[test]
     fn more_than_one_parent_is_an_error() {
         let mut scene = Scene::default();
-        scene.create("left", "transform");
+        scene.create("left", "transform").unwrap();
         scene.set_attribute("left", vec![translate(1.0, 0.0, 0.0)]);
-        scene.create("right", "transform");
+        scene.create("right", "transform").unwrap();
         scene.set_attribute("right", vec![translate(9.0, 0.0, 0.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "left", "objects").unwrap();
         scene.connect("mesh", None, "right", "objects").unwrap();
 
@@ -713,10 +831,10 @@ mod tests {
     #[test]
     fn a_motion_sampled_transform_is_an_error() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
         scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "xf", "objects").unwrap();
         scene.connect("xf", None, ".root", "objects").unwrap();
 
@@ -733,7 +851,7 @@ mod tests {
     #[test]
     fn motion_samples_of_other_attributes_do_not_block_resolution() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
         scene.set_attribute_at_time(
             "xf",
@@ -755,10 +873,10 @@ mod tests {
     #[test]
     fn a_sampled_chain_resolves_per_sample() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
         scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
         scene.connect("mesh", None, "xf", "objects").unwrap();
         scene.connect("xf", None, ".root", "objects").unwrap();
 
@@ -771,9 +889,9 @@ mod tests {
     #[test]
     fn a_static_parent_composes_with_a_sampled_child() {
         let mut scene = Scene::default();
-        scene.create("grp", "transform");
+        scene.create("grp", "transform").unwrap();
         scene.set_attribute("grp", vec![translate(100.0, 0.0, 0.0)]);
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
         scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
         scene.connect("xf", None, "grp", "objects").unwrap();
@@ -791,7 +909,7 @@ mod tests {
         // `inner` is walked first and its only time sorts last, so a
         // merge that just concatenated the chain would come out
         // unsorted. `0.0` appears on both, so it must also dedup.
-        scene.create("outer", "transform");
+        scene.create("outer", "transform").unwrap();
         scene.set_attribute_at_time(
             "outer",
             0.5,
@@ -802,7 +920,7 @@ mod tests {
             0.0,
             vec![translate(0.0, 0.0, 0.0)],
         );
-        scene.create("inner", "transform");
+        scene.create("inner", "transform").unwrap();
         scene.set_attribute_at_time(
             "inner",
             2.0,
@@ -824,7 +942,7 @@ mod tests {
     #[test]
     fn a_static_chain_has_no_motion_times() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute("xf", vec![translate(5.0, 0.0, 0.0)]);
         // A motion sample of something that is not a transform. The
         // chain is still static as far as transforms go, and counting
@@ -855,7 +973,7 @@ mod tests {
     #[test]
     fn samples_pair_every_time_with_its_matrix() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
         scene.set_attribute_at_time("xf", 0.5, vec![translate(2.0, 0.0, 0.0)]);
         scene.connect("xf", None, ".root", "objects").unwrap();
@@ -875,7 +993,7 @@ mod tests {
     #[test]
     fn a_time_between_samples_is_an_error_not_an_interpolation() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         scene.set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)]);
         scene.set_attribute_at_time("xf", 1.0, vec![translate(5.0, 0.0, 0.0)]);
         scene.connect("xf", None, ".root", "objects").unwrap();
@@ -896,13 +1014,13 @@ mod tests {
     #[test]
     fn a_chain_sampled_at_different_times_is_an_error() {
         let mut scene = Scene::default();
-        scene.create("outer", "transform");
+        scene.create("outer", "transform").unwrap();
         scene.set_attribute_at_time(
             "outer",
             0.25,
             vec![translate(1.0, 0.0, 0.0)],
         );
-        scene.create("inner", "transform");
+        scene.create("inner", "transform").unwrap();
         scene.set_attribute_at_time(
             "inner",
             0.75,
@@ -921,7 +1039,7 @@ mod tests {
     #[test]
     fn a_non_f64_matrix_is_skipped_not_reinterpreted() {
         let mut scene = Scene::default();
-        scene.create("xf", "transform");
+        scene.create("xf", "transform").unwrap();
         #[rustfmt::skip]
         let m = vec![
             1.0f32, 0.0, 0.0, 0.0,
@@ -946,14 +1064,28 @@ mod tests {
 
 #[cfg(test)]
 mod binding_tests {
-    use crate::Scene;
+    use crate::{OwnedArg, OwnedData, Scene};
+    use nsi_trait::Type;
 
-    /// The canonical ɴsɪ shape: shader -> attributes -> geometry.
+    /// An ɴsɪ `"priority"` connection argument.
+    fn priority(value: i32) -> OwnedArg {
+        OwnedArg {
+            name: "priority".to_string(),
+            type_tag: Type::I32,
+            array_length: 1,
+            flags: 0,
+            data: OwnedData::I32(vec![value]),
+        }
+    }
+
+    /// The canonical ɴsɪ shape: shader -> attributes -> geometry, with
+    /// the geometry actually in the scene.
     fn scene_with_material() -> Scene {
         let mut scene = Scene::default();
-        scene.create("mesh", "mesh");
-        scene.create("attr", "attributes");
-        scene.create("shader", "shader");
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("attr", "attributes").unwrap();
+        scene.create("shader", "shader").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
         scene
             .connect("attr", None, "mesh", "geometryattributes")
             .unwrap();
@@ -967,14 +1099,15 @@ mod binding_tests {
     fn dissolves_attributes_to_a_shader() {
         let scene = scene_with_material();
         let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-        assert_eq!(binding.attributes, "attr");
+        assert_eq!(binding.attributes, vec!["attr".to_string()]);
         assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
     }
 
     #[test]
     fn unbound_geometry_has_no_binding() {
         let mut scene = Scene::default();
-        scene.create("mesh", "mesh");
+        scene.create("mesh", "mesh").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
         assert!(scene.geometry_binding("mesh").unwrap().is_none());
     }
 
@@ -983,13 +1116,14 @@ mod binding_tests {
     #[test]
     fn attributes_without_a_shader_still_bind() {
         let mut scene = Scene::default();
-        scene.create("mesh", "mesh");
-        scene.create("attr", "attributes");
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("attr", "attributes").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
         scene
             .connect("attr", None, "mesh", "geometryattributes")
             .unwrap();
         let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-        assert_eq!(binding.attributes, "attr");
+        assert_eq!(binding.attributes, vec!["attr".to_string()]);
         assert!(binding.surface_shader.is_none());
     }
 
@@ -998,13 +1132,14 @@ mod binding_tests {
     #[test]
     fn one_attributes_node_fans_out_to_every_shape() {
         let mut scene = Scene::default();
-        scene.create("attr", "attributes");
-        scene.create("shader", "shader");
+        scene.create("attr", "attributes").unwrap();
+        scene.create("shader", "shader").unwrap();
         scene
             .connect("shader", None, "attr", "surfaceshader")
             .unwrap();
         for mesh in ["a", "b", "c"] {
-            scene.create(mesh, "mesh");
+            scene.create(mesh, "mesh").unwrap();
+            scene.connect(mesh, None, ".root", "objects").unwrap();
             scene
                 .connect("attr", None, mesh, "geometryattributes")
                 .unwrap();
@@ -1022,10 +1157,10 @@ mod binding_tests {
     #[test]
     fn a_binding_on_an_ancestor_transform_is_inherited() {
         let mut scene = Scene::default();
-        scene.create("grp", "transform");
-        scene.create("mesh", "mesh");
-        scene.create("attr", "attributes");
-        scene.create("shader", "shader");
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("attr", "attributes").unwrap();
+        scene.create("shader", "shader").unwrap();
         scene.connect("mesh", None, "grp", "objects").unwrap();
         scene.connect("grp", None, ".root", "objects").unwrap();
         scene
@@ -1036,20 +1171,82 @@ mod binding_tests {
             .unwrap();
 
         let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-        assert_eq!(binding.attributes, "attr");
+        assert_eq!(binding.attributes, vec!["attr".to_string()]);
         assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
     }
 
-    /// At equal priority the more specific binding wins: the one on the
-    /// geometry beats the one it inherits from its parent.
+    /// ɴsɪ describes the root as "much like a transform node", with its
+    /// own `geometryattributes`. A scene-wide attributes node is bound
+    /// there, and gathering that stops at `.root` would never see it.
+    #[test]
+    fn a_binding_on_the_root_is_gathered() {
+        let mut scene = Scene::default();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("global_attr", "attributes").unwrap();
+        scene.create("shader", "shader").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
+        scene
+            .connect("global_attr", None, ".root", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("shader", None, "global_attr", "surfaceshader")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.attributes, vec!["global_attr".to_string()]);
+        assert_eq!(binding.surface_shader.as_deref(), Some("shader"));
+    }
+
+    /// The one ɴsɪ says out loud: "one attributes node can set object
+    /// visibility and another can set the surface shader ... and will
+    /// all be considered". A winner-take-all resolver returns the
+    /// nearest node and silently loses the shader on the other.
+    #[test]
+    fn every_attributes_node_on_the_path_is_gathered() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("shaded", "attributes").unwrap();
+        scene.create("visibility", "attributes").unwrap();
+        scene.create("metal", "shader").unwrap();
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
+        // The shader lives on the group's attributes node...
+        scene
+            .connect("shaded", None, "grp", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("metal", None, "shaded", "surfaceshader")
+            .unwrap();
+        // ...and visibility on the mesh's own, which is nearer.
+        scene
+            .connect("visibility", None, "mesh", "geometryattributes")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(
+            binding.attributes,
+            vec!["visibility".to_string(), "shaded".to_string()],
+            "both nodes gathered, nearest first"
+        );
+        assert_eq!(
+            binding.surface_shader.as_deref(),
+            Some("metal"),
+            "the shader survives being on the farther node"
+        );
+    }
+
+    /// At equal priority the more specific definition wins: ɴsɪ selects
+    /// "the definition that is the closest to the geometric primitive".
     #[test]
     fn the_nearest_binding_wins_at_equal_priority() {
         let mut scene = Scene::default();
-        scene.create("grp", "transform");
-        scene.create("mesh", "mesh");
-        scene.create("outer", "attributes");
-        scene.create("own", "attributes");
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("outer", "attributes").unwrap();
+        scene.create("own", "attributes").unwrap();
         scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
         scene
             .connect("outer", None, "grp", "geometryattributes")
             .unwrap();
@@ -1058,26 +1255,27 @@ mod binding_tests {
             .unwrap();
 
         let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-        assert_eq!(binding.attributes, "own");
+        assert_eq!(binding.attributes[0], "own");
     }
 
-    /// ɴsɪ's `"priority"` overrides proximity -- that is what it is for.
-    /// The ancestor's binding wins over the geometry's own.
+    /// ɴsɪ: "the definition with the highest priority is selected",
+    /// which overrides proximity.
     #[test]
     fn priority_beats_proximity() {
         let mut scene = Scene::default();
-        scene.create("grp", "transform");
-        scene.create("mesh", "mesh");
-        scene.create("outer", "attributes");
-        scene.create("own", "attributes");
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("outer", "attributes").unwrap();
+        scene.create("own", "attributes").unwrap();
         scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
         scene
-            .connect_with_priority(
+            .connect_with_args(
                 "outer",
                 None,
                 "grp",
                 "geometryattributes",
-                10,
+                vec![priority(10)],
             )
             .unwrap();
         scene
@@ -1085,7 +1283,135 @@ mod binding_tests {
             .unwrap();
 
         let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-        assert_eq!(binding.attributes, "outer");
+        assert_eq!(binding.attributes[0], "outer");
+    }
+
+    /// A `surfaceshader` connection carries its own priority, "useful
+    /// for overriding a shader from higher in the scene graph".
+    #[test]
+    fn a_surfaceshader_connection_priority_wins() {
+        let mut scene = Scene::default();
+        scene.create("grp", "transform").unwrap();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("outer", "attributes").unwrap();
+        scene.create("own", "attributes").unwrap();
+        scene.create("far_shader", "shader").unwrap();
+        scene.create("near_shader", "shader").unwrap();
+        scene.connect("mesh", None, "grp", "objects").unwrap();
+        scene.connect("grp", None, ".root", "objects").unwrap();
+        scene
+            .connect("outer", None, "grp", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("own", None, "mesh", "geometryattributes")
+            .unwrap();
+        // The nearer node's shader would win on proximity alone.
+        scene
+            .connect("near_shader", None, "own", "surfaceshader")
+            .unwrap();
+        scene
+            .connect_with_args(
+                "far_shader",
+                None,
+                "outer",
+                "surfaceshader",
+                vec![priority(5)],
+            )
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.surface_shader.as_deref(), Some("far_shader"));
+    }
+
+    /// An instancing prototype reaches the scene through its
+    /// `instances` node, never through `.root` directly. Calling it
+    /// detached would leave every prototype in a `GeometrySet` with no
+    /// material.
+    #[test]
+    fn an_instancing_prototype_is_not_detached() {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto", "mesh").unwrap();
+        scene.create("attr", "attributes").unwrap();
+        scene.create("metal", "shader").unwrap();
+        scene.connect("inst", None, ".root", "objects").unwrap();
+        scene
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        scene
+            .connect("attr", None, "proto", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("metal", None, "attr", "surfaceshader")
+            .unwrap();
+
+        let binding = scene.geometry_binding("proto").unwrap().expect("bound");
+        assert_eq!(binding.surface_shader.as_deref(), Some("metal"));
+        assert!(scene.world_transform("proto").is_ok());
+    }
+
+    /// `attributes` is ordered by ɴsɪ's precedence, and the shader must
+    /// agree with it. Picking the last maximal candidate instead of the
+    /// first returns a shader from a node that lost the ordering.
+    #[test]
+    fn the_shader_agrees_with_the_gathered_order() {
+        let mut scene = Scene::default();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("first", "attributes").unwrap();
+        scene.create("second", "attributes").unwrap();
+        scene.create("wanted", "shader").unwrap();
+        scene.create("loser", "shader").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
+        // Both bound to the same node at the same priority, so only
+        // connection order separates them.
+        scene
+            .connect("first", None, "mesh", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("second", None, "mesh", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("wanted", None, "first", "surfaceshader")
+            .unwrap();
+        scene
+            .connect("loser", None, "second", "surfaceshader")
+            .unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.attributes[0], "first");
+        assert_eq!(
+            binding.surface_shader.as_deref(),
+            Some("wanted"),
+            "the shader must come from attributes[0], not the last match"
+        );
+    }
+
+    /// ɴsɪ's `attributes` node has three shader slots. Rejecting the
+    /// other two made every displaced or volumetric scene unrecordable.
+    #[test]
+    fn displacement_and_volume_shaders_resolve_too() {
+        let mut scene = Scene::default();
+        scene.create("mesh", "mesh").unwrap();
+        scene.create("attr", "attributes").unwrap();
+        scene.create("surf", "shader").unwrap();
+        scene.create("disp", "shader").unwrap();
+        scene.create("vol", "shader").unwrap();
+        scene.connect("mesh", None, ".root", "objects").unwrap();
+        scene
+            .connect("attr", None, "mesh", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("surf", None, "attr", "surfaceshader")
+            .unwrap();
+        scene
+            .connect("disp", None, "attr", "displacementshader")
+            .unwrap();
+        scene.connect("vol", None, "attr", "volumeshader").unwrap();
+
+        let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+        assert_eq!(binding.surface_shader.as_deref(), Some("surf"));
+        assert_eq!(binding.displacement_shader.as_deref(), Some("disp"));
+        assert_eq!(binding.volume_shader.as_deref(), Some("vol"));
     }
 
     /// A cyclic chain has no binding either -- the walk that finds
@@ -1093,8 +1419,8 @@ mod binding_tests {
     #[test]
     fn a_cycle_is_an_error_for_bindings_too() {
         let mut scene = Scene::default();
-        scene.create("a", "transform");
-        scene.create("b", "transform");
+        scene.create("a", "transform").unwrap();
+        scene.create("b", "transform").unwrap();
         scene.connect("a", None, "b", "objects").unwrap();
         scene.connect("b", None, "a", "objects").unwrap();
         assert!(scene.geometry_binding("a").is_err());
@@ -1109,10 +1435,10 @@ mod output_tests {
     /// driver -> layer -> screen -> camera.
     fn scene_with_output() -> Scene {
         let mut scene = Scene::default();
-        scene.create("cam", "perspectivecamera");
-        scene.create("scr", "screen");
-        scene.create("beauty", "outputlayer");
-        scene.create("drv", "outputdriver");
+        scene.create("cam", "perspectivecamera").unwrap();
+        scene.create("scr", "screen").unwrap();
+        scene.create("beauty", "outputlayer").unwrap();
+        scene.create("drv", "outputdriver").unwrap();
         scene.connect("scr", None, "cam", "screens").unwrap();
         scene
             .connect("beauty", None, "scr", "outputlayers")
@@ -1140,8 +1466,8 @@ mod output_tests {
     #[test]
     fn a_screen_without_layers_still_resolves() {
         let mut scene = Scene::default();
-        scene.create("cam", "perspectivecamera");
-        scene.create("scr", "screen");
+        scene.create("cam", "perspectivecamera").unwrap();
+        scene.create("scr", "screen").unwrap();
         scene.connect("scr", None, "cam", "screens").unwrap();
         let outputs = scene.render_outputs();
         assert_eq!(outputs.len(), 1);
@@ -1152,7 +1478,7 @@ mod output_tests {
     #[test]
     fn multiple_layers_keep_connection_order() {
         let mut scene = scene_with_output();
-        scene.create("depth", "outputlayer");
+        scene.create("depth", "outputlayer").unwrap();
         scene.connect("depth", None, "scr", "outputlayers").unwrap();
         let outputs = scene.render_outputs();
         let names: Vec<&str> = outputs[0]
@@ -1167,7 +1493,7 @@ mod output_tests {
     #[test]
     fn a_layer_may_have_several_drivers() {
         let mut scene = scene_with_output();
-        scene.create("drv2", "outputdriver");
+        scene.create("drv2", "outputdriver").unwrap();
         scene
             .connect("drv2", None, "beauty", "outputdrivers")
             .unwrap();
@@ -1178,7 +1504,7 @@ mod output_tests {
     #[test]
     fn no_screen_means_no_outputs() {
         let mut scene = Scene::default();
-        scene.create("cam", "perspectivecamera");
+        scene.create("cam", "perspectivecamera").unwrap();
         assert!(scene.render_outputs().is_empty());
     }
 
@@ -1191,9 +1517,9 @@ mod output_tests {
             ("cam_a", "scr_a", "beauty_a"),
             ("cam_b", "scr_b", "beauty_b"),
         ] {
-            scene.create(cam, "perspectivecamera");
-            scene.create(scr, "screen");
-            scene.create(layer, "outputlayer");
+            scene.create(cam, "perspectivecamera").unwrap();
+            scene.create(scr, "screen").unwrap();
+            scene.create(layer, "outputlayer").unwrap();
             scene.connect(scr, None, cam, "screens").unwrap();
             scene.connect(layer, None, scr, "outputlayers").unwrap();
         }
@@ -1216,9 +1542,9 @@ mod instance_tests {
     #[test]
     fn resolves_instance_source_models() {
         let mut scene = Scene::default();
-        scene.create("inst", "instances");
-        scene.create("proto_a", "mesh");
-        scene.create("proto_b", "mesh");
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto_a", "mesh").unwrap();
+        scene.create("proto_b", "mesh").unwrap();
         scene
             .connect("proto_a", None, "inst", "sourcemodels")
             .unwrap();
@@ -1231,7 +1557,7 @@ mod instance_tests {
     #[test]
     fn an_instances_node_with_no_sources_is_empty() {
         let mut scene = Scene::default();
-        scene.create("inst", "instances");
+        scene.create("inst", "instances").unwrap();
         assert!(scene.instance_sources("inst").is_empty());
     }
 }

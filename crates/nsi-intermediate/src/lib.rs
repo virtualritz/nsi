@@ -40,7 +40,19 @@
 /// ɴsɪ's root node handle.
 pub const ROOT: &str = ".root";
 
+/// ɴsɪ's global-options node handle.
+///
+/// Reserved like [`ROOT`]: it need not be created.
+pub const GLOBAL: &str = ".global";
+
+/// ɴsɪ's wildcard handle and attribute name.
+///
+/// `NSIDisconnect` accepts it for either node handle and for either
+/// attribute name, matching everything in that position.
+pub const ALL: &str = ".all";
+
 mod edge;
+mod error;
 mod owned;
 mod recorder;
 mod resolve;
@@ -48,6 +60,7 @@ mod scene;
 mod stream;
 
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
+pub use error::RecordError;
 pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{Binding, IDENTITY, OutputLayer, RenderOutput, ResolveError};

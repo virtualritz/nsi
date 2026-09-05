@@ -11,10 +11,12 @@
 //! prevent: a misclassified connection does not fail loudly, it renders,
 //! with materials on the wrong shapes or output routed nowhere.
 
+use crate::OwnedArg;
 use core::fmt;
 
 /// What an ɴsɪ connection means, once classified.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum EdgeKind {
     /// `X -> .root "objects"`, or a transform chain link. Membership and
     /// hierarchy share one ɴsɪ attribute; which one an edge is depends
@@ -28,6 +30,10 @@ pub enum EdgeKind {
     /// `shader -> attributes "surfaceshader"`. Becomes the shape's
     /// material.
     SurfaceShader,
+    /// `shader -> attributes "displacementshader"`.
+    DisplacementShader,
+    /// `shader -> attributes "volumeshader"`.
+    VolumeShader,
     /// `geo -> instances "sourcemodels"`.
     InstanceSource,
     /// `screen -> camera "screens"`.
@@ -51,7 +57,7 @@ pub enum EdgeKind {
 }
 
 /// A recorded, classified connection.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edge {
     /// The handle the connection is made from.
     pub from: String,
@@ -59,16 +65,37 @@ pub struct Edge {
     pub to: String,
     /// What the connection means.
     pub kind: EdgeKind,
-    /// The `"priority"` argument of the ɴsɪ `connect` call that made
-    /// this edge, defaulting to `0`.
+    /// The arguments of the ɴsɪ `connect` call that made this edge, in
+    /// call order.
     ///
-    /// ɴsɪ documents it as deciding "in which order the nodes should be
-    /// considered when evaluating the value of an attribute", which is
-    /// why [`Scene::geometry_binding`] reads it. Only
-    /// [`EdgeKind::AttributeBinding`] edges consult it today.
+    /// Kept whole rather than reduced to the one argument resolution
+    /// needs, so `"strength"` -- which blocks a recursive delete -- and
+    /// `"value"` survive for a backend that wants them, and so replay
+    /// can emit what was passed.
+    pub args: Vec<OwnedArg>,
+}
+
+impl Edge {
+    /// ɴsɪ's `"priority"` connection argument, or `0` when absent.
+    ///
+    /// ɴsɪ ranks a repeated attribute definition by "the highest
+    /// priority", so a larger number wins. See
+    /// [`Scene::geometry_binding`].
     ///
     /// [`Scene::geometry_binding`]: crate::Scene::geometry_binding
-    pub priority: i32,
+    pub fn priority(&self) -> i32 {
+        self.args
+            .iter()
+            .find(|arg| arg.name == "priority")
+            .and_then(|arg| match &arg.data {
+                crate::OwnedData::I32(values) => values.first().copied(),
+                crate::OwnedData::I64(values) => {
+                    values.first().map(|v| *v as i32)
+                }
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
 }
 
 /// An ɴsɪ connection whose destination attribute has no mapping.
@@ -115,6 +142,8 @@ pub fn classify(
         "objects" => EdgeKind::SceneMember,
         "geometryattributes" => EdgeKind::AttributeBinding,
         "surfaceshader" => EdgeKind::SurfaceShader,
+        "displacementshader" => EdgeKind::DisplacementShader,
+        "volumeshader" => EdgeKind::VolumeShader,
         "sourcemodels" => EdgeKind::InstanceSource,
         "screens" => EdgeKind::Screen,
         "outputlayers" => EdgeKind::OutputLayer,

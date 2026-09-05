@@ -77,6 +77,55 @@ where
     ctx.create("layer", "outputlayer", None)?;
     ctx.create("drv", "outputdriver", None)?;
 
+    // Floats whose Rust `Display` and C `%.17g` renderings differ. Every
+    // one of these was wrong before the emitter formatted doubles the
+    // way 3Delight does.
+    ctx.create("floats", "mesh", None)?;
+    ctx.set_attribute("floats", &[nsi::f64!("tenth", 0.1f64)])?;
+    ctx.set_attribute("floats", &[nsi::f64!("third", 1.0f64 / 3.0)])?;
+    ctx.set_attribute("floats", &[nsi::f64!("tiny", 1e-7f64)])?;
+    ctx.set_attribute("floats", &[nsi::f64!("huge", 1e20f64)])?;
+    ctx.set_attribute("floats", &[nsi::f64!("neg_zero", -0.0f64)])?;
+
+    // Argument flags, which ɴsɪ writes as letters prefixed to the type.
+    let flagged = [[0.0f32, 1.0, 2.0], [3.0, 4.0, 5.0]];
+    ctx.set_attribute(
+        "floats",
+        &[nsi::point_slice!("P_pv", &flagged).per_vertex()],
+    )?;
+    ctx.set_attribute("floats", &[nsi::f32!("w_pf", 1.0).per_face()])?;
+    ctx.set_attribute(
+        "floats",
+        &[nsi::f32!("w_lin", 1.0).linear_interpolation()],
+    )?;
+
+    // A string containing a quote and a newline. Unescaped, the newline
+    // ends the statement and the rest parses as more of them.
+    ctx.set_attribute(
+        "floats",
+        &[nsi::string!(
+            "tricky",
+            "say \"hi\"\nCreate \"evil\" \"mesh\""
+        )],
+    )?;
+
+    // A `Reference`: 3Delight keeps the statement and omits the value.
+    static PAYLOAD: u64 = 0xfeed_face;
+    ctx.set_attribute(
+        "floats",
+        &[nsi::reference_stable!("callbackdata", &PAYLOAD)],
+    )?;
+
+    // A sample time that also discriminates the two formatters.
+    ctx.set_attribute_at_time("floats", 1.0 / 3.0, &[nsi::f64!("t", 1.0)])?;
+
+    ctx.create("prio_attr", "attributes", None)?;
+    ctx.create("s1", "shader", None)?;
+    ctx.create("s2", "shader", None)?;
+
+    // Every connection comes last, deliberately: `write_stream` emits a
+    // scene's nodes before its edges, so a fixture that interleaved them
+    // would diverge on ordering alone. See `contracts/stream.md`.
     ctx.connect("xf", None, ".root", "objects", None)?;
     ctx.connect("attr", None, "mesh", "geometryattributes", None)?;
     ctx.connect("shader", None, "attr", "surfaceshader", None)?;
@@ -91,6 +140,15 @@ where
     ctx.connect("mesh", Some(""), "xf", "objects", None)?;
 
     ctx.connect("s1", Some("outColor"), "s2", "inColor", None)?;
+
+    // Connection arguments, emitted as indented lines under `Connect`.
+    ctx.connect(
+        "prio_attr",
+        None,
+        "floats",
+        "geometryattributes",
+        Some(&[nsi::i32!("priority", 3)]),
+    )?;
     Ok(())
 }
 
