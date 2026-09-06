@@ -46,6 +46,26 @@ locking. A `ConcurrentDisplayDriver` trait for the opt-in case is future
 work, deliberately not built until someone needs it. One trait, no
 conditional bounds, no `Mutex` imposed on the common file-writing driver.
 
+## Prior art: `r-display`
+
+`github.com/virtualritz/r-display`, vendored at
+`crates/ndspy-sys/examples/r-display`, is a working 3Delight display
+driver in Rust written by hand. It is the crate's motivation, and the
+audit of it is the acceptance criterion: each of the following must be
+impossible to write with `nsi-display`.
+
+| r-display | Where |
+| --- | --- |
+| `PkSizeQuery` `Box::from_raw`s the image handle and drops it -- freeing memory the renderer still holds | `lib.rs:156` |
+| `DspyImageData` `Box::from_raw`s *before* the null check; a null handle is instant UB and any early return frees the handle | `:201` |
+| `DspyImageQuery` assigns `Box::into_raw(..)` to the by-value `data` parameter, so both answers are discarded and leaked | `:168`, `:180` |
+| `get_parameter<T>` ignores `valueType` -- type confusion by construction | `:41` |
+| No `catch_unwind`; `.to_str().unwrap()` unwinds into C on bad UTF-8 | throughout |
+| `copy_nonoverlapping` at a running offset, never bounds-checked | `:209` |
+
+Task 7 ports it. The port is the example *and* the proof: the same
+driver, with none of the above expressible.
+
 ## File Structure
 
 | File                                        | Responsibility                                            |
@@ -1142,7 +1162,14 @@ git commit -m "Add the declare_display_driver! macro"
 
 ---
 
-### Task 7: A worked example driver, rendered end to end
+### Task 7: Port `r-display`, rendered end to end
+
+Port `crates/ndspy-sys/examples/r-display` onto this crate. Keep its
+behaviour -- accumulate buckets, disassociate alpha, write a PNG -- and
+drop every unsafe mechanism it needed. Read its `src/lib.rs` first; the
+audit table above lists what must not survive the port. The PPM driver
+below is a fallback if the `png` dev-dependency proves awkward; prefer
+the port.
 
 **Files:**
 
