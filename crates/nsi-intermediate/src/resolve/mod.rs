@@ -22,6 +22,9 @@ pub const IDENTITY: [f64; 16] = [
 /// The ɴsɪ attribute holding a transform node's matrix.
 const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
 
+/// An `instances` node's per-instance matrices.
+const MATRICES: &str = "transformationmatrices";
+
 /// Why a scene could not be resolved into flat facts.
 ///
 /// Every variant is a scene ɴsɪ permits but this crate refuses to guess
@@ -245,6 +248,11 @@ pub struct Binding {
     /// no node sets `ATTR.priority` and the attribute is not a
     /// visibility one. [`Scene::attribute_value`] applies those two
     /// rules and is the safe way to ask.
+    ///
+    /// When this [`Binding`] came from a [`Placement`], ask
+    /// [`Scene::attribute_value_along`] with that placement's path
+    /// instead: `attribute_value` takes a geometry, so it refuses the
+    /// multi-parent node a placement exists for.
     ///
     /// The handles are returned rather than their contents because what
     /// lives on them -- visibility flags above all -- is encoded
@@ -745,8 +753,24 @@ impl Scene {
         time: f64,
     ) -> Result<[f64; 16], ResolveError> {
         let chain = self.transform_chain(handle)?;
+        self.interpolate_along(&chain, time)
+    }
 
-        chain.iter().try_fold(IDENTITY, |matrix, node| {
+    /// Compose an already-walked path with each node interpolated at
+    /// `time`.
+    ///
+    /// The interpolating twin of [`Scene::compose_along`], and shared
+    /// the same way: `placements_at` had a verbatim copy of this fold,
+    /// which is the drift that copy was introduced to prevent. Nothing
+    /// constrained it -- reversing the multiplication and reversing the
+    /// path both left the suite green, because every fixture that
+    /// reached it used translations, which commute.
+    fn interpolate_along(
+        &self,
+        path: &[String],
+        time: f64,
+    ) -> Result<[f64; 16], ResolveError> {
+        path.iter().try_fold(IDENTITY, |matrix, node| {
             Ok(match self.local_transform_interpolated_at(node, time)? {
                 Some(local) => mul(matrix, local),
                 None => matrix,
@@ -1274,9 +1298,15 @@ impl Scene {
     ///
     /// [`Scene::placements`] refuses a motion-sampled node and
     /// [`Scene::world_transform_interpolated_at`] refuses a node with
-    /// more than one parent, so a *moving instanced* geometry -- a
-    /// crowd, foliage, a particle instance -- had no answer from either.
-    /// This is that answer.
+    /// more than one parent, so a geometry with several *moving*
+    /// parents had no answer from either. This is that answer.
+    ///
+    /// A geometry animated by an `instances` node instead -- a crowd or
+    /// a particle system, where the *instancer's*
+    /// `transformationmatrices` are sampled -- is a different question,
+    /// and [`Scene::instance_transforms_at`] answers it. This one
+    /// returns an empty list for such a prototype, because it has no
+    /// direct placement.
     ///
     /// The end sample is held outside the sampled range, exactly as
     /// [`Scene::world_transform_interpolated_at`] describes.
@@ -1284,20 +1314,16 @@ impl Scene {
     /// # Errors
     ///
     /// As [`Scene::placements`], less
-    /// [`ResolveError::MotionSampledTransform`], which is the case this
-    /// exists to answer.
+    /// [`ResolveError::MotionSampledTransform`] -- the case this exists
+    /// to answer -- plus [`ResolveError::MissingSampleAtTime`] for a
+    /// time that names no sample, such as a NaN.
     pub fn placements_at(
         &self,
         geometry: &str,
         time: f64,
     ) -> Result<Vec<Placement>, ResolveError> {
         self.placements_with(geometry, |path| {
-            path.iter().try_fold(IDENTITY, |matrix, node| {
-                Ok(match self.local_transform_interpolated_at(node, time)? {
-                    Some(local) => mul(matrix, local),
-                    None => matrix,
-                })
-            })
+            self.interpolate_along(path, time)
         })
     }
 
@@ -1381,6 +1407,73 @@ impl Scene {
                 })
             }
         })
+    }
+
+    /// The instancer's matrices at `time`, when they are sampled.
+    ///
+    /// `None` when the node has no sampled matrices, in which case the
+    /// static ones apply.
+    fn instance_matrices_at(
+        &self,
+        node: &Node,
+        instances: &str,
+        time: Option<f64>,
+    ) -> Result<Option<Vec<f64>>, ResolveError> {
+        let samples: Vec<(f64, &[f64])> = node
+            .time_attrs
+            .iter()
+            .filter_map(|(t, attrs)| match attrs.get(MATRICES)?.data {
+                OwnedData::F64(ref values) => Some((*t, values.as_slice())),
+                _ => None,
+            })
+            .collect();
+
+        if samples.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(time) = time else {
+            return Err(ResolveError::MotionSampledTransform {
+                handle: instances.to_string(),
+            });
+        };
+
+        let first = samples[0];
+        let last = samples[samples.len() - 1];
+        if time <= first.0 {
+            return Ok(Some(first.1.to_vec()));
+        }
+        if time >= last.0 {
+            return Ok(Some(last.1.to_vec()));
+        }
+
+        let pair = samples
+            .windows(2)
+            .find(|w| w[0].0 < time && time < w[1].0)
+            .ok_or_else(|| ResolveError::MissingSampleAtTime {
+                handle: instances.to_string(),
+                time,
+                available: samples.iter().map(|(t, _)| *t).collect(),
+            })?;
+
+        let (t0, m0) = pair[0];
+        let (t1, m1) = pair[1];
+        // A sample that changes length mid-animation describes a
+        // different set of instances, not a moved one.
+        if m0.len() != m1.len() {
+            return Err(ResolveError::MalformedInstanceMatrices {
+                instances: instances.to_string(),
+                values: m1.len(),
+            });
+        }
+
+        let a = (time - t0) / (t1 - t0);
+        Ok(Some(
+            m0.iter()
+                .zip(m1)
+                .map(|(from, to)| from * (1.0 - a) + to * a)
+                .collect(),
+        ))
     }
 
     /// Every `attributes` node on a geometry's path, in ɴsɪ's
@@ -1662,7 +1755,7 @@ impl Scene {
     /// index is negative is omitted too: ɴsɪ says "a negative value will
     /// cause an instance to not be rendered".
     ///
-    /// Empty when the node carries no `transformationmatrices`.
+    /// Empty when the node carries no `transformationmatrices` at all.
     ///
     /// # Errors
     ///
@@ -1671,20 +1764,59 @@ impl Scene {
     /// [`ResolveError::UnknownModelIndex`] when a `modelindices` entry
     /// matches no prototype connection. Both were silent drops, which is
     /// the failure mode this crate exists to refuse.
+    ///
+    /// [`ResolveError::MotionSampledTransform`] when the matrices are
+    /// *sampled* rather than static: this read only the static
+    /// attributes, so a moving instancer -- which 3Delight renders --
+    /// came back as an empty list, indistinguishable from "no
+    /// instances". Ask [`Scene::instance_transforms_at`] for those.
     pub fn instance_transforms(
         &self,
         instances: &str,
+    ) -> Result<Vec<Instance>, ResolveError> {
+        self.instances_with(instances, None)
+    }
+
+    /// The same, with the instance matrices interpolated at `time`.
+    ///
+    /// ɴsɪ animates a whole instancer by sampling
+    /// `transformationmatrices`, which is how a crowd or a particle
+    /// system moves. Interpolated element-wise between the bracketing
+    /// samples and held outside them, exactly as
+    /// [`Scene::world_transform_interpolated_at`] describes.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::instance_transforms`], less
+    /// [`ResolveError::MotionSampledTransform`]; plus
+    /// [`ResolveError::MissingSampleAtTime`] for a time that names no
+    /// sample, such as a NaN.
+    pub fn instance_transforms_at(
+        &self,
+        instances: &str,
+        time: f64,
+    ) -> Result<Vec<Instance>, ResolveError> {
+        self.instances_with(instances, Some(time))
+    }
+
+    /// The shared body: `time` is `None` for the static reading.
+    fn instances_with(
+        &self,
+        instances: &str,
+        time: Option<f64>,
     ) -> Result<Vec<Instance>, ResolveError> {
         let Some(node) = self.node(instances) else {
             return Ok(Vec::new());
         };
 
-        let matrices = match node.attrs.get("transformationmatrices") {
-            Some(arg) => match &arg.data {
+        let sampled = self.instance_matrices_at(node, instances, time)?;
+        let matrices: &[f64] = match (&sampled, node.attrs.get(MATRICES)) {
+            (Some(values), _) => values,
+            (None, Some(arg)) => match &arg.data {
                 OwnedData::F64(values) => values.as_slice(),
                 _ => &[],
             },
-            None => &[],
+            (None, None) => &[],
         };
 
         let model_indices = match node.attrs.get("modelindices") {
@@ -1705,7 +1837,7 @@ impl Scene {
 
         // `modelindices` names the connection's `index` attribute, so
         // the value has to be looked up rather than used as a position.
-        if matrices.len() % 16 != 0 {
+        if !matrices.len().is_multiple_of(16) {
             return Err(ResolveError::MalformedInstanceMatrices {
                 instances: instances.to_string(),
                 values: matrices.len(),

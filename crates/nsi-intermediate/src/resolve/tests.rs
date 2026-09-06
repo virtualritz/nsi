@@ -3134,3 +3134,182 @@ fn shader_attributes_resolve_along_a_placement_path() {
         "q",
     );
 }
+
+/// The interpolated composition, with matrices that do **not** commute.
+///
+/// `placements_at` held a verbatim copy of `world_transform_interpolated_at`'s
+/// fold -- the drift the sharing was introduced to prevent -- and
+/// nothing constrained it: reversing the multiplication and reversing
+/// the path both left the suite green, because every fixture reaching
+/// it used translations.
+#[test]
+fn interpolated_composition_order_is_pinned() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("q", None, "inner", "objects").unwrap();
+    scene.set_attribute("outer", vec![scale(2.0)]).unwrap();
+    scene
+        .set_attribute_at_time("inner", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 1.0, vec![translate(6.0, 0.0, 0.0)])
+        .unwrap();
+
+    // At t=0.5 the inner translate is 3, scaled by 2 => 6.
+    // The reversed order gives 3, and a reversed path gives 3 too.
+    let half = scene.placements_at("q", 0.5).unwrap();
+    assert_eq!(half[0].transform[12], 6.0);
+    assert_eq!(half[0].transform[0], 2.0);
+    assert_eq!(
+        half[0].transform,
+        scene.world_transform_interpolated_at("q", 0.5).unwrap(),
+        "one fold, so the two cannot disagree",
+    );
+}
+
+/// A *moving instancer* is not an empty scene.
+///
+/// `instance_transforms` read only the static attributes, so an
+/// instancer whose `transformationmatrices` are sampled -- how a crowd
+/// or a particle system moves -- came back as an empty list,
+/// indistinguishable from "no instances", while 3Delight renders the
+/// instances. It refuses now, and `instance_transforms_at` answers.
+#[test]
+fn a_moving_instancer_is_refused_not_reported_empty() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", instance_matrix(0.0))],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![doubles("transformationmatrices", instance_matrix(8.0))],
+        )
+        .unwrap();
+
+    assert!(
+        matches!(
+            scene.instance_transforms("inst"),
+            Err(ResolveError::MotionSampledTransform { .. })
+        ),
+        "an empty list would read as `no instances`",
+    );
+
+    let half = scene.instance_transforms_at("inst", 0.5).unwrap();
+    assert_eq!(half.len(), 1);
+    assert_eq!(half[0].transform[12], 4.0);
+
+    // Held outside the sampled range, as transforms are.
+    let after = scene.instance_transforms_at("inst", 5.0).unwrap();
+    assert_eq!(after[0].transform[12], 8.0);
+}
+
+/// A static instancer answers the same either way, so a backend can
+/// use the time-taking form alone.
+#[test]
+fn instance_transforms_at_agrees_on_a_static_instancer() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene
+        .set_attribute(
+            "inst",
+            vec![doubles("transformationmatrices", instance_matrix(2.0))],
+        )
+        .unwrap();
+
+    assert_eq!(
+        scene.instance_transforms_at("inst", 0.75).unwrap(),
+        scene.instance_transforms("inst").unwrap(),
+    );
+}
+
+/// `ATTR.priority` applies along a placement path too. The first
+/// version of the along-path test covered specificity and the fallback
+/// but not priority, which was carried only by the shared body.
+#[test]
+fn attr_priority_applies_along_a_placement_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("near", "attributes").unwrap();
+    scene.create("far", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .connect("near", None, "q", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("far", None, "xf", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    let value = scene
+        .attribute_value_along(&placements[0].path, "visibility")
+        .expect("defined");
+    assert_eq!(value.node, "far", "priority outranks proximity here too");
+    assert_eq!(value.priority, 10);
+}
+
+/// Nearest wins along a placement path for shader attributes as well.
+/// The earlier test had one container per path, so reversing the walk
+/// changed nothing.
+#[test]
+fn the_nearest_shader_attribute_wins_along_a_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("near", "attributes").unwrap();
+    scene.create("far", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .connect("near", None, "q", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("far", None, "xf", "shaderattributes")
+        .unwrap();
+    scene
+        .set_attribute("near", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("tint", vec![2])])
+        .unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    let value = scene
+        .shader_attribute_value_along(&placements[0].path, "tint")
+        .expect("defined");
+    assert_eq!(value.node, "near");
+}
