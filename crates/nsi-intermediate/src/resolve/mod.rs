@@ -1216,6 +1216,20 @@ impl Scene {
     /// at all is not a definition, and neither is one whose priority is
     /// an `int64`, which 3Delight cannot read.
     ///
+    /// # Reading the value is not [`OwnedArg::as_i32`]
+    ///
+    /// 3Delight is far looser about an attribute's **value** than
+    /// about its priority. Rendered, on `visibility`: `float 0.4` is
+    /// visible and `float 0` is hidden, so a float is read and
+    /// non-zero is true; `int64 0` hides; `int 2 [ 0 0 ]` hides, where
+    /// the same shape as a *priority* is ignored outright; and a
+    /// `string` is refused, leaving the attribute at its default. A
+    /// backend that reaches for `as_i32` here gets `None` for the
+    /// first three and will draw an object the renderer hides. This
+    /// crate hands back the argument rather than a decoded flag
+    /// precisely because that rule is the renderer's, and it is not
+    /// the rule beside it.
+    ///
     /// Such a winner comes back with [`AttributeValue::arg`] `None`:
     /// this crate names the attribute and leaves ɴsɪ's default for it to
     /// the backend, which is the one thing it cannot supply.
