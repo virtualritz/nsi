@@ -95,7 +95,24 @@ credentials, so it is a person's action:
 5. `nsi`, `nsi-toolbelt`, `nsi-3delight`, `nsi-jupyter` and `nsi-stream`
    as they re-export them.
 
-Until step 2 lands, `cargo publish --dry-run` for the last two fails
-with "no matching package named `nsi-ffi-wrap` found" -- which is the
-correct pre-publish state and not a defect. **A consumer in the same
+### Verified state
+
+Measured, not assumed:
+
+| Crate | `cargo package` |
+| --- | --- |
+| `nsi-trait 0.4.0` | **Packages and compiles from its own tarball.** Step 1 is ready. |
+| `nsi-ffi-wrap 0.10.0` | Fails: `nsi-trait = "^0.4"`, candidate `0.3.0`. |
+| `nsi-intermediate 0.1.0` | Fails: `nsi-ffi-wrap = "^0.10"`, candidate `0.9.0`. |
+| `nsi-parse 0.1.0` | Fails: needs `nsi-intermediate 0.1` published. |
+
+Each failure names only its unpublished *upstream version* -- none is a
+code or metadata problem, and each resolves as the one before it lands.
+All four package file lists are clean: `nsi-trait` gained an `include`
+whitelist after `cargo package` was found shipping a `.claude/audit`
+log a hook had written into the crate.
+
+That is the whole remaining distance. Publishing itself is irreversible
+and happens under the maintainer's identity, so it stays a person's
+action. **A consumer in the same
 workspace, or one using a git dependency, is not blocked by any of it.**
