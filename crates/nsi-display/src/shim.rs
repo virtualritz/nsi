@@ -120,7 +120,7 @@ pub unsafe fn shim_data<D: DisplayDriver>(
     x_max_plus_one: c_int,
     y_min: c_int,
     y_max_plus_one: c_int,
-    _entry_size: c_int,
+    entry_size: c_int,
     data: *const u8,
 ) -> ndspy_sys::PtDspyError {
     guard(|| {
@@ -130,12 +130,28 @@ pub unsafe fn shim_data<D: DisplayDriver>(
         if data.is_null() {
             return Error::None;
         }
+        // An inverted rectangle would sign-extend into an enormous
+        // length through the `as usize` casts below.
+        if x_max_plus_one < x_min || y_max_plus_one < y_min {
+            return Error::BadParameters;
+        }
 
         // SAFETY: ours, from `shim_open`. `write` needs `&mut`, which is
         // sound because we answer `multithread = 0`.
         let handle = unsafe { &mut *(image as *mut Handle<D>) };
 
         let channels = handle.format.channels();
+
+        // `entry_size` is the renderer's ground truth for the bytes it
+        // wrote per pixel; `channels()` is the result of parsing the
+        // layer names. When the two disagree the parse is wrong, and
+        // believing it would build a slice running past the end of the
+        // renderer's buffer and hand it to safe author code. Fail loudly
+        // instead of reading out of bounds.
+        if entry_size as usize != channels * core::mem::size_of::<D::Pixel>() {
+            return Error::BadParameters;
+        }
+
         let width = (x_max_plus_one - x_min) as usize;
         let height = (y_max_plus_one - y_min) as usize;
 
@@ -337,6 +353,112 @@ mod tests {
         let error = unsafe { shim_close::<Recorder>(handle) };
         assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
         assert_eq!(1, CLOSED.get().unwrap().load(Ordering::SeqCst));
+    }
+
+    /// A driver whose `write` must never be reached.
+    struct NeverWrites;
+
+    impl DisplayDriver for NeverWrites {
+        type Pixel = f32;
+
+        fn open(
+            _params: Params<'_>,
+            _width: usize,
+            _height: usize,
+            _format: &PixelFormat,
+        ) -> crate::Result<Self> {
+            Ok(NeverWrites)
+        }
+
+        fn write(&mut self, _bucket: Bucket<'_, f32>) -> crate::Result<()> {
+            panic!("the shim must reject the bucket before calling `write`")
+        }
+
+        fn close(self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// The round-trip test sizes its buffer with the same `channels()`
+    /// the shim uses, so it cannot see a divergence. These buckets are
+    /// sized by `entry_size` -- the renderer's ground truth -- and
+    /// disagree with the parsed channel count, which is exactly the
+    /// case that used to build a slice past the end of the renderer's
+    /// buffer. A panic from `write` would surface as `Undefined`, so
+    /// `BadParams` also proves `write` was never called.
+    #[test]
+    fn a_bucket_the_shim_cannot_trust_is_rejected() {
+        let layer = CString::new("beauty.000").unwrap();
+        let mut format = [ndspy_sys::PtDspyDevFormat {
+            name: layer.as_ptr(),
+            type_: 0,
+        }];
+        let mut flags = ndspy_sys::PtFlagStuff { flags: 0 };
+        let name = CString::new("never").unwrap();
+        let mut handle: ndspy_sys::PtDspyImageHandle = core::ptr::null_mut();
+
+        // SAFETY: every pointer below is valid for this call.
+        let error = unsafe {
+            shim_open::<NeverWrites>(
+                &mut handle,
+                name.as_ptr(),
+                name.as_ptr(),
+                4,
+                4,
+                0,
+                core::ptr::null(),
+                format.len() as _,
+                format.as_mut_ptr(),
+                &mut flags,
+            )
+        };
+        assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
+
+        // `beauty.000` parses to one channel; the renderer here claims
+        // two floats per pixel. The buffer holds what the renderer
+        // says, so trusting the parse would read only half of it -- and
+        // the reverse mismatch would read off the end.
+        let pixels = [0.5f32; 2 * 2 * 2];
+        // SAFETY: `handle` came from `shim_open`; `pixels` outlives the call.
+        let error = unsafe {
+            shim_data::<NeverWrites>(
+                handle,
+                0,
+                2,
+                0,
+                2,
+                (2 * core::mem::size_of::<f32>()) as _,
+                pixels.as_ptr() as *const u8,
+            )
+        };
+        assert_eq!(
+            ndspy_sys::PtDspyError::BadParams as u32,
+            error as u32,
+            "entry_size disagreeing with channels() must be refused"
+        );
+
+        // An inverted rectangle sign-extends into an enormous length.
+        // SAFETY: as above.
+        let error = unsafe {
+            shim_data::<NeverWrites>(
+                handle,
+                2,
+                0,
+                0,
+                2,
+                core::mem::size_of::<f32>() as _,
+                pixels.as_ptr() as *const u8,
+            )
+        };
+        assert_eq!(
+            ndspy_sys::PtDspyError::BadParams as u32,
+            error as u32,
+            "an inverted rectangle must be refused"
+        );
+
+        // SAFETY: `handle` is live and reclaimed exactly here.
+        let error = unsafe { shim_close::<NeverWrites>(handle) };
+        assert_eq!(ndspy_sys::PtDspyError::None as u32, error as u32);
     }
 
     /// We must not promise concurrency we do not honour: `write` takes
