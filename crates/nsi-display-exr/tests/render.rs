@@ -6,7 +6,7 @@
 //! ```text
 //! RUSTFLAGS="-C link-arg=-Wl,-rpath,$DELIGHT/lib/oidn/lib" \
 //!   OIDN_DIR=$DELIGHT/lib/oidn \
-//!   cargo test -p nsi-display --features exr-driver --test exr_render
+//!   cargo test -p nsi-display-exr
 //! ```
 //!
 //! An rpath rather than `LD_LIBRARY_PATH`: 3Delight's OIDN directory
@@ -15,8 +15,6 @@
 //! one and die on an undefined symbol. The rpath also makes the built
 //! `.dpy` self-contained, which is what you want when the renderer,
 //! not cargo, is loading it.
-#![cfg(feature = "exr-driver")]
-
 use std::{
     env,
     path::{Path, PathBuf},
@@ -65,6 +63,8 @@ fn render_scene(out: &Path) {
             nsi::string!("variablename", "Ci"),
             nsi::string!("scalarformat", "float"),
             nsi::i32!("withalpha", 1),
+            // 3Delight forwards this to the driver verbatim.
+            nsi::string!("colorprofile", "srgb"),
         ],
     );
     ctx.connect("beauty", None, "screen", "outputlayers", None);
@@ -90,13 +90,7 @@ fn render_scene(out: &Path) {
 #[test]
 fn the_exr_driver_writes_every_connected_layer() {
     let status = Command::new(env!("CARGO"))
-        .args([
-            "build",
-            "--features",
-            "exr-driver",
-            "--example",
-            "exr_driver",
-        ])
+        .args(["build", "-p", "nsi-display-exr"])
         .status()
         .expect("cargo build");
     assert!(status.success());
@@ -108,7 +102,7 @@ fn the_exr_driver_writes_every_connected_layer() {
         .unwrap_or_else(|| {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target")
         });
-    let built = target_dir.join("debug/examples/libexr_driver.so");
+    let built = target_dir.join("debug/libnsi_display_exr.so");
 
     // See `png_driver`'s docs: `drivername` resolves against a search
     // path whose first entry is the renderer's cwd, and the artefact is
@@ -169,6 +163,20 @@ fn the_exr_driver_writes_every_connected_layer() {
             "channel {expected} missing from {names:?}"
         );
     }
+
+    // The output layer's `colorprofile` must be recorded too. 3Delight
+    // passes it through to the driver only when the scene sets one, so
+    // this pins both halves: that we receive it, and that we write it.
+    let profile = layer
+        .attributes
+        .other
+        .iter()
+        .find(|(key, _)| **key == *"colorprofile");
+    assert!(
+        profile.is_some(),
+        "colorprofile must be recorded in the exr header, got {:?}",
+        layer.attributes.other.keys().collect::<Vec<_>>()
+    );
 
     // `header.comment` must have reached the file's own header.
     let comment = layer

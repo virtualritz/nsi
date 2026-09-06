@@ -1,0 +1,29 @@
+[package]
+name = "nsi-display-exr"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+rust-version = "1.88"
+keywords = ["graphics", "rendering", "openexr", "display-driver", "denoise"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "An ɴsɪ OpenEXR display driver with OIDN denoising."
+readme = "README.md"
+documentation = "https://docs.rs/nsi-display-exr/"
+repository = "https://github.com/virtualritz/nsi/"
+
+[lib]
+# cdylib is the artefact the renderer dlopens, renamed to `<name>.dpy`.
+# rlib so integration tests and other crates can link the driver itself.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ndspy-sys = "0.2"
+nsi-display = { version = "0.1", path = "../nsi-display" }
+# Default features on purpose: `rayon` is one of them, and it is what
+# compresses pixel blocks on several threads.
+exr = "1.7"
+oidn = "2.3"
+
+[dev-dependencies]
+nsi = { version = "0.9", path = "../..", features = ["output"] }

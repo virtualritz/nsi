@@ -1,12 +1,17 @@
-//! An OpenEXR display driver, with optional OIDN denoising.
+//! An ɴsɪ OpenEXR display driver, with optional OIDN denoising.
 //!
-//! Build as a cdylib and give it the name the renderer looks for:
+//! A worked example of `nsi-display` that is meant to grow into a
+//! production driver, which is why it is a crate of its own rather than
+//! an example inside `nsi-display`: it has real dependencies (OpenEXR
+//! and OIDN) that no other user of `nsi-display` should have to build.
+//!
+//! Build it and give the artefact the name the renderer looks for:
 //!
 //! ```text
 //! RUSTFLAGS="-C link-arg=-Wl,-rpath,$DELIGHT/lib/oidn/lib" \
 //!   OIDN_DIR=$DELIGHT/lib/oidn \
-//!   cargo build -p nsi-display --features exr-driver --example exr_driver
-//! cp target/debug/examples/libexr_driver.so rust_exr.dpy
+//!   cargo build -p nsi-display-exr
+//! cp target/debug/libnsi_display_exr.so rust_exr.dpy
 //! ```
 //!
 //! The rpath matters: the renderer `dlopen`s this driver, so OIDN has
@@ -51,6 +56,12 @@
 //!   `increasing`.
 //! - `header.<name>` -- any string attribute, written into the EXR
 //!   header under `<name>`.
+//!
+//! The output layer's `colorprofile` reaches the driver too, when the
+//! scene sets one, and is recorded in the header under that name.
+//! OpenEXR has no standard attribute for it and this driver does not
+//! transform pixels the renderer already wrote, so it is metadata, not
+//! a conversion.
 //! - `denoise` -- `1` to denoise the beauty layer through OIDN.
 //! - `denoise.quality` -- `default`, `fast`, `balanced` or `high`.
 //! - `denoise.albedo` -- the name of the output layer to take OIDN's
@@ -109,6 +120,8 @@ struct Exr {
     line_order: LineOrder,
     /// `header.<name>` attributes, as `(name, value)`.
     header: Vec<(String, String)>,
+    /// The `colorprofile` the scene set on its output layer, if any.
+    colour_profile: Option<String>,
     denoise: bool,
     denoise_quality: oidn::Quality,
     /// The layer names to take OIDN's auxiliary inputs from.
@@ -215,6 +228,16 @@ impl DisplayDriver for Exr {
                 }
             };
 
+        // 3Delight passes the output layer's `colorprofile` straight
+        // through to the driver when the scene sets one -- measured,
+        // `colorprofile` = `srgb`. Nothing sets it by default, so this
+        // stays `None` unless asked for. OpenEXR carries no standard
+        // attribute for it, so it is written as a named header entry
+        // rather than silently applied to the pixels: this driver does
+        // not transform what the renderer gave it.
+        let colour_profile =
+            params.string("colorprofile").map(|profile| profile.to_owned());
+
         let header = params
             .strings()
             .filter_map(|(name, value)| {
@@ -292,6 +315,7 @@ impl DisplayDriver for Exr {
             compression,
             line_order,
             header,
+            colour_profile,
             denoise,
             denoise_quality,
             denoise_albedo,
@@ -354,6 +378,12 @@ impl DisplayDriver for Exr {
         }
 
         let mut attributes = LayerAttributes::default();
+        if let Some(profile) = &self.colour_profile {
+            attributes.other.insert(
+                Text::from("colorprofile"),
+                AttributeValue::Text(Text::from(profile.as_str())),
+            );
+        }
         for (key, value) in &self.header {
             attributes.other.insert(
                 Text::from(key.as_str()),
