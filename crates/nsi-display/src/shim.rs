@@ -72,6 +72,14 @@ pub unsafe fn shim_open<D: DisplayDriver>(
             return Error::BadParameters;
         }
 
+        // Every path out of here must leave a defined handle. ndspy does
+        // not promise the caller pre-nulled `*image`, and an author is
+        // free to return `Err(Error::None)` -- which reports success --
+        // so without this the renderer could be handed whatever `*image`
+        // happened to contain on entry.
+        // SAFETY: `image` is non-null per the check above.
+        unsafe { *image = core::ptr::null_mut() };
+
         // SAFETY: the renderer guarantees `format_count` entries.
         let format = unsafe {
             core::slice::from_raw_parts_mut(format, format_count as usize)
