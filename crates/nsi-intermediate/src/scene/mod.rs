@@ -168,6 +168,44 @@ pub struct Changes {
     pub edges_rearmed: Vec<Edge>,
 }
 
+/// What a [`Changes`] batch may have moved.
+///
+/// **Candidates, not a minimal set.** An entry means "resolve this
+/// again", not "this definitely differs": ɴsɪ's precedence rules can
+/// make an edit invisible -- a re-armed `surfaceshader` at a lower
+/// priority than a nearer one changes nothing -- and deciding that
+/// here would mean remembering every previous answer this crate ever
+/// gave, which is the consumer's own record to keep.
+///
+/// Keyed by **handle**, not by placement path. One geometry under two
+/// parents is several objects to a renderer, and editing one parent
+/// moves only one of them; a handle-level answer makes the consumer
+/// re-resolve both. Correct, and coarse for a crowd -- path-precision
+/// is an optimisation to ask for with a measurement.
+#[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
+pub struct Affected {
+    /// Geometry, transforms, instancers, cameras and lights whose
+    /// resolved answers may have moved.
+    pub nodes: IndexSet<String>,
+    /// Shader nodes whose own attributes or network changed.
+    ///
+    /// Kept apart because they map one-to-one onto a renderer's
+    /// material parameters and cost no geometry work: only the *root*
+    /// shader's identity reaches geometry, and that is a
+    /// `surfaceshader` edge, which lands in `nodes`.
+    pub shaders: IndexSet<String>,
+    /// Whether the camera/screen/layer/driver chain changed, so the
+    /// outputs need re-reading.
+    pub outputs: bool,
+    /// Whether something global changed -- an attribute on `.root` or
+    /// `.global` -- and the whole scene is a candidate.
+    ///
+    /// When this is set, `nodes` is not filled: the answer is
+    /// everything, and listing it would be a copy of the scene.
+    pub everything: bool,
+}
+
 /// The recorded scene graph.
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
@@ -254,6 +292,182 @@ impl Scene {
     /// What has changed, without clearing it.
     pub fn changes(&self) -> &Changes {
         &self.changes
+    }
+
+    /// The nodes a [`Changes`] batch may have moved.
+    ///
+    /// Every rule here is the **inverse** of a walk this crate already
+    /// does upward. Resolution asks "what applies to this geometry" by
+    /// climbing `objects` to `.root` and gathering containers on the
+    /// way; a synchronise asks the same question backwards -- "given
+    /// this node changed, whose answers depended on it" -- so the
+    /// indexes that make the climb cheap (`by_to_attr`) make the
+    /// descent cheap too, and no new index is needed.
+    ///
+    /// The rules, and what each inverts:
+    ///
+    /// - a `transform`'s attribute, or an `objects` edge: everything
+    ///   below it, and any instancer drawing a prototype found there.
+    ///   Inverts the chain walk. Cameras and lights hang off `objects`
+    ///   like geometry, so they come along.
+    /// - an `attributes` node's attribute, or a shader edge into one:
+    ///   everything below each node it is bound to. Inverts the
+    ///   container gather. A binding onto a `set` reaches the set's
+    ///   members.
+    /// - a shader's own attribute, or a shader-network edge: the
+    ///   shader alone. Nothing about geometry changed.
+    /// - `.root` or `.global`: everything.
+    ///
+    /// Over-approximate on purpose -- see [`Affected`].
+    pub fn affected(&self, changes: &Changes) -> Affected {
+        let mut affected = Affected::default();
+
+        for (handle, _) in &changes.attributes {
+            if crate::is_reserved(handle) {
+                affected.everything = true;
+                continue;
+            }
+            match self.nodes.get(handle) {
+                Some(node) if node.node_type == "shader" => {
+                    affected.shaders.insert(handle.clone());
+                }
+                Some(node) if node.node_type == "attributes" => {
+                    self.through_bindings(handle, &mut affected.nodes);
+                }
+                // Anything else is a scene node: it may be the thing
+                // that moved, and it may be a transform with a subtree
+                // under it. The descent answers both.
+                _ => self.descend(handle, &mut affected.nodes),
+            }
+            if self.is_output_node(handle) {
+                affected.outputs = true;
+            }
+        }
+
+        for handle in &changes.created {
+            self.descend(handle, &mut affected.nodes);
+        }
+
+        // A deleted handle is gone from the graph, so there is nothing
+        // left to descend *from*: what it orphaned is reached through
+        // the edges the delete took with it, which is why they are
+        // recorded in full.
+        for handle in changes.deleted.keys() {
+            affected.nodes.insert(handle.clone());
+        }
+
+        for edge in changes
+            .edges_added
+            .iter()
+            .chain(&changes.edges_removed)
+            .chain(&changes.edges_rearmed)
+        {
+            match edge.kind.to_attr() {
+                // A child, a set member or a prototype: whatever hung
+                // below the source now hangs somewhere else.
+                "objects" | "members" | "sourcemodels" => {
+                    self.descend(&edge.from, &mut affected.nodes);
+                    if self.is_output_node(&edge.from)
+                        || self.is_output_node(&edge.to)
+                    {
+                        affected.outputs = true;
+                    }
+                }
+                // A container bound to something, or unbound from it.
+                "geometryattributes" | "shaderattributes" => {
+                    self.descend(&edge.to, &mut affected.nodes);
+                    self.set_members(&edge.to, &mut affected.nodes);
+                }
+                // A shader reaching an `attributes` node -- including a
+                // repeated `connect` that only changed `"priority"`,
+                // which is why re-armed edges are here.
+                "surfaceshader" | "displacementshader" | "volumeshader"
+                | "lightset" | "exclusiveshading" => {
+                    affected.shaders.insert(edge.from.clone());
+                    self.through_bindings(&edge.to, &mut affected.nodes);
+                }
+                "screens" | "outputlayers" | "outputdrivers" => {
+                    affected.outputs = true;
+                }
+                // A shader-network edge, or a class this crate carries
+                // without resolving: both ends, and nothing below.
+                _ => {
+                    affected.shaders.insert(edge.from.clone());
+                    affected.shaders.insert(edge.to.clone());
+                }
+            }
+        }
+
+        if affected.everything {
+            affected.nodes.clear();
+        }
+
+        affected
+    }
+
+    /// Everything at or below `handle` on the `objects` chain, plus any
+    /// instancer that draws a prototype found there.
+    ///
+    /// Iterative with an explicit stack: an ɴsɪ scene's depth is the
+    /// caller's, not ours, and a recursive walk here would overflow on
+    /// a deep chain. The `insert` doubles as the visited set, so a
+    /// cycle terminates.
+    fn descend(&self, handle: &str, out: &mut IndexSet<String>) {
+        let mut stack = vec![handle.to_string()];
+        while let Some(node) = stack.pop() {
+            if !out.insert(node.clone()) {
+                continue;
+            }
+            for edge in self.edges_to_attr(&node, "objects") {
+                stack.push(edge.from.clone());
+            }
+            // A prototype's mover moves every instancer drawing it, and
+            // the instancer is not below the transform that moved --
+            // it is reached the other way, through `sourcemodels`.
+            for edge in self.edges_from(&node) {
+                if edge.kind.to_attr() == "sourcemodels" {
+                    stack.push(edge.to.clone());
+                }
+            }
+        }
+    }
+
+    /// Everything an `attributes` node is bound to, and below that.
+    fn through_bindings(&self, handle: &str, out: &mut IndexSet<String>) {
+        for edge in self.edges_from(handle) {
+            if matches!(
+                edge.kind.to_attr(),
+                "geometryattributes" | "shaderattributes"
+            ) {
+                self.descend(&edge.to, out);
+                self.set_members(&edge.to, out);
+            }
+        }
+    }
+
+    /// If `handle` is a `set`, everything its members carry.
+    ///
+    /// One hop, not a recursion: a `set` inside a `set` contributes
+    /// nothing to what a geometry inherits -- rendered, and pinned by
+    /// `a_nested_sets_attributes_are_not_inherited` -- so descending
+    /// through nested sets would name nodes the renderer never reaches.
+    fn set_members(&self, handle: &str, out: &mut IndexSet<String>) {
+        for edge in self.edges_to_attr(handle, "members") {
+            self.descend(&edge.from, out);
+        }
+    }
+
+    /// Whether this handle is part of the camera/screen/layer/driver
+    /// chain, whose answers come from [`Scene::render_outputs`] rather
+    /// than from a geometry walk.
+    fn is_output_node(&self, handle: &str) -> bool {
+        self.nodes.get(handle).is_some_and(|node| {
+            node.node_type.ends_with("camera")
+                || matches!(
+                    node.node_type.as_str(),
+                    "screen" | "outputlayer" | "outputdriver"
+                )
+        })
     }
 
     /// The nodes, by handle, in creation order.

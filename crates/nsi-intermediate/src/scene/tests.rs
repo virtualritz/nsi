@@ -911,6 +911,461 @@ fn changes_are_not_part_of_scene_equality() {
     assert_eq!(synchronised, build());
 }
 
+/// A transform edit dirties everything under it -- the inverse of the
+/// chain walk resolution already does upward.
+#[test]
+fn a_moved_transform_dirties_its_subtree() {
+    let mut scene = Scene::default();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("elsewhere", "mesh").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("q", None, "inner", "objects").unwrap();
+    scene
+        .connect("elsewhere", None, ".root", "objects")
+        .unwrap();
+    scene.take_changes();
+
+    scene
+        .set_attribute("outer", vec![arg("transformationmatrix", 1.0)])
+        .unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.nodes.contains("q"), "two levels down");
+    assert!(affected.nodes.contains("inner"));
+    assert!(
+        !affected.nodes.contains("elsewhere"),
+        "and nothing on another branch",
+    );
+}
+
+/// A shader edit reaches every geometry bound through the `attributes`
+/// node that carries it -- including when the binding is onto a `set`,
+/// and including a repeated `connect` that only changed `"priority"`.
+#[test]
+fn a_shader_edit_reaches_the_geometry_bound_through_it() {
+    let mut scene = Scene::default();
+    scene.create("attr", "attributes").unwrap();
+    scene.create("shader", "shader").unwrap();
+    scene.create("group", "set").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("other", "mesh").unwrap();
+    scene.connect("q", None, ".root", "objects").unwrap();
+    scene.connect("other", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "group", "members").unwrap();
+    scene
+        .connect("attr", None, "group", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("shader", None, "attr", "surfaceshader")
+        .unwrap();
+    scene.take_changes();
+
+    // Re-arming the connection changes which shader wins and adds no
+    // edge; the geometry behind the set must still be named.
+    scene
+        .connect_with_args(
+            "shader",
+            None,
+            "attr",
+            "surfaceshader",
+            vec![OwnedArg::new(
+                "priority",
+                Type::I32,
+                1,
+                0,
+                OwnedData::I32(vec![10]),
+            )],
+        )
+        .unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.nodes.contains("q"), "through the set's members");
+    assert!(!affected.nodes.contains("other"), "not the whole scene");
+    assert!(affected.shaders.contains("shader"));
+}
+
+/// A shader's *own* attribute is a material parameter and no geometry
+/// work: it must not drag the geometry bound through it into the
+/// affected set.
+#[test]
+fn a_shader_parameter_edit_is_not_geometry_work() {
+    let mut scene = Scene::default();
+    scene.create("attr", "attributes").unwrap();
+    scene.create("shader", "shader").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("q", None, ".root", "objects").unwrap();
+    scene
+        .connect("attr", None, "q", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("shader", None, "attr", "surfaceshader")
+        .unwrap();
+    scene.take_changes();
+
+    scene
+        .set_attribute("shader", vec![arg("roughness", 0.5)])
+        .unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.shaders.contains("shader"));
+    assert!(
+        affected.nodes.is_empty(),
+        "a material parameter costs no geometry work: {:?}",
+        affected.nodes,
+    );
+}
+
+/// A prototype's ancestor reaches the instancer, which is **not**
+/// below the transform that moved: it hangs off the other end of a
+/// `sourcemodels` edge.
+#[test]
+fn a_prototypes_ancestor_reaches_the_instancer() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.create("inst", "instances").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene.connect("proto", None, "xf", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene.take_changes();
+
+    scene
+        .set_attribute("xf", vec![arg("transformationmatrix", 1.0)])
+        .unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.nodes.contains("proto"));
+    assert!(
+        affected.nodes.contains("inst"),
+        "the instancer draws it, and is reached the other way round",
+    );
+}
+
+/// An attribute on `.root` or `.global` is a candidate set of
+/// "everything", and saying so beats listing the scene.
+#[test]
+fn a_global_edit_dirties_everything() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("q", None, ".root", "objects").unwrap();
+    scene.take_changes();
+
+    scene
+        .set_attribute(crate::GLOBAL, vec![arg("quality.shadingsamples", 8.0)])
+        .unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.everything);
+    assert!(affected.nodes.is_empty(), "not a copy of the scene");
+}
+
+/// A `disconnect` naming `.all` severs several children at once, and
+/// each one's subtree is a candidate.
+#[test]
+fn a_wildcard_disconnect_dirties_every_child_it_severed() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    for handle in ["a", "b"] {
+        scene.create(handle, "mesh").unwrap();
+        scene.connect(handle, None, "xf", "objects").unwrap();
+    }
+    scene.take_changes();
+
+    scene.disconnect(crate::ALL, None, "xf", "objects").unwrap();
+
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    assert!(affected.nodes.contains("a"));
+    assert!(affected.nodes.contains("b"));
+}
+
+/// **The gate for the whole feature: `changed ⊆ affected`.**
+///
+/// The defect this crate can have here is an *under*-approximation --
+/// a node whose resolved answer moved and which the candidate set does
+/// not name. A backend acting on that synchronises everything except
+/// the thing that changed, and renders the old state with no error and
+/// no warning. No hand-written case can be trusted to find it, because
+/// the rule that goes missing is the one nobody thought of.
+///
+/// So: a fixture carrying every feature the walks touch -- nested
+/// transforms, an instancer with a prototype under its own transform,
+/// a `set` with members, containers bound at two levels with a
+/// priority, a shader network -- then a scripted run of edits, and a
+/// brute-force comparison of every resolved answer before and after.
+/// Over-approximating is allowed; missing one is not.
+///
+/// What it cannot see: an over-approximation. Dropping the
+/// `sourcemodels` hop leaves this green, because moving a prototype's
+/// parent transform does not change what the instancer draws in this
+/// fixture -- naming the instancer there is a conservative choice, and
+/// `a_prototypes_ancestor_reaches_the_instancer` is what pins it.
+///
+/// Widened twice, both times because a mutation survived it: the
+/// script's `transformationmatrix` was an `f32`, which `matrix_of`
+/// refuses, so "move a transform" moved nothing; and its priorities
+/// were `f32` too, which 3Delight does not read as priorities, so
+/// precedence was never exercised. A gate that cannot fail proves only
+/// its own fixture.
+#[test]
+fn every_changed_answer_is_named_in_the_affected_set() {
+    // Answers a backend would act on, as text so they compare.
+    fn answers(scene: &Scene, handle: &str) -> String {
+        format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            scene.world_transform(handle),
+            scene.geometry_binding(handle),
+            scene.attribute_value(handle, "visibility"),
+            scene.placements(handle).map(|placements| placements
+                .iter()
+                .map(|placement| (placement.path.clone(), placement.transform))
+                .collect::<Vec<_>>()),
+        ) + &format!(
+            "|{:?}|{:?}",
+            scene.instance_transforms(handle),
+            scene.attribute_value(handle, "visibility.camera"),
+        )
+    }
+
+    fn fixture() -> Scene {
+        let mut scene = Scene::default();
+        for (handle, node_type) in [
+            ("outer", "transform"),
+            ("inner", "transform"),
+            ("protoxf", "transform"),
+            ("q", "mesh"),
+            ("r", "mesh"),
+            ("proto", "mesh"),
+            ("inst", "instances"),
+            ("group", "set"),
+            ("near", "attributes"),
+            ("far", "attributes"),
+            ("surface", "shader"),
+            ("surface2", "shader"),
+            ("texture", "shader"),
+        ] {
+            scene.create(handle, node_type).unwrap();
+        }
+        for (from, to) in [
+            ("outer", ".root"),
+            ("inner", "outer"),
+            ("q", "inner"),
+            ("r", "outer"),
+            ("protoxf", ".root"),
+            ("proto", "protoxf"),
+            ("inst", ".root"),
+        ] {
+            scene.connect(from, None, to, "objects").unwrap();
+        }
+        scene
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        scene.connect("q", None, "group", "members").unwrap();
+        scene
+            .connect("near", None, "q", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("far", None, "group", "geometryattributes")
+            .unwrap();
+        scene
+            .connect("surface", None, "near", "surfaceshader")
+            .unwrap();
+        // A rival on the same node: which of the two wins is decided
+        // by the connection's arguments, so a re-arm that adds and
+        // removes nothing changes the answer.
+        scene
+            .connect("surface2", None, "near", "surfaceshader")
+            .unwrap();
+        scene
+            .connect("texture", Some("out"), "surface", "colour")
+            .unwrap();
+        scene
+            .set_attribute(
+                "outer",
+                vec![OwnedArg::new(
+                    "transformationmatrix",
+                    Type::MatrixF64,
+                    1,
+                    0,
+                    OwnedData::F64(vec![
+                        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                        0.0, 1.0, 0.0, 0.0, 1.0,
+                    ]),
+                )],
+            )
+            .unwrap();
+        scene
+            .set_attribute("near", vec![arg("visibility", 1.0)])
+            .unwrap();
+        scene
+            .set_attribute(
+                "far",
+                vec![
+                    arg("visibility", 0.0),
+                    OwnedArg::new(
+                        "visibility.priority",
+                        Type::I32,
+                        1,
+                        0,
+                        OwnedData::I32(vec![10]),
+                    ),
+                ],
+            )
+            .unwrap();
+        scene
+    }
+
+    let handles = [
+        "outer", "inner", "protoxf", "q", "r", "proto", "inst", "group",
+        "near", "far", "surface", "surface2", "texture",
+    ];
+
+    // One edit is applied by `edit`, so the runs below can be
+    // exhaustive over (handle x operation) rather than trusting a
+    // random draw to have tried the one that matters.
+    // A `doublematrix`, declared. An `f32` here is `E6007` to
+    // 3Delight and `None` to `matrix_of`, so a script that used one
+    // would be editing nothing at all -- which is how this fixture
+    // first failed to notice a truncated descent.
+    fn matrix(x: f64) -> OwnedArg {
+        OwnedArg::new(
+            "transformationmatrix",
+            Type::MatrixF64,
+            1,
+            0,
+            OwnedData::F64(vec![
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, x,
+                0.0, 0.0, 1.0,
+            ]),
+        )
+    }
+
+    fn edit(scene: &mut Scene, handle: &str, op: usize) {
+        match op {
+            0 => {
+                let _ = scene.set_attribute(handle, vec![matrix(2.0)]);
+            }
+            1 => {
+                let _ =
+                    scene.set_attribute(handle, vec![arg("visibility", 0.0)]);
+            }
+            2 => {
+                let _ =
+                    scene.set_attribute_at_time(handle, 0.5, vec![matrix(3.0)]);
+            }
+            3 => scene.delete_attribute(handle, "visibility"),
+            4 => {
+                let _ = scene.delete(handle);
+            }
+            5 => {
+                let _ = scene.disconnect(crate::ALL, None, handle, "objects");
+            }
+            6 => {
+                let _ = scene.connect(handle, None, ".root", "objects");
+            }
+            7 => {
+                // Re-arm: no edge added, none removed, and which of the
+                // two rival shaders wins changes.
+                let _ = scene.connect_with_args(
+                    if op.is_multiple_of(2) {
+                        "surface"
+                    } else {
+                        "surface2"
+                    },
+                    None,
+                    "near",
+                    "surfaceshader",
+                    vec![OwnedArg::new(
+                        "priority",
+                        Type::I32,
+                        1,
+                        0,
+                        OwnedData::I32(vec![7]),
+                    )],
+                );
+            }
+            _ => {
+                // An `int`, and exactly one: anything else is not a
+                // priority to 3Delight, so an `f32` here would rank
+                // nothing and precedence would never be exercised.
+                let _ = scene.set_attribute(
+                    handle,
+                    vec![OwnedArg::new(
+                        "visibility.priority",
+                        Type::I32,
+                        1,
+                        0,
+                        OwnedData::I32(vec![20]),
+                    )],
+                );
+            }
+        }
+    }
+
+    let check =
+        |scene: &Scene, before: &Scene, affected: &Affected, what: &str| {
+            if affected.everything {
+                return;
+            }
+            for handle in handles {
+                let was = answers(before, handle);
+                let now = answers(scene, handle);
+                assert!(
+                    was == now
+                        || affected.nodes.contains(handle)
+                        || affected.shaders.contains(handle),
+                    "{what}: `{handle}` answers differently and is not in the \
+                 affected set\n  before: {was}\n   after: {now}",
+                );
+            }
+        };
+
+    // Every single edit, on every handle.
+    for handle in handles {
+        for op in 0..9 {
+            let mut scene = fixture();
+            let before = scene.clone();
+            scene.take_changes();
+            edit(&mut scene, handle, op);
+            let changes = scene.take_changes();
+            let affected = scene.affected(&changes);
+            check(&scene, &before, &affected, &format!("{handle}/{op}"));
+        }
+    }
+
+    // And pairs, for the interactions a single edit cannot show.
+    for seed in 0..256u64 {
+        let mut scene = fixture();
+        let before = scene.clone();
+        scene.take_changes();
+
+        let mut state =
+            seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        for _ in 0..2 {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let pick = (state >> 33) as usize;
+            edit(&mut scene, handles[pick % handles.len()], pick % 9);
+        }
+
+        let changes = scene.take_changes();
+        let affected = scene.affected(&changes);
+        check(&scene, &before, &affected, &format!("seed {seed}"));
+    }
+}
+
 /// `Node::effective` is what the resolver reads, so asking a node
 /// directly gives the resolver's answer.
 ///
