@@ -7,3 +7,8 @@ Cargo.lock
 /dodecahedron.exr
 /dodecahedron.png
 /repro_shared
+
+# Agent scratch inside crate directories would be PUBLISHED: a nested
+# .claude/audit/commands.log once reached `cargo package -p nsi-ffi-wrap`.
+# The root .claude/ is tracked deliberately; these are not.
+crates/**/.claude/
