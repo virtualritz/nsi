@@ -247,6 +247,14 @@ impl PixelFormat {
         let mut offset = 0;
 
         let is_single_channel = format.len() == 1;
+        // `previous_channel_id` is seeded from the first entry, so the
+        // first step of the loop compares that entry against itself. A
+        // channel id that is both a layer-ender and a layer-starter --
+        // `"s"`, i.e. an indexed scalar such as `"beauty.000"` -- would
+        // then self-trigger a boundary and emit a spurious duplicate
+        // layer. Only a transition from a *preceding* entry can open a
+        // new layer.
+        let mut is_first_entry = true;
         let mut layers = format
             .iter()
             .enumerate()
@@ -263,9 +271,13 @@ impl PixelFormat {
                 let (layer_name, channel_id) =
                     Self::split_into_layer_name_and_channel_id(name);
 
+                let has_predecessor =
+                    !core::mem::replace(&mut is_first_entry, false);
+
                 // A boundary between two layers will be when the postfix
                 // is a combination of those above.
-                if ["b", "z", "s", "a"].contains(&previous_channel_id)
+                if has_predecessor
+                    && ["b", "z", "s", "a"].contains(&previous_channel_id)
                     && ["r", "x", "s"].contains(&channel_id)
                 {
                     let tmp_layer_name = if previous_layer_name.is_empty() {

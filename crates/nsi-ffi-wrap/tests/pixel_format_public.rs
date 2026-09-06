@@ -16,17 +16,19 @@ fn a_display_driver_can_build_a_pixel_format_from_ndspy() {
     assert_eq!(1, pixel_format.channels());
 }
 
-/// Known defect: indexed channels (ndspy's native format) self-trigger layer boundaries.
+/// Regression: indexed channels (ndspy's native format) used to self-trigger
+/// layer boundaries.
 ///
-/// Root cause: "s" (scalar) appears in both the layer-ender set ["b","z","s","a"]
-/// and the layer-starter set ["r","x","s"], causing a single "s" channel to match
-/// both patterns and incorrectly trigger a boundary emission.
+/// Root cause was that "s" (scalar) appears in both the layer-ender set
+/// ["b","z","s","a"] and the layer-starter set ["r","x","s"]. The first loop
+/// step compares the seeded `previous_*` against the very same entry, so a lone
+/// "s" matched both patterns and emitted a spurious duplicate layer:
+/// `["beauty.000"]` produced 2 layers, channels()==2.
 ///
-/// Current behavior: `["beauty.000"]` produces 2 duplicate layers, each
-/// {"beauty", OneChannel}, so channels()==2.
-/// Correct behavior: should produce 1 layer {"beauty", OneChannel}, channels()==1.
+/// A single `PtDspyDevFormat` entry must never yield more than one layer, and
+/// the display shim uses `channels()` as a slice length, so an inflated count
+/// is a memory-safety hazard, not just a cosmetic one.
 #[test]
-#[ignore]
 fn indexed_channels_self_trigger_boundary() {
     let name = CString::new("beauty.000").unwrap();
     let format = [ndspy_sys::PtDspyDevFormat {
