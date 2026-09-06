@@ -15,7 +15,7 @@ repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
 ndspy-sys = "0.2"
-nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = ["output"] }
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
 
 [dev-dependencies]
 nsi = { version = "0.9", path = "../..", features = ["output"] }
