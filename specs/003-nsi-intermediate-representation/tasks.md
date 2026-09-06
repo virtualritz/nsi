@@ -343,12 +343,16 @@ against this API now.
       priority (while accepting `int64` for the value itself), so the
       arm would have ranked a node the renderer does not. Evidence:
       `resolve::tests::an_int64_priority_is_ignored`.
-- [ ] T9.8 A node setting `ATTR.priority` without `ATTR` defines `ATTR`
-      at its default in 3Delight, and this crate skips it. Closing it
-      means carrying ɴsɪ's per-attribute defaults or widening
-      `AttributeValue`. Pinned by
-      `resolve::tests::a_priority_without_its_attribute_is_skipped`.
-      Gate: the `Open` row in `contracts/resolution.md`.
+- [x] T9.8 A node setting `ATTR.priority` without `ATTR` defines
+      `ATTR` at its default, and ranks on that priority: rendered, such
+      a node two levels up beats a `visibility 0` on the primitive's
+      own node, so the crate was returning a **wrong** winner and not
+      merely a missing one. Closed by widening rather than by carrying
+      ɴsɪ's per-attribute defaults, which are a renderer's to know:
+      `AttributeValue::arg` is now `Option`, `None` meaning *the
+      default of `AttributeValue::name`*, and `name` carries the
+      attribute that won -- which `arg.name` used to. Evidence: seven
+      tests in `resolve::tests`, three mutations, seven probe scenes.
 - [x] T9.9 `shaderattributes` nodes resolve, under their own rule.
       They had classified since the classifier landed and nothing read
       them. `shader_attribute_value` takes the nearest and stops:

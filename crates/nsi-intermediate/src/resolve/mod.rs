@@ -516,15 +516,24 @@ pub struct AttributeValue<'a> {
     /// Usually an `attributes` node. For a shader attribute it can be
     /// the geometry itself, which ɴsɪ ranks above every container.
     pub node: &'a str,
-    /// The definition itself.
-    ///
-    /// [`OwnedArg::name`] is the attribute that actually won, which is
-    /// not always the one asked for: in [`Scene::attribute_value`] a
-    /// `visibility.<ray>` query falls back to the less specific
-    /// `visibility`, and this is how a backend tells the two apart.
+    /// The attribute that actually won, which is not always the one
+    /// asked for: in [`Scene::attribute_value`] a `visibility.<ray>`
+    /// query falls back to the less specific `visibility`, and this is
+    /// how a backend tells the two apart.
     /// [`Scene::shader_attribute_value`] performs no such fallback, so
-    /// there the name always matches the query.
-    pub arg: &'a OwnedArg,
+    /// there it always matches the query.
+    pub name: &'a str,
+    /// The definition itself, or `None` when the winning node carries
+    /// only `<name>.priority`.
+    ///
+    /// 3Delight reads a lone `ATTR.priority` as a definition of `ATTR`
+    /// **at its ɴsɪ default**, and it wins on the strength of that
+    /// priority; [`Scene::attribute_value`] has the rendered evidence.
+    /// This crate does not carry ɴsɪ's per-attribute defaults, so it
+    /// names the winner and leaves the value to the backend: `None`
+    /// means *the default of [`AttributeValue::name`]*, never
+    /// *undefined*.
+    pub arg: Option<&'a OwnedArg>,
     /// The `ATTR.priority` that selected it; `0` when none is set.
     pub priority: i32,
 }
@@ -1191,20 +1200,22 @@ impl Scene {
     /// - A priority that is not an `int` is ignored, leaving `0`. That
     ///   includes `int64`, which 3Delight also ignores here.
     ///
-    /// # Known divergence
+    /// # A priority with no attribute beside it
     ///
     /// A node that sets `ATTR.priority` but **not** `ATTR` is a
-    /// definition to 3Delight -- of `ATTR` at its default value, with
-    /// that priority. Rendered: an `attributes` node carrying only
-    /// `visibility.priority` makes the geometry visible even though a
-    /// farther node sets `visibility 0`, and it does so at priority `0`
-    /// too; a node with no attributes at all does not. This function
-    /// skips such a node, because it has no recorded value to return
-    /// and this crate does not carry ɴsɪ's per-attribute defaults.
+    /// definition too -- of `ATTR` at its ɴsɪ default -- and it ranks on
+    /// that priority like any other. Rendered: an `attributes` node
+    /// carrying only `visibility.priority` makes the geometry visible
+    /// over a farther `visibility 0`, at priority `10` and at `0`
+    /// alike; and one two levels up at priority `10` beats a
+    /// `visibility 0` on the node attached to the primitive itself, so
+    /// it is not merely winning on proximity. A node with no attributes
+    /// at all is not a definition, and neither is one whose priority is
+    /// an `int64`, which 3Delight cannot read.
     ///
-    /// A backend that cares can look for `<name>.priority` among
-    /// [`Binding::attributes`]. Tracked as an `Open` row in
-    /// `contracts/resolution.md`.
+    /// Such a winner comes back with [`AttributeValue::arg`] `None`:
+    /// this crate names the attribute and leaves ɴsɪ's default for it to
+    /// the backend, which is the one thing it cannot supply.
     ///
     /// # Errors
     ///
@@ -1255,7 +1266,8 @@ impl Scene {
         {
             return Some(AttributeValue {
                 node: handle,
-                arg,
+                name: &arg.name,
+                arg: Some(arg),
                 priority: 0,
             });
         }
@@ -1269,7 +1281,8 @@ impl Scene {
             if let Some(arg) = node.effective(name) {
                 return Some(AttributeValue {
                     node: &edge.from,
-                    arg,
+                    name: &arg.name,
+                    arg: Some(arg),
                     priority: 0,
                 });
             }
@@ -1299,13 +1312,24 @@ impl Scene {
                 .chain(fallback.map(|name| (0u8, name)));
 
             for (specificity, key) in keys {
-                let Some(arg) = node.effective(key) else {
-                    continue;
+                let beside = node.effective(&format!("{key}.priority"));
+                let priority = beside.and_then(priority_value);
+
+                // A lone `ATTR.priority` is a definition of `ATTR` at
+                // its ɴsɪ default, so it is a candidate with no value.
+                // Its name is the priority argument's own, less the
+                // suffix: a borrow of the scene, where `key` is only
+                // borrowed from the caller. An unreadable priority is
+                // not a definition -- 3Delight ignores that node.
+                let (attribute, arg) = match (node.effective(key), beside) {
+                    (Some(arg), _) => (arg.name.as_str(), Some(arg)),
+                    (None, Some(beside)) if priority.is_some() => (
+                        &beside.name[..beside.name.len() - ".priority".len()],
+                        None,
+                    ),
+                    (None, _) => continue,
                 };
-                let priority = node
-                    .effective(&format!("{key}.priority"))
-                    .and_then(priority_value)
-                    .unwrap_or(0);
+                let priority = priority.unwrap_or(0);
 
                 candidates.push((
                     priority,
@@ -1313,6 +1337,7 @@ impl Scene {
                     rank,
                     AttributeValue {
                         node: &edge.from,
+                        name: attribute,
                         arg,
                         priority,
                     },

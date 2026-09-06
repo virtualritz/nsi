@@ -1483,7 +1483,10 @@ fn at_equal_priority_the_nearest_definition_wins() {
     let value = scene.attribute_value("mesh", "visibility").unwrap();
     let value = value.expect("defined on the path");
     assert_eq!(value.node, "near");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
 }
 
 /// ɴsɪ: "the definition with the highest priority is selected". The
@@ -1509,7 +1512,10 @@ fn attr_priority_beats_proximity() {
     let value = value.expect("defined on the path");
     assert_eq!(value.node, "far", "priority 10 outranks proximity");
     assert_eq!(value.priority, 10);
-    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![1])
+    );
 }
 
 /// The priority is per attribute, not per node: a priority on one
@@ -1570,8 +1576,11 @@ fn a_per_ray_visibility_beats_the_default() {
 
     let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
     let value = value.expect("defined on the path");
-    assert_eq!(value.arg.name, "visibility.camera");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+    assert_eq!(value.name, "visibility.camera");
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
 }
 
 /// A per-ray query falls back to the default when nothing sets the ray
@@ -1586,8 +1595,11 @@ fn the_default_visibility_answers_a_per_ray_query() {
 
     let value = scene.attribute_value("mesh", "visibility.shadow").unwrap();
     let value = value.expect("the default covers every ray type");
-    assert_eq!(value.arg.name, "visibility");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+    assert_eq!(value.name, "visibility");
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
 }
 
 /// Specificity only breaks a *tie*: "the attribute with the highest
@@ -1609,7 +1621,7 @@ fn a_prioritised_default_beats_a_per_ray_visibility() {
 
     let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
     let value = value.expect("defined on the path");
-    assert_eq!(value.arg.name, "visibility", "priority 5 beats specificity");
+    assert_eq!(value.name, "visibility", "priority 5 beats specificity");
     assert_eq!(value.priority, 5);
 }
 
@@ -1709,7 +1721,7 @@ fn specificity_is_compared_before_proximity() {
         value.node, "far",
         "the per-ray value outranks the nearer default"
     );
-    assert_eq!(value.arg.name, "visibility.camera");
+    assert_eq!(value.name, "visibility.camera");
 }
 
 /// 3Delight ignores an `int64` `ATTR.priority`, so this does too.
@@ -1747,16 +1759,14 @@ fn an_int64_priority_is_ignored() {
     assert_eq!(value.priority, 0);
 }
 
-/// The documented divergence, pinned so it cannot change silently.
-///
 /// A node setting only `visibility.priority` is a definition to
-/// 3Delight -- of `visibility` at its default -- and that node wins.
-/// This crate has no value to return for it and skips it, so the
-/// farther node answers instead. If this ever starts returning `near`,
-/// the `Open` row in `contracts/resolution.md` has been closed and the
-/// docs must follow.
+/// 3Delight -- of `visibility` at its ɴsɪ default -- and it wins.
+/// Rendered (`B`, `C`): the geometry is visible over a farther
+/// `visibility 0`, at priority `10` and at `0` alike. This crate does
+/// not carry ɴsɪ's defaults, so it names the winner and returns no
+/// value rather than the loser's.
 #[test]
-fn a_priority_without_its_attribute_is_skipped() {
+fn a_priority_without_its_attribute_is_a_definition() {
     let mut scene = scene_with_two_attribute_levels();
     scene
         .set_attribute("near", vec![integers("visibility.priority", vec![10])])
@@ -1766,10 +1776,160 @@ fn a_priority_without_its_attribute_is_skipped() {
         .unwrap();
 
     let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("`near` defines it at the default");
+    assert_eq!(value.node, "near");
+    assert_eq!(value.name, "visibility");
+    assert_eq!(value.arg, None, "the default is the backend's to supply");
+    assert_eq!(value.priority, 10);
+}
+
+/// And it ranks on that priority, rather than merely winning where it
+/// happens to be nearest: rendered (`E`), a `visibility.priority 10`
+/// two levels up leaves the geometry visible even though the node
+/// attached to the primitive itself sets `visibility 0`.
+///
+/// This is the case the crate answered **wrongly** before, not merely
+/// incompletely: it returned `near`'s `visibility 0` and a backend
+/// would have hidden an object 3Delight draws.
+#[test]
+fn a_defaulted_definition_outranks_a_nearer_value() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility.priority", vec![10])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("`far` defines it at the default");
+    assert_eq!(value.node, "far", "priority 10 outranks proximity");
+    assert_eq!(value.arg, None);
+    assert_eq!(value.priority, 10);
+}
+
+/// The converse, so the new candidate cannot simply always win:
+/// rendered (`F`), a `visibility 0` at priority `20` two levels up
+/// beats a lone `visibility.priority 10` on the primitive's own node,
+/// and the geometry stays hidden.
+#[test]
+fn a_higher_priority_value_beats_a_defaulted_definition() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility.priority", vec![10])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![0]),
+                integers("visibility.priority", vec![20]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
     let value = value.expect("`far` defines it");
+    assert_eq!(value.node, "far");
     assert_eq!(
-        value.node, "far",
-        "3Delight answers `near` at the default; this crate cannot",
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
+    assert_eq!(value.priority, 20);
+}
+
+/// A priority 3Delight cannot read is not a definition either.
+/// Rendered (`D`): with the lone priority written as an `int64` the
+/// geometry is **hidden**, so the farther `visibility 0` answers -- if
+/// the node counted at priority `0` it would win on proximity and the
+/// geometry would be visible, as in `C`.
+#[test]
+fn an_unreadable_priority_alone_is_not_a_definition() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute(
+            "near",
+            vec![OwnedArg {
+                name: "visibility.priority".to_string(),
+                type_tag: Type::I64,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::I64(vec![10]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("`far` defines it");
+    assert_eq!(value.node, "far", "an int64 priority defines nothing");
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
+}
+
+/// An `attributes` node with nothing on it is not a definition, which
+/// is what makes the rule about the *priority* rather than the node.
+/// Rendered (`A`): the geometry stays hidden.
+#[test]
+fn an_empty_attributes_node_is_not_a_definition() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("far", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("`far` defines it");
+    assert_eq!(value.node, "far");
+}
+
+/// A per-ray priority defines the per-ray attribute, not the default.
+/// Rendered (`G`): a lone `visibility.camera.priority` makes the
+/// geometry visible over a farther `visibility.camera 0`.
+#[test]
+fn a_per_ray_priority_alone_defines_the_per_ray_attribute() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute(
+            "near",
+            vec![integers("visibility.camera.priority", vec![10])],
+        )
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility.camera", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("`near` defines it at the default");
+    assert_eq!(value.node, "near");
+    assert_eq!(value.name, "visibility.camera");
+    assert_eq!(value.arg, None);
+}
+
+/// A defaulted definition is ranked by specificity like any other, not
+/// waved through on proximity. Rendered (`H2`): at equal priority a
+/// farther explicit `visibility.camera 0` beats a nearer lone
+/// `visibility.priority`, and the geometry stays hidden.
+#[test]
+fn a_defaulted_definition_is_ranked_by_specificity() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility.priority", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility.camera", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("`far` defines it");
+    assert_eq!(value.node, "far", "the per-ray value is more specific");
+    assert_eq!(value.name, "visibility.camera");
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
     );
 }
 
@@ -1811,7 +1971,10 @@ fn the_nearest_shader_attribute_wins() {
     let value = scene.shader_attribute_value("mesh", "tint").unwrap();
     let value = value.expect("defined on the path");
     assert_eq!(value.node, "near");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![1])
+    );
 }
 
 /// An ancestor's shader attributes are inherited when nothing nearer
@@ -1935,7 +2098,10 @@ fn the_geometrys_own_shader_attribute_outranks_every_container() {
     let value = scene.shader_attribute_value("mesh", "tint").unwrap();
     let value = value.expect("set on the primitive");
     assert_eq!(value.node, "mesh");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![1])
+    );
 }
 
 /// The primitive is a source with no container present at all.
@@ -2118,7 +2284,10 @@ fn a_set_outranks_the_transform_above_it() {
     let value = scene.attribute_value("mesh", "visibility").unwrap();
     let value = value.expect("defined");
     assert_eq!(value.node, "sa");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![1])
+    );
 }
 
 /// With two memberships the first connection wins.
@@ -2400,7 +2569,10 @@ fn a_set_of_the_geometry_outranks_a_set_of_its_transform() {
     let value = scene.attribute_value("mesh", "visibility").unwrap();
     let value = value.expect("defined");
     assert_eq!(value.node, "am");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![1])
+    );
 }
 
 /// A transform's own container outranks a set that transform belongs
@@ -3112,13 +3284,13 @@ fn attribute_rules_apply_along_a_placement_path() {
         .attribute_value_along(&placements[0].path, "visibility.camera")
         .expect("defined");
     assert_eq!(a.node, "attrA");
-    assert_eq!(a.arg.name, "visibility.camera", "specificity still applies");
+    assert_eq!(a.name, "visibility.camera", "specificity still applies");
 
     let b = scene
         .attribute_value_along(&placements[1].path, "visibility.camera")
         .expect("defined");
     assert_eq!(b.node, "attrB");
-    assert_eq!(b.arg.name, "visibility", "falls back to the default");
+    assert_eq!(b.name, "visibility", "falls back to the default");
 }
 
 /// The same for `shaderattributes`, including the primitive's own
@@ -4438,7 +4610,10 @@ fn an_attribute_set_only_at_a_time_is_gathered() {
     let value = scene.attribute_value("m", "visibility").unwrap();
     let value = value.expect("3Delight honours it; so must this");
     assert_eq!(value.node, "a");
-    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+    assert_eq!(
+        value.arg.expect("a recorded value").data,
+        OwnedData::I32(vec![0])
+    );
 }
 
 /// And its `ATTR.priority` is read the same way, so a sampled priority

@@ -92,6 +92,16 @@ trait -> ffi-wrap -> intermediate -> parse.
   `shader_attribute_value_along` apply ɴsɪ's full precedence to one
   placement, which the geometry-taking forms cannot do for a
   multi-parent node.
+- `ATTR.priority` selects between definitions -- and a node carrying
+  **only** `ATTR.priority` is one of them. 3Delight reads it as defining
+  `ATTR` at its ɴsɪ default: rendered, such a node two levels up beats a
+  `visibility 0` on the `attributes` node attached to the primitive
+  itself, so this crate was returning a wrong winner and not merely a
+  missing one. `AttributeValue::arg` is therefore an `Option` -- `None`
+  meaning *the default of `AttributeValue::name`*, never *undefined* --
+  and `name` carries the attribute that won, which used to be read off
+  `arg.name`. The defaults themselves are not carried here: they are a
+  renderer's to know, and a stale table would be worse than none.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,
