@@ -284,3 +284,46 @@ fn a_raw_byte_in_the_chunk_survives() {
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
     );
 }
+
+/// The Lua emitter replays samples in the order they were **set**, as
+/// the stream emitter does.
+///
+/// An attribute resolves by the last call, so a writer that walked the
+/// timeline would hand the reader a scene that resolves differently
+/// from the one it wrote. The stream side is pinned by
+/// `cross_crate::the_order_the_samples_were_set_in_survives_the_round_trip`;
+/// this one was claimed by a contract row and proven by nothing, and
+/// reversing the emitter's loop left the suite green.
+#[test]
+fn the_order_the_samples_were_set_in_survives_the_lua_round_trip() {
+    let original = Recorder::new();
+    original.create("a", "attributes", None).unwrap();
+    // The later time first, so call order and time order disagree.
+    original
+        .set_attribute_at_time("a", 1.0, &[nsi::i32!("visibility", 0)])
+        .unwrap();
+    original
+        .set_attribute_at_time("a", 0.0, &[nsi::i32!("visibility", 1)])
+        .unwrap();
+
+    let mut script = Vec::new();
+    write_lua(&original.into_scene(), &mut script).expect("write_lua");
+
+    let rebuilt = Recorder::new();
+    run_lua(&script, &rebuilt).expect("run");
+    let scene = rebuilt.into_scene();
+    let node = scene.node("a").expect("node");
+
+    assert_eq!(
+        node.sample_order["visibility"],
+        vec![1.0, 0.0],
+        "the t=0 call was last on both sides",
+    );
+    assert_eq!(
+        node.effective("visibility")
+            .expect("set at a time")
+            .as_i32(),
+        Some(1),
+        "which is the value 3Delight renders",
+    );
+}

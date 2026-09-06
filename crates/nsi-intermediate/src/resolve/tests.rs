@@ -3939,6 +3939,67 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
 
+/// Survivors come back in **time** order however they were set.
+///
+/// Call order decides *which* samples survive; interpolation then
+/// needs them on the timeline. A reviewer deleted the sort and the
+/// whole suite stayed green: every out-of-order fixture until now had
+/// one survivor, or survivors that were already in time order. Both
+/// sampled paths are pinned here, because they were two copies of this
+/// mistake waiting to happen.
+#[test]
+fn survivors_are_ordered_by_time_however_they_were_set() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    // The later time is set first.
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(1.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        0.0,
+        "halfway between -1 and +1",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.25).unwrap()[12],
+        -0.5,
+        "a quarter of the way, which an unsorted pair gets wrong",
+    );
+
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![doubles("transformationmatrices", instance_matrix(1.0))],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", instance_matrix(-1.0))],
+        )
+        .unwrap();
+
+    let at = scene.instance_transforms_at("inst", 0.25).unwrap();
+    assert_eq!(at.len(), 1);
+    assert_eq!(at[0].transform[12], -0.5, "the instancer sorts too");
+}
+
 /// The last **defined** sample wins, not the last by time.
 ///
 /// A stream that sets `t=1` before `t=0` separates the two, and

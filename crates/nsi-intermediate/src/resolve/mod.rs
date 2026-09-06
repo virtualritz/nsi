@@ -1691,13 +1691,10 @@ impl Scene {
     /// tell a step from a blend. It was the wrong choice, and it
     /// returned the discarded sample in every case that discriminates.
     ///
-    /// # The one divergence
-    ///
-    /// 3Delight keys on the last sample *defined*; this keys on the last
-    /// by *time*, because `time_attrs` is sorted by time and definition
-    /// order is not recorded. A stream setting `t=1` before `t=0` --
-    /// which 3Delight itself never writes -- resolves to the other one.
-    /// Recorded in `contracts/resolution.md`.
+    /// The last **defined**, which is not the last by time for a
+    /// stream that sets `t=1` before `t=0`. That was a divergence for
+    /// as long as nothing recorded the order; [`Node::sample_order`]
+    /// does, and this reads it.
     fn instance_ints(&self, node: &Node, name: &str) -> Option<Vec<i32>> {
         // The shared typing rule, not a sixth hand-rolled copy of it:
         // the last sample that *names* the attribute wins, and a type
