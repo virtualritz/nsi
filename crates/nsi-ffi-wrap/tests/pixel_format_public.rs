@@ -16,6 +16,40 @@ fn a_display_driver_can_build_a_pixel_format_from_ndspy() {
     assert_eq!(1, pixel_format.channels());
 }
 
+/// An RGB layer with no alpha -- common, and it used to yield an *empty*
+/// `PixelFormat`.
+///
+/// This pins `channels()`, which the `nsi-display` shim uses as a slice length
+/// over the renderer's bucket buffer: a wrong count there is an out-of-bounds
+/// read, so the value is memory-safety-critical and must not drift.
+#[test]
+fn rgb_without_alpha_is_one_three_channel_layer() {
+    let names = [
+        CString::new("Ci.r").unwrap(),
+        CString::new("Ci.g").unwrap(),
+        CString::new("Ci.b").unwrap(),
+    ];
+    let format = [
+        ndspy_sys::PtDspyDevFormat {
+            name: names[0].as_ptr(),
+            type_: 1, // PkDspyFloat32
+        },
+        ndspy_sys::PtDspyDevFormat {
+            name: names[1].as_ptr(),
+            type_: 1,
+        },
+        ndspy_sys::PtDspyDevFormat {
+            name: names[2].as_ptr(),
+            type_: 1,
+        },
+    ];
+
+    let pixel_format = PixelFormat::from_ndspy(&format);
+
+    assert_eq!(1, pixel_format.len(), "should produce 1 layer");
+    assert_eq!(3, pixel_format.channels(), "should have 3 channels");
+}
+
 /// Regression: indexed channels (ndspy's native format) used to self-trigger
 /// layer boundaries.
 ///
