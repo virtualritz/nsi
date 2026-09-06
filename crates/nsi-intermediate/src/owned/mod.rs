@@ -117,6 +117,7 @@ pub enum OwnedData {
 
 /// A recorded ɴsɪ argument.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct OwnedArg {
     /// The attribute name this argument sets.
     pub name: String,

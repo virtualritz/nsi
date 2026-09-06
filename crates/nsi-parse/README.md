@@ -20,6 +20,12 @@ of its own, so the same parser feeds a live 3Delight context, an
 reader that insisted on its own representation would make every
 consumer translate.
 
+A sink brings its own *behaviour*, not its own argument type: every
+entry point here binds `Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call,
+'static>>`, because the parser has to build the arguments it hands over
+and can only build the one shape. Implement `nsi_trait::Nsi` with that
+associated type and the parser will drive it.
+
 ```rust
 let bytes = std::fs::read("scene.nsi")?;
 let recorder = nsi_intermediate::Recorder::new();

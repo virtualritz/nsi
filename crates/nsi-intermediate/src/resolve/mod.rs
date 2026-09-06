@@ -345,17 +345,19 @@ pub struct Placement {
     pub binding: Option<Binding>,
 }
 
-/// What a node's samples of one attribute amount to.
 /// What ɴsɪ's typing rule makes of one attribute's samples.
 ///
 /// Returned by [`Scene::sampled_attribute`], and what the resolver
 /// itself reads for `transformationmatrix` and the instancer's
 /// attributes.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Sampled<'a> {
-    /// Not sampled; the static value applies, and
-    /// [`Node::effective`] gives it.
+    /// Not sampled. The static value applies and [`Node::effective`]
+    /// gives it -- **run the same predicate over that too**: the rule
+    /// is about the call, not about `SetAttributeAtTime`. Rendered, a
+    /// static `"nvertices" "int64" 1` is `E6007`, then `E6020`, and
+    /// the mesh does not draw.
     No,
     /// Sampled, but the last call cannot be read as the attribute's
     /// type -- so the attribute is unset, at every time.
@@ -571,6 +573,7 @@ fn priority_value(arg: &OwnedArg) -> Option<i32> {
 /// One renderable output: a camera paired with a screen, and the AOVs
 /// written from it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct RenderOutput {
     /// The camera the screen is connected to.
     pub camera: String,
@@ -610,6 +613,7 @@ pub struct Instance {
 
 /// One AOV and the drivers it is written to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct OutputLayer {
     /// The `outputlayer` node's handle.
     pub handle: String,
@@ -975,9 +979,25 @@ impl Scene {
     /// would sweep through both, which is the answer 3Delight gives to
     /// neither.
     ///
+    /// # What `readable` should say
+    ///
+    /// 3Delight does not type-check every attribute, so the strictest
+    /// predicate is not always the right one. Rendered: `P` declared
+    /// `vector`, `normal`, `color`, `float 12` or `double 12` is
+    /// `E6007` and the mesh does not draw -- there an exact
+    /// `type_tag == Type::Point` matches the renderer. But `N`
+    /// declared `vector` raises **no** error and renders identically
+    /// to a `normal`, so a predicate demanding `Type::Normal` reports
+    /// `Unset` for a call 3Delight accepts. The rule this applies is
+    /// proven for the attributes the renderer type-checks; for the
+    /// others, `readable` is the backend's own policy and this crate
+    /// does not know better.
+    ///
     /// # Errors
     ///
-    /// [`ResolveError::UnknownHandle`] if no such node exists.
+    /// [`ResolveError::UnknownHandle`] if no such node exists. A node
+    /// that exists but never had the attribute set is
+    /// [`Sampled::No`], not an error.
     pub fn sampled_attribute(
         &self,
         handle: &str,
@@ -1787,32 +1807,28 @@ impl Scene {
         // The same typing rule: a wrong-typed last sample unsets the
         // matrices, and 3Delight then draws **nothing** rather than the
         // discarded earlier set.
-        let mut samples: Vec<(f64, &[f64])> =
-            match sampled_attr(node, MATRICES, |arg| {
-                matches!(arg.data, OwnedData::F64(_))
-            }) {
-                // `No` means "use the static value"; `Unset` means
-                // "there is none". Indistinguishable today, because
-                // `set_attribute` clears the samples of that name and
-                // `set_attribute_at_time` clears the static one, so a
-                // node never holds both -- swapping these two leaves
-                // the suite green, and no reachable scene separates
-                // them. Kept apart because they say different things,
-                // and the arm that would go wrong if that rule changed
-                // is the one that draws instances that should not be
-                // there.
-                Sampled::No => return Ok(None),
-                Sampled::Unset => return Ok(Some(Vec::new())),
-                found @ Sampled::Yes { .. } => found
-                    .samples()
-                    .filter_map(|(t, arg)| match arg.data {
-                        OwnedData::F64(ref values) => {
-                            Some((t, values.as_slice()))
-                        }
-                        _ => None,
-                    })
-                    .collect(),
-            };
+        let mut samples: Vec<(f64, &[f64])> = match sampled_attr(
+            node,
+            MATRICES,
+            |arg| matrices_of(arg).is_some(),
+        ) {
+            // `No` means "use the static value"; `Unset` means
+            // "there is none". Indistinguishable today, because
+            // `set_attribute` clears the samples of that name and
+            // `set_attribute_at_time` clears the static one, so a
+            // node never holds both -- swapping these two leaves
+            // the suite green, and no reachable scene separates
+            // them. Kept apart because they say different things,
+            // and the arm that would go wrong if that rule changed
+            // is the one that draws instances that should not be
+            // there.
+            Sampled::No => return Ok(None),
+            Sampled::Unset => return Ok(Some(Vec::new())),
+            found @ Sampled::Yes { .. } => found
+                .samples()
+                .filter_map(|(t, arg)| Some((t, matrices_of(arg)?)))
+                .collect(),
+        };
 
         // A sample that changes the instance *count* describes a
         // different set, not a moved one, and 3Delight refuses the
@@ -2187,10 +2203,7 @@ impl Scene {
         let sampled = self.instance_matrices_at(node, instances, time)?;
         let matrices: &[f64] = match (&sampled, node.attrs.get(MATRICES)) {
             (Some(values), _) => values,
-            (None, Some(arg)) => match &arg.data {
-                OwnedData::F64(values) => values.as_slice(),
-                _ => &[],
-            },
+            (None, Some(arg)) => matrices_of(arg).unwrap_or(&[]),
             (None, None) => &[],
         };
 
@@ -2406,6 +2419,25 @@ impl Scene {
 /// Non-`f64` matrices yield `None`: ɴsɪ documents the attribute as
 /// `doublematrix`, and silently reinterpreting an `f32` one would be
 /// worse than skipping it.
+fn matrices_of(arg: &OwnedArg) -> Option<&[f64]> {
+    // The declared type again, and for the same reason. Rendered:
+    // `"transformationmatrices" "doublematrix" 2` draws two copies,
+    // while the *same thirty-two doubles* declared `"double" 32` are
+    // `E6007` and 3Delight draws **nothing**. Reading the payload
+    // alone drew two instances the renderer refuses -- the wrong
+    // answer this crate exists to not give, and it survived the commit
+    // that fixed `matrix_of` because the instancer kept its own
+    // predicate at two sites.
+    if arg.type_tag != Type::MatrixF64 {
+        return None;
+    }
+
+    match &arg.data {
+        OwnedData::F64(values) => Some(values),
+        _ => None,
+    }
+}
+
 fn matrix_of(arg: &OwnedArg) -> Option<[f64; 16]> {
     // The declared type, not just the payload: sixteen `double`s are
     // not a `doublematrix`. Rendered, `"transformationmatrix" "double"

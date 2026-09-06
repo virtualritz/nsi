@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 /// One ɴsɪ node.
 #[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Node {
     /// The ɴsɪ node type this handle was created with.
     pub node_type: String,
@@ -84,29 +85,35 @@ impl Node {
 pub(crate) fn latest_per_time(
     calls: &[(f64, OwnedArg)],
 ) -> Vec<(f64, &OwnedArg)> {
-    // Sorted by time, and by call order within one time -- a **stable**
-    // sort on the time alone gives the second for free, which is what
-    // makes "the last call at a time stands" a `dedup` rather than a
-    // search. Scanning the standing values for each call instead was
-    // quadratic in the distinct times, and a thousand-sample animation
-    // baked one `SetAttributeAtTime` per frame is not a strange scene:
-    // measured, `world_transform_samples` over five such nodes took
-    // seconds.
-    let mut standing: Vec<(f64, &OwnedArg)> =
-        calls.iter().map(|(time, arg)| (*time, arg)).collect();
-    standing.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+    // Sorted by time, and by **call order** within one time -- the
+    // call index is part of the key rather than a stability the sort
+    // happens to give. A reviewer switched this to `sort_unstable_by`
+    // and nothing went red; no fixture had enough same-time calls to
+    // make an unstable sort actually reorder, so the guarantee the
+    // rule rested on was one no test could see. With the index in the
+    // key the order is total and any correct sort gives this answer.
+    let mut standing: Vec<(f64, usize, &OwnedArg)> = calls
+        .iter()
+        .enumerate()
+        .map(|(index, (time, arg))| (*time, index, arg))
+        .collect();
+    standing.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     standing.dedup_by(|later, earlier| {
         // `dedup_by` keeps the *earlier* of a matching pair, and the
         // later call is the one that stands, so its value moves down
         // before the earlier one is dropped.
         if later.0.total_cmp(&earlier.0) == Ordering::Equal {
-            earlier.1 = later.1;
+            earlier.2 = later.2;
             true
         } else {
             false
         }
     });
+
     standing
+        .into_iter()
+        .map(|(time, _, arg)| (time, arg))
+        .collect()
 }
 
 /// The recorded scene graph.

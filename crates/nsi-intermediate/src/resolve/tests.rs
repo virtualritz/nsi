@@ -3939,6 +3939,84 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
 
+/// The instancer's matrices are a `doublematrix`, declared, not
+/// sixteen doubles per instance that happen to be there.
+///
+/// Rendered: `"transformationmatrices" "doublematrix" 2` draws two
+/// copies, while the **same thirty-two doubles** declared `"double"
+/// 32` are `E6007` and 3Delight draws **nothing**. This crate read the
+/// payload and drew two -- the wrong answer it exists not to give, and
+/// it outlived the commit that fixed the same leniency in `matrix_of`
+/// because the instancer carried its own predicate at two more sites.
+#[test]
+fn instancer_matrices_are_a_doublematrix_by_declaration() {
+    let plain_doubles = |values: Vec<f64>| OwnedArg {
+        name: "transformationmatrices".to_string(),
+        type_tag: Type::F64,
+        array_length: 1,
+        flags: 0,
+        data: OwnedData::F64(values),
+    };
+    let two = || [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+
+    let build = |arg: OwnedArg| {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto", "mesh").unwrap();
+        scene.connect("inst", None, ".root", "objects").unwrap();
+        scene
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        scene.set_attribute("inst", vec![arg]).unwrap();
+        scene
+    };
+
+    assert_eq!(
+        build(doubles("transformationmatrices", two()))
+            .instance_transforms("inst")
+            .unwrap()
+            .len(),
+        2,
+        "the control: a declared doublematrix draws two",
+    );
+    assert!(
+        build(plain_doubles(two()))
+            .instance_transforms("inst")
+            .unwrap()
+            .is_empty(),
+        "thirty-two doubles are not a doublematrix, and the renderer \
+         draws nothing for them",
+    );
+
+    // And on the sampled path, where a wrong-typed last call unsets
+    // the matrices rather than falling back to the good earlier one.
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", two())],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("inst", 1.0, vec![plain_doubles(two())])
+        .unwrap();
+
+    assert!(
+        scene
+            .instance_transforms_at("inst", 0.5)
+            .unwrap()
+            .is_empty(),
+        "the last call is not a doublematrix, so nothing is drawn",
+    );
+}
+
 /// The typing rule, over an attribute the crate has no type for.
 ///
 /// Rendered on a mesh's deforming `P`, and identical to the transform
@@ -4021,6 +4099,48 @@ fn the_typing_rule_is_available_for_any_attribute() {
     };
     assert_eq!(samples.len(), 1, "the t=0 sample did not survive");
     assert_eq!(samples[0].0, 1.0);
+
+    // The `# Errors` paragraph, which nothing held: an unknown handle
+    // is refused, a reserved one is simply unsampled.
+    assert!(matches!(
+        scene.sampled_attribute("nosuch", "P", readable),
+        Err(ResolveError::UnknownHandle { .. })
+    ));
+    assert_eq!(
+        scene.sampled_attribute(crate::ROOT, "P", readable).unwrap(),
+        Sampled::No,
+        "a reserved handle needs no create and holds nothing",
+    );
+}
+
+/// The sort has to be **stable**, and only a fixture with enough
+/// same-time calls can see it.
+///
+/// `latest_per_time` sorts by time and then lets `dedup_by` carry the
+/// later value down, which is only "later" if equal times keep their
+/// call order. A reviewer switched it to `sort_unstable_by` and the
+/// whole suite stayed green: every fixture had two or three calls at
+/// one time, and a short slice is insertion-sorted, which is stable by
+/// accident rather than by contract.
+#[test]
+fn the_value_that_stands_is_the_last_call_at_that_time() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    for step in 0..40 {
+        let time = f64::from(step % 2);
+        scene
+            .set_attribute_at_time(
+                "a",
+                time,
+                vec![integers("visibility", vec![step])],
+            )
+            .unwrap();
+    }
+
+    let samples = scene.attribute_samples("a", "visibility").unwrap();
+    assert_eq!(samples.len(), 2, "forty calls, two times");
+    assert_eq!(samples[0].1.data, OwnedData::I32(vec![38]));
+    assert_eq!(samples[1].1.data, OwnedData::I32(vec![39]));
 }
 
 /// Survivors come back in **time** order however they were set.

@@ -106,6 +106,7 @@ pub enum EdgeKind {
 
 /// A recorded, classified connection.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Edge {
     /// The handle the connection is made from.
     pub from: String,

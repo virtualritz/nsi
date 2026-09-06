@@ -10,6 +10,12 @@
 //! Nothing here is specific to any one renderer, and none of it needs a
 //! renderer present to build or test.
 //!
+//! It does need **libclang** to build: the dependency chain reaches
+//! `nsi-sys`, whose build script runs `bindgen` over ɴsɪ's header
+//! unconditionally. That is a build-host requirement, not a runtime
+//! one -- no renderer has to be installed -- but a machine without
+//! libclang fails there rather than here.
+//!
 //! Backends consume a lowered scene and flush it into their own
 //! representation: [`nsi-mitsuba`] into Mitsuba `Properties`,
 //! [`nsi-moonray`] into `scene_rdl2` `SceneObject`s.
@@ -139,7 +145,7 @@
 //!
 //! ɴsɪ permits scenes with no single correct answer, and this crate
 //! returns a typed error for each rather than a plausible wrong one: a
-//! a cycle, a node that never reaches `.root`, and -- from the
+//! cycle, a node that never reaches `.root`, and -- from the
 //! *exact-hit* accessors only -- a motion-sampled transform asked for
 //! at a time it has no sample at.
 //!

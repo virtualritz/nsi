@@ -12,6 +12,12 @@
 //! reader that insisted on its own representation would make every
 //! consumer translate.
 //!
+//! A sink brings its own *behaviour*, not its own argument type: every
+//! entry point here binds `Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call,
+//! 'static>>`, because the parser has to build the arguments it hands
+//! over and can only build the one shape. Implement [`nsi_trait::Nsi`]
+//! with that associated type and the parser will drive it.
+//!
 //! ```no_run
 //! # use nsi_parse::parse_stream;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
