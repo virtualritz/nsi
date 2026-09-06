@@ -358,6 +358,19 @@ impl Scene {
         time: f64,
         args: Vec<OwnedArg>,
     ) -> Result<(), RecordError> {
+        // 3Delight answers a non-finite time with `E6026 invalid time`.
+        if !time.is_finite() {
+            return Err(RecordError::InvalidTime {
+                handle: handle.to_string(),
+            });
+        }
+
+        // `-0.0` and `0.0` are one sample to the renderer, which reads a
+        // `-0` time as `+0`. Keeping them apart handed a backend two
+        // matrices at times that compare equal -- a zero-length motion
+        // segment.
+        let time = time + 0.0;
+
         let node = self.node_mut(handle)?;
 
         // `total_cmp`, not `==`. A sample time arrives from a caller

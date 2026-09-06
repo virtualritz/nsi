@@ -129,10 +129,13 @@ impl<'a> Scratch<'a> {
 
     /// ɴsɪ's `RenderControl` action, if the parameters name one.
     pub(crate) fn action(&self) -> Option<Action> {
-        let descriptor = self
-            .descriptors
-            .iter()
-            .find(|d| d.name == "action" && d.base == Base::String)?;
+        let descriptor = self.descriptors.iter().find(|d| {
+            d.name == "action"
+                && d.base == Base::String
+                // A zero-count `action` would otherwise read the *next*
+                // parameter's first string as the action.
+                && d.end - d.start == 1
+        })?;
         match self.strings.get(descriptor.start)?.as_ref() {
             "start" => Some(Action::Start),
             "stop" => Some(Action::Stop),

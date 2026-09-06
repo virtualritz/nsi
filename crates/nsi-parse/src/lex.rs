@@ -220,21 +220,15 @@ fn unescape(raw: &[u8], offset: usize) -> Result<String, LexError> {
                 b'"' => out.push(b'"'),
                 b'\\' => out.push(b'\\'),
                 b'0'..=b'7' => {
-                    // Three octal digits, as the renderer writes them.
-                    let digits = raw.get(index + 1..index + 4).ok_or(
-                        LexError::BadEscape {
-                            offset: offset + index,
-                        },
-                    )?;
-                    if !digits
+                    // One to three octal digits, C-style. The renderer
+                    // always *writes* three, but reads `\1b` as well,
+                    // so demanding three rejected a legal stream.
+                    let digits = raw[index + 1..]
                         .iter()
-                        .all(|digit| digit.is_ascii_digit() && *digit < b'8')
-                    {
-                        return Err(LexError::BadEscape {
-                            offset: offset + index,
-                        });
-                    }
-                    let value = digits
+                        .take(3)
+                        .take_while(|d| (b'0'..=b'7').contains(d))
+                        .count();
+                    let value = raw[index + 1..index + 1 + digits]
                         .iter()
                         .fold(0u32, |acc, d| acc * 8 + u32::from(d - b'0'));
                     out.push(u8::try_from(value).map_err(|_| {
@@ -242,8 +236,8 @@ fn unescape(raw: &[u8], offset: usize) -> Result<String, LexError> {
                             offset: offset + index,
                         }
                     })?);
-                    // Two beyond the one the shared step consumes.
-                    index += 2;
+                    // Beyond the one the shared step consumes.
+                    index += digits - 1;
                 }
                 _ => {
                     return Err(LexError::BadEscape {

@@ -117,8 +117,10 @@ demonstrated rather than asserted.
   scenes.
 - R6: Node and attribute order is insertion order.
 - R7: Motion samples are stored separately from static attributes and
-  sorted by time. Sample times are keyed by a *total* order, so a `NaN`
-  time matches itself and `-0.0` is distinct from `0.0`. The two setters
+  sorted by time. A non-finite sample time is refused, as 3Delight
+  refuses one (`E6026`), and `-0.0` is the same sample as `0.0`, because
+  the renderer reads a `-0` time as `+0`. An earlier version of this
+  requirement asserted the opposite of both. The two setters
   replace each other per name, as ɴsɪ requires: "Setting an attribute
   using this function replaces any value previously set by
   `NSISetAttribute` or `NSISetAttributeAtTime`."

@@ -93,6 +93,17 @@ pub enum ResolveError {
         /// How many values it carries.
         values: usize,
     },
+    /// Two prototype connections share one `index`.
+    ///
+    /// ɴsɪ: connections "must have an integer index attribute if there
+    /// are several, so the models effectively form an ordered list" --
+    /// which a duplicate does not.
+    DuplicateModelIndex {
+        /// The `instances` node.
+        instances: String,
+        /// The index used twice.
+        index: i32,
+    },
     /// A `modelindices` entry matches no prototype connection's
     /// `index`.
     UnknownModelIndex {
@@ -171,6 +182,11 @@ impl fmt::Display for ResolveError {
                      of 4x4 matrices"
                 )
             }
+            Self::DuplicateModelIndex { instances, index } => write!(
+                f,
+                "ɴsɪ node {instances:?} has two sourcemodels connections \
+                 at index {index}, so its models are not an ordered list"
+            ),
             Self::UnknownModelIndex { instances, model } => write!(
                 f,
                 "ɴsɪ node {instances:?} selects model index {model}, which \
@@ -582,6 +598,14 @@ impl Scene {
     /// the geometric primitive" -- and a backend takes the first that
     /// defines the attribute it wants.
     ///
+    /// **That last sentence is not the whole rule.** ɴsɪ has a *second*
+    /// priority, `ATTR.priority`, set on an `attributes` node to rank
+    /// one of its own attributes and distinct from the connection
+    /// `priority` ordered here; and at equal priority a more specific
+    /// `visibility.<ray>` beats `visibility`. Neither is applied, so a
+    /// scene that sets either needs the backend to apply it. Tracked as
+    /// an `Open` row in `contracts/resolution.md`.
+    ///
     /// Returns `Ok(None)` for geometry with nothing bound anywhere on
     /// its path.
     ///
@@ -851,6 +875,16 @@ impl Scene {
         }
 
         let sources = self.sorted_instance_sources(instances);
+
+        if let Some(pair) = sources
+            .windows(2)
+            .find(|pair| pair[0].0 == pair[1].0 && sources.len() > 1)
+        {
+            return Err(ResolveError::DuplicateModelIndex {
+                instances: instances.to_string(),
+                index: pair[0].0,
+            });
+        }
 
         matrices
             .as_chunks::<16>()

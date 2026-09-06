@@ -576,45 +576,45 @@ fn recreating_with_the_same_type_is_a_no_op() {
     assert_eq!(scene.nodes["x"].attrs.len(), 1, "attributes survive");
 }
 
-/// A sample time is caller data and ɴsɪ does not validate it. Under
-/// `==` a NaN never matches itself, so every repeat would append
-/// another sample and the vector would grow without bound.
+/// 3Delight answers a non-finite sample time with `E6026 invalid time`.
+/// Storing one produced a `motion_times` a backend could not iterate:
+/// a `NaN` compares equal to nothing, an `inf` sorts past every real
+/// shutter time.
 #[test]
-fn a_nan_sample_time_matches_itself() {
+fn a_non_finite_sample_time_is_refused() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
-    scene
-        .set_attribute_at_time("xf", f64::NAN, vec![arg("t", 0.0)])
-        .unwrap();
-    scene
-        .set_attribute_at_time("xf", f64::NAN, vec![arg("t", 1.0)])
-        .unwrap();
 
-    let samples = &scene.nodes["xf"].time_attrs;
-    assert_eq!(samples.len(), 1, "one key, not one per call");
-    assert_eq!(samples[0].1["t"].data, OwnedData::F32(vec![1.0]));
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            scene.set_attribute_at_time("xf", bad, vec![arg("t", 1.0)]),
+            Err(RecordError::InvalidTime {
+                handle: "xf".to_string()
+            })
+        );
+    }
+    assert!(scene.node("xf").unwrap().time_attrs.is_empty());
 }
 
-/// `-0.0` and `0.0` are distinct sample keys under a total order,
-/// where `==` would merge them.
+/// `-0.0` and `0.0` are **one** sample. The renderer reads a `-0` time
+/// as `+0`, so keeping them apart handed a backend two matrices at
+/// times that compare equal -- a zero-length motion segment where
+/// 3Delight sees a single sample holding the later value.
 #[test]
-fn negative_zero_is_a_distinct_sample_time() {
+fn negative_zero_is_the_same_sample_time_as_zero() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene
-        .set_attribute_at_time("xf", 0.0, vec![arg("t", 1.0)])
+        .set_attribute_at_time("xf", -0.0, vec![arg("t", 5.0)])
         .unwrap();
     scene
-        .set_attribute_at_time("xf", -0.0, vec![arg("t", 2.0)])
+        .set_attribute_at_time("xf", 0.0, vec![arg("t", 9.0)])
         .unwrap();
 
-    let times: Vec<f64> = scene.nodes["xf"]
-        .time_attrs
-        .iter()
-        .map(|(t, _)| *t)
-        .collect();
-    assert_eq!(times.len(), 2);
-    assert!(times[0].is_sign_negative(), "-0.0 sorts first");
+    let samples = &scene.node("xf").unwrap().time_attrs;
+    assert_eq!(samples.len(), 1, "one key, as the renderer has");
+    assert!(!samples[0].0.is_sign_negative(), "normalised to +0");
+    assert_eq!(samples[0].1["t"].data, OwnedData::F32(vec![9.0]));
 }
 
 /// ɴsɪ's reserved handles exist already, and 3Delight answers a

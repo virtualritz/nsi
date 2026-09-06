@@ -224,18 +224,6 @@ fn octal_escapes_are_decoded() {
     );
 }
 
-/// A malformed octal escape is an error, not a silently wrong byte.
-#[test]
-fn a_short_octal_escape_is_an_error() {
-    let source = b"Create \"m\" \"mesh\"\nSetAttribute \"m\"\n  \"s\" \"string\" 1 \"a\\09\"\n";
-
-    let recorder = Recorder::new();
-    assert!(matches!(
-        parse_stream(source, &recorder),
-        Err(nsi_parse::Error::BadEscape { .. })
-    ));
-}
-
 /// The declared element count is authoritative, not decorative. Given
 /// `"P" "point" 1 [ 0 0 0 1 2 3 ]` the renderer warns and keeps one
 /// point; ignoring the count here would silently yield two.
@@ -295,4 +283,34 @@ fn an_operand_error_offset_points_at_the_operand() {
             other => panic!("expected a syntax error, got {other:?}"),
         }
     }
+}
+
+/// 3Delight decodes one to three octal digits, C-style -- it always
+/// *writes* three, but reads `\1b` too, so demanding three rejected a
+/// legal stream.
+#[test]
+fn a_short_octal_escape_is_decoded() {
+    let source = b"Create \"m\" \"mesh\"\nSetAttribute \"m\"\n  \"s\" \"string\" 1 \"a\\1b\\17c\"\n";
+
+    let recorder = Recorder::new();
+    parse_stream(source, &recorder).expect("parse");
+
+    use nsi_intermediate::OwnedData;
+    assert_eq!(
+        recorder.into_scene().node("m").unwrap().attrs["s"].data,
+        OwnedData::String(vec!["a\u{1}b\u{f}c".to_string()])
+    );
+}
+
+/// A zero-count `action` must not let the next parameter's value be read
+/// as the render action.
+#[test]
+fn a_zero_count_action_does_not_steal_the_next_value() {
+    let source = b"RenderControl\n  \"action\" \"string\" 0 [ ]\n  \"x\" \"string\" 1 \"start\"\n";
+
+    let recorder = Recorder::new();
+    assert!(
+        parse_stream(source, &recorder).is_err(),
+        "no usable action, so the statement is malformed"
+    );
 }

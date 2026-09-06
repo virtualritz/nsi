@@ -1367,3 +1367,35 @@ fn a_port_named_like_a_binding_does_not_bind() {
         "a port edge must not become an attributes node"
     );
 }
+
+/// ɴsɪ requires distinct `index` attributes so the models "effectively
+/// form an ordered list". Two at the same index is a malformed scene,
+/// and picking the first was a guess.
+#[test]
+fn duplicate_model_indices_are_refused() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    for handle in ["a", "b"] {
+        scene.create(handle, "mesh").unwrap();
+        scene
+            .connect_with_args(
+                handle,
+                None,
+                "inst",
+                "sourcemodels",
+                vec![index_arg(0)],
+            )
+            .unwrap();
+    }
+    scene
+        .set_attribute(
+            "inst",
+            vec![doubles("transformationmatrices", instance_matrix(1.0))],
+        )
+        .unwrap();
+
+    assert!(matches!(
+        scene.instance_transforms("inst"),
+        Err(crate::ResolveError::DuplicateModelIndex { index: 0, .. })
+    ));
+}

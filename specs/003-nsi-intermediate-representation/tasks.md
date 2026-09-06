@@ -3,10 +3,10 @@
 Landed tasks are kept as the record of what shipped. Open tasks are the
 `Partial` and `Open` contract rows, and nothing else.
 
-Counts below are the modules as they stand: `owned` 5, `recorder` 13,
-`resolve` 54, `scene` 33, `stream` 5 -- 110 in the library -- plus
+Counts below are the modules as they stand: `owned` 7, `recorder` 13,
+`resolve` 57, `scene` 33, `stream` 5 -- 115 in the library -- plus
 `classifier` 10, `compression` 4, `lua_roundtrip` 2,
-`stream_roundtrip` 1, and two doctests of which one is `ignore`d. 128
+`stream_roundtrip` 1, and two doctests of which one is `ignore`d. 133
 with every feature.
 
 ## User Story 1: Record An ɴsɪ Scene (P1)

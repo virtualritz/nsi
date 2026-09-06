@@ -21,6 +21,14 @@ pub enum RecordError {
         /// The reserved handle.
         handle: String,
     },
+    /// A motion sample was given a time that is not a finite number.
+    ///
+    /// 3Delight answers `E6026 invalid time`. Storing one produced a
+    /// `motion_times` a backend could not iterate meaningfully.
+    InvalidTime {
+        /// The node the sample was set on.
+        handle: String,
+    },
     /// A `connect` or `disconnect` named a handle that does not exist.
     ///
     /// ɴsɪ: "the nodes on which the connection is performed must
@@ -55,6 +63,11 @@ impl fmt::Display for RecordError {
                 f,
                 "ɴsɪ node {handle:?} is reserved: it exists already and \
                  cannot be created or deleted"
+            ),
+            Self::InvalidTime { handle } => write!(
+                f,
+                "ɴsɪ motion sample on node {handle:?} has a time that is \
+                 not a finite number"
             ),
             Self::UnknownHandle { handle } => write!(
                 f,
