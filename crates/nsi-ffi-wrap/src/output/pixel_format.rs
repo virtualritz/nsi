@@ -260,27 +260,28 @@ impl PixelFormat {
         let mut channel_ids = Vec::<&str>::new();
         let mut offset = 0;
 
-        let mut flush = |name: &str, ids: &mut Vec<&str>, offset: &mut usize| {
-            for depth in Self::depths_for(ids.len(), ids.first().copied()) {
-                let unnamed = if layers.is_empty() {
-                    // The first unnamed layer is the beauty pass.
-                    "Ci"
-                } else {
-                    // A later one has no name to take: 3Delight sends
-                    // built-in variables unprefixed, so all this layer
-                    // is known by is its first channel.
-                    ids.first().copied().unwrap_or("Ci")
-                };
-                layers.push(Layer {
-                    name: if name.is_empty() { unnamed } else { name }
-                        .to_string(),
-                    depth,
-                    offset: *offset,
-                });
-                *offset += depth.channels();
-            }
-            ids.clear();
-        };
+        let mut flush =
+            |name: &str, ids: &mut Vec<&str>, offset: &mut usize| {
+                for depth in Self::depths_for(ids.len(), ids.first().copied()) {
+                    let unnamed = if layers.is_empty() {
+                        // The first unnamed layer is the beauty pass.
+                        "Ci"
+                    } else {
+                        // A later one has no name to take: 3Delight sends
+                        // built-in variables unprefixed, so all this layer
+                        // is known by is its first channel.
+                        ids.first().copied().unwrap_or("Ci")
+                    };
+                    layers.push(Layer {
+                        name: if name.is_empty() { unnamed } else { name }
+                            .to_string(),
+                        depth,
+                        offset: *offset,
+                    });
+                    *offset += depth.channels();
+                }
+                ids.clear();
+            };
 
         for entry in format {
             // SAFETY: `name` is a valid C string from the renderer.
@@ -331,8 +332,7 @@ impl PixelFormat {
         }
         // An alpha joins whatever it follows, and closes it.
         if "a" == channel_id {
-            return accumulated.len() < 5
-                && accumulated.last() != Some(&"a");
+            return accumulated.len() < 5 && accumulated.last() != Some(&"a");
         }
         let position = |id: &str| match id {
             "r" | "x" => Some(0),

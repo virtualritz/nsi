@@ -186,7 +186,7 @@ fn a_denoise_ready_multi_aov_format_keeps_every_layer() {
     let pixel_format = parse(&[
         "Ci.r", "Ci.g", "Ci.b", "Ci.a", // beauty, rgba
         "albedo.r", "albedo.g", "albedo.b", // albedo, rgb
-        "N.x", "N.y", "N.z", // normal, xyz
+        "N.x", "N.y", "N.z",     // normal, xyz
         "depth.z", // depth, scalar
     ]);
 
@@ -245,8 +245,10 @@ fn unprefixed_channels_still_separate_into_layers() {
 fn unprefixed_vector_channels_stay_one_layer() {
     let pixel_format = parse(&["r", "g", "b", "a", "x", "y", "z"]);
 
-    let layers: Vec<(&str, usize)> =
-        pixel_format.iter().map(|l| (l.name(), l.channels())).collect();
+    let layers: Vec<(&str, usize)> = pixel_format
+        .iter()
+        .map(|l| (l.name(), l.channels()))
+        .collect();
 
     assert_eq!(vec![("Ci", 4), ("x", 3)], layers);
     assert_eq!(7, pixel_format.channels());
