@@ -230,148 +230,106 @@ impl LayerDepth {
 pub struct PixelFormat(Vec<Layer>);
 
 impl PixelFormat {
+    /// Groups the renderer's flat channel list into [`Layer`]s.
+    ///
+    /// ndspy names each channel `<layer>.<channel>`, so a layer boundary
+    /// is a change of the *name* part -- which is what this reads. The
+    /// previous implementation instead guessed boundaries from the
+    /// channel part, opening a layer only on `r`, `x` or `s`; a layer
+    /// led by anything else (`depth.z`, say) never opened one, so it was
+    /// merged into its predecessor, and with
+    /// `["Ci.r","Ci.g","Ci.b","Ci.a","albedo.r","albedo.g","albedo.b",
+    /// "N.x","N.y","N.z","depth.z"]` the whole `N` layer disappeared:
+    /// its name was overwritten by `depth` and a channel was lost.
+    ///
+    /// The one place a name change is *not* a boundary is a bare `a`
+    /// following a named layer -- that is the layer's alpha.
+    ///
+    /// ndspy passes exactly one `PtDspyDevFormat` per channel, so
+    /// [`channels()`](PixelFormat::channels) always equals `format.len()`
+    /// by construction here. That is not cosmetic: `nsi-display`'s
+    /// `shim_data` uses it as the length of a slice over the renderer's
+    /// bucket buffer, so over-reporting reads out of bounds and
+    /// under-reporting silently drops AOVs.
     #[inline]
     pub(crate) fn new(format: &[ndspy_sys::PtDspyDevFormat]) -> Self {
-        if format.is_empty() {
-            return PixelFormat::default();
-        }
-
-        let (mut previous_layer_name, mut previous_channel_id) =
-            Self::split_into_layer_name_and_channel_id({
-                // SAFETY: format.name should be a valid C string from the renderer
-                let c_str = unsafe { CStr::from_ptr(format[0].name) };
-                c_str.to_str().unwrap_or("<invalid>")
-            });
-
-        let mut depth = LayerDepth::OneChannel;
+        let mut layers = Vec::<Layer>::new();
+        // The layer being accumulated: its name, and one entry per
+        // channel seen so far.
+        let mut name = "";
+        let mut channel_ids = Vec::<&str>::new();
         let mut offset = 0;
 
-        let is_single_channel = format.len() == 1;
-        // `previous_channel_id` is seeded from the first entry, so the
-        // first step of the loop compares that entry against itself. A
-        // channel id that is both a layer-ender and a layer-starter --
-        // `"s"`, i.e. an indexed scalar such as `"beauty.000"` -- would
-        // then self-trigger a boundary and emit a spurious duplicate
-        // layer. Only a transition from a *preceding* entry can open a
-        // new layer.
-        let mut is_first_entry = true;
-        let mut layers = format
-            .iter()
-            .enumerate()
-            .cycle()
-            .take(format.len() + 1)
-            .filter_map(|format| {
-                // FIXME: add support for specifying AOV and detect type
-                // for indexing (.r vs .x)
-                // SAFETY: format.name should be a valid C string from the renderer
-                let name = unsafe { CStr::from_ptr(format.1.name) }
-                    .to_str()
-                    .unwrap_or("<invalid>");
+        let mut flush = |name: &str, ids: &mut Vec<&str>, offset: &mut usize| {
+            for depth in Self::depths_for(ids.len(), ids.first().copied()) {
+                layers.push(Layer {
+                    // An unnamed layer is the beauty pass.
+                    name: if name.is_empty() { "Ci" } else { name }.to_string(),
+                    depth,
+                    offset: *offset,
+                });
+                *offset += depth.channels();
+            }
+            ids.clear();
+        };
 
-                let (layer_name, channel_id) =
-                    Self::split_into_layer_name_and_channel_id(name);
+        for entry in format {
+            // SAFETY: `name` is a valid C string from the renderer.
+            let channel = unsafe { CStr::from_ptr(entry.name) }
+                .to_str()
+                .unwrap_or("<invalid>");
+            let (layer_name, channel_id) =
+                Self::split_into_layer_name_and_channel_id(channel);
 
-                let has_predecessor =
-                    !core::mem::replace(&mut is_first_entry, false);
+            // A bare `a` after a named layer is that layer's alpha, not
+            // a layer of its own.
+            let is_lone_alpha = layer_name.is_empty()
+                && "a" == channel_id
+                && !channel_ids.is_empty();
 
-                // A boundary between two layers will be when the postfix
-                // is a combination of those above.
-                if has_predecessor
-                    && ["b", "z", "s", "a"].contains(&previous_channel_id)
-                    && ["r", "x", "s"].contains(&channel_id)
-                {
-                    let tmp_layer_name = if previous_layer_name.is_empty() {
-                        "Ci"
-                    } else {
-                        previous_layer_name
-                    };
-                    previous_layer_name = layer_name;
-
-                    previous_channel_id = channel_id;
-
-                    let tmp_depth = depth;
-                    depth = LayerDepth::OneChannel;
-
-                    let tmp_offset = offset;
-                    offset = format.0;
-
-                    Some(Layer {
-                        name: tmp_layer_name.to_string(),
-                        depth: tmp_depth,
-                        offset: tmp_offset,
-                    })
-                } else {
-                    // Do we we have a lonely alpha -> it belongs to the
-                    // current layer.
-                    if layer_name.is_empty() && "a" == channel_id {
-                        depth = match &depth {
-                            LayerDepth::OneChannel => {
-                                LayerDepth::OneChannelAndAlpha
-                            }
-                            LayerDepth::Color => LayerDepth::ColorAndAlpha,
-                            LayerDepth::Vector => LayerDepth::VectorAndAlpha,
-                            LayerDepth::FourChannels => {
-                                LayerDepth::FourChannelsAndAlpha
-                            }
-                            _ => unreachable!(),
-                        };
-                    }
-                    // Are we still on the same layer?
-                    else if layer_name == previous_layer_name {
-                        // We only check for first channel, but only for multi-channel formats.
-                        // Single-channel formats should remain as OneChannel.
-                        if !is_single_channel {
-                            match channel_id {
-                                "r" | "g" | "b" => depth = LayerDepth::Color,
-                                "x" | "y" | "z" => depth = LayerDepth::Vector,
-                                "a" => {
-                                    if layer_name.is_empty() {
-                                        depth = match &depth {
-                                            LayerDepth::OneChannel => {
-                                                LayerDepth::OneChannelAndAlpha
-                                            }
-                                            LayerDepth::Color => {
-                                                LayerDepth::ColorAndAlpha
-                                            }
-                                            LayerDepth::Vector => {
-                                                LayerDepth::VectorAndAlpha
-                                            }
-                                            _ => unreachable!(),
-                                        };
-                                    } else {
-                                        depth = LayerDepth::FourChannels;
-                                    }
-                                }
-                                _ => (),
-                            }
-                        }
-                        previous_layer_name = layer_name;
-                    // We have a new layer.
-                    } else {
-                        previous_layer_name = layer_name;
-                    }
-                    previous_channel_id = channel_id;
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // If no layers were emitted (e.g., single-channel formats),
-        // emit the final accumulated layer.
-        if layers.is_empty() && !format.is_empty() {
-            let final_layer_name = if previous_layer_name.is_empty() {
-                "Ci"
-            } else {
-                previous_layer_name
-            };
-            layers.push(Layer {
-                name: final_layer_name.to_string(),
-                depth,
-                offset,
-            });
+            if !channel_ids.is_empty() && !is_lone_alpha && layer_name != name {
+                flush(name, &mut channel_ids, &mut offset);
+            }
+            if channel_ids.is_empty() {
+                name = layer_name;
+            }
+            channel_ids.push(channel_id);
         }
+        flush(name, &mut channel_ids, &mut offset);
 
         PixelFormat(layers)
+    }
+
+    /// The [`LayerDepth`]s spanning `count` channels, whose first is
+    /// `first` (`x`, `y` or `z` meaning a vector rather than a colour).
+    ///
+    /// Normally one depth. ɴsɪ's layer types top out at five channels
+    /// (`quad` with alpha), and `LayerDepth` can represent no more, so a
+    /// longer run -- which 3Delight does not currently emit -- is split
+    /// into four-channel pieces sharing the layer's name. Splitting
+    /// rather than truncating keeps the total channel count equal to the
+    /// number of format entries, which is the invariant memory safety
+    /// downstream rests on.
+    fn depths_for(count: usize, first: Option<&str>) -> Vec<LayerDepth> {
+        let is_vector = matches!(first, Some("x" | "y" | "z"));
+        let mut depths = Vec::new();
+        let mut left = count;
+        while left > 5 {
+            depths.push(LayerDepth::FourChannels);
+            left -= 4;
+        }
+        depths.extend(match (left, is_vector) {
+            (0, _) => None,
+            (1, _) => Some(LayerDepth::OneChannel),
+            (2, _) => Some(LayerDepth::OneChannelAndAlpha),
+            (3, true) => Some(LayerDepth::Vector),
+            (3, false) => Some(LayerDepth::Color),
+            (4, true) => Some(LayerDepth::VectorAndAlpha),
+            (4, false) => Some(LayerDepth::ColorAndAlpha),
+            (5, _) => Some(LayerDepth::FourChannelsAndAlpha),
+            _ => unreachable!("the loop above leaves at most five"),
+        });
+        depths
     }
 
     /// Builds a `PixelFormat` from the format array ndspy hands a

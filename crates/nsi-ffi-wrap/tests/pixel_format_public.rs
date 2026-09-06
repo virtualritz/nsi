@@ -95,7 +95,6 @@ fn indexed_channels_self_trigger_boundary() {
 ///
 /// Total channels()==4.
 #[test]
-#[ignore]
 fn layers_starting_with_z_are_silently_dropped() {
     let names = [
         CString::new("Ci.r").unwrap(),
@@ -127,4 +126,88 @@ fn layers_starting_with_z_are_silently_dropped() {
     // Correct expected values:
     assert_eq!(2, pixel_format.len(), "should produce 2 layers");
     assert_eq!(4, pixel_format.channels(), "should have 4 channels total");
+}
+
+/// Builds a `PixelFormat` from channel names, all `PkDspyFloat32`.
+fn parse(names: &[&str]) -> PixelFormat {
+    let owned: Vec<CString> =
+        names.iter().map(|n| CString::new(*n).unwrap()).collect();
+    let format: Vec<ndspy_sys::PtDspyDevFormat> = owned
+        .iter()
+        .map(|n| ndspy_sys::PtDspyDevFormat {
+            name: n.as_ptr(),
+            type_: 1, // PkDspyFloat32
+        })
+        .collect();
+    PixelFormat::from_ndspy(&format)
+}
+
+/// The invariant the display shim's memory safety rests on: ndspy hands
+/// one `PtDspyDevFormat` per channel, so the parsed total must equal the
+/// number of entries -- never more (an out-of-bounds read in
+/// `nsi-display`'s `shim_data`) and never fewer (silently dropped AOVs).
+///
+/// Stated over every shape the parser is expected to meet, so a future
+/// heuristic cannot satisfy one case by breaking another.
+#[test]
+fn channel_count_always_equals_the_number_of_format_entries() {
+    for names in [
+        vec!["Ci.r", "Ci.g", "Ci.b"],
+        vec!["Ci.r", "Ci.g", "Ci.b", "Ci.a"],
+        vec!["r", "g", "b", "a"],
+        vec!["beauty.000"],
+        vec!["depth.z"],
+        vec!["Ci.r", "Ci.g", "Ci.b", "depth.z"],
+        vec!["N.x", "N.y", "N.z"],
+        vec!["Ci.r", "Ci.g", "Ci.b", "Ci.a", "N.x", "N.y", "N.z"],
+        vec!["albedo.r", "albedo.g", "albedo.b", "depth.z"],
+    ] {
+        let pixel_format = parse(&names);
+        assert_eq!(
+            names.len(),
+            pixel_format.channels(),
+            "one channel per format entry, for {names:?}"
+        );
+    }
+}
+
+/// The format an OIDN-denoising EXR driver actually receives: beauty
+/// plus the three utility passes. Every layer must survive with its own
+/// name and offset, or the driver cannot tell which passes it was given.
+#[test]
+fn a_denoise_ready_multi_aov_format_keeps_every_layer() {
+    let pixel_format = parse(&[
+        "Ci.r", "Ci.g", "Ci.b", "Ci.a", // beauty, rgba
+        "albedo.r", "albedo.g", "albedo.b", // albedo, rgb
+        "N.x", "N.y", "N.z", // normal, xyz
+        "depth.z", // depth, scalar
+    ]);
+
+    let layers: Vec<(&str, usize, usize)> = pixel_format
+        .iter()
+        .map(|l| (l.name(), l.channels(), l.offset()))
+        .collect();
+
+    assert_eq!(
+        vec![
+            ("Ci", 4, 0),
+            ("albedo", 3, 4),
+            ("N", 3, 7),
+            ("depth", 1, 10),
+        ],
+        layers
+    );
+    assert_eq!(11, pixel_format.channels());
+}
+
+/// A bare `a` after a named layer is that layer's alpha, not a layer of
+/// its own -- the one case where a change of layer name is not a
+/// boundary.
+#[test]
+fn a_lone_alpha_belongs_to_the_layer_before_it() {
+    let pixel_format = parse(&["Ci.r", "Ci.g", "Ci.b", "a"]);
+
+    assert_eq!(1, pixel_format.len(), "the alpha joins Ci");
+    assert_eq!(4, pixel_format.channels());
+    assert!(pixel_format[0].has_alpha());
 }
