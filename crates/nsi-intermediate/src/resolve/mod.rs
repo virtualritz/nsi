@@ -217,15 +217,22 @@ impl core::error::Error for ResolveError {}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Binding {
-    /// Every `attributes` node gathered along the path, in ɴsɪ's
-    /// precedence order: highest connection priority first, then
-    /// nearest the geometry.
+    /// Every `attributes` node gathered along the path, nearest the
+    /// geometry first, then in connection order.
+    ///
+    /// The `priority` on a `geometryattributes` connection deliberately
+    /// does **not** reorder this: 3Delight ignores it, whatever the
+    /// specification says. A priority on a *shader* connection is
+    /// honoured; see [`Binding::surface_shader`] and `research.md` D12.
     ///
     /// ɴsɪ gathers attributes along the whole path and considers
     /// *every* node on it -- "one attributes node can set object
     /// visibility and another can set the surface shader" -- so this is
     /// a list, not a winner. A backend looking for one attribute takes
-    /// the first node in this list that defines it.
+    /// the first node in this list that defines it -- correct only while
+    /// no node sets `ATTR.priority` and the attribute is not a
+    /// visibility one. [`Scene::attribute_value`] applies those two
+    /// rules and is the safe way to ask.
     ///
     /// The handles are returned rather than their contents because what
     /// lives on them -- visibility flags above all -- is encoded
@@ -242,6 +249,60 @@ pub struct Binding {
     pub displacement_shader: Option<String>,
     /// The `volumeshader`, resolved the same way.
     pub volume_shader: Option<String>,
+}
+
+/// ɴsɪ's ray types: the suffixes a `visibility.<ray>` attribute takes.
+///
+/// Spelled out rather than accepting any suffix, because
+/// `visibility.set.subsurface` is a *connection* to a `set` node and not
+/// a per-ray visibility int; treating it as the more specific form of
+/// `visibility` would rank a connection against a flag.
+///
+/// Public because a backend building a visibility mask needs exactly
+/// this list, and a second copy of it would drift from this one.
+pub const RAY_TYPES: [&str; 8] = [
+    "camera",
+    "diffuse",
+    "hair",
+    "reflection",
+    "refraction",
+    "shadow",
+    "specular",
+    "volume",
+];
+
+/// The winning definition of one attribute, gathered along a path.
+///
+/// Returned by [`Scene::attribute_value`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct AttributeValue<'a> {
+    /// The `attributes` node the winning definition sits on.
+    pub node: &'a str,
+    /// The definition itself.
+    ///
+    /// [`OwnedArg::name`] is the attribute that actually won, which is
+    /// not always the one asked for: a `visibility.<ray>` query falls
+    /// back to the less specific `visibility`, and this is how a backend
+    /// tells the two apart.
+    pub arg: &'a OwnedArg,
+    /// The `ATTR.priority` that selected it; `0` when none is set.
+    pub priority: i32,
+}
+
+/// Read an `ATTR.priority`.
+///
+/// ɴsɪ declares it `int`. A caller that recorded it as some other type
+/// has not set a priority this can read, so it stays `0` rather than
+/// being reinterpreted from a different layout.
+fn priority_value(arg: &OwnedArg) -> Option<i32> {
+    match &arg.data {
+        OwnedData::I32(values) => values.first().copied(),
+        OwnedData::I64(values) => {
+            values.first().and_then(|value| i32::try_from(*value).ok())
+        }
+        _ => None,
+    }
 }
 
 /// One renderable output: a camera paired with a screen, and the AOVs
@@ -592,19 +653,18 @@ impl Scene {
     /// connected to, until the scene root is reached", and *every*
     /// `attributes` node on that path is considered: "one attributes
     /// node can set object visibility and another can set the surface
-    /// shader". So this returns all of them, ordered by ɴsɪ's own rule
-    /// -- "the definition with the highest priority is selected. In case
-    /// of conflicting priorities, the definition that is the closest to
-    /// the geometric primitive" -- and a backend takes the first that
+    /// shader". So this returns all of them, nearest the geometry
+    /// first -- ɴsɪ selects "the definition that is the closest to the
+    /// geometric primitive" -- and a backend takes the first that
     /// defines the attribute it wants.
     ///
-    /// **That last sentence is not the whole rule.** ɴsɪ has a *second*
-    /// priority, `ATTR.priority`, set on an `attributes` node to rank
-    /// one of its own attributes and distinct from the connection
-    /// `priority` ordered here; and at equal priority a more specific
-    /// `visibility.<ray>` beats `visibility`. Neither is applied, so a
-    /// scene that sets either needs the backend to apply it. Tracked as
-    /// an `Open` row in `contracts/resolution.md`.
+    /// **That is not the whole rule.** ɴsɪ ranks a definition by
+    /// `ATTR.priority`, set on an `attributes` node beside the attribute
+    /// it applies to; and at equal priority a more specific
+    /// `visibility.<ray>` beats `visibility`. This method applies
+    /// neither -- it orders nodes, not the attributes on them. Ask
+    /// [`Scene::attribute_value`] for one attribute's value and both
+    /// rules are applied.
     ///
     /// Returns `Ok(None)` for geometry with nothing bound anywhere on
     /// its path.
@@ -619,32 +679,7 @@ impl Scene {
         &self,
         geometry: &str,
     ) -> Result<Option<Binding>, ResolveError> {
-        let chain = self.chain(geometry)?;
-
-        // (priority, depth, connection order, handle) for every
-        // `attributes` node anywhere on the path.
-        let mut gathered = chain
-            .iter()
-            .enumerate()
-            .flat_map(|(depth, node)| {
-                self.edges_to_attr(node, EdgeKind::AttributeBinding.to_attr())
-                    // A shader-network edge's `to_attr` is its *port*
-                    // name, so it shares this bucket with the named
-                    // class. Without the filter a port called
-                    // `geometryattributes` resolved as a binding.
-                    .filter(|edge| edge.kind == EdgeKind::AttributeBinding)
-                    .enumerate()
-                    .map(move |(order, edge)| {
-                        (edge.priority(), depth, order, edge)
-                    })
-            })
-            .collect::<Vec<_>>();
-
-        // Highest priority first, then nearest the geometry, then
-        // connection order.
-        gathered.sort_by(|a, b| {
-            b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
-        });
+        let gathered = self.gathered_attributes(geometry)?;
 
         if gathered.is_empty() {
             Ok(None)
@@ -659,10 +694,159 @@ impl Scene {
                 volume_shader: shader(&EdgeKind::VolumeShader),
                 attributes: gathered
                     .iter()
-                    .map(|(_, _, _, edge)| edge.from.clone())
+                    .map(|(_, _, edge)| edge.from.clone())
                     .collect(),
             }))
         }
+    }
+
+    /// The value of one attribute, gathered along a geometry's path by
+    /// ɴsɪ's full precedence rule.
+    ///
+    /// [`Binding::attributes`] hands back the `attributes` nodes and
+    /// lets a backend take the first that defines what it wants. That is
+    /// right only while no node sets `ATTR.priority` and the attribute
+    /// is not a visibility one. This applies both rules and returns the
+    /// answer itself.
+    ///
+    /// # Precedence
+    ///
+    /// ɴsɪ: "When an attribute is defined multiple times along this
+    /// path, the definition with the highest priority is selected. In
+    /// case of conflicting priorities, the definition that is the
+    /// closest to the geometric primitive [...] is selected." A
+    /// definition's priority is the `ATTR.priority` int sitting beside
+    /// it on the same `attributes` node, `0` when absent.
+    ///
+    /// For a `visibility.<ray>` query the default `visibility` is a
+    /// candidate too: "When visibility is set both per ray type and with
+    /// this default visibility, the attribute with the highest priority
+    /// is used. If their priority is the same, the more specific
+    /// attribute (i.e. per ray type) is used."
+    ///
+    /// Candidates therefore rank by priority, then specificity, then the
+    /// [`Binding::attributes`] order.
+    ///
+    /// # Assumptions
+    ///
+    /// Two orderings the specification does not settle. Both are
+    /// recorded in `contracts/resolution.md` rather than left implicit:
+    ///
+    /// - Specificity is compared *before* proximity, so a distant
+    ///   `visibility.camera` beats a nearer plain `visibility` at equal
+    ///   priority. ɴsɪ gives the specificity rule without saying whether
+    ///   it outranks proximity.
+    /// - A non-integer `ATTR.priority` is ignored, leaving priority `0`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::geometry_binding`]: walking the path can fail.
+    pub fn attribute_value(
+        &self,
+        geometry: &str,
+        name: &str,
+    ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
+        let gathered = self.gathered_attributes(geometry)?;
+
+        // A per-ray visibility query also matches the default.
+        let fallback = name
+            .strip_prefix("visibility.")
+            .filter(|ray| RAY_TYPES.contains(ray))
+            .map(|_| "visibility");
+
+        let mut candidates = Vec::new();
+        for (rank, (_, _, edge)) in gathered.iter().enumerate() {
+            let Some(node) = self.node(&edge.from) else {
+                continue;
+            };
+
+            let keys = core::iter::once((1u8, name))
+                .chain(fallback.map(|name| (0u8, name)));
+
+            for (specificity, key) in keys {
+                let Some(arg) = node.attrs.get(key) else {
+                    continue;
+                };
+                let priority = node
+                    .attrs
+                    .get(&format!("{key}.priority"))
+                    .and_then(priority_value)
+                    .unwrap_or(0);
+
+                candidates.push((
+                    priority,
+                    specificity,
+                    rank,
+                    AttributeValue {
+                        node: &edge.from,
+                        arg,
+                        priority,
+                    },
+                ));
+            }
+        }
+
+        // Highest priority, then the more specific attribute, then the
+        // gathered order.
+        candidates.sort_by(|a, b| {
+            b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2))
+        });
+
+        Ok(candidates.into_iter().next().map(|(_, _, _, value)| value))
+    }
+
+    /// Every `attributes` node on a geometry's path, in ɴsɪ's
+    /// precedence order.
+    ///
+    /// `(depth, connection order, edge)`, nearest the geometry first.
+    /// [`Scene::geometry_binding`] and [`Scene::attribute_value`] share
+    /// it so the two cannot disagree about which node outranks which.
+    ///
+    /// # The `priority` on a `geometryattributes` connection is ignored
+    ///
+    /// ɴsɪ documents `connect`'s `priority` as "when connecting
+    /// attributes nodes, indicates in which order the nodes should be
+    /// considered when evaluating the value of an attribute", and this
+    /// function used to sort by it. **3Delight does not implement
+    /// that.** Rendering `mesh -> xf -> .root`, `visibility 0` on the
+    /// geometry's own `attributes` node and `visibility 1` on a node
+    /// connected to the transform with `"priority" 10`, 3Delight leaves
+    /// the object invisible: proximity wins and the connection priority
+    /// does nothing. Moving the same `10` onto the far node as
+    /// `visibility.priority` *does* flip it. Six probe scenes agree.
+    ///
+    /// The prose the renderer follows is the other sentence:
+    /// "Connections **(for shaders, essentially)** can also be assigned
+    /// priorities". A priority on a *shader* connection is honoured, and
+    /// `shader_on` still applies it; one on the `geometryattributes`
+    /// connection is not.
+    fn gathered_attributes(
+        &self,
+        geometry: &str,
+    ) -> Result<Vec<(usize, usize, &Edge)>, ResolveError> {
+        let chain = self.chain(geometry)?;
+
+        let mut gathered = chain
+            .iter()
+            .enumerate()
+            .flat_map(|(depth, node)| {
+                self.edges_to_attr(node, EdgeKind::AttributeBinding.to_attr())
+                    // A shader-network edge's `to_attr` is its *port*
+                    // name, so it shares this bucket with the named
+                    // class. Without the filter a port called
+                    // `geometryattributes` resolved as a binding.
+                    .filter(|edge| edge.kind == EdgeKind::AttributeBinding)
+                    .enumerate()
+                    .map(move |(order, edge)| (depth, order, edge))
+            })
+            .collect::<Vec<_>>();
+
+        // Nearest the geometry, then connection order. `chain` already
+        // runs geometry-first, so this states the invariant rather than
+        // establishing it.
+        gathered.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        Ok(gathered)
     }
 
     /// The shader of one kind reached from any gathered `attributes`
@@ -674,13 +858,13 @@ impl Scene {
     /// [`Binding::attributes`] rather than disagreeing with it.
     fn shader_on(
         &self,
-        gathered: &[(i32, usize, usize, &Edge)],
+        gathered: &[(usize, usize, &Edge)],
         kind: &EdgeKind,
     ) -> Option<String> {
         gathered
             .iter()
             .enumerate()
-            .flat_map(|(rank, (_, _, _, edge))| {
+            .flat_map(|(rank, (_, _, edge))| {
                 self.edges_to_attr(&edge.from, kind.to_attr())
                     .filter(move |shader| shader.kind == *kind)
                     .map(move |shader| (shader.priority(), rank, shader))

@@ -104,6 +104,15 @@ The implemented rule -- priority, then proximity -- happened to match.
 The reasoning did not, and a row was `Partial` for a reason that did not
 exist.
 
+**And the rule it matched was still the wrong one.** The quoted sentence
+governs `ATTR.priority`, set on the node. Applying it to the *connection*
+`priority`, as this crate then did, is contradicted by the renderer; see
+[D12](#d12-the-connection-priority-on-geometryattributes-is-inert). So
+this entry's own lesson -- read the specification, not the wrapper --
+has a second half: read the renderer where the specification
+contradicts itself. Two sentences of `nsi.pdf` disagree about this
+argument, and only 3Delight settles which one ships.
+
 **The lesson is the entry.** This surface is built against a published
 specification, and two review rounds found it inventing semantics that
 `nsi.pdf` already defines, because the Rust wrapper's docstrings
@@ -175,3 +184,50 @@ into `None` tells a caller nothing about which.
   `priority`, `value` and `strength`, and `Context::disconnect`, which
   documents the `.all` wildcard.
 - 3Delight 2.9.207 linux64 "Re-Animator" — the stream oracle.
+
+### D12: the connection `priority` on `geometryattributes` is inert
+
+ɴsɪ documents `connect`'s `priority` twice, and the two do not agree.
+The attribute entry is unconditional:
+
+> `priority` ... When connecting attributes nodes, indicates in which
+> order the nodes should be considered when evaluating the value of an
+> attribute.
+
+The prose in the `attributes` node section hedges:
+
+> Connections **(for shaders, essentially)** can also be assigned
+> priorities, which are used in the same way as for regular attributes.
+
+This crate implemented the first reading from round 2 onward and sorted
+the gathered nodes by it. 3Delight 2.9 implements the second. The
+decisive scene, rendered to a 4x4 EXR and read at the alpha channel:
+
+```
+Create "xf" "transform"
+Connect "xf" "" ".root" "objects"
+Create "mesh" "mesh"
+Connect "mesh" "" "xf" "objects"
+Create "near" "attributes"
+Create "far" "attributes"
+Connect "near" "" "mesh" "geometryattributes"
+Connect "far" "" "xf" "geometryattributes" "priority" "int" 1 [ 10 ]
+SetAttribute "near" "visibility" "int" 1 [ 0 ]
+SetAttribute "far" "visibility" "int" 1 [ 1 ]
+```
+
+Alpha is **0**: `near` wins and the priority does nothing. Replacing
+that connection argument with `"visibility.priority" "int" 1 [ 10 ]`
+set on `far` itself gives alpha **1**, so the scene can express "far
+wins" -- just not that way. `renderdl -cat` echoes the connection
+argument back, so it was parsed and then ignored, not dropped.
+
+Six scenes agree, covering both levels and both directions, same-depth
+siblings, and shader resolution. A priority on a `surfaceshader`
+connection *is* honoured, which is why `shader_on` still reads one and
+`gathered_attributes` does not.
+
+The renderer is the oracle here. A backend that trusted the
+specification would place an override on the wrong node and get a
+silently different picture from 3Delight, which is worse than not
+supporting the argument at all.

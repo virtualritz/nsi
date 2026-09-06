@@ -191,7 +191,8 @@ pub use lua::{LuaError, write_lua};
 pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
-    Binding, IDENTITY, Instance, OutputLayer, RenderOutput, ResolveError,
+    AttributeValue, Binding, IDENTITY, Instance, OutputLayer, RAY_TYPES,
+    RenderOutput, ResolveError,
 };
 pub use scene::{Node, Scene};
 pub use stream::{Compression, write_stream, write_stream_with};

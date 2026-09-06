@@ -655,10 +655,19 @@ fn the_nearest_binding_wins_at_equal_priority() {
     assert_eq!(binding.attributes[0], "own");
 }
 
-/// ɴsɪ: "the definition with the highest priority is selected",
-/// which overrides proximity.
+/// The `priority` on a `geometryattributes` connection does **not**
+/// reorder the gathered nodes.
+///
+/// This test previously asserted the opposite, quoting ɴsɪ's
+/// "`priority` ... indicates in which order the nodes should be
+/// considered when evaluating the value of an attribute". Rendered in
+/// 3Delight, the connection priority does nothing: `outer` carries
+/// `priority` 10 and `own` still wins, because it is nearer. Moving the
+/// same 10 onto `outer` as an `ATTR.priority` *does* flip it, which is
+/// `attr_priority_beats_proximity`. The renderer is the oracle, so the
+/// expectation was corrected to what it does.
 #[test]
-fn priority_beats_proximity() {
+fn a_geometryattributes_connection_priority_does_not_reorder() {
     let mut scene = Scene::default();
     scene.create("grp", "transform").unwrap();
     scene.create("mesh", "mesh").unwrap();
@@ -680,7 +689,10 @@ fn priority_beats_proximity() {
         .unwrap();
 
     let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
-    assert_eq!(binding.attributes[0], "outer");
+    assert_eq!(
+        binding.attributes[0], "own",
+        "proximity decides; the connection priority is inert",
+    );
 }
 
 /// A `surfaceshader` connection carries its own priority, "useful
@@ -1398,4 +1410,272 @@ fn duplicate_model_indices_are_refused() {
         scene.instance_transforms("inst"),
         Err(crate::ResolveError::DuplicateModelIndex { index: 0, .. })
     ));
+}
+
+// ---------------------------------------------------------------------
+// `attribute_value`: ɴsɪ's two attribute-level precedence rules.
+// ---------------------------------------------------------------------
+
+/// `mesh -> xf -> .root`, with an `attributes` node on each level.
+/// `near` sits on the geometry, `far` on the transform.
+fn scene_with_two_attribute_levels() -> Scene {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("near", "attributes").unwrap();
+    scene.create("far", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .connect("near", None, "mesh", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("far", None, "xf", "geometryattributes")
+        .unwrap();
+    scene
+}
+
+/// The baseline the whole feature rests on: with no priority anywhere,
+/// ɴsɪ takes "the definition that is the closest to the geometric
+/// primitive".
+#[test]
+fn at_equal_priority_the_nearest_definition_wins() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+}
+
+/// ɴsɪ: "the definition with the highest priority is selected". The
+/// far node outranks proximity by setting `ATTR.priority`, which is
+/// exactly what `Binding::attributes` alone cannot express.
+#[test]
+fn attr_priority_beats_proximity() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "far", "priority 10 outranks proximity");
+    assert_eq!(value.priority, 10);
+    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+}
+
+/// The priority is per attribute, not per node: a priority on one
+/// attribute must not lift the node's other attributes with it.
+#[test]
+fn attr_priority_lifts_only_its_own_attribute() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute(
+            "near",
+            vec![integers("visibility", vec![0]), integers("matte", vec![0])],
+        )
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10]),
+                integers("matte", vec![1]),
+            ],
+        )
+        .unwrap();
+
+    assert_eq!(
+        scene
+            .attribute_value("mesh", "visibility")
+            .unwrap()
+            .unwrap()
+            .node,
+        "far",
+    );
+    assert_eq!(
+        scene
+            .attribute_value("mesh", "matte")
+            .unwrap()
+            .unwrap()
+            .node,
+        "near",
+        "`matte` has no priority of its own, so proximity decides it",
+    );
+}
+
+/// ɴsɪ: "If their priority is the same, the more specific attribute
+/// (i.e. per ray type) is used."
+#[test]
+fn a_per_ray_visibility_beats_the_default() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute(
+            "near",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.camera", vec![0]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.arg.name, "visibility.camera");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+}
+
+/// A per-ray query falls back to the default when nothing sets the ray
+/// type: ɴsɪ's `visibility` "sets the default visibility for all ray
+/// types". `arg.name` is how the caller tells which one answered.
+#[test]
+fn the_default_visibility_answers_a_per_ray_query() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.shadow").unwrap();
+    let value = value.expect("the default covers every ray type");
+    assert_eq!(value.arg.name, "visibility");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+}
+
+/// Specificity only breaks a *tie*: "the attribute with the highest
+/// priority is used" comes first, so a prioritised default beats a
+/// per-ray value.
+#[test]
+fn a_prioritised_default_beats_a_per_ray_visibility() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute(
+            "near",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![5]),
+                integers("visibility.camera", vec![0]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.arg.name, "visibility", "priority 5 beats specificity");
+    assert_eq!(value.priority, 5);
+}
+
+/// `visibility.set.subsurface` is a *connection* to a `set` node, not a
+/// per-ray int. Falling back to `visibility` for it would answer a
+/// connection query with a flag.
+#[test]
+fn visibility_set_subsurface_is_not_a_ray_type() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    assert!(
+        scene
+            .attribute_value("mesh", "visibility.set.subsurface")
+            .unwrap()
+            .is_none(),
+        "`set.subsurface` is not one of ɴsɪ's ray types",
+    );
+}
+
+/// ɴsɪ declares `ATTR.priority` an `int`. Reinterpreting some other
+/// layout as one would let a stray float silently reorder the scene.
+#[test]
+fn a_non_integer_priority_is_ignored() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                OwnedArg {
+                    name: "visibility.priority".to_string(),
+                    type_tag: Type::F32,
+                    array_length: 1,
+                    flags: 0,
+                    data: OwnedData::F32(vec![10.0]),
+                },
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near", "the float priority does not count");
+    assert_eq!(value.priority, 0);
+}
+
+/// Nothing on the path defines it.
+#[test]
+fn an_undefined_attribute_resolves_to_none() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    assert!(scene.attribute_value("mesh", "matte").unwrap().is_none());
+}
+
+/// The walk is the same one `geometry_binding` does, so its failures
+/// are this function's failures too.
+#[test]
+fn attribute_value_propagates_a_detached_path() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    assert!(matches!(
+        scene.attribute_value("mesh", "visibility"),
+        Err(ResolveError::Detached { .. })
+    ));
+}
+
+/// The documented assumption, isolated: specificity is compared
+/// *before* proximity, so a per-ray value on the far node beats a plain
+/// `visibility` on the near one. ɴsɪ gives the specificity rule without
+/// saying whether it outranks proximity, so this pins the choice rather
+/// than leaving it to whichever candidate happened to be pushed first.
+///
+/// The same-node case cannot show this: there the push order already
+/// puts the specific attribute ahead of the default.
+#[test]
+fn specificity_is_compared_before_proximity() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility.camera", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(
+        value.node, "far",
+        "the per-ray value outranks the nearer default"
+    );
+    assert_eq!(value.arg.name, "visibility.camera");
 }

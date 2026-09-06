@@ -278,3 +278,42 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
 - [x] T8.6 `nsi-trait` gains an `include` whitelist. `cargo package`
       was shipping a `.claude/audit` log a hook had written into the
       crate. All four crates now package clean.
+
+## Attribute-Level Precedence
+
+The one `Open` row that could hand a backend a *wrong answer* rather
+than a missing feature, closed because `nsi-moonray` is being written
+against this API now.
+
+- [x] T9.1 `Scene::attribute_value(geometry, name)` applies ɴsɪ's two
+      attribute-level rules that `Binding::attributes` cannot express:
+      `ATTR.priority`, and a per-ray `visibility.<ray>` beating the
+      default `visibility` at equal priority. `geometry_binding` orders
+      *nodes*; this orders the definitions on them. Both now share
+      `gathered_attributes`, so they cannot disagree about rank.
+      Evidence: eleven tests in `resolve::tests`, each falsified by
+      breaking the rule it guards.
+- [x] T9.2 `RAY_TYPES` is the eight suffixes the specification lists,
+      not any `visibility.*`. `visibility.set.subsurface` is a
+      *connection* to a `set` node, and treating it as a more specific
+      `visibility` would have ranked a connection against a flag.
+      Evidence: `resolve::tests::visibility_set_subsurface_is_not_a_ray_type`.
+- [x] T9.3 `priority_value` reads `int` only. Reinterpreting another
+      layout would let a stray float silently reorder the scene.
+      Evidence: `resolve::tests::a_non_integer_priority_is_ignored`.
+- [x] T9.4 Specificity-before-proximity confirmed against 3Delight.
+      Probes `E` and `E2`: a distant `visibility.camera` beats a nearer
+      `visibility`. The row is `Covered`, not an assumption.
+- [x] T9.5 **The connection `priority` on a `geometryattributes` edge is
+      inert in 3Delight, and this crate had sorted by it since round 2.**
+      Round 10 rendered it: `visibility 0` near, `visibility 1` far with
+      `"priority" 10` on the connection, and 3Delight leaves the object
+      invisible -- proximity wins. Six scenes agree, and a priority on a
+      *shader* connection still works, which is the distinction ɴsɪ's
+      "(for shaders, essentially)" draws and its `priority` entry at
+      line 552 does not. `gathered_attributes` no longer reads it;
+      `shader_on` still does. The test that had pinned the opposite was
+      corrected to what the renderer does, and is now
+      `a_geometryattributes_connection_priority_does_not_reorder`.
+- [x] T9.6 `RAY_TYPES` is public: a backend building a visibility mask
+      needs exactly those eight, and a second copy would drift.
