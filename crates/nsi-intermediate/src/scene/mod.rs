@@ -362,10 +362,17 @@ impl Scene {
             .chain(&changes.edges_removed)
             .chain(&changes.edges_rearmed)
         {
-            match edge.kind.to_attr() {
-                // A child, a set member or a prototype: whatever hung
-                // below the source now hangs somewhere else.
-                "objects" | "members" | "sourcemodels" => {
+            // On `EdgeKind`, with no wildcard. Matching the
+            // *destination attribute string* let a new variant land
+            // silently in whatever arm the `_` was, and a
+            // `ShaderNetwork` whose port happens to be named `objects`
+            // took the child arm -- the resolver already carries a
+            // comment about that hazard, and this had re-learned it.
+            // Exhaustive here means the compiler asks the question.
+            match &edge.kind {
+                // A child, a set member: whatever hung below the
+                // source now hangs somewhere else.
+                EdgeKind::SceneMember | EdgeKind::SetMember => {
                     self.descend(&edge.from, &mut affected.nodes);
                     if self.is_output_node(&edge.from)
                         || self.is_output_node(&edge.to)
@@ -373,27 +380,70 @@ impl Scene {
                         affected.outputs = true;
                     }
                 }
+                // A prototype joining or leaving an instancer. The
+                // node whose answer moves is the **instancer**, and it
+                // is not below the prototype -- it is the other end of
+                // this edge, which is exactly why a walk that only
+                // descends from `edge.from` missed it: rendered, a
+                // severed `sourcemodels` leaves the instancer drawing
+                // a prototype the scene no longer has.
+                EdgeKind::InstanceSource => {
+                    self.descend(&edge.from, &mut affected.nodes);
+                    affected.nodes.insert(edge.to.clone());
+                }
                 // A container bound to something, or unbound from it.
-                "geometryattributes" | "shaderattributes" => {
+                EdgeKind::AttributeBinding | EdgeKind::ShaderAttributes => {
                     self.descend(&edge.to, &mut affected.nodes);
                     self.set_members(&edge.to, &mut affected.nodes);
                 }
                 // A shader reaching an `attributes` node -- including a
                 // repeated `connect` that only changed `"priority"`,
                 // which is why re-armed edges are here.
-                "surfaceshader" | "displacementshader" | "volumeshader"
-                | "lightset" | "exclusiveshading" => {
+                EdgeKind::SurfaceShader
+                | EdgeKind::DisplacementShader
+                | EdgeKind::VolumeShader => {
                     affected.shaders.insert(edge.from.clone());
                     self.through_bindings(&edge.to, &mut affected.nodes);
                 }
-                "screens" | "outputlayers" | "outputdrivers" => {
+                // The output chain, and the things hung off it. A
+                // light set and a background layer belong to an
+                // `outputlayer`, and a lens shader to a camera: none
+                // of them is a material parameter, and filing them
+                // under `shaders` told a backend honouring light sets
+                // nothing at all.
+                EdgeKind::Screen
+                | EdgeKind::OutputLayer
+                | EdgeKind::OutputDriver
+                | EdgeKind::LightSet
+                | EdgeKind::BackgroundLayer
+                | EdgeKind::LensShader => {
                     affected.outputs = true;
                 }
-                // A shader-network edge, or a class this crate carries
-                // without resolving: both ends, and nothing below.
-                _ => {
-                    affected.shaders.insert(edge.from.clone());
-                    affected.shaders.insert(edge.to.clone());
+                // `.global`'s own membership: it applies to the whole
+                // render, so the whole scene is the candidate.
+                EdgeKind::ExclusiveShading => {
+                    affected.everything = true;
+                }
+                // Bounds, subsurface sets and face sets attach to a
+                // geometry or a set and change what it resolves to.
+                EdgeKind::Bounds
+                | EdgeKind::SubsurfaceSet
+                | EdgeKind::FaceSet => {
+                    self.descend(&edge.to, &mut affected.nodes);
+                    self.set_members(&edge.to, &mut affected.nodes);
+                }
+                // A shader network edge is between shaders, and a
+                // carried connection this crate does not resolve is
+                // not known to reach geometry. Only ends that really
+                // are shader nodes go in `shaders`.
+                EdgeKind::ShaderNetwork { .. } | EdgeKind::Other { .. } => {
+                    for handle in [&edge.from, &edge.to] {
+                        if self.is_shader_node(handle) {
+                            affected.shaders.insert(handle.clone());
+                        } else {
+                            self.descend(handle, &mut affected.nodes);
+                        }
+                    }
                 }
             }
         }
@@ -455,6 +505,19 @@ impl Scene {
         for edge in self.edges_to_attr(handle, "members") {
             self.descend(&edge.from, out);
         }
+    }
+
+    /// Whether this handle is a shader node.
+    ///
+    /// Asked before filing anything under [`Affected::shaders`], whose
+    /// documented meaning is "maps one-to-one onto a renderer's
+    /// material parameters". A `set` reached through a `lightset` edge
+    /// is not that, and neither is a camera reached through a lens
+    /// shader.
+    fn is_shader_node(&self, handle: &str) -> bool {
+        self.nodes
+            .get(handle)
+            .is_some_and(|node| node.node_type == "shader")
     }
 
     /// Whether this handle is part of the camera/screen/layer/driver

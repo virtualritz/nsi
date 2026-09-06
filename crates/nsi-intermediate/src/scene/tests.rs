@@ -1112,7 +1112,24 @@ fn a_wildcard_disconnect_dirties_every_child_it_severed() {
 /// fixture -- naming the instancer there is a conservative choice, and
 /// `a_prototypes_ancestor_reaches_the_instancer` is what pins it.
 ///
-/// Widened twice, both times because a mutation survived it: the
+/// What it structurally cannot catch, established by mutating the walk
+/// against it rather than assumed:
+///
+/// - **Over-approximation.** Naming a node that did not move breaks no
+///   `changed ⊆ affected`, so filing a shader attribute under `nodes`
+///   instead of `shaders` survives here;
+///   `a_shader_parameter_edit_is_not_geometry_work` is what pins that.
+/// - **A bare `create`.** A node with no edges resolves to the same
+///   answers it did before it existed -- `world_transform` says
+///   `Detached` for an unknown handle as readily as for an unconnected
+///   one -- so dropping the walk over `Changes::created` survives. It
+///   is over-approximation either way.
+/// - **Dropping an `EdgeKind` arm.** That is now a compile error rather
+///   than a surviving mutation: the match is exhaustive over the enum
+///   instead of over `to_attr()` strings, so a new edge class stops the
+///   build at the place a decision is owed.
+///
+/// Widened three times, each because a mutation survived it: the
 /// script's `transformationmatrix` was an `f32`, which `matrix_of`
 /// refuses, so "move a transform" moved nothing; and its priorities
 /// were `f32` too, which 3Delight does not read as priorities, so
@@ -1132,9 +1149,10 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 .map(|placement| (placement.path.clone(), placement.transform))
                 .collect::<Vec<_>>()),
         ) + &format!(
-            "|{:?}|{:?}",
+            "|{:?}|{:?}|{:?}",
             scene.instance_transforms(handle),
             scene.attribute_value(handle, "visibility.camera"),
+            scene.instance_sources(handle),
         )
     }
 
@@ -1154,6 +1172,10 @@ fn every_changed_answer_is_named_in_the_affected_set() {
             ("surface", "shader"),
             ("surface2", "shader"),
             ("texture", "shader"),
+            ("cam", "perspectivecamera"),
+            ("screen", "screen"),
+            ("layer", "outputlayer"),
+            ("driver", "outputdriver"),
         ] {
             scene.create(handle, node_type).unwrap();
         }
@@ -1170,6 +1192,40 @@ fn every_changed_answer_is_named_in_the_affected_set() {
         }
         scene
             .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        // Matrices, or `instance_transforms` is `Ok([])` before and
+        // after every edit and the instancer is invisible to the gate.
+        scene
+            .set_attribute(
+                "inst",
+                vec![OwnedArg::new(
+                    "transformationmatrices",
+                    Type::MatrixF64,
+                    1,
+                    0,
+                    OwnedData::F64(
+                        [
+                            [
+                                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                                0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 1.0,
+                            ],
+                            [
+                                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                                0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+                            ],
+                        ]
+                        .concat(),
+                    ),
+                )],
+            )
+            .unwrap();
+        scene.connect("cam", None, ".root", "objects").unwrap();
+        scene.connect("screen", None, "cam", "screens").unwrap();
+        scene
+            .connect("layer", None, "screen", "outputlayers")
+            .unwrap();
+        scene
+            .connect("driver", None, "layer", "outputdrivers")
             .unwrap();
         scene.connect("q", None, "group", "members").unwrap();
         scene
@@ -1228,7 +1284,12 @@ fn every_changed_answer_is_named_in_the_affected_set() {
 
     let handles = [
         "outer", "inner", "protoxf", "q", "r", "proto", "inst", "group",
-        "near", "far", "surface", "surface2", "texture",
+        "near", "far", "surface", "surface2", "texture", "cam", "screen",
+        "layer", "driver",
+        // The node a `create` edit makes. Without it in this list no
+        // created node was ever checked, and dropping the walk over
+        // `Changes::created` left the gate green.
+        "fresh",
     ];
 
     // One edit is applied by `edit`, so the runs below can be
@@ -1278,7 +1339,10 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 // Re-arm: no edge added, none removed, and which of the
                 // two rival shaders wins changes.
                 let _ = scene.connect_with_args(
-                    if op.is_multiple_of(2) {
+                    // Keyed on the *handle*, not on `op`: `op` is 7
+                    // throughout this arm, so `op % 2` was a constant
+                    // and only one of the two rivals was ever re-armed.
+                    if handle.len().is_multiple_of(2) {
                         "surface"
                     } else {
                         "surface2"
@@ -1294,6 +1358,17 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                         OwnedData::I32(vec![7]),
                     )],
                 );
+            }
+            9 => {
+                // Created and left unconnected, on purpose: connecting
+                // it would record an edge, the edge arm would name it,
+                // and the walk over `Changes::created` could be deleted
+                // with the gate still green.
+                let _ = scene.create("fresh", "mesh");
+            }
+            10 => {
+                let _ =
+                    scene.disconnect(crate::ALL, None, handle, "sourcemodels");
             }
             _ => {
                 // An `int`, and exactly one: anything else is not a
@@ -1318,13 +1393,28 @@ fn every_changed_answer_is_named_in_the_affected_set() {
             if affected.everything {
                 return;
             }
+            // `render_outputs` is one answer for the whole scene, not
+            // one per handle, so it is held against the flag that
+            // exists for it. Folding it into every handle's answer made
+            // deleting a camera look like every node in the scene
+            // changing -- which is how this assertion first failed.
+            assert!(
+                format!("{:?}", before.render_outputs())
+                    == format!("{:?}", scene.render_outputs())
+                    || affected.outputs,
+                "{what}: the outputs changed and `outputs` is false",
+            );
+
             for handle in handles {
                 let was = answers(before, handle);
                 let now = answers(scene, handle);
+                // `nodes` and `shaders` are separate answers -- one
+                // costs geometry work and the other does not -- so a
+                // geometry answer that moved must be in `nodes`.
+                // Accepting either left the distinction the API sells
+                // unverified.
                 assert!(
-                    was == now
-                        || affected.nodes.contains(handle)
-                        || affected.shaders.contains(handle),
+                    was == now || affected.nodes.contains(handle),
                     "{what}: `{handle}` answers differently and is not in the \
                  affected set\n  before: {was}\n   after: {now}",
                 );
@@ -1333,7 +1423,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
 
     // Every single edit, on every handle.
     for handle in handles {
-        for op in 0..9 {
+        for op in 0..11 {
             let mut scene = fixture();
             let before = scene.clone();
             scene.take_changes();
@@ -1357,7 +1447,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 .wrapping_mul(6_364_136_223_846_793_005)
                 .wrapping_add(1_442_695_040_888_963_407);
             let pick = (state >> 33) as usize;
-            edit(&mut scene, handles[pick % handles.len()], pick % 9);
+            edit(&mut scene, handles[pick % handles.len()], pick % 11);
         }
 
         let changes = scene.take_changes();
