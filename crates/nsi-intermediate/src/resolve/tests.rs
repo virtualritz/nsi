@@ -405,24 +405,56 @@ fn a_time_between_samples_is_an_error_not_an_interpolation() {
     );
 }
 
-/// A chain whose nodes are sampled at different times has no answer
-/// without interpolation, and says so rather than composing a
-/// mismatched pair.
+/// A chain whose nodes are sampled at **different** times resolves.
+///
+/// This asserted an error, on the reasoning that a sweep needs every
+/// node to have a sample at each time. 3Delight renders such a scene --
+/// `outer` sampled at 0 and 0.5, `inner` at 0.25 and 0.75, shutter
+/// [0, 1], draws a smear across six bands with no error -- because each
+/// node is interpolated at each time independently. Refusing it was a
+/// refusal where the renderer answers, and the crate-level
+/// documentation steered a backend straight into it.
+///
+/// `world_transform_samples` interpolates now, so it agrees with
+/// `world_transform_interpolated_at` at every time it reports.
 #[test]
-fn a_chain_sampled_at_different_times_is_an_error() {
+fn a_chain_sampled_at_different_times_resolves() {
     let mut scene = Scene::default();
     scene.create("outer", "transform").unwrap();
     scene
-        .set_attribute_at_time("outer", 0.25, vec![translate(1.0, 0.0, 0.0)])
+        .set_attribute_at_time("outer", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("outer", 0.5, vec![translate(2.0, 0.0, 0.0)])
         .unwrap();
     scene.create("inner", "transform").unwrap();
     scene
-        .set_attribute_at_time("inner", 0.75, vec![translate(2.0, 0.0, 0.0)])
+        .set_attribute_at_time("inner", 0.25, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 0.75, vec![translate(4.0, 0.0, 0.0)])
         .unwrap();
     scene.connect("inner", None, "outer", "objects").unwrap();
     scene.connect("outer", None, ".root", "objects").unwrap();
 
-    assert!(scene.world_transform_samples("inner").is_err());
+    let times = scene.motion_times("inner").unwrap();
+    assert_eq!(times, vec![0.0, 0.25, 0.5, 0.75], "the union of both");
+
+    let samples = scene.world_transform_samples("inner").unwrap();
+    assert_eq!(samples.len(), 4);
+    for (time, matrix) in &samples {
+        assert_eq!(
+            *matrix,
+            scene
+                .world_transform_interpolated_at("inner", *time)
+                .unwrap(),
+            "the sweep agrees with the interpolating accessor at {time}",
+        );
+    }
+
+    // At t=0.5 the outer is at its own sample (2.0) and the inner is
+    // halfway between its two (2.0): 4.0 together.
+    assert_eq!(samples[2].1[12], 4.0);
 }
 
 /// ɴsɪ documents `transformationmatrix` as `doublematrix`. An `f32`
@@ -4466,5 +4498,49 @@ fn a_sampled_shader_attribute_is_gathered() {
             .unwrap()
             .node,
         "m",
+    );
+}
+
+/// A multi-parent geometry can get its motion times, per path.
+///
+/// `motion_times` walks the chain itself and so refuses one; a backend
+/// emitting per-sample transforms for an instanced object had to
+/// re-walk the chain by hand. `motion_times_along` takes the path a
+/// `Placement` already carries.
+#[test]
+fn motion_times_are_available_along_a_placement_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xfA", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xfA", 1.0, vec![translate(10.0, 0.0, 0.0)])
+        .unwrap();
+    // The B path is static.
+    scene
+        .set_attribute("xfB", vec![translate(-4.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert!(matches!(
+        scene.motion_times("q"),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+
+    let placements = scene.placements_at("q", 0.0).unwrap();
+    assert_eq!(
+        scene.motion_times_along(&placements[0].path),
+        vec![0.0, 1.0],
+        "the moving path",
+    );
+    assert!(
+        scene.motion_times_along(&placements[1].path).is_empty(),
+        "the static path",
     );
 }

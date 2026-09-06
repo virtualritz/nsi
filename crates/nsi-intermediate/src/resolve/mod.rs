@@ -825,12 +825,22 @@ impl Scene {
     /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`].
     pub fn motion_times(&self, handle: &str) -> Result<Vec<f64>, ResolveError> {
         let chain = self.transform_chain(handle)?;
+        Ok(self.motion_times_along(&chain))
+    }
 
+    /// The same, along a path already walked.
+    ///
+    /// [`Scene::motion_times`] refuses a geometry with more than one
+    /// parent, because it walks the chain itself and there is no single
+    /// chain. A backend emitting per-sample transforms for an instanced
+    /// object needs the times of *its* path, which is what a
+    /// [`Placement`] carries -- pass `placement.path`.
+    pub fn motion_times_along(&self, path: &[String]) -> Vec<f64> {
         // The typing rule again: an unreadable sample is not a motion
         // time. Reporting one made `world_transform_samples` iterate a
         // time that `world_transform_at` then refused -- the same scene
         // answered differently depending on which accessor asked.
-        let mut times = chain
+        let mut times = path
             .iter()
             .filter_map(|node| self.node(node))
             .flat_map(|node| {
@@ -846,7 +856,7 @@ impl Scene {
         times.sort_by(f64::total_cmp);
         times.dedup_by(|a, b| a.total_cmp(b) == Ordering::Equal);
 
-        Ok(times)
+        times
     }
 
     /// The node for `handle`, or `None` for a reserved handle nothing
@@ -1068,7 +1078,9 @@ impl Scene {
     ) -> Result<Vec<(f64, [f64; 16])>, ResolveError> {
         self.motion_times(handle)?
             .into_iter()
-            .map(|time| Ok((time, self.world_transform_at(handle, time)?)))
+            .map(|time| {
+                Ok((time, self.world_transform_interpolated_at(handle, time)?))
+            })
             .collect()
     }
 
