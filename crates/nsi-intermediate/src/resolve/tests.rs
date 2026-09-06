@@ -2008,3 +2008,189 @@ fn the_first_connected_shader_attribute_wins_at_one_level() {
         "a node on `.root` is still a source",
     );
 }
+
+// ---------------------------------------------------------------------
+// Set membership as an attribute source. Every expectation below was
+// rendered in 3Delight, each direction mirrored.
+// ---------------------------------------------------------------------
+
+/// `mesh -> xf -> .root`, with `mesh` also a member of set `s`.
+fn scene_with_a_set() -> Scene {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("s", "set").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene.connect("mesh", None, "s", "members").unwrap();
+    scene
+}
+
+/// An `attributes` node on a set the geometry belongs to binds. ɴsɪ's
+/// gathering text names only primitives and transforms; 3Delight
+/// honours the set, and this crate silently missed it.
+#[test]
+fn an_attributes_node_on_a_set_binds() {
+    let mut scene = scene_with_a_set();
+    scene.create("sa", "attributes").unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+
+    let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+    assert_eq!(binding.attributes, vec!["sa".to_string()]);
+}
+
+/// A container on the geometry outranks one on its set.
+#[test]
+fn the_geometrys_own_container_outranks_its_set() {
+    let mut scene = scene_with_a_set();
+    scene.create("near", "attributes").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene
+        .connect("near", None, "mesh", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("sa", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    assert_eq!(value.expect("defined").node, "near");
+}
+
+/// A container on the set outranks one on the transform above it.
+#[test]
+fn a_set_outranks_the_transform_above_it() {
+    let mut scene = scene_with_a_set();
+    scene.create("far", "attributes").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene
+        .connect("far", None, "xf", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("sa", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined");
+    assert_eq!(value.node, "sa");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+}
+
+/// With two memberships the first connection wins.
+#[test]
+fn the_first_set_membership_wins() {
+    let mut scene = scene_with_a_set();
+    scene.create("s2", "set").unwrap();
+    scene.connect("mesh", None, "s2", "members").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene.create("sa2", "attributes").unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("sa2", None, "s2", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("sa", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute("sa2", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    assert_eq!(value.expect("defined").node, "sa");
+}
+
+/// A set nested inside another set contributes nothing: only direct
+/// membership counts. Walking transitively would apply attributes
+/// 3Delight does not.
+#[test]
+fn a_nested_sets_attributes_are_not_inherited() {
+    let mut scene = scene_with_a_set();
+    scene.create("s2", "set").unwrap();
+    scene.connect("s", None, "s2", "members").unwrap();
+    scene.create("sa2", "attributes").unwrap();
+    scene
+        .connect("sa2", None, "s2", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("sa2", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    assert!(
+        scene
+            .attribute_value("mesh", "visibility")
+            .unwrap()
+            .is_none(),
+        "the outer set is not a source for this geometry",
+    );
+}
+
+/// `ATTR.priority` still outranks the whole ordering, from a set too.
+#[test]
+fn an_attr_priority_on_a_set_beats_the_geometrys_own() {
+    let mut scene = scene_with_a_set();
+    scene.create("near", "attributes").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene
+        .connect("near", None, "mesh", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "sa",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined");
+    assert_eq!(value.node, "sa");
+    assert_eq!(value.priority, 10);
+}
+
+/// The set path serves shader attributes too, at the same rank.
+#[test]
+fn a_set_provides_shader_attributes_below_the_geometry() {
+    let mut scene = scene_with_a_set();
+    scene.create("sa", "attributes").unwrap();
+    scene.create("far", "attributes").unwrap();
+    scene.connect("sa", None, "s", "shaderattributes").unwrap();
+    scene
+        .connect("far", None, "xf", "shaderattributes")
+        .unwrap();
+    scene
+        .set_attribute("sa", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("tint", vec![2])])
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    assert_eq!(value.expect("defined").node, "sa");
+    assert_eq!(
+        scene.shader_attributes("mesh").unwrap(),
+        vec!["mesh".to_string(), "sa".to_string(), "far".to_string()],
+    );
+}

@@ -349,11 +349,13 @@ against this API now.
       edges each left the suite green. Evidence:
       `resolve::tests::shader_attribute_sources_are_in_precedence_order`,
       `the_first_connected_shader_attribute_wins_at_one_level`.
-- [ ] T9.10 Attributes provided through a `set`, for **both**
+- [x] T9.10 Attributes provided through a `set`, for **both**
       containers. 3Delight honours `geometryattributes` on a set as well
       as `shaderattributes`, so `geometry_binding` and `attribute_value`
-      share the blind spot and it was untracked. The ranking is now
-      observed -- primitive, then its `shaderattributes`, then the set,
-      then the transform -- so what remains is walking `SetMember` as a
-      second source and deciding how multiple or nested memberships
-      order. Gate: the `Open` row in `contracts/resolution.md`.
+      shared the blind spot and it was untracked until round 12. Rather
+      than leave it open on "the specification does not say", the
+      ranking was rendered: a set sits between the geometry and its
+      first transform, direct membership only, first membership wins,
+      and `ATTR.priority` still outranks all of it. Each of those four
+      decisions is falsified by a separate mutation. Evidence: seven
+      tests in `resolve::tests`.

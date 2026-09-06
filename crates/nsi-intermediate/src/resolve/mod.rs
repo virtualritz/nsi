@@ -971,6 +971,25 @@ impl Scene {
 
     /// The same walk for any container class, nearest the geometry
     /// first.
+    ///
+    /// # Sets rank between the geometry and its first transform
+    ///
+    /// ɴsɪ describes gathering as running "from the geometric
+    /// primitive, through all the transform nodes it is connected to,
+    /// until the scene root is reached", and names `set` nodes only as
+    /// a place a `shaderattributes` node may hang. 3Delight honours a
+    /// container on a set the geometry belongs to for **both** classes,
+    /// ranked below anything on the geometry itself and above every
+    /// transform. Rendered, each direction mirrored so the answer is not
+    /// an artefact of which value happened to be `0`:
+    ///
+    /// - a container on the geometry beats one on its set;
+    /// - one on the set beats one on the transform above it;
+    /// - with two memberships the first connection wins;
+    /// - a set nested inside another set contributes **nothing** --
+    ///   only direct membership counts.
+    ///
+    /// `ATTR.priority` still outranks all of it, as everywhere else.
     fn gathered_containers(
         &self,
         geometry: &str,
@@ -978,11 +997,25 @@ impl Scene {
     ) -> Result<Vec<(usize, usize, &Edge)>, ResolveError> {
         let chain = self.chain(geometry)?;
 
-        let mut gathered = chain
-            .iter()
+        // The geometry, then the sets it belongs to directly, then the
+        // transforms above it. With no set memberships this is `chain`
+        // and the walk is unchanged.
+        let mut sources: Vec<&String> = Vec::with_capacity(chain.len() + 1);
+        if let Some(first) = chain.first() {
+            sources.push(first);
+        }
+        sources.extend(
+            self.edges_from(geometry)
+                .filter(|edge| edge.kind == EdgeKind::SetMember)
+                .map(|edge| &edge.to),
+        );
+        sources.extend(chain.iter().skip(1));
+
+        let mut gathered = sources
+            .into_iter()
             .enumerate()
             .flat_map(|(depth, node)| {
-                self.edges_to_attr(node, kind.to_attr())
+                self.edges_to_attr(node.as_str(), kind.to_attr())
                     // A shader-network edge's `to_attr` is its *port*
                     // name, so it shares this bucket with the named
                     // class. Without the filter a port called
