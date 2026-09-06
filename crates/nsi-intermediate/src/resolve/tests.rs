@@ -3361,47 +3361,69 @@ fn an_interior_sample_time_is_answered_for_instances_and_transforms() {
     );
 }
 
-/// Sampled `disabledinstances` and `modelindices` are honoured.
+/// Sampled `disabledinstances` and `modelindices` are honoured, and
+/// the **last** one defined applies for the whole shutter.
 ///
-/// Rendered: an instancer whose `disabledinstances` is set only through
-/// `SetAttributeAtTime` draws the same single instance as the static
-/// form. Reading only the static attributes reported every instance as
-/// enabled -- the same silent-empty class as the matrices, one level
-/// down.
+/// 3Delight does not sample these: `SetAttributeAtTime` on them behaves
+/// like an overwriting `SetAttribute`. Rendered with two instances --
+/// `disabledinstances [1]` at `t=0` then `[0]` at `t=1` -- it draws
+/// instance **1**, the `t=1` value applying throughout; mirroring the
+/// values mirrors the result, and moving the shutter changes nothing.
+///
+/// This crate first held the *earlier* sample, a step, and so returned
+/// the discarded value in every case that discriminates. Reading only
+/// the static attributes, before that, reported every instance enabled.
 #[test]
-fn sampled_instance_indices_are_honoured() {
-    let mut scene = Scene::default();
-    scene.create("inst", "instances").unwrap();
-    scene.create("proto", "mesh").unwrap();
-    scene.connect("inst", None, ".root", "objects").unwrap();
-    scene
-        .connect("proto", None, "inst", "sourcemodels")
-        .unwrap();
-
+fn sampled_instance_indices_take_their_last_value() {
     let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
-    scene
-        .set_attribute("inst", vec![doubles("transformationmatrices", two)])
-        .unwrap();
-    for time in [0.0, 1.0] {
+
+    let build = |disabled_at: [(f64, i32); 2]| {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto", "mesh").unwrap();
+        scene.connect("inst", None, ".root", "objects").unwrap();
         scene
-            .set_attribute_at_time(
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        scene
+            .set_attribute(
                 "inst",
-                time,
-                vec![integers("disabledinstances", vec![1])],
+                vec![doubles("transformationmatrices", two.clone())],
             )
             .unwrap();
+        for (time, value) in disabled_at {
+            scene
+                .set_attribute_at_time(
+                    "inst",
+                    time,
+                    vec![integers("disabledinstances", vec![value])],
+                )
+                .unwrap();
+        }
+        scene
+    };
+
+    // `[1]` then `[0]`: instance 0 is disabled, so instance 1 is drawn.
+    let scene = build([(0.0, 1), (1.0, 0)]);
+    for time in [0.0, 0.5, 1.0, 9.0] {
+        let at = scene.instance_transforms_at("inst", time).unwrap();
+        assert_eq!(at.len(), 1, "at {time}");
+        assert_eq!(
+            at[0].transform[12], 1.0,
+            "the last value applies at {time}"
+        );
     }
 
+    // Mirrored, as the render mirrors.
+    let scene = build([(0.0, 0), (1.0, 1)]);
     let at = scene.instance_transforms_at("inst", 0.5).unwrap();
-    assert_eq!(at.len(), 1, "instance 1 is disabled at this time");
     assert_eq!(at[0].transform[12], -1.0);
 
-    // And the static reading refuses rather than reporting both, since
-    // it cannot know which sample applies.
-    assert!(matches!(
-        scene.instance_transforms("inst"),
-        Err(ResolveError::MotionSampledTransform { .. })
-    ));
+    // And the static reading answers rather than refusing: the value
+    // does not depend on a time, so there is nothing to refuse.
+    let statically = scene.instance_transforms("inst").unwrap();
+    assert_eq!(statically.len(), 1);
+    assert_eq!(statically[0].transform[12], -1.0);
 }
 
 /// A sample that changes the instance count is dropped, not blended.
@@ -3500,5 +3522,54 @@ fn shader_attribute_value_refuses_an_unreachable_geometry() {
             .expect("on the primitive")
             .node,
         "q",
+    );
+}
+
+/// `-0.0` names the sample at `0.0`, including when it is *interior*.
+///
+/// The recorder folds the two when storing and the renderer reads `-0`
+/// as `+0`. With samples at `-1`, `0` and `1`, a query at `-0.0` missed
+/// the exact hit under `total_cmp`, was not clamped by either end, and
+/// bracketed no pair -- so it errored on a sample that plainly exists.
+/// The earlier test could not catch it: its fixture starts at `0`, so
+/// the leading clamp answered regardless.
+#[test]
+fn negative_zero_finds_an_interior_sample() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    for (time, x) in [(-1.0, -8.0), (0.0, 5.0), (1.0, 20.0)] {
+        scene
+            .set_attribute_at_time("xf", time, vec![translate(x, 0.0, 0.0)])
+            .unwrap();
+        scene
+            .set_attribute_at_time(
+                "inst",
+                time,
+                vec![doubles("transformationmatrices", instance_matrix(x))],
+            )
+            .unwrap();
+    }
+
+    assert_eq!(
+        scene.world_transform_interpolated_at("xf", -0.0).unwrap()[12],
+        5.0,
+    );
+    assert_eq!(
+        scene.instance_transforms_at("inst", -0.0).unwrap()[0].transform[12],
+        5.0,
+    );
+    assert_eq!(
+        scene.placements_at("q", -0.0).unwrap()[0].transform[12],
+        5.0,
     );
 }

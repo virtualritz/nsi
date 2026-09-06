@@ -73,9 +73,14 @@ trait -> ffi-wrap -> intermediate -> parse.
   `instance_transforms` pairing each matrix with the prototype it draws
   through `modelindices`; `instance_transforms_at` for an instancer
   whose matrices, `modelindices` or `disabledinstances` are *sampled* --
-  which `instance_transforms` now refuses rather than reporting an empty
-  list, since an empty list reads as "nothing to draw" for something
-  3Delight renders.
+  which `instance_transforms` refuses for sampled *matrices* rather than
+  reporting an empty list, since an empty list reads as "nothing to
+  draw" for something 3Delight renders. Sampled `modelindices` and
+  `disabledinstances` are not time-varying at all -- the last one
+  defined applies for the whole shutter, as an overwriting
+  `SetAttribute` would -- so those are read, not refused. Before this
+  they were ignored, reporting every instance enabled and drawn from
+  model 0.
 - ɴsɪ's lightweight instancing resolves per path: `placements` and
   `placements_at` give one placement per way a geometry is placed, each
   with the transform *and* the binding along that path -- rendered,

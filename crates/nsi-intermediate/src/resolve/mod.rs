@@ -353,6 +353,13 @@ enum Located<'a, T> {
 /// `None` when there are no samples, or when `time` names nothing: a
 /// NaN compares false against everything and brackets no pair.
 fn locate_sample<T>(samples: &[(f64, T)], time: f64) -> Option<Located<'_, T>> {
+    // `-0.0` names the sample at `0.0`: the recorder folds the two when
+    // storing, and the renderer reads `-0` as `+0`. Without this,
+    // `total_cmp` misses the exact hit, the `<=`/`>=` ends do not clamp
+    // an *interior* `0.0`, and the strict windows bracket nothing -- so
+    // querying at `-0.0` errored on a sample that exists.
+    let time = time + 0.0;
+
     let first = samples.first()?;
     let last = samples.last()?;
 
@@ -1451,56 +1458,42 @@ impl Scene {
         })
     }
 
-    /// A sampled integer instancer attribute at `time`.
+    /// The effective value of an integer instancer attribute that was
+    /// set with `SetAttributeAtTime`.
     ///
-    /// `None` when it is not sampled, in which case the static value
-    /// applies.
+    /// `None` when it was not.
     ///
-    /// # A step, not a blend
+    /// # Time is not part of the answer
     ///
     /// `modelindices` names a prototype and `disabledinstances` names
-    /// instances to skip; neither has a meaningful value between two
-    /// samples, so the earlier sample of the bracketing pair holds until
-    /// the next. That is a choice, not a measurement: the probe that
-    /// established 3Delight honours these sampled used the *same*
-    /// values at both times, so it could not tell a step from a blend.
+    /// instances to skip. 3Delight does not sample either: the last one
+    /// **defined** applies for the whole shutter, exactly as an
+    /// overwriting `SetAttribute` would. Rendered -- two instances,
+    /// `disabledinstances [1]` at `t=0` then `[0]` at `t=1` -- it draws
+    /// instance **1**, which is the `t=1` value applying throughout, and
+    /// mirroring the values mirrors the result. Moving the shutter to
+    /// `[0, 0.25]`, `[2, 3]` or `[-3, -2]` changes nothing.
+    ///
+    /// An earlier version held the *earlier* sample of the bracketing
+    /// pair -- a step -- and documented that as a choice, because the
+    /// probe behind it used the same values at both times and could not
+    /// tell a step from a blend. It was the wrong choice, and it
+    /// returned the discarded sample in every case that discriminates.
+    ///
+    /// # The one divergence
+    ///
+    /// 3Delight keys on the last sample *defined*; this keys on the last
+    /// by *time*, because `time_attrs` is sorted by time and definition
+    /// order is not recorded. A stream setting `t=1` before `t=0` --
+    /// which 3Delight itself never writes -- resolves to the other one.
     /// Recorded in `contracts/resolution.md`.
-    fn instance_ints_at(
-        &self,
-        node: &Node,
-        name: &str,
-        instances: &str,
-        time: Option<f64>,
-    ) -> Result<Option<Vec<i32>>, ResolveError> {
-        let samples: Vec<(f64, &[i32])> = node
-            .time_attrs
-            .iter()
-            .filter_map(|(t, attrs)| match attrs.get(name)?.data {
-                OwnedData::I32(ref values) => Some((*t, values.as_slice())),
+    fn instance_ints(&self, node: &Node, name: &str) -> Option<Vec<i32>> {
+        node.time_attrs.iter().rev().find_map(|(_, attrs)| {
+            match attrs.get(name)?.data {
+                OwnedData::I32(ref values) => Some(values.to_vec()),
                 _ => None,
-            })
-            .collect();
-
-        if samples.is_empty() {
-            return Ok(None);
-        }
-
-        let Some(time) = time else {
-            return Err(ResolveError::MotionSampledTransform {
-                handle: instances.to_string(),
-            });
-        };
-
-        match locate_sample(&samples, time) {
-            Some(Located::At(values)) => Ok(Some(values.to_vec())),
-            // The earlier sample holds; see above.
-            Some(Located::Between(from, _, _)) => Ok(Some(from.to_vec())),
-            None => Err(ResolveError::MissingSampleAtTime {
-                handle: instances.to_string(),
-                time,
-                available: samples.iter().map(|(t, _)| *t).collect(),
-            }),
-        }
+            }
+        })
     }
 
     /// The instancer's matrices at `time`, when they are sampled.
@@ -1546,21 +1539,8 @@ impl Scene {
         match locate_sample(&samples, time) {
             Some(Located::At(values)) => Ok(Some(values.to_vec())),
             Some(Located::Between(from, to, alpha)) => {
-                // A sample that changes length describes a *different*
-                // set of instances, not a moved one. 3Delight refuses
-                // the whole change -- `E6023 ... incompatible with its
-                // definition at previously defined time steps and will
-                // be ignored` -- and renders the first sample's set,
-                // static. `instance_matrices_sampled` drops the
-                // mismatched samples before we get here, so reaching
-                // this means two kept samples still disagree.
-                if from.len() != to.len() {
-                    return Err(ResolveError::MalformedInstanceMatrices {
-                        instances: instances.to_string(),
-                        values: to.len(),
-                    });
-                }
-
+                // Samples of a differing length were dropped above, so
+                // the two here agree by construction.
                 Ok(Some(
                     from.iter()
                         .zip(*to)
@@ -1927,8 +1907,7 @@ impl Scene {
         // only `attrs` reported every instance as enabled and drawn from
         // source 0 -- the same silent-empty class as the matrices, one
         // level down.
-        let sampled_models =
-            self.instance_ints_at(node, MODEL_INDICES, instances, time)?;
+        let sampled_models = self.instance_ints(node, MODEL_INDICES);
         let model_indices: &[i32] =
             match (&sampled_models, node.attrs.get(MODEL_INDICES)) {
                 (Some(values), _) => values,
@@ -1939,8 +1918,7 @@ impl Scene {
                 (None, None) => &[],
             };
 
-        let sampled_disabled =
-            self.instance_ints_at(node, DISABLED, instances, time)?;
+        let sampled_disabled = self.instance_ints(node, DISABLED);
         let disabled: &[i32] =
             match (&sampled_disabled, node.attrs.get(DISABLED)) {
                 (Some(values), _) => values,
