@@ -3741,3 +3741,147 @@ fn definition_order_is_not_recorded_and_this_is_what_that_costs() {
          in `contracts/resolution.md`",
     );
 }
+
+/// A wrong-typed last sample unsets a *transform* too, at every time.
+///
+/// The rule was stated in three scans and only one had it. Rendered: a
+/// good `doublematrix` at `t=0` followed by a `float` at `t=1` makes
+/// 3Delight draw the node at **identity** -- the attribute is unset,
+/// not held at the discarded `t=0` sample. This crate gave three
+/// different answers for that one scene: the interpolating accessor
+/// held `t=0`, the exact one erred at `t=0.5`, and
+/// `world_transform_samples` reported a motion sweep the renderer does
+/// not draw.
+#[test]
+fn a_wrong_typed_last_transform_sample_unsets_it() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+
+    // Unset, so the node has no transform: identity, at every time and
+    // through every accessor.
+    assert_eq!(scene.world_transform("q").unwrap(), super::IDENTITY);
+    for time in [0.0, 0.5, 1.0] {
+        assert_eq!(
+            scene.world_transform_at("q", time).unwrap(),
+            super::IDENTITY,
+            "exact accessor at {time}",
+        );
+        assert_eq!(
+            scene.world_transform_interpolated_at("q", time).unwrap(),
+            super::IDENTITY,
+            "interpolating accessor at {time}",
+        );
+    }
+}
+
+/// And a wrong-typed last sample unsets an instancer's matrices, which
+/// 3Delight renders as nothing at all rather than as the earlier set.
+#[test]
+fn a_wrong_typed_last_matrices_sample_draws_nothing() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", two)],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![integers("transformationmatrices", vec![0])],
+        )
+        .unwrap();
+
+    for time in [0.0, 0.5, 1.0] {
+        assert!(
+            scene
+                .instance_transforms_at("inst", time)
+                .unwrap()
+                .is_empty(),
+            "unset at {time}; the renderer draws nothing",
+        );
+    }
+}
+
+/// A wrong-typed sample that is *not* last is dropped, and the good
+/// last one answers.
+#[test]
+fn a_wrong_typed_earlier_sample_is_dropped() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    scene
+        .set_attribute_at_time(
+            "xf",
+            0.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(4.0, 0.0, 0.0)])
+        .unwrap();
+
+    // Only the good sample remains, so it is the whole animation.
+    assert_eq!(scene.world_transform_at("q", 1.0).unwrap()[12], 4.0);
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
+        4.0,
+        "one sample is constant, held at every time",
+    );
+
+    // And the dropped sample's own time names nothing. This is the
+    // only place the drop is observable: every other path filters
+    // again downstream, so keeping the unreadable sample in the list
+    // changed no other answer.
+    assert!(
+        matches!(
+            scene.world_transform_at("q", 0.0),
+            Err(ResolveError::MissingSampleAtTime { .. })
+        ),
+        "the unreadable sample at t=0 was dropped, so no sample is there",
+    );
+    assert_eq!(
+        scene.motion_times("q").unwrap(),
+        vec![1.0],
+        "and it is not a motion time either",
+    );
+}

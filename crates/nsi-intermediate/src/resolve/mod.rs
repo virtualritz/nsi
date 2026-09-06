@@ -330,6 +330,53 @@ pub struct Placement {
     pub binding: Option<Binding>,
 }
 
+/// What a node's samples of one attribute amount to.
+enum Sampled<'a> {
+    /// Not sampled; the static value applies.
+    No,
+    /// Sampled, but the last sample *naming* it cannot be read as the
+    /// attribute's type -- so the attribute is unset, at every time.
+    Unset,
+    /// The readable samples, in time order.
+    Yes(Vec<(f64, &'a OwnedArg)>),
+}
+
+/// Apply ɴsɪ's typing rule to a node's samples of `name`.
+///
+/// The last sample that *names* the attribute decides. If it cannot be
+/// read, the attribute is unset -- 3Delight warns `E6007` and renders
+/// as though it had never been set. Otherwise unreadable samples that
+/// are not last are dropped, and the readable ones remain.
+///
+/// Stated once because it was stated three times and only one of them
+/// was right: matching the type *inside* the lookup skips a wrong-typed
+/// later sample and answers from the discarded earlier one. Rendered, a
+/// good `doublematrix` at `t=0` followed by a `float` at `t=1` makes
+/// 3Delight draw **nothing**, while the crate drew the `t=0` set; on a
+/// transform node the three accessors gave three different answers for
+/// one scene.
+fn sampled_attr<'a>(
+    node: &'a Node,
+    name: &str,
+    readable: impl Fn(&OwnedArg) -> bool,
+) -> Sampled<'a> {
+    let named: Vec<(f64, &OwnedArg)> = node
+        .time_attrs
+        .iter()
+        .filter_map(|(time, attrs)| Some((*time, attrs.get(name)?)))
+        .collect();
+
+    let Some((_, last)) = named.last() else {
+        return Sampled::No;
+    };
+
+    if !readable(last) {
+        return Sampled::Unset;
+    }
+
+    Sampled::Yes(named.into_iter().filter(|(_, arg)| readable(arg)).collect())
+}
+
 /// Where a time falls among a set of samples.
 enum Located<'a, T> {
     /// Use this sample as it stands: an exact hit, or a held end.
@@ -681,12 +728,22 @@ impl Scene {
     pub fn motion_times(&self, handle: &str) -> Result<Vec<f64>, ResolveError> {
         let chain = self.transform_chain(handle)?;
 
+        // The typing rule again: an unreadable sample is not a motion
+        // time. Reporting one made `world_transform_samples` iterate a
+        // time that `world_transform_at` then refused -- the same scene
+        // answered differently depending on which accessor asked.
         let mut times = chain
             .iter()
             .filter_map(|node| self.node(node))
-            .flat_map(|node| node.time_attrs.iter())
-            .filter(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
-            .map(|(time, _)| *time)
+            .flat_map(|node| {
+                match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+                    matrix_of(arg).is_some()
+                }) {
+                    Sampled::Yes(samples) => samples,
+                    Sampled::No | Sampled::Unset => Vec::new(),
+                }
+            })
+            .map(|(time, _)| time)
             .collect::<Vec<_>>();
 
         // `total_cmp` throughout, matching how the samples were keyed.
@@ -911,10 +968,17 @@ impl Scene {
     /// Read before composing, because [`Scene::world_transform`] reads
     /// static attributes only and a motion-sampled node has none.
     fn has_motion_transform(&self, handle: &str) -> bool {
+        // The typing rule applies here too: a node whose samples are
+        // all unreadable, or whose last one is, has no motion -- and
+        // reporting motion for it made `world_transform` refuse a node
+        // the other accessors resolve to identity.
         self.node(handle).is_some_and(|node| {
-            node.time_attrs
-                .iter()
-                .any(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
+            matches!(
+                sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+                    matrix_of(arg).is_some()
+                }),
+                Sampled::Yes(ref samples) if !samples.is_empty()
+            )
         })
     }
 
@@ -1527,14 +1591,35 @@ impl Scene {
         instances: &str,
         time: Option<f64>,
     ) -> Result<Option<Vec<f64>>, ResolveError> {
-        let mut samples: Vec<(f64, &[f64])> = node
-            .time_attrs
-            .iter()
-            .filter_map(|(t, attrs)| match attrs.get(MATRICES)?.data {
-                OwnedData::F64(ref values) => Some((*t, values.as_slice())),
-                _ => None,
-            })
-            .collect();
+        // The same typing rule: a wrong-typed last sample unsets the
+        // matrices, and 3Delight then draws **nothing** rather than the
+        // discarded earlier set.
+        let mut samples: Vec<(f64, &[f64])> =
+            match sampled_attr(node, MATRICES, |arg| {
+                matches!(arg.data, OwnedData::F64(_))
+            }) {
+                // `No` means "use the static value"; `Unset` means
+                // "there is none". Indistinguishable today, because
+                // `set_attribute` clears the samples of that name and
+                // `set_attribute_at_time` clears the static one, so a
+                // node never holds both -- swapping these two leaves
+                // the suite green, and no reachable scene separates
+                // them. Kept apart because they say different things,
+                // and the arm that would go wrong if that rule changed
+                // is the one that draws instances that should not be
+                // there.
+                Sampled::No => return Ok(None),
+                Sampled::Unset => return Ok(Some(Vec::new())),
+                Sampled::Yes(kept) => kept
+                    .into_iter()
+                    .filter_map(|(t, arg)| match arg.data {
+                        OwnedData::F64(ref values) => {
+                            Some((t, values.as_slice()))
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+            };
 
         if samples.is_empty() {
             return Ok(None);
@@ -2046,16 +2131,21 @@ impl Scene {
             return Ok(None);
         };
 
-        let sampled: Vec<(f64, [f64; 16])> = node
-            .time_attrs
-            .iter()
-            .filter_map(|(t, attrs)| {
-                attrs
-                    .get(TRANSFORMATION_MATRIX)
-                    .and_then(matrix_of)
-                    .map(|matrix| (*t, matrix))
-            })
-            .collect();
+        // A wrong-typed *last* sample unsets the attribute, so the
+        // static value applies -- rendered, 3Delight draws the node at
+        // identity rather than at the discarded earlier sample.
+        let sampled: Vec<(f64, [f64; 16])> =
+            match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+                matrix_of(arg).is_some()
+            }) {
+                Sampled::No | Sampled::Unset => {
+                    return Ok(self.local_transform(handle));
+                }
+                Sampled::Yes(samples) => samples
+                    .into_iter()
+                    .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
+                    .collect(),
+            };
 
         if sampled.is_empty() {
             return Ok(self.local_transform(handle));
@@ -2101,26 +2191,32 @@ impl Scene {
             return Ok(None);
         };
 
-        let mut sampled = node
-            .time_attrs
-            .iter()
-            .filter(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
-            .peekable();
+        // Same typing rule as the interpolating twin: a wrong-typed
+        // last sample unsets the attribute at *every* time, rather than
+        // leaving this to error at one time and answer the discarded
+        // sample at another. That inconsistency had one scene giving
+        // three different answers across the three accessors.
+        let sampled = match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+            matrix_of(arg).is_some()
+        }) {
+            Sampled::No | Sampled::Unset => {
+                return Ok(self.local_transform(handle));
+            }
+            Sampled::Yes(samples) => samples,
+        };
 
-        if sampled.peek().is_none() {
+        if sampled.is_empty() {
             Ok(self.local_transform(handle))
         } else {
             match sampled
-                .clone()
+                .iter()
                 .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
             {
-                Some((_, attrs)) => {
-                    Ok(matrix_of(&attrs[TRANSFORMATION_MATRIX]))
-                }
+                Some((_, arg)) => Ok(matrix_of(arg)),
                 None => Err(ResolveError::MissingSampleAtTime {
                     handle: handle.to_string(),
                     time,
-                    available: sampled.map(|(t, _)| *t).collect(),
+                    available: sampled.iter().map(|(t, _)| *t).collect(),
                 }),
             }
         }
