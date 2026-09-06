@@ -79,11 +79,33 @@ pub enum OwnedData {
     /// ɴsɪ streams carry `${VAR}` references so a scene can move between
     /// machines, and 3Delight expands them **when it uses the value**,
     /// not when it reads the stream. A backend that opens a path from
-    /// here without expanding `${VAR}` opens the wrong file -- and only
-    /// on the machines where the variable mattered, which is when it is
-    /// hardest to diagnose. Any variable expands, not only the
-    /// `NSI_PATH_`-prefixed ones the specification names; that prefix is
-    /// a write-side convention. Measured; see `specs/004` research Q1.
+    /// here without expanding opens the wrong file -- and only on the
+    /// machines where the variable mattered, which is when it is hardest
+    /// to diagnose.
+    ///
+    /// The rules, measured rather than inferred, because each one
+    /// changes what a backend must implement:
+    ///
+    /// - **`${NAME}` only.** A bare `$NAME` is left alone: a probe
+    ///   naming `$VAR/x.exr` created a literal `$VAR` directory.
+    /// - **Path-valued attributes only.** `imagefilename`,
+    ///   `shaderfilename` and `Evaluate`'s `filename` expand, and nest
+    ///   (`${A}/${B}`). `drivername` does **not** -- it fails with
+    ///   `E6024 cannot find display driver '${...}'` -- nor does a node
+    ///   handle (`E6087 unknown node handle`), nor an attribute *name*,
+    ///   which is silently ignored.
+    /// - **Any variable, not just `NSI_PATH_`.** `${HOME}` expands. That
+    ///   prefix governs which variables 3Delight *writes* as references
+    ///   under `streampathreplacement`; on read it means nothing.
+    /// - **An unset variable stays literal**, rather than expanding to
+    ///   empty or erroring: a probe created a literal `${MISSING}`
+    ///   directory.
+    ///
+    /// One trap worth naming: `${...}` in an output layer's
+    /// `variablename` **segfaults** 3Delight 2.9.207. Do not pass one
+    /// through to a renderer expecting a diagnostic.
+    ///
+    /// See `specs/004` research Q1.
     String(Vec<Vec<u8>>),
     /// Raw host pointers. ɴsɪ calls this `Reference` (`Pointer` in the C
     /// API); it is not an object link and is never forwarded to a

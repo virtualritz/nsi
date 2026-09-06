@@ -110,10 +110,20 @@ with every feature.
       `recorder::tests::connect_records_the_priority_argument`.
       Spec: R12.
 - [x] T3.5b `world_transform_at`, `motion_times` and
-      `world_transform_samples`. Decided: never interpolate, because
-      element-wise interpolation of a matrix is wrong for anything with
-      a rotation in it. An unsampled time is an error naming the times
-      that exist. Evidence: `resolve::tests` motion cases, 7. Spec: R13.
+      `world_transform_samples` answer only at a recorded sample. An
+      unsampled time is an error naming the times that exist. Evidence:
+      `resolve::tests` motion cases. Spec: R13.
+
+      This entry used to justify that with "element-wise interpolation
+      of a matrix is wrong for anything with a rotation in it". That is
+      false, and measurable: 3Delight's own rotation blur fits
+      component-wise interpolation (rms 0.002) far better than slerp
+      (0.021), and three samples fit piecewise-linear (0.003) not
+      quadratic (0.026). The reason to keep these three exact is that
+      "what did the caller record" is a different question from "where
+      is it mid-shutter" -- which
+      `world_transform_interpolated_at` now answers, on that measured
+      model. See T9.17.
 - [ ] T3.11 Per-path transforms for an instanced node.
       Gate: `contracts/resolution.md` instancing row. T3.8 refuses the
       case; this answers it.
@@ -393,3 +403,24 @@ against this API now.
       (`E6002`). The crate already refused the type; the row was open on
       a question that a single render answered. Evidence:
       `recorder::tests::create_arguments_are_inert_but_the_type_is_not`.
+
+## Interpolating A Transform
+
+- [x] T9.17 `world_transform_interpolated_at` holds the end sample
+      outside the sampled range, rather than refusing. The first
+      version refused, and its doc argued that clamping "would answer
+      for a moment the caller never described" -- as though the renderer
+      agreed. It does not: samples at t=0 and t=1 under a shutter of
+      [-1, 2] leave **zero** alpha beyond the sampled positions, with a
+      peak at each end 2.7x the swept middle. The caller did describe
+      that moment; they opened the shutter there. Refusing would have
+      failed a backend on a scene 3Delight renders.
+- [x] T9.18 A chain mixing static and sampled nodes, and a node with a
+      single sample. Dropping static nodes from the interpolated walk
+      left all 180 tests green, and a single-sample node found no
+      bracketing pair and was refused while `world_transform_at`
+      answered -- the two accessors disagreed.
+- [x] T9.19 A `-0.0` normalising `+ 0.0` was added to the interpolated
+      path and removed again: the clamp subsumes it, and removing it
+      left the suite green. A line that guards nothing is worse than no
+      line, because it reads as protection.

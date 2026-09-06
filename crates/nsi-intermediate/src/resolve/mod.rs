@@ -704,12 +704,24 @@ impl Scene {
     /// world matrices, and it is the accurate model of a hierarchy in
     /// motion.
     ///
+    /// # Outside the sampled range, the end sample is held
+    ///
+    /// Not extrapolated, and not refused -- because that is what
+    /// 3Delight does, and a backend that differed would render a
+    /// different picture. Rendered with samples at `t=0` and `t=1` and
+    /// the shutter open over `[-1, 2]`: there is **zero** alpha beyond
+    /// the two sampled positions, where extrapolation would sweep half
+    /// again as far each way, and a peak at each end 2.7 times the swept
+    /// middle, where a third of the shutter is held.
+    ///
+    /// An earlier version of this refused such a time, on the reasoning
+    /// that clamping "answers for a moment the caller never described".
+    /// The caller did describe it: they opened the shutter there.
+    ///
     /// # Errors
     ///
-    /// [`ResolveError::MissingSampleAtTime`] when `time` falls outside a
-    /// node's sampled range, or is not a number. Such a time brackets
-    /// nothing, and clamping to the nearest sample would answer for a
-    /// moment the caller never described.
+    /// [`ResolveError::MissingSampleAtTime`] when `time` is not a
+    /// number, which names no sample and brackets no pair.
     ///
     /// Also [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`]
     /// from walking the chain.
@@ -1469,13 +1481,11 @@ impl Scene {
         matrix_of(node.attrs.get(TRANSFORMATION_MATRIX)?)
     }
 
-    /// This node's matrix at `time`.
+    /// This node's matrix at `time`, interpolated.
     ///
-    /// A node with no transform samples is constant: its static matrix
-    /// applies at every time. A sampled node must have a sample at
-    /// exactly `time`; this crate does not interpolate.
-    /// The same, interpolating linearly between the bracketing
-    /// samples.
+    /// Linear between the bracketing samples, and held at the nearest
+    /// sample outside the sampled range -- which is what 3Delight does;
+    /// see [`Scene::world_transform_interpolated_at`].
     fn local_transform_interpolated_at(
         &self,
         handle: &str,
@@ -1507,9 +1517,24 @@ impl Scene {
             return Ok(Some(*matrix));
         }
 
-        // The bracketing pair. A time outside the sampled range, or a
-        // NaN, brackets nothing and is refused rather than clamped:
-        // clamping would answer for a moment the caller never described.
+        // Outside the sampled range the end sample is held, because
+        // that is what 3Delight does. Rendered: samples at t=0 and t=1
+        // with the shutter open over [-1, 2] leaves **zero** alpha
+        // beyond the two sampled positions -- an extrapolating renderer
+        // would sweep half again as far each way -- with a peak at each
+        // end, 2.7x the swept middle, where a third of the shutter is
+        // held.
+        let first = sampled[0];
+        let last = sampled[sampled.len() - 1];
+        if time <= first.0 {
+            return Ok(Some(first.1));
+        }
+        if time >= last.0 {
+            return Ok(Some(last.1));
+        }
+
+        // The bracketing pair. A NaN compares false against everything,
+        // so it reaches here and brackets nothing.
         let pair = sampled.windows(2).find(|w| w[0].0 < time && time < w[1].0);
 
         match pair {

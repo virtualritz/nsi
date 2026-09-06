@@ -2499,10 +2499,19 @@ fn interpolating_at_a_sample_returns_the_sample() {
     );
 }
 
-/// Outside the sampled range is refused, not clamped: clamping would
-/// answer for a moment the caller never described.
+/// Outside the sampled range the end sample is **held**, because that
+/// is what 3Delight does.
+///
+/// This test asserted the opposite. Rendered -- samples at t=0 and t=1
+/// with the shutter open over [-1, 2] -- there is zero alpha beyond the
+/// two sampled positions, where an extrapolating renderer would sweep
+/// half again as far each way, and a peak at each end 2.7x the swept
+/// middle where a third of the shutter is held. Refusing here would
+/// have failed a backend on a scene the renderer renders.
+///
+/// A NaN still brackets nothing and is still refused.
 #[test]
-fn interpolating_outside_the_sampled_range_is_refused() {
+fn interpolating_outside_the_sampled_range_holds_the_end_sample() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene.create("mesh", "mesh").unwrap();
@@ -2515,15 +2524,30 @@ fn interpolating_outside_the_sampled_range_is_refused() {
         .set_attribute_at_time("xf", 1.0, vec![translate(10.0, 0.0, 0.0)])
         .unwrap();
 
-    for time in [-0.5, 1.5, f64::NAN] {
-        assert!(
-            matches!(
-                scene.world_transform_interpolated_at("mesh", time),
-                Err(ResolveError::MissingSampleAtTime { .. })
-            ),
-            "time {time} brackets no pair",
-        );
-    }
+    // Before the first sample, and after the last: held.
+    assert_eq!(
+        scene.world_transform_interpolated_at("mesh", -0.5).unwrap()[12],
+        0.0,
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("mesh", 1.5).unwrap()[12],
+        10.0,
+    );
+
+    // `-0.0` is the sample at `0.0`, as it is to the recorder and the
+    // renderer, not a time before it. Held by the clamp above rather
+    // than by a normalising `+ 0.0`, which was redundant here and
+    // guarded nothing -- removing it left the suite green.
+    assert_eq!(
+        scene.world_transform_interpolated_at("mesh", -0.0).unwrap()[12],
+        0.0,
+    );
+
+    // A NaN brackets nothing and names no sample.
+    assert!(matches!(
+        scene.world_transform_interpolated_at("mesh", f64::NAN),
+        Err(ResolveError::MissingSampleAtTime { .. })
+    ));
 }
 
 /// Each node is interpolated from its **own** samples and the results
@@ -2559,4 +2583,76 @@ fn each_node_interpolates_from_its_own_samples() {
     // (0 + 3*4)/2 = 6, so this discriminates the two models.
     let half = scene.world_transform_interpolated_at("mesh", 0.5).unwrap();
     assert_eq!(half[12], 4.0);
+}
+
+/// A chain mixing static and sampled nodes composes both.
+///
+/// A static node is constant, so it contributes its matrix at every
+/// time. Dropping static nodes from the interpolated walk left all 180
+/// tests green, so nothing covered this.
+#[test]
+fn interpolation_keeps_the_static_nodes_of_a_chain() {
+    let mut scene = Scene::default();
+    scene.create("outer", "transform").unwrap();
+    scene.create("mid", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("mid", None, "outer", "objects").unwrap();
+    scene.connect("inner", None, "mid", "objects").unwrap();
+    scene.connect("mesh", None, "inner", "objects").unwrap();
+
+    // Sampled, static, sampled.
+    scene
+        .set_attribute_at_time("outer", 0.0, vec![scale(1.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("outer", 1.0, vec![scale(3.0)])
+        .unwrap();
+    scene
+        .set_attribute("mid", vec![translate(1.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 1.0, vec![translate(4.0, 0.0, 0.0)])
+        .unwrap();
+
+    // t=0.5: scale 2, then the static +1, then the interpolated +2.
+    // (1 + 2) * 2 = 6. Dropping the static node gives 4.
+    let half = scene.world_transform_interpolated_at("mesh", 0.5).unwrap();
+    assert_eq!(half[12], 6.0);
+
+    // And at a shared sample it must agree with the exact accessor.
+    for time in [0.0, 1.0] {
+        assert_eq!(
+            scene.world_transform_interpolated_at("mesh", time).unwrap(),
+            scene.world_transform_at("mesh", time).unwrap(),
+            "the two accessors disagree at sample {time}",
+        );
+    }
+}
+
+/// A node with a single sample is constant at it, rather than having no
+/// bracketing pair. `world_transform_at` answers at that sample, so
+/// refusing here would have made the two accessors disagree.
+#[test]
+fn a_single_sample_node_is_constant() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.25, vec![translate(7.0, 0.0, 0.0)])
+        .unwrap();
+
+    for time in [0.0, 0.25, 9.0] {
+        assert_eq!(
+            scene.world_transform_interpolated_at("mesh", time).unwrap()[12],
+            7.0,
+            "one sample applies at every time, including {time}",
+        );
+    }
 }
