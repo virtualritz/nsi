@@ -4327,6 +4327,51 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
     assert_eq!(
         scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
         -3.0,
-        "static at the t=1 matrix here; 3Delight draws -1.5 at t=0",
+        "static at the t=1 matrix here; 3Delight sweeps",
     );
+
+    // The same three calls in three more orders. This crate sorts by
+    // time, so it answers identically for all four; 3Delight gives four
+    // different pictures, each explained by "an unreadable call unsets
+    // the attribute at call time":
+    //
+    //   float, g0, g1  -> sweeps        (both goods rebuilt it)
+    //   g0, float, g1  -> static -3.0   (only g1 survives; we agree)
+    //   g1, float, g0  -> static -1.5   (only g0 survives)
+    //   g0, g1, float  -> identity      (nothing rebuilt it)
+    //
+    // The last is the opposite of the `Unset`-arm divergence: there the
+    // crate unsets and the renderer keeps; here the renderer unsets and
+    // the crate truncates.
+    type Calls = [(f64, Option<f64>); 3];
+    let orders: [(Calls, f64); 3] = [
+        ([(0.0, Some(-1.5)), (0.5, None), (1.0, Some(-3.0))], -3.0),
+        ([(1.0, Some(-3.0)), (0.5, None), (0.0, Some(-1.5))], -3.0),
+        ([(0.0, Some(-1.5)), (1.0, Some(-3.0)), (0.5, None)], -3.0),
+    ];
+    for (calls, expected) in orders {
+        let mut scene = Scene::default();
+        scene.create("xf", "transform").unwrap();
+        scene.create("q", "mesh").unwrap();
+        scene.connect("xf", None, ".root", "objects").unwrap();
+        scene.connect("q", None, "xf", "objects").unwrap();
+        for (time, x) in calls {
+            let arg = match x {
+                Some(x) => translate(x, 0.0, 0.0),
+                None => OwnedArg {
+                    name: "transformationmatrix".to_string(),
+                    type_tag: Type::F32,
+                    array_length: 1,
+                    flags: 0,
+                    data: OwnedData::F32(vec![0.5]),
+                },
+            };
+            scene.set_attribute_at_time("xf", time, vec![arg]).unwrap();
+        }
+        assert_eq!(
+            scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
+            expected,
+            "this crate is order-blind; 3Delight is not",
+        );
+    }
 }
