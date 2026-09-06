@@ -283,6 +283,5 @@ fn unescape(raw: &[u8], offset: usize) -> Result<Vec<u8>, LexError> {
         }
     }
 
-    let _ = offset;
     Ok(out)
 }

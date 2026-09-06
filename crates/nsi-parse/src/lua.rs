@@ -30,16 +30,27 @@ struct Param {
     f64s: Vec<f64>,
     i32s: Vec<i32>,
     i64s: Vec<i64>,
-    strings: Vec<String>,
+    /// Bytes, not `String`: a Lua string is a byte string, and an ɴsɪ
+    /// string value is whatever the C API was handed. Converting here
+    /// lost a Latin-1 file name to U+FFFD exactly as the stream reader
+    /// used to.
+    strings: Vec<Vec<u8>>,
 }
 
 /// Run `source`, applying the ɴsɪ calls it makes to `sink`.
 ///
+/// Takes bytes because a Lua chunk is bytes: a script naming a Latin-1
+/// file is one 3Delight runs, and one `nsi_intermediate::write_lua`
+/// emits.
+///
 /// # Errors
 ///
 /// [`Error::Lua`] for a script that fails to load or run, and
-/// [`Error::Sink`] when the sink refuses a call.
-pub fn run_lua<N>(source: &str, sink: &N) -> Result<(), Error<N::Error>>
+/// [`Error::Sink`] when the sink refuses a call. A handle or attribute
+/// name that is not UTF-8 is an [`Error::Lua`] conversion failure: ɴsɪ
+/// identifiers reach [`nsi_trait::Nsi`] as `&str`, so this front end
+/// refuses them exactly as the stream reader does.
+pub fn run_lua<N>(source: &[u8], sink: &N) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
     for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
@@ -288,12 +299,14 @@ fn param_of(table: Table) -> mlua::Result<Param> {
         match type_tag {
             Type::String => {
                 let text = value
-                    .as_string_lossy()
-                    .ok_or_else(|| mlua::Error::runtime("expected a string"))?;
+                    .as_string()
+                    .ok_or_else(|| mlua::Error::runtime("expected a string"))?
+                    .as_bytes()
+                    .to_vec();
                 // An interior NUL would panic in `CString::new` at the
                 // ɴsɪ boundary. The stream reader refuses it; so does
                 // this, which is the path that runs a script.
-                if text.contains('\0') {
+                if text.contains(&0) {
                     return Err(mlua::Error::runtime(
                         "an ɴsɪ string cannot contain an interior NUL",
                     ));
@@ -366,14 +379,16 @@ fn integer(value: &Value) -> mlua::Result<i64> {
 }
 
 /// ɴsɪ's `RenderControl` action names.
-fn action_of(name: &str) -> Option<Action> {
+fn action_of(name: &[u8]) -> Option<Action> {
+    // Byte literals: a string value is bytes here, and an action that is
+    // not one of these six is `None` either way.
     Some(match name {
-        "start" => Action::Start,
-        "stop" => Action::Stop,
-        "suspend" => Action::Suspend,
-        "resume" => Action::Resume,
-        "wait" => Action::Wait,
-        "synchronize" => Action::Synchronize,
+        b"start" => Action::Start,
+        b"stop" => Action::Stop,
+        b"suspend" => Action::Suspend,
+        b"resume" => Action::Resume,
+        b"wait" => Action::Wait,
+        b"synchronize" => Action::Synchronize,
         _ => return None,
     })
 }
@@ -410,9 +425,9 @@ fn with_args<T>(
         .iter()
         .map(|p| p.f64s.as_chunks::<16>().0.to_vec())
         .collect();
-    let borrowed: Vec<Vec<&str>> = params
+    let borrowed: Vec<Vec<&[u8]>> = params
         .iter()
-        .map(|p| p.strings.iter().map(String::as_str).collect())
+        .map(|p| p.strings.iter().map(Vec::as_slice).collect())
         .collect();
 
     let args: Vec<Arg<'_, 'static>> = params

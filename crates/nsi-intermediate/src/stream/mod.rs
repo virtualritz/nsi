@@ -77,9 +77,15 @@ fn quoted(value: &[u8]) -> Vec<u8> {
 /// byte through, so UTF-8 in gives UTF-8 out. The fallback is
 /// unreachable rather than a repair.
 fn quoted_str(value: &str) -> String {
-    String::from_utf8(quoted(value.as_bytes())).unwrap_or_else(|error| {
-        String::from_utf8_lossy(error.as_bytes()).into_owned()
-    })
+    // Unreachable, and stated rather than repaired: `quoted` substitutes
+    // only for `"`, `\`, `\n`, `\t` and bytes below `0x20`, all ASCII,
+    // and in valid UTF-8 an ASCII byte is always a whole code point --
+    // lead and continuation bytes are `0x80` and above. So every
+    // multi-byte sequence is copied through contiguously and unchanged.
+    // Falling back to a lossy conversion here would quietly rewrite an
+    // identifier, which is the one thing this crate refuses to do.
+    String::from_utf8(quoted(value.as_bytes()))
+        .expect("escaping only ASCII preserves UTF-8")
 }
 
 /// Format an `f64` as 3Delight does: C's `printf("%.17g")`.

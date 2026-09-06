@@ -67,7 +67,7 @@ fn a_lua_script_this_workspace_wrote_reads_back_the_same() {
     let script = String::from_utf8(script).expect("utf-8");
 
     let rebuilt = Recorder::new();
-    run_lua(&script, &rebuilt)
+    run_lua(script.as_bytes(), &rebuilt)
         .unwrap_or_else(|e| panic!("{e}\n--- script ---\n{script}"));
 
     assert_eq!(stream_of(&rebuilt.into_scene()), stream_of(&original));
@@ -89,7 +89,7 @@ fn a_computed_scene_is_read() {
     "#;
 
     let recorder = Recorder::new();
-    run_lua(source, &recorder).expect("run");
+    run_lua(source.as_bytes(), &recorder).expect("run");
     let scene = recorder.into_scene();
 
     assert_eq!(scene.len(), 6, "one group and five meshes");
@@ -113,7 +113,7 @@ fn both_parameter_shapes_are_accepted() {
     "#;
 
     let recorder = Recorder::new();
-    run_lua(source, &recorder).expect("run");
+    run_lua(source.as_bytes(), &recorder).expect("run");
     let scene = recorder.into_scene();
     let attrs = &scene.node("m").expect("created").attrs;
 
@@ -124,7 +124,8 @@ fn both_parameter_shapes_are_accepted() {
 #[test]
 fn a_broken_script_is_an_error() {
     let recorder = Recorder::new();
-    let error = run_lua("this is not lua", &recorder).expect_err("must fail");
+    let error = run_lua("this is not lua".as_bytes(), &recorder)
+        .expect_err("must fail");
     assert!(matches!(error, nsi_parse::Error::Lua(_)), "got {error:?}");
 }
 
@@ -132,9 +133,11 @@ fn a_broken_script_is_an_error() {
 #[test]
 fn a_sink_refusal_escapes_the_script() {
     let recorder = Recorder::new();
-    let error =
-        run_lua(r#"nsi.Connect("ghost", "", ".root", "objects")"#, &recorder)
-            .expect_err("must fail");
+    let error = run_lua(
+        r#"nsi.Connect("ghost", "", ".root", "objects")"#.as_bytes(),
+        &recorder,
+    )
+    .expect_err("must fail");
     assert!(matches!(error, nsi_parse::Error::Sink(_)), "got {error:?}");
 }
 
@@ -150,7 +153,7 @@ fn a_refusal_stops_the_script() {
     "#;
 
     let recorder = Recorder::new();
-    let error = run_lua(source, &recorder).expect_err("must fail");
+    let error = run_lua(source.as_bytes(), &recorder).expect_err("must fail");
     assert!(matches!(error, nsi_parse::Error::Sink(_)), "got {error:?}");
     assert!(
         recorder.into_scene().node("after").is_none(),
@@ -164,7 +167,7 @@ fn a_refusal_stops_the_script() {
 fn render_control_is_bound() {
     let recorder = Recorder::new();
     run_lua(
-        r#"nsi.RenderControl({name="action", data="start"})"#,
+        r#"nsi.RenderControl({name="action", data="start"})"#.as_bytes(),
         &recorder,
     )
     .expect("run");
@@ -186,7 +189,7 @@ fn delete_carries_its_parameters() {
     "#;
 
     let recorder = Recorder::new();
-    run_lua(source, &recorder).expect("run");
+    run_lua(source.as_bytes(), &recorder).expect("run");
     let scene = recorder.into_scene();
 
     assert!(scene.node("attr").is_none());
@@ -202,7 +205,7 @@ fn delete_carries_its_parameters() {
 fn short_tuple_data_is_refused() {
     let recorder = Recorder::new();
     let error = run_lua(
-        r#"nsi.Create("m","mesh") nsi.SetAttribute("m",{name="P",data={0,0},type=nsi.TypePoint})"#,
+        r#"nsi.Create("m","mesh") nsi.SetAttribute("m",{name="P",data={0,0},type=nsi.TypePoint})"#.as_bytes(),
         &recorder,
     )
     .expect_err("must fail");
@@ -230,6 +233,54 @@ fn the_lua_reader_refuses_what_the_stream_reader_refuses() {
         ),
     ] {
         let recorder = Recorder::new();
-        assert!(run_lua(source, &recorder).is_err(), "must refuse {what}");
+        assert!(
+            run_lua(source.as_bytes(), &recorder).is_err(),
+            "must refuse {what}"
+        );
     }
+}
+
+/// The Lua front end must keep a non-UTF-8 byte, exactly as the stream
+/// reader does.
+///
+/// 3Delight's Lua accepts `"\xE9"` in a string literal and hands the
+/// raw byte to ɴsɪ. This reader used `as_string_lossy`, so it recorded
+/// U+FFFD instead -- the same "render writes to a file the scene did
+/// not name" failure the stream reader had, reachable through the
+/// other front end of the same crate.
+#[test]
+fn a_non_utf8_byte_survives_a_lua_script() {
+    let source = br#"nsi.Create("d","outputdriver")
+nsi.SetAttribute("d",{name="imagefilename", data="caf\xE9.exr"})"#;
+
+    let recorder = Recorder::new();
+    run_lua(source, &recorder).expect("run");
+
+    use nsi_intermediate::OwnedData;
+    assert_eq!(
+        recorder.into_scene().node("d").unwrap().attrs["imagefilename"].data,
+        OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
+        "the byte survives; U+FFFD would be `ef bf bd`",
+    );
+}
+
+/// And a raw byte in the chunk itself, which is why `run_lua` takes
+/// bytes: `write_lua` emits such a file, so this crate could not read
+/// back what it had just written.
+#[test]
+fn a_raw_byte_in_the_chunk_survives() {
+    let mut source = Vec::new();
+    source.extend_from_slice(b"nsi.Create(\"d\",\"outputdriver\")\n");
+    source.extend_from_slice(b"nsi.SetAttribute(\"d\",{name=\"f\", data=\"caf");
+    source.push(0xE9);
+    source.extend_from_slice(b".exr\"})");
+
+    let recorder = Recorder::new();
+    run_lua(&source, &recorder).expect("run");
+
+    use nsi_intermediate::OwnedData;
+    assert_eq!(
+        recorder.into_scene().node("d").unwrap().attrs["f"].data,
+        OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
+    );
 }

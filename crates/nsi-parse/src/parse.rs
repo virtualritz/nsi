@@ -196,9 +196,11 @@ fn string<'a, E>(
     lexer: &mut Lexer<'a>,
     expected: &'static str,
 ) -> Result<Ident<'a>, Error<E>> {
-    let offset = lexer.offset();
     match lexer.next_token()? {
-        Some(Token::Quoted(text)) => Ok(text.into_ident(offset)?),
+        // After `next_token`, not before: `offset` reports the start of
+        // the token last returned, so reading it first named the
+        // *previous* operand.
+        Some(Token::Quoted(text)) => Ok(text.into_ident(lexer.offset())?),
         _ => Err(Error::Syntax {
             offset: lexer.offset(),
             expected,

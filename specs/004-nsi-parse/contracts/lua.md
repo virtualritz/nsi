@@ -40,3 +40,11 @@ is stated rather than implied.
 - `write_lua` output round-tripping into an equal scene.
 - A comparison against `renderdl -lua -cat` for the same script, so the
   interpretation is held against the renderer's rather than our own.
+
+## Byte Fidelity
+
+| Behavior | Status | Source Evidence | Test/QA Evidence | Required Next Evidence |
+| --- | --- | --- | --- | --- |
+| A non-UTF-8 string value survives a script | Covered | `lua.rs` `Param::strings` is `Vec<Vec<u8>>`; the value read uses `as_string().as_bytes()` | `lua::a_non_utf8_byte_survives_a_lua_script`; restoring `as_string_lossy` reddens it. The stream reader was fixed first and this path was left behind, so the same "render writes to a file the scene did not name" failure stayed reachable through the crate's other front end | -- |
+| A raw byte in the chunk itself is read | Covered | `run_lua` takes `&[u8]`; mlua loads a raw chunk | `lua::a_raw_byte_in_the_chunk_survives`. `write_lua` emits such a file, so taking `&str` meant this crate could not read back what it had just written | -- |
+| A non-UTF-8 identifier is refused | Covered | mlua's `String` conversion fails for a handle or name | Consistent with the stream reader, which refuses one too. The variant differs -- `Error::Lua` here, `Error::NotUtf8` there -- because the conversion happens inside mlua | Unify the variant if a caller ever needs to distinguish the two. |

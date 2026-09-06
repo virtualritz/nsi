@@ -364,22 +364,41 @@ fn a_non_utf8_byte_survives_an_escaped_value() {
     );
 }
 
-/// A *handle* is an identifier, not a value: ɴsɪ compares it, so a
-/// non-UTF-8 one is a stream this crate cannot act on. Values are
-/// bytes; names are text.
+/// An identifier is refused, in every position that is one.
+///
+/// Not because ɴsɪ requires it -- 3Delight accepts and echoes a Latin-1
+/// handle and parameter name. The constraint is this crate's:
+/// [`nsi_trait::Nsi`] takes `&str` for handles and names, so the parser
+/// has nothing to carry them in and refusing beats inventing a
+/// different name. Values are bytes; names are text.
+///
+/// The offset must name the token that failed. It pointed at the
+/// *previous* one, because `Lexer::offset` reports the start of the
+/// token last returned and it was read before `next_token`.
 #[test]
-fn a_non_utf8_handle_is_still_refused() {
-    let mut source = Vec::new();
-    source.extend_from_slice(b"Create \"me");
-    source.push(0xE9);
-    source.extend_from_slice(b"sh\" \"mesh\"\n");
+fn a_non_utf8_identifier_is_refused_in_every_position() {
+    // (source, byte offset of the opening quote of the bad token)
+    let cases: [(&[u8], usize); 4] = [
+        // Handle.
+        (b"Create \"me\xE9sh\" \"mesh\"\n", 7),
+        // Node type.
+        (b"Create \"mesh\" \"me\xE9sh\"\n", 14),
+        // Parameter name.
+        (b"Create \"m\" \"mesh\"\nSetAttribute \"m\" \"n\xE9me\" \"int\" 1 1\n", 35),
+        // Type spelling.
+        (b"Create \"m\" \"mesh\"\nSetAttribute \"m\" \"n\" \"i\xE9t\" 1 1\n", 39),
+    ];
 
-    let recorder = Recorder::new();
-    assert!(
-        matches!(
-            parse_stream(&source, &recorder),
-            Err(nsi_parse::Error::NotUtf8 { .. })
-        ),
-        "an identifier must be text",
-    );
+    for (source, offset) in cases {
+        let recorder = Recorder::new();
+        let error = parse_stream(source, &recorder)
+            .expect_err("an identifier must be text");
+        let nsi_parse::Error::NotUtf8 { offset: reported } = error else {
+            panic!("expected NotUtf8, got {error:?}");
+        };
+        assert_eq!(
+            reported, offset,
+            "the offset must name the failing token, not the one before it",
+        );
+    }
 }

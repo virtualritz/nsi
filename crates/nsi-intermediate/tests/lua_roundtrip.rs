@@ -56,6 +56,11 @@ where
     // A string with escapes 3Delight round-trips.
     ctx.set_attribute("m", &[nsi::string!("tricky", "a\\b\nc\"d")])?;
 
+    // A byte at or above 0x7f, which 3Delight's Lua accepts in a string
+    // literal and hands to ɴsɪ raw. The emitter wrote it as U+FFFD
+    // while every test stayed green, because no fixture carried one.
+    ctx.set_attribute("m", &[nsi::string!("latin1", b"caf\xE9.exr".to_vec())])?;
+
     // An empty numeric slice, which Lua accepts (unlike an empty string
     // array, which aborts the renderer -- see `lua_refuses_*`).
     let nothing: [f32; 0] = [];
@@ -166,8 +171,22 @@ fn a_lua_script_rebuilds_the_recorded_scene() {
     let mut ours = Vec::new();
     write_stream(&scene, &mut ours).expect("write_stream");
 
+    // Byte fidelity first, and on **both** sides. The structural
+    // comparison below goes through `from_utf8_lossy`, which would turn
+    // a raw `0xE9` into U+FFFD on each side and match itself -- proving
+    // nothing. These two assertions are what prove the byte survived
+    // the emitter, 3Delight's Lua, and the replay.
+    assert!(
+        ours.windows(8).any(|w| w == b"caf\xE9.exr"),
+        "our Lua-derived stream lost the raw byte",
+    );
+    assert!(
+        output.stdout.windows(8).any(|w| w == b"caf\xE9.exr"),
+        "3Delight's replay of our script lost the raw byte",
+    );
+
     assert_eq!(
-        canonicalise(&String::from_utf8(ours).expect("utf-8")),
+        canonicalise(&String::from_utf8_lossy(&ours)),
         canonicalise(&replayed),
         "the Lua script rebuilt a different scene\n--- script ---\n{}",
         String::from_utf8_lossy(&lua),
