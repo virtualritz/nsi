@@ -59,12 +59,32 @@ trait -> ffi-wrap -> intermediate -> parse.
   be considered". The previous winner-take-all resolution silently
   dropped a shader whenever visibility sat on a nearer node.
 - Motion-sampled transforms resolve: `motion_times`,
-  `world_transform_at`, `world_transform_samples`. Nothing is
-  interpolated; element-wise interpolation of a matrix is wrong through
-  a rotation, so that decomposition stays the backend's.
-- Instancing is usable: `relative_transform` for a prototype's subtree,
-  and `instance_transforms` pairing each matrix with the prototype it
-  draws through `modelindices`.
+  `world_transform_at`, `world_transform_samples` answer at a recorded
+  sample, and `world_transform_interpolated_at` answers between them.
+  Element-wise is the renderer's own model, not an approximation:
+  interpolating a transformed point gives `((1-a)M₀ + aM₁)p`, and
+  3Delight's rotation blur fits component-wise (rms 0.002) far better
+  than slerp (0.021). Outside the sampled range the end sample is held,
+  as 3Delight holds it.
+- Deforming geometry resolves: `attribute_times` and
+  `attribute_samples` give the sample times of any attribute, so a mesh
+  whose `P` moves under a static transform is no longer reported static.
+- Instancing is usable: `relative_transform` for a prototype's subtree;
+  `instance_transforms` pairing each matrix with the prototype it draws
+  through `modelindices`; `instance_transforms_at` for an instancer
+  whose matrices, `modelindices` or `disabledinstances` are *sampled* --
+  which `instance_transforms` now refuses rather than reporting an empty
+  list, since an empty list reads as "nothing to draw" for something
+  3Delight renders.
+- ɴsɪ's lightweight instancing resolves per path: `placements` and
+  `placements_at` give one placement per way a geometry is placed, each
+  with the transform *and* the binding along that path -- rendered,
+  `visibility 1` on one parent and `visibility 0` on another draws one
+  copy, so the paths gather different attributes.
+- Resolution along a path: `attribute_value_along` and
+  `shader_attribute_value_along` apply ɴsɪ's full precedence to one
+  placement, which the geometry-taking forms cannot do for a
+  multi-parent node.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,

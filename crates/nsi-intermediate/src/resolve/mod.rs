@@ -25,6 +25,12 @@ const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
 /// An `instances` node's per-instance matrices.
 const MATRICES: &str = "transformationmatrices";
 
+/// Which prototype each instance draws.
+const MODEL_INDICES: &str = "modelindices";
+
+/// The instances an `instances` node skips.
+const DISABLED: &str = "disabledinstances";
+
 /// Why a scene could not be resolved into flat facts.
 ///
 /// Every variant is a scene ɴsɪ permits but this crate refuses to guess
@@ -49,12 +55,20 @@ pub enum ResolveError {
         /// Every parent, in connection order.
         parents: Vec<String>,
     },
-    /// A node in the chain carries a motion-sampled
-    /// `transformationmatrix`.
+    /// A node carries motion-sampled placement data where a single
+    /// answer was asked for.
     ///
-    /// Composing per sample is not implemented, and answering with the
-    /// static transform would hand a motion-blurred scene back its
-    /// unblurred pose.
+    /// Either a `transformationmatrix` on a node in the chain, or an
+    /// `instances` node's `transformationmatrices`, `modelindices` or
+    /// `disabledinstances`. Answering with the static value would hand
+    /// a motion-blurred scene back its unblurred pose, and answering
+    /// with an empty list -- which the instancer path used to do --
+    /// reads as "nothing to draw".
+    ///
+    /// Ask at a time instead:
+    /// [`Scene::world_transform_interpolated_at`],
+    /// [`Scene::placements_at`] or
+    /// [`Scene::instance_transforms_at`].
     MotionSampledTransform {
         /// The node whose transform is motion-sampled.
         handle: String,
@@ -164,10 +178,9 @@ impl fmt::Display for ResolveError {
             ),
             Self::MotionSampledTransform { handle } => write!(
                 f,
-                "ɴsɪ node {handle:?} has a motion-sampled \
-                 transformationmatrix; per-sample composition is not \
-                 implemented and the static transform would be the wrong \
-                 answer"
+                "ɴsɪ node {handle:?} carries motion-sampled placement \
+                 data; the static value would be the wrong answer, so \
+                 ask at a time instead"
             ),
             Self::Cycle { handle } => write!(
                 f,
@@ -315,6 +328,55 @@ pub struct Placement {
     /// The same shape [`Scene::geometry_binding`] returns, resolved
     /// against this path rather than against "the" path.
     pub binding: Option<Binding>,
+}
+
+/// Where a time falls among a set of samples.
+enum Located<'a, T> {
+    /// Use this sample as it stands: an exact hit, or a held end.
+    At(&'a T),
+    /// Interpolate, `alpha` of the way from the first to the second.
+    Between(&'a T, &'a T, f64),
+}
+
+/// Locate `time` among samples ordered by time.
+///
+/// The one statement of ɴsɪ's sampling rule -- exact hit, hold the end
+/// outside the range, otherwise interpolate between the bracketing
+/// pair. Both the transform path and the instancer path read it here.
+///
+/// It exists because they did not. The instancer's copy dropped the
+/// exact-hit branch, so asking at an interior sample time -- shutter
+/// centre, the single most ordinary query -- errored on a scene the
+/// renderer draws. That was the fourth time a copied resolution rule
+/// drifted in this crate, and the commit before it removed three.
+///
+/// `None` when there are no samples, or when `time` names nothing: a
+/// NaN compares false against everything and brackets no pair.
+fn locate_sample<T>(samples: &[(f64, T)], time: f64) -> Option<Located<'_, T>> {
+    let first = samples.first()?;
+    let last = samples.last()?;
+
+    if let Some((_, value)) = samples
+        .iter()
+        .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
+    {
+        return Some(Located::At(value));
+    }
+
+    if time <= first.0 {
+        return Some(Located::At(&first.1));
+    }
+    if time >= last.0 {
+        return Some(Located::At(&last.1));
+    }
+
+    samples
+        .windows(2)
+        .find(|pair| pair[0].0 < time && time < pair[1].0)
+        .map(|pair| {
+            let alpha = (time - pair[0].0) / (pair[1].0 - pair[0].0);
+            Located::Between(&pair[0].1, &pair[1].1, alpha)
+        })
 }
 
 /// The winning definition of one attribute, gathered along a path.
@@ -1389,21 +1451,32 @@ impl Scene {
         })
     }
 
-    /// The instancer's matrices at `time`, when they are sampled.
+    /// A sampled integer instancer attribute at `time`.
     ///
-    /// `None` when the node has no sampled matrices, in which case the
-    /// static ones apply.
-    fn instance_matrices_at(
+    /// `None` when it is not sampled, in which case the static value
+    /// applies.
+    ///
+    /// # A step, not a blend
+    ///
+    /// `modelindices` names a prototype and `disabledinstances` names
+    /// instances to skip; neither has a meaningful value between two
+    /// samples, so the earlier sample of the bracketing pair holds until
+    /// the next. That is a choice, not a measurement: the probe that
+    /// established 3Delight honours these sampled used the *same*
+    /// values at both times, so it could not tell a step from a blend.
+    /// Recorded in `contracts/resolution.md`.
+    fn instance_ints_at(
         &self,
         node: &Node,
+        name: &str,
         instances: &str,
         time: Option<f64>,
-    ) -> Result<Option<Vec<f64>>, ResolveError> {
-        let samples: Vec<(f64, &[f64])> = node
+    ) -> Result<Option<Vec<i32>>, ResolveError> {
+        let samples: Vec<(f64, &[i32])> = node
             .time_attrs
             .iter()
-            .filter_map(|(t, attrs)| match attrs.get(MATRICES)?.data {
-                OwnedData::F64(ref values) => Some((*t, values.as_slice())),
+            .filter_map(|(t, attrs)| match attrs.get(name)?.data {
+                OwnedData::I32(ref values) => Some((*t, values.as_slice())),
                 _ => None,
             })
             .collect();
@@ -1418,42 +1491,89 @@ impl Scene {
             });
         };
 
-        let first = samples[0];
-        let last = samples[samples.len() - 1];
-        if time <= first.0 {
-            return Ok(Some(first.1.to_vec()));
-        }
-        if time >= last.0 {
-            return Ok(Some(last.1.to_vec()));
-        }
-
-        let pair = samples
-            .windows(2)
-            .find(|w| w[0].0 < time && time < w[1].0)
-            .ok_or_else(|| ResolveError::MissingSampleAtTime {
+        match locate_sample(&samples, time) {
+            Some(Located::At(values)) => Ok(Some(values.to_vec())),
+            // The earlier sample holds; see above.
+            Some(Located::Between(from, _, _)) => Ok(Some(from.to_vec())),
+            None => Err(ResolveError::MissingSampleAtTime {
                 handle: instances.to_string(),
                 time,
                 available: samples.iter().map(|(t, _)| *t).collect(),
-            })?;
+            }),
+        }
+    }
 
-        let (t0, m0) = pair[0];
-        let (t1, m1) = pair[1];
-        // A sample that changes length mid-animation describes a
-        // different set of instances, not a moved one.
-        if m0.len() != m1.len() {
-            return Err(ResolveError::MalformedInstanceMatrices {
-                instances: instances.to_string(),
-                values: m1.len(),
-            });
+    /// The instancer's matrices at `time`, when they are sampled.
+    ///
+    /// `None` when the node has no sampled matrices, in which case the
+    /// static ones apply.
+    fn instance_matrices_at(
+        &self,
+        node: &Node,
+        instances: &str,
+        time: Option<f64>,
+    ) -> Result<Option<Vec<f64>>, ResolveError> {
+        let mut samples: Vec<(f64, &[f64])> = node
+            .time_attrs
+            .iter()
+            .filter_map(|(t, attrs)| match attrs.get(MATRICES)?.data {
+                OwnedData::F64(ref values) => Some((*t, values.as_slice())),
+                _ => None,
+            })
+            .collect();
+
+        if samples.is_empty() {
+            return Ok(None);
         }
 
-        let a = (time - t0) / (t1 - t0);
-        Ok(Some(
-            m0.iter()
-                .zip(m1)
-                .map(|(from, to)| from * (1.0 - a) + to * a)
-                .collect(),
-        ))
+        // A sample that changes the instance *count* describes a
+        // different set, not a moved one, and 3Delight refuses the
+        // change rather than the instancer: `E6023 ... incompatible
+        // with its definition at previously defined time steps and will
+        // be ignored`, after which it renders the first sample's set,
+        // static. Rendered with 2 matrices at t=0 and 3 at t=1: two
+        // sharp bands at the t=0 positions, no third instance and no
+        // blur. Dropping the mismatched samples here reproduces that.
+        let width = samples[0].1.len();
+        samples.retain(|(_, values)| values.len() == width);
+
+        let Some(time) = time else {
+            return Err(ResolveError::MotionSampledTransform {
+                handle: instances.to_string(),
+            });
+        };
+
+        match locate_sample(&samples, time) {
+            Some(Located::At(values)) => Ok(Some(values.to_vec())),
+            Some(Located::Between(from, to, alpha)) => {
+                // A sample that changes length describes a *different*
+                // set of instances, not a moved one. 3Delight refuses
+                // the whole change -- `E6023 ... incompatible with its
+                // definition at previously defined time steps and will
+                // be ignored` -- and renders the first sample's set,
+                // static. `instance_matrices_sampled` drops the
+                // mismatched samples before we get here, so reaching
+                // this means two kept samples still disagree.
+                if from.len() != to.len() {
+                    return Err(ResolveError::MalformedInstanceMatrices {
+                        instances: instances.to_string(),
+                        values: to.len(),
+                    });
+                }
+
+                Ok(Some(
+                    from.iter()
+                        .zip(*to)
+                        .map(|(a, b)| a * (1.0 - alpha) + b * alpha)
+                        .collect(),
+                ))
+            }
+            None => Err(ResolveError::MissingSampleAtTime {
+                handle: instances.to_string(),
+                time,
+                available: samples.iter().map(|(t, _)| *t).collect(),
+            }),
+        }
     }
 
     /// Every `attributes` node on a geometry's path, in ɴsɪ's
@@ -1799,21 +1919,37 @@ impl Scene {
             (None, None) => &[],
         };
 
-        let model_indices = match node.attrs.get("modelindices") {
-            Some(arg) => match &arg.data {
-                OwnedData::I32(values) => values.as_slice(),
-                _ => &[],
-            },
-            None => &[],
-        };
+        // `modelindices` and `disabledinstances` can be sampled too,
+        // and 3Delight honours them: an instancer whose
+        // `disabledinstances` is set only through `SetAttributeAtTime`
+        // renders the same one instance as the static form, and a
+        // sampled `modelindices` selects the same prototype. Reading
+        // only `attrs` reported every instance as enabled and drawn from
+        // source 0 -- the same silent-empty class as the matrices, one
+        // level down.
+        let sampled_models =
+            self.instance_ints_at(node, MODEL_INDICES, instances, time)?;
+        let model_indices: &[i32] =
+            match (&sampled_models, node.attrs.get(MODEL_INDICES)) {
+                (Some(values), _) => values,
+                (None, Some(arg)) => match &arg.data {
+                    OwnedData::I32(values) => values.as_slice(),
+                    _ => &[],
+                },
+                (None, None) => &[],
+            };
 
-        let disabled = match node.attrs.get("disabledinstances") {
-            Some(arg) => match &arg.data {
-                OwnedData::I32(values) => values.as_slice(),
-                _ => &[],
-            },
-            None => &[],
-        };
+        let sampled_disabled =
+            self.instance_ints_at(node, DISABLED, instances, time)?;
+        let disabled: &[i32] =
+            match (&sampled_disabled, node.attrs.get(DISABLED)) {
+                (Some(values), _) => values,
+                (None, Some(arg)) => match &arg.data {
+                    OwnedData::I32(values) => values.as_slice(),
+                    _ => &[],
+                },
+                (None, None) => &[],
+            };
 
         // `modelindices` names the connection's `index` attribute, so
         // the value has to be looked up rather than used as a position.
@@ -1926,41 +2062,19 @@ impl Scene {
             return Ok(self.local_transform(handle));
         }
 
-        if let Some((_, matrix)) = sampled
-            .iter()
-            .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
-        {
-            return Ok(Some(*matrix));
-        }
-
         // Outside the sampled range the end sample is held, because
         // that is what 3Delight does. Rendered: samples at t=0 and t=1
         // with the shutter open over [-1, 2] leaves **zero** alpha
         // beyond the two sampled positions -- an extrapolating renderer
         // would sweep half again as far each way -- with a peak at each
         // end, 2.7x the swept middle, where a third of the shutter is
-        // held.
-        let first = sampled[0];
-        let last = sampled[sampled.len() - 1];
-        if time <= first.0 {
-            return Ok(Some(first.1));
-        }
-        if time >= last.0 {
-            return Ok(Some(last.1));
-        }
-
-        // The bracketing pair. A NaN compares false against everything,
-        // so it reaches here and brackets nothing.
-        let pair = sampled.windows(2).find(|w| w[0].0 < time && time < w[1].0);
-
-        match pair {
-            Some(window) => {
-                let (t0, m0) = window[0];
-                let (t1, m1) = window[1];
-                let a = (time - t0) / (t1 - t0);
+        // held. `locate_sample` states that rule once.
+        match locate_sample(&sampled, time) {
+            Some(Located::At(matrix)) => Ok(Some(*matrix)),
+            Some(Located::Between(from, to, alpha)) => {
                 let mut out = [0.0f64; 16];
                 for (index, slot) in out.iter_mut().enumerate() {
-                    *slot = m0[index] * (1.0 - a) + m1[index] * a;
+                    *slot = from[index] * (1.0 - alpha) + to[index] * alpha;
                 }
                 Ok(Some(out))
             }

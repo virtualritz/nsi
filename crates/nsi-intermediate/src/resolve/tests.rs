@@ -3313,3 +3313,192 @@ fn the_nearest_shader_attribute_wins_along_a_path() {
         .expect("defined");
     assert_eq!(value.node, "near");
 }
+
+/// Asking at an *interior* sample time must answer, not error.
+///
+/// The instancer's sampling logic was a copy of the transform's with
+/// the exact-hit branch dropped, so a query at shutter centre -- the
+/// single most ordinary one -- errored on a scene 3Delight renders.
+/// Both now read one `locate_sample`.
+#[test]
+fn an_interior_sample_time_is_answered_for_instances_and_transforms() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    for (time, x) in [(0.0, 0.0), (0.5, 4.0), (1.0, 10.0)] {
+        scene
+            .set_attribute_at_time(
+                "inst",
+                time,
+                vec![doubles("transformationmatrices", instance_matrix(x))],
+            )
+            .unwrap();
+        scene
+            .set_attribute_at_time("xf", time, vec![translate(x, 0.0, 0.0)])
+            .unwrap();
+    }
+
+    // The interior sample, exactly.
+    assert_eq!(
+        scene.instance_transforms_at("inst", 0.5).unwrap()[0].transform[12],
+        4.0,
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("xf", 0.5).unwrap()[12],
+        4.0,
+    );
+
+    // And between two of them, which must not be the same answer.
+    assert_eq!(
+        scene.instance_transforms_at("inst", 0.25).unwrap()[0].transform[12],
+        2.0,
+    );
+}
+
+/// Sampled `disabledinstances` and `modelindices` are honoured.
+///
+/// Rendered: an instancer whose `disabledinstances` is set only through
+/// `SetAttributeAtTime` draws the same single instance as the static
+/// form. Reading only the static attributes reported every instance as
+/// enabled -- the same silent-empty class as the matrices, one level
+/// down.
+#[test]
+fn sampled_instance_indices_are_honoured() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    scene
+        .set_attribute("inst", vec![doubles("transformationmatrices", two)])
+        .unwrap();
+    for time in [0.0, 1.0] {
+        scene
+            .set_attribute_at_time(
+                "inst",
+                time,
+                vec![integers("disabledinstances", vec![1])],
+            )
+            .unwrap();
+    }
+
+    let at = scene.instance_transforms_at("inst", 0.5).unwrap();
+    assert_eq!(at.len(), 1, "instance 1 is disabled at this time");
+    assert_eq!(at[0].transform[12], -1.0);
+
+    // And the static reading refuses rather than reporting both, since
+    // it cannot know which sample applies.
+    assert!(matches!(
+        scene.instance_transforms("inst"),
+        Err(ResolveError::MotionSampledTransform { .. })
+    ));
+}
+
+/// A sample that changes the instance count is dropped, not blended.
+///
+/// 3Delight refuses the change rather than the instancer -- `E6023 ...
+/// incompatible with its definition at previously defined time steps
+/// and will be ignored` -- and renders the first sample's set, static.
+/// Two sharp bands at the `t=0` positions, no third instance, no blur.
+#[test]
+fn a_sample_changing_the_instance_count_is_ignored() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    let three = [
+        instance_matrix(-5.0),
+        instance_matrix(5.0),
+        instance_matrix(0.0),
+    ]
+    .concat();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", two)],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![doubles("transformationmatrices", three)],
+        )
+        .unwrap();
+
+    for time in [0.0, 0.5, 1.0, 9.0] {
+        let at = scene.instance_transforms_at("inst", time).unwrap();
+        assert_eq!(at.len(), 2, "the t=1 sample is ignored, at {time}");
+        assert_eq!(at[0].transform[12], -1.0, "and the set stays static");
+        assert_eq!(at[1].transform[12], 1.0);
+    }
+}
+
+/// `shader_attribute_value` refuses an unreachable geometry.
+///
+/// It used to answer from the geometry's own attributes *before*
+/// walking the chain, so a detached, cyclic or multi-parent node
+/// returned `Ok(Some(..))`. Routing it through the path form made it
+/// walk first, which agrees with `attribute_value` and with its own
+/// documented errors -- but the commit that did it said "no behaviour
+/// change", and nothing pinned the difference either way.
+#[test]
+fn shader_attribute_value_refuses_an_unreachable_geometry() {
+    // Detached.
+    let mut scene = Scene::default();
+    scene.create("det", "mesh").unwrap();
+    scene
+        .set_attribute("det", vec![integers("tint", vec![1])])
+        .unwrap();
+    assert!(matches!(
+        scene.shader_attribute_value("det", "tint"),
+        Err(ResolveError::Detached { .. })
+    ));
+    assert!(matches!(
+        scene.attribute_value("det", "tint"),
+        Err(ResolveError::Detached { .. })
+    ));
+
+    // More than one parent.
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("a", "transform").unwrap();
+    scene.create("b", "transform").unwrap();
+    scene.connect("a", None, ".root", "objects").unwrap();
+    scene.connect("b", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "a", "objects").unwrap();
+    scene.connect("q", None, "b", "objects").unwrap();
+    scene
+        .set_attribute("q", vec![integers("tint", vec![1])])
+        .unwrap();
+    assert!(matches!(
+        scene.shader_attribute_value("q", "tint"),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+
+    // ...and the path form still answers, which is the way out.
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(
+        scene
+            .shader_attribute_value_along(&placements[0].path, "tint")
+            .expect("on the primitive")
+            .node,
+        "q",
+    );
+}
