@@ -125,8 +125,27 @@
 //!   bytes.
 //!
 //! `write` takes `&mut self`, and the shims answer `PkThreadQuery` with
-//! `multithread = 0`, so the renderer serialises buckets -- this crate
-//! does not support concurrent bucket delivery.
+//! `multithread = 0`, so the renderer serialises buckets. A driver that
+//! wants concurrent bucket delivery instead implements
+//! `ConcurrentDisplayDriver`; see "Choosing a trait" below.
+//!
+//! # Choosing a trait
+//!
+//! - `DisplayDriver` -- the default. The renderer serialises buckets
+//!   (`multithread = 0`), `write` takes `&mut self`, and no
+//!   synchronisation is needed. Right for a driver that accumulates into
+//!   a frame buffer or writes a file.
+//! - `ConcurrentDisplayDriver` -- opt in. The renderer may deliver
+//!   buckets from several threads at once (`multithread = 1`), `write`
+//!   takes `&self`, and the type must be `Sync`. Right for a driver
+//!   whose state is already behind atomics or a lock, or which writes
+//!   each bucket independently.
+//!
+//! `PkThreadQuery` is a 3Delight extension -- standard ndspy has no
+//! thread negotiation and always serialises -- so `DisplayDriver` is the
+//! portable default. A crate invokes exactly one of
+//! `declare_display_driver!` or `declare_concurrent_display_driver!`;
+//! invoking both defines the same four symbols twice and will not link.
 //!
 //! # Scope
 //!
@@ -147,9 +166,12 @@ mod bucket;
 pub use bucket::Bucket;
 
 mod shim;
-pub use shim::DisplayDriver;
+pub use shim::{ConcurrentDisplayDriver, DisplayDriver};
 #[doc(hidden)]
-pub use shim::{shim_close, shim_data, shim_open, shim_query};
+pub use shim::{
+    concurrent_shim_close, concurrent_shim_data, concurrent_shim_open,
+    concurrent_shim_query, shim_close, shim_data, shim_open, shim_query,
+};
 
 pub use nsi_ffi_wrap::output::{Error, PixelFormat, PixelType};
 
@@ -171,6 +193,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 ///
 /// The macro body refers to `::ndspy_sys`, so any crate invoking it must
 /// itself depend on `ndspy-sys`.
+///
+/// A crate invokes exactly one of `declare_display_driver!` or
+/// [`declare_concurrent_display_driver!`]; invoking both defines the
+/// same four symbols twice and will not link.
 #[macro_export]
 macro_rules! declare_display_driver {
     ($driver:ty) => {
@@ -250,6 +276,113 @@ macro_rules! declare_display_driver {
         ) -> ::ndspy_sys::PtDspyError {
             unsafe {
                 $crate::shim_query::<$driver>(image, query_type, data_len, data)
+            }
+        }
+    };
+}
+
+/// Exports `$driver` as an ɴsɪ display driver that accepts buckets from
+/// several threads at once.
+///
+/// Emits the same four symbols as [`declare_display_driver!`], with
+/// identical `extern "C"` signatures -- the renderer resolves the same
+/// names either way. Invoke once, at the crate root of a `cdylib`:
+///
+/// ```ignore
+/// nsi_display::declare_concurrent_display_driver!(MyDriver);
+/// ```
+///
+/// Build it with `crate-type = ["cdylib"]` and give the artefact the
+/// name the renderer expects — 3Delight looks for `<drivername>.dpy`, so
+/// `libmy_driver.so` has to be renamed or symlinked to `my_driver.dpy`.
+///
+/// The macro body refers to `::ndspy_sys`, so any crate invoking it must
+/// itself depend on `ndspy-sys`.
+///
+/// A crate invokes exactly one of [`declare_display_driver!`] or
+/// `declare_concurrent_display_driver!`; invoking both defines the same
+/// four symbols twice and will not link.
+#[macro_export]
+macro_rules! declare_concurrent_display_driver {
+    ($driver:ty) => {
+        /// # Safety
+        /// Called by the renderer per the ndspy contract.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn DspyImageOpen(
+            image: *mut ::ndspy_sys::PtDspyImageHandle,
+            drivername: *const ::core::ffi::c_char,
+            filename: *const ::core::ffi::c_char,
+            width: ::core::ffi::c_int,
+            height: ::core::ffi::c_int,
+            param_count: ::core::ffi::c_int,
+            parameters: *const ::ndspy_sys::UserParameter,
+            format_count: ::core::ffi::c_int,
+            format: *mut ::ndspy_sys::PtDspyDevFormat,
+            flags: *mut ::ndspy_sys::PtFlagStuff,
+        ) -> ::ndspy_sys::PtDspyError {
+            unsafe {
+                $crate::concurrent_shim_open::<$driver>(
+                    image,
+                    drivername,
+                    filename,
+                    width,
+                    height,
+                    param_count,
+                    parameters,
+                    format_count,
+                    format,
+                    flags,
+                )
+            }
+        }
+
+        /// # Safety
+        /// Called by the renderer per the ndspy contract.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn DspyImageData(
+            image: ::ndspy_sys::PtDspyImageHandle,
+            x_min: ::core::ffi::c_int,
+            x_max_plus_one: ::core::ffi::c_int,
+            y_min: ::core::ffi::c_int,
+            y_max_plus_one: ::core::ffi::c_int,
+            entry_size: ::core::ffi::c_int,
+            data: *const u8,
+        ) -> ::ndspy_sys::PtDspyError {
+            unsafe {
+                $crate::concurrent_shim_data::<$driver>(
+                    image,
+                    x_min,
+                    x_max_plus_one,
+                    y_min,
+                    y_max_plus_one,
+                    entry_size,
+                    data,
+                )
+            }
+        }
+
+        /// # Safety
+        /// Called by the renderer per the ndspy contract.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn DspyImageClose(
+            image: ::ndspy_sys::PtDspyImageHandle,
+        ) -> ::ndspy_sys::PtDspyError {
+            unsafe { $crate::concurrent_shim_close::<$driver>(image) }
+        }
+
+        /// # Safety
+        /// Called by the renderer per the ndspy contract.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn DspyImageQuery(
+            image: ::ndspy_sys::PtDspyImageHandle,
+            query_type: ::ndspy_sys::PtDspyQueryType,
+            data_len: ::core::ffi::c_int,
+            data: *mut ::core::ffi::c_void,
+        ) -> ::ndspy_sys::PtDspyError {
+            unsafe {
+                $crate::concurrent_shim_query::<$driver>(
+                    image, query_type, data_len, data,
+                )
             }
         }
     };

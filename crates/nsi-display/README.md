@@ -129,8 +129,27 @@ safe to implement:
   bytes.
 
 `write` takes `&mut self`, and the shims answer `PkThreadQuery` with
-`multithread = 0`, so the renderer serialises buckets -- this crate
-does not support concurrent bucket delivery.
+`multithread = 0`, so the renderer serialises buckets. A driver that
+wants concurrent bucket delivery instead implements
+`ConcurrentDisplayDriver`; see "Choosing a trait" below.
+
+## Choosing a trait
+
+- `DisplayDriver` -- the default. The renderer serialises buckets
+  (`multithread = 0`), `write` takes `&mut self`, and no
+  synchronisation is needed. Right for a driver that accumulates into
+  a frame buffer or writes a file.
+- `ConcurrentDisplayDriver` -- opt in. The renderer may deliver
+  buckets from several threads at once (`multithread = 1`), `write`
+  takes `&self`, and the type must be `Sync`. Right for a driver
+  whose state is already behind atomics or a lock, or which writes
+  each bucket independently.
+
+`PkThreadQuery` is a 3Delight extension -- standard ndspy has no
+thread negotiation and always serialises -- so `DisplayDriver` is the
+portable default. A crate invokes exactly one of
+`declare_display_driver!` or `declare_concurrent_display_driver!`;
+invoking both defines the same four symbols twice and will not link.
 
 ## Scope
 
