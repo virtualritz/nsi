@@ -54,7 +54,7 @@ pub const PARTICLES: &str = "particles";
 /// NURBS surface with optional trim curves.
 ///
 /// Intrinsic attributes: `nu`, `nv`, `uorder`, `vorder`, `uknot`, `vknot`, and
-/// either `P` (point) or `Pw` (rational, float[4]). Trim curves are specified
+/// either `P` (point) or `Pw` (rational, `float[4]`). Trim curves are specified
 /// via the `trimcurves.*` attribute family.
 pub const NURBS: &str = "nurbs";
 

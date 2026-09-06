@@ -1,10 +1,25 @@
 //! Helper to generate a test image.
-//! Run with: cargo test --test generate_test_image -- --nocapture
+//! Run with:
+//!
+//! ```text
+//! cargo test --test generate_test_image -- --ignored --nocapture
+//! ```
+//!
+//! `#[ignore]`, because this is a **tool**, not a test: it sets
+//! `RUST_TEST_UPDATE` and overwrites the checked-in
+//! `tests/expected_images/sphere.png` with whatever it just rendered.
+//! Running by default made `geometry::sphere` unable to fail -- the
+//! expectation was rewritten from the same renderer it was compared
+//! against -- and worse, a misconfigured renderer wrote its failure
+//! into the fixture: an 829-byte blank replaced the 13,935-byte
+//! golden, and the next run compared against *that*. Regenerate
+//! deliberately, look at the image, and commit it on purpose.
 
 mod common;
 mod test_utils;
 
 #[test]
+#[ignore = "a golden-image generator: it overwrites the checked-in expectation"]
 fn sphere_generation() {
     // Set update mode to generate the expected image
     // SAFETY: This test is single-threaded and no other thread reads this var.

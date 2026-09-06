@@ -1,6 +1,6 @@
 //! Macros for defining NSI renderer implementations.
 //!
-//! This module provides the [`define_nsi_renderer!`] macro which generates
+//! This module provides the [`crate::define_nsi_renderer!`] macro which generates
 //! all the boilerplate code needed to wrap an NSI C API implementation.
 
 /// Generates a complete NSI renderer implementation.

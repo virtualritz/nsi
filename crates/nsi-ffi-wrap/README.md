@@ -50,6 +50,36 @@ support.
 - `ustr_handles` — use [`ustr`](https://crates.io/crates/ustr) for node
   handles (interned, cheap to clone). Default is `CString`.
 
+**`--all-features` is not a configuration this crate has.**
+`link_lib3delight` and the default `dlopen2` are two answers to the
+same question, and enabling both together links a library the runtime
+loader was going to find for itself — with `download_lib3delight` also
+on, that library is a *downloaded* one, so the renderer under test is
+not the one installed. The golden-image tests then differ by tens of
+percent for reasons that have nothing to do with this crate. Test with
+`--features output`, which is what exercises the renderer, and see
+`[package.metadata.docs.rs]` for the same reason stated to docs.rs.
+
+## Testing
+
+```bash
+DELIGHT=/path/to/3delight cargo test -p nsi-ffi-wrap --features output
+```
+
+`DELIGHT` must be set: the render tests name shaders as
+`${DELIGHT}/osl/...` and the renderer expands that from the
+environment. Without it every shader fails to load and the images
+differ wildly.
+
+`tests/generate_test_image.rs` is `#[ignore]`d because it is a tool
+rather than a test — it sets `RUST_TEST_UPDATE` and overwrites
+`tests/expected_images/sphere.png`. Run it deliberately, look at what
+it produced, and commit that on purpose:
+
+```bash
+cargo test -p nsi-ffi-wrap --features output --test generate_test_image -- --ignored
+```
+
 ## License
 
 Licensed under any of

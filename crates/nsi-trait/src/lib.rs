@@ -17,7 +17,8 @@
 //! - Node type constants ([`ROOT`], [`MESH`], etc.)
 //! - [`Attribute<T>`](attribute::Attribute) -- Typed attribute names with
 //!   per-name compile-time data-shape verification, plus standard attribute
-//!   constants ([`P`](attribute::P), [`FOV`](attribute::FOV), etc.)
+//!   constants ([`attribute::POSITION`], [`attribute::FIELD_OF_VIEW`],
+//!   etc.)
 //!
 //! # Crate Organization
 //!

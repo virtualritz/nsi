@@ -1,15 +1,15 @@
-//! C API function generation for [`Nsi`] trait implementations.
+//! C API function generation for [`crate::Nsi`] trait implementations.
 //!
 //! This module provides the infrastructure for generating C-compatible
-//! `extern "C"` functions from an [`Nsi`] implementation.
+//! `extern "C"` functions from an [`crate::Nsi`] implementation.
 //!
 //! # Usage
 //!
-//! A renderer implementing the [`Nsi`] trait can use this module to expose
+//! A renderer implementing the [`crate::Nsi`] trait can use this module to expose
 //! a C API. The typical pattern is:
 //!
-//! 1. Implement [`Nsi`] for your renderer type
-//! 2. Create a [`FfiApiAdapter`] wrapping your renderer
+//! 1. Implement [`crate::Nsi`] for your renderer type
+//! 2. Create a [`crate::FfiApiAdapter`] wrapping your renderer
 //! 3. Store the adapter in a `static` or use the provided macros
 //! 4. Implement the `extern "C"` functions delegating to the adapter
 //!
@@ -217,7 +217,7 @@ pub unsafe fn handle_to_str<'a>(handle: *const c_char) -> Option<&'a str> {
     unsafe { CStr::from_ptr(handle) }.to_str().ok()
 }
 
-/// Macro for defining the complete C API for an [`Nsi`] implementation.
+/// Macro for defining the complete C API for an [`crate::Nsi`] implementation.
 ///
 /// This macro generates all the `extern "C"` functions required for a
 /// complete NSI C API implementation.

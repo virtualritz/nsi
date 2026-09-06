@@ -59,5 +59,7 @@ bytemuck = "1"
 anyhow = "1"
 
 [package.metadata.docs.rs]
+# An explicit list, not `all-features`: `download_lib3delight` fetches
+# a shared library from the network in its build script, and docs.rs
+# builds without one.
 features = ["output", "nightly"]
-all-features = true

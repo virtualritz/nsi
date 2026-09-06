@@ -182,7 +182,7 @@ impl LayerDepth {
 ///
 /// ## RAW Layout
 ///
-/// The resp. callbacks deliver pixels as a flat [`f32`] buffer.
+/// The resp. callbacks deliver pixels as a flat [`prim@f32`] buffer.
 /// For the above example the actual layout of a single pixel in the
 /// buffer is:
 ///

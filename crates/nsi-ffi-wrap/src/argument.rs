@@ -116,55 +116,55 @@ pub(crate) trait ArgDataMethods {
 /// function call where they get passed.
 ///
 /// Lifetime `'b` is for the arbitrary reference type. This is
-/// pegged to the lifetime of the [`Context`](crate::context::Context).
+/// pegged to the lifetime of the [`crate::context::Context`].
 /// Use this to pass arbitrary Rust data through the FFI boundary.
 #[enum_dispatch]
 #[derive(Debug, Clone)]
 pub enum ArgData<'a, 'b> {
-    /// Single [`f32`] value.
+    /// Single [`prim@f32`] value.
     F32,
-    /// An [`f32`] slice.
+    /// An [`prim@f32`] slice.
     F32Slice(F32Slice<'a>),
-    /// Single [`f64`] value.
+    /// Single [`prim@f64`] value.
     F64,
-    /// An [`f64`] slice.
+    /// An [`prim@f64`] slice.
     F64Slice(F64Slice<'a>),
-    /// Single [`i32`] value.
+    /// Single [`prim@i32`] value.
     I32,
-    /// An [`i32`] slice.
+    /// An [`prim@i32`] slice.
     I32Slice(I32Slice<'a>),
-    /// Single [`i64`] value.
+    /// Single [`prim@i64`] value.
     I64,
-    /// An [`i64`] slice.
+    /// An [`prim@i64`] slice.
     I64Slice(I64Slice<'a>),
     /// A [`String`].
     String(String),
     /// A [`String`] slice.
     StringSlice(StringSlice),
     /// Color in linear space, given as a red, green, blue triplet
-    /// of [`f32`] values; usually in the range `0..1`.
+    /// of [`prim@f32`] values; usually in the range `0..1`.
     Color(Color<'a>),
-    /// A flat [`f32`] slice of colors (`len % 3 == 0`).
+    /// A flat [`prim@f32`] slice of colors (`len % 3 == 0`).
     ColorSlice(ColorSlice<'a>),
-    /// Point, given as three [`f32`] values.
+    /// Point, given as three [`prim@f32`] values.
     Point(Point<'a>),
-    /// A flat [`f32`] slice of points (`len % 3 == 0`).
+    /// A flat [`prim@f32`] slice of points (`len % 3 == 0`).
     PointSlice(PointSlice<'a>),
-    /// Vector, given as three [`f32`] values.
+    /// Vector, given as three [`prim@f32`] values.
     Vector(Vector<'a>),
-    /// A flat [`f32`] slice of vectors (`len % 3 == 0`).
+    /// A flat [`prim@f32`] slice of vectors (`len % 3 == 0`).
     VectorSlice(VectorSlice<'a>),
-    /// Normal vector, given as three [`f32`] values.
+    /// Normal vector, given as three [`prim@f32`] values.
     Normal(Normal<'a>),
-    /// A flat [`f32`] slice of normals (`len % 3 == 0`).
+    /// A flat [`prim@f32`] slice of normals (`len % 3 == 0`).
     NormalSlice(NormalSlice<'a>),
-    /// Row-major, 4×4 transformation matrix, given as 16 [`f32`] values.
+    /// Row-major, 4×4 transformation matrix, given as 16 [`prim@f32`] values.
     MatrixF32(MatrixF32<'a>),
-    /// A flat [`f32`] slice of matrices (`len % 16 == 0`).
+    /// A flat [`prim@f32`] slice of matrices (`len % 16 == 0`).
     MatrixF32Slice(MatrixF32Slice<'a>),
-    /// Row-major, 4×4 transformation matrix, given as 16 [`f64`] values.
+    /// Row-major, 4×4 transformation matrix, given as 16 [`prim@f64`] values.
     MatrixF64(MatrixF64<'a>),
-    /// A flat [`f64`] slice of matrices (`len % 16 == 0`).
+    /// A flat [`prim@f64`] slice of matrices (`len % 16 == 0`).
     MatrixF64Slice(MatrixF64Slice<'a>),
     /// A slice of 4-component f32 points (xyzw).
     /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats — the
@@ -393,7 +393,7 @@ use std::sync::Arc;
 
 impl<'a> Reference<'a> {
     /// Create a reference from any type that implements StableDeref.
-    /// This includes &Box<T>, &Arc<T>, and &Pin<Box<T>>.
+    /// This includes `&Box<T>`, `&Arc<T>`, and `&Pin<Box<T>>`.
     pub fn new<S: StableDeref<'a>>(data: S) -> Self {
         let ptr = data.stable_deref();
         debug_assert!(!ptr.is_null(), "Reference created with null pointer");
@@ -721,29 +721,29 @@ nsi_tuple_data_def!(f64, 16, MatrixF64, DataType::MatrixF64);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub(crate) enum DataType {
-    /// A single [`f32`] value.
+    /// A single [`prim@f32`] value.
     F32 = NSIType::F32 as _,
-    /// A single [`f64`] value.
+    /// A single [`prim@f64`] value.
     F64 = NSIType::F64 as _,
-    /// Single [`i32`] value.
+    /// Single [`prim@i32`] value.
     I32 = NSIType::I32 as _,
-    /// Single [`i64`] value.
+    /// Single [`prim@i64`] value.
     I64 = NSIType::I64 as _,
     /// A [`String`].
     String = NSIType::String as _,
-    /// Color, given as three [`f32`] values,
+    /// Color, given as three [`prim@f32`] values,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]. Assumed to be in a linear color space.`
     Color = NSIType::Color as _,
-    /// Point, given as three [`f32`] values.
+    /// Point, given as three [`prim@f32`] values.
     Point = NSIType::Point as _,
-    /// Vector, given as three [`f32`] values.
+    /// Vector, given as three [`prim@f32`] values.
     Vector = NSIType::Vector as _,
-    /// Normal vector, given as three [`f32`] values.
+    /// Normal vector, given as three [`prim@f32`] values.
     Normal = NSIType::Normal as _,
-    /// Transformation matrix, given as 16 [`f32`] values.
+    /// Transformation matrix, given as 16 [`prim@f32`] values.
     MatrixF32 = NSIType::MatrixF32 as _,
-    /// Transformation matrix, given as 16 [`f64`] values.
+    /// Transformation matrix, given as 16 [`prim@f64`] values.
     MatrixF64 = NSIType::MatrixF64 as _,
     /// Raw (`*const T`) pointer.
     Reference = NSIType::Pointer as _,
@@ -1097,7 +1097,7 @@ macro_rules! normal_slice {
 }
 
 /// Create a [`MatrixF32`] row-major, 4×4 transformation matrix argument.
-/// The matrix is given as 16 [`f32`] values.
+/// The matrix is given as 16 [`prim@f32`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Matrix4F32>`](crate::Attribute) constant.
@@ -1116,7 +1116,7 @@ macro_rules! matrix_f32 {
 }
 
 /// Create a [`MatrixF32Slice`] row-major, 4×4 transformation matrices argument.
-/// Each matrix is given as 16 [`f32`] values.
+/// Each matrix is given as 16 [`prim@f32`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Matrix4F32]>`](crate::Attribute) constant.
@@ -1138,7 +1138,7 @@ macro_rules! matrix_f32_slice {
 }
 
 /// Create a [`MatrixF64`] row-major, 4×4 transformation matrix argument.
-/// The matrix is given as 16 [`f64`] values.
+/// The matrix is given as 16 [`prim@f64`] values.
 ///
 /// # Examples
 ///
@@ -1175,7 +1175,7 @@ macro_rules! matrix_f64 {
 }
 
 /// Create a [`MatrixF64Slice`] row-major, 4×4 transformation matrices argument.
-/// Each matrix is given as 16 [`f64`] values.
+/// Each matrix is given as 16 [`prim@f64`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Matrix4F64]>`](crate::Attribute) constant.
