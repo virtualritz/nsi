@@ -271,8 +271,10 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       total and returns `EdgeKind`.
 - [x] T8.4 Contract rows cited test modules that the test-file split had
       renamed, so `cargo test -- binding_tests` ran nothing.
-- [ ] T8.5 `Scene::create` accepts a reserved handle and keeps the node,
-      which replay then drops -- so the scene changes on its first round
-      trip. 3Delight answers `E6002`.
-- [ ] T8.6 `nsi-trait` has no `include`, so `cargo package` ships a
-      stray `.claude/audit` log. Fix before releasing 0.4.0.
+- [x] T8.5 `create` refuses a reserved handle, as 3Delight does. It kept
+      a node replay then dropped, so the scene changed on its own first
+      round trip. Evidence:
+      `scene::tests::the_reserved_handles_cannot_be_created`.
+- [x] T8.6 `nsi-trait` gains an `include` whitelist. `cargo package`
+      was shipping a `.claude/audit` log a hook had written into the
+      crate. All four crates now package clean.

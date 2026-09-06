@@ -165,6 +165,16 @@ impl Scene {
         handle: &str,
         node_type: &str,
     ) -> Result<(), RecordError> {
+        // ɴsɪ's reserved handles exist already. 3Delight answers a
+        // `create` on one with "already exists"; accepting it here kept
+        // a node that replay then drops, so the scene changed on its
+        // own first round trip.
+        if crate::is_reserved(handle) {
+            return Err(RecordError::Reserved {
+                handle: handle.to_string(),
+            });
+        }
+
         match self.nodes.get(handle) {
             Some(existing) if existing.node_type != node_type => {
                 Err(RecordError::TypeMismatch {

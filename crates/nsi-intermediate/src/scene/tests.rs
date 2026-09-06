@@ -616,3 +616,20 @@ fn negative_zero_is_a_distinct_sample_time() {
     assert_eq!(times.len(), 2);
     assert!(times[0].is_sign_negative(), "-0.0 sorts first");
 }
+
+/// ɴsɪ's reserved handles exist already, and 3Delight answers a
+/// `create` on one with "already exists". Accepting it kept a node that
+/// replay drops, so the scene changed on its own first round trip.
+#[test]
+fn the_reserved_handles_cannot_be_created() {
+    let mut scene = Scene::default();
+    for handle in [crate::ROOT, crate::GLOBAL] {
+        assert_eq!(
+            scene.create(handle, "transform"),
+            Err(RecordError::Reserved {
+                handle: handle.to_string()
+            })
+        );
+        assert!(scene.node(handle).is_none(), "nothing recorded");
+    }
+}

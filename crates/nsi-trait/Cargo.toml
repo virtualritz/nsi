@@ -13,6 +13,14 @@ readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-trait/"
 repository = "https://github.com/virtualritz/nsi/"
+# Whitelist rather than blacklist, as the other crates do: without it
+# `cargo package` shipped a `.claude/audit` log that a hook had written
+# into the crate directory.
+include = [
+    "src/**/*",
+    "/Cargo.toml",
+    "/README.md",
+]
 
 [dependencies]
 bitflags = "2"

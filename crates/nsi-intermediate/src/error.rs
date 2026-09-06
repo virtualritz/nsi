@@ -13,9 +13,10 @@ use core::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RecordError {
-    /// A call tried to delete one of ɴsɪ's reserved nodes.
+    /// A call tried to create or delete one of ɴsɪ's reserved nodes.
     ///
-    /// ɴsɪ: "it is not possible to delete the root or the global node."
+    /// ɴsɪ: "it is not possible to delete the root or the global node",
+    /// and they "don't need to be created" because they already exist.
     Reserved {
         /// The reserved handle.
         handle: String,
@@ -52,7 +53,8 @@ impl fmt::Display for RecordError {
         match self {
             Self::Reserved { handle } => write!(
                 f,
-                "ɴsɪ node {handle:?} is reserved and cannot be deleted"
+                "ɴsɪ node {handle:?} is reserved: it exists already and \
+                 cannot be created or deleted"
             ),
             Self::UnknownHandle { handle } => write!(
                 f,
