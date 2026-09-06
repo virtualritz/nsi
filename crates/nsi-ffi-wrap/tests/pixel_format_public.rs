@@ -92,6 +92,7 @@ fn indexed_channels_self_trigger_boundary() {
 /// Correct behavior: should produce 2 layers:
 /// - {"Ci", Color, 0} with channels 0-2
 /// - {"depth", OneChannel, 3} with channel 3
+///
 /// Total channels()==4.
 #[test]
 #[ignore]
