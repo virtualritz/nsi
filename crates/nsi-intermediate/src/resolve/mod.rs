@@ -826,6 +826,81 @@ impl Scene {
         Ok(candidates.into_iter().next().map(|(_, _, _, value)| value))
     }
 
+    /// The `attributes` nodes providing *shader* attributes for a
+    /// geometry, nearest it first.
+    ///
+    /// ɴsɪ's second attribute container. The same `attributes` node type
+    /// reaches it, through the `shaderattributes` connection rather than
+    /// `geometryattributes`, and it is gathered "along the path starting
+    /// from the geometric primitive, through all the transform nodes it
+    /// is connected to, until the scene root is reached".
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::geometry_binding`]: walking the path can fail.
+    pub fn shader_attributes(
+        &self,
+        geometry: &str,
+    ) -> Result<Vec<String>, ResolveError> {
+        Ok(self
+            .gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
+            .into_iter()
+            .map(|(_, _, edge)| edge.from.clone())
+            .collect())
+    }
+
+    /// The value of one shader attribute, gathered along a geometry's
+    /// path.
+    ///
+    /// # Precedence
+    ///
+    /// **Not** the rule [`Scene::attribute_value`] applies. ɴsɪ gives
+    /// this container its own, and it is simpler: "Priority is given to
+    /// nodes attached closest to the geometric primitive, with the
+    /// highest priority given to attributes set directly on the
+    /// geometric primitive." There is no `ATTR.priority` here and no
+    /// per-ray fallback -- nearest wins, then connection order. Reusing
+    /// the `geometryattributes` rule would invent a priority the
+    /// specification does not give this node.
+    ///
+    /// [`AttributeValue::priority`] is therefore always `0`.
+    ///
+    /// ɴsɪ adds that attributes on such a node "may only have a single
+    /// value"; this does not enforce that, and returns what was
+    /// recorded.
+    ///
+    /// # Scope
+    ///
+    /// ɴsɪ allows these on "geometric primitives, transform nodes or
+    /// **set nodes**". Only the first two lie on the walked chain, so an
+    /// attribute provided through set membership is not found. Tracked
+    /// as an `Open` row in `contracts/resolution.md`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::geometry_binding`]: walking the path can fail.
+    pub fn shader_attribute_value(
+        &self,
+        geometry: &str,
+        name: &str,
+    ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
+        for (_, _, edge) in
+            self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
+        {
+            let Some(node) = self.node(&edge.from) else {
+                continue;
+            };
+            if let Some(arg) = node.attrs.get(name) {
+                return Ok(Some(AttributeValue {
+                    node: &edge.from,
+                    arg,
+                    priority: 0,
+                }));
+            }
+        }
+        Ok(None)
+    }
+
     /// Every `attributes` node on a geometry's path, in ɴsɪ's
     /// precedence order.
     ///
@@ -855,18 +930,28 @@ impl Scene {
         &self,
         geometry: &str,
     ) -> Result<Vec<(usize, usize, &Edge)>, ResolveError> {
+        self.gathered_containers(geometry, &EdgeKind::AttributeBinding)
+    }
+
+    /// The same walk for any container class, nearest the geometry
+    /// first.
+    fn gathered_containers(
+        &self,
+        geometry: &str,
+        kind: &EdgeKind,
+    ) -> Result<Vec<(usize, usize, &Edge)>, ResolveError> {
         let chain = self.chain(geometry)?;
 
         let mut gathered = chain
             .iter()
             .enumerate()
             .flat_map(|(depth, node)| {
-                self.edges_to_attr(node, EdgeKind::AttributeBinding.to_attr())
+                self.edges_to_attr(node, kind.to_attr())
                     // A shader-network edge's `to_attr` is its *port*
                     // name, so it shares this bucket with the named
                     // class. Without the filter a port called
                     // `geometryattributes` resolved as a binding.
-                    .filter(|edge| edge.kind == EdgeKind::AttributeBinding)
+                    .filter(move |edge| edge.kind == *kind)
                     .enumerate()
                     .map(move |(order, edge)| (depth, order, edge))
             })

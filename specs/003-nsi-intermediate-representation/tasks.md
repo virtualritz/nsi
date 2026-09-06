@@ -328,9 +328,15 @@ against this API now.
       `AttributeValue`. Pinned by
       `resolve::tests::a_priority_without_its_attribute_is_skipped`.
       Gate: the `Open` row in `contracts/resolution.md`.
-- [ ] T9.9 Resolve `shaderattributes` nodes. They classify but nothing
-      reads them, and their gathering rule is *not* the one
-      `attribute_value` implements: proximity only, no `ATTR.priority`,
-      and values may sit directly on the geometric primitive. Asking
-      `attribute_value` for one returns `None` indistinguishably from
-      "not set". Gate: the `Open` row in `contracts/resolution.md`.
+- [x] T9.9 `shaderattributes` nodes resolve, under their own rule.
+      They had classified since the classifier landed and nothing read
+      them. `shader_attribute_value` takes the nearest and stops:
+      proximity only, no `ATTR.priority`, no per-ray fallback -- ɴsɪ
+      gives this container none of those, and reusing the
+      `geometryattributes` rule would have invented them. The two
+      containers are gathered by their own `EdgeKind` and proven not to
+      cross. Evidence: five tests in `resolve::tests`, each falsified.
+- [ ] T9.10 A `shaderattributes` node connected to a `set`. ɴsɪ allows
+      "geometric primitives, transform nodes or set nodes"; only the
+      first two are on the walked chain. Gate: the `Open` row in
+      `contracts/resolution.md`.

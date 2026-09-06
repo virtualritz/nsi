@@ -1740,3 +1740,136 @@ fn a_priority_without_its_attribute_is_skipped() {
         "3Delight answers `near` at the default; this crate cannot",
     );
 }
+
+// ---------------------------------------------------------------------
+// `shaderattributes`: ɴsɪ's other container, with its own rule.
+// ---------------------------------------------------------------------
+
+/// `mesh -> xf -> .root` with a `shaderattributes` node on each level.
+fn scene_with_shader_attributes() -> Scene {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("near", "attributes").unwrap();
+    scene.create("far", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .connect("near", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("far", None, "xf", "shaderattributes")
+        .unwrap();
+    scene
+}
+
+/// ɴsɪ: "Priority is given to nodes attached closest to the geometric
+/// primitive, with the highest priority given to attributes set
+/// directly on the geometric primitive."
+#[test]
+fn the_nearest_shader_attribute_wins() {
+    let mut scene = scene_with_shader_attributes();
+    scene
+        .set_attribute("near", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("tint", vec![2])])
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+}
+
+/// An ancestor's shader attributes are inherited when nothing nearer
+/// defines them.
+#[test]
+fn an_ancestor_shader_attribute_is_inherited() {
+    let mut scene = scene_with_shader_attributes();
+    scene
+        .set_attribute("far", vec![integers("tint", vec![2])])
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    assert_eq!(value.expect("inherited").node, "far");
+}
+
+/// `ATTR.priority` belongs to the `geometryattributes` rule. ɴsɪ gives
+/// this node proximity only, so honouring a priority here would invent
+/// a rule the specification does not state.
+#[test]
+fn a_shader_attribute_ignores_attr_priority() {
+    let mut scene = scene_with_shader_attributes();
+    scene
+        .set_attribute("near", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("tint", vec![2]),
+                integers("tint.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near", "proximity only; no priority here");
+    assert_eq!(value.priority, 0);
+}
+
+/// The two containers are separate. A `geometryattributes` node must not
+/// answer a shader-attribute query, nor the reverse.
+#[test]
+fn the_two_attribute_containers_do_not_cross() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("geom", "attributes").unwrap();
+    scene.create("shade", "attributes").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .connect("geom", None, "mesh", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("shade", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .set_attribute("geom", vec![integers("only_geom", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("shade", vec![integers("only_shade", vec![1])])
+        .unwrap();
+
+    assert!(
+        scene
+            .shader_attribute_value("mesh", "only_geom")
+            .unwrap()
+            .is_none(),
+        "a geometryattributes node is not a shader-attribute source",
+    );
+    assert!(
+        scene
+            .attribute_value("mesh", "only_shade")
+            .unwrap()
+            .is_none(),
+        "a shaderattributes node is not a geometry-attribute source",
+    );
+    assert_eq!(
+        scene.shader_attributes("mesh").unwrap(),
+        vec!["shade".to_string()],
+    );
+}
+
+/// Nothing on the path provides one.
+#[test]
+fn an_undefined_shader_attribute_resolves_to_none() {
+    let scene = scene_with_shader_attributes();
+    assert!(
+        scene
+            .shader_attribute_value("mesh", "tint")
+            .unwrap()
+            .is_none()
+    );
+}
