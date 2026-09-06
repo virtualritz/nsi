@@ -6,22 +6,25 @@
 //! renderer; the rest are scene membership, transform composition,
 //! instancing, or output routing.
 //!
-//! Unrecognised destinations are rejected. Defaulting them to a
-//! reference is exactly the silent failure this module exists to
-//! prevent: a misclassified connection does not fail loudly, it renders,
-//! with materials on the wrong shapes or output routed nowhere.
+//! Defaulting an unrecognised destination to a reference would be the
+//! silent failure this module exists to prevent: a misclassified
+//! connection does not fail loudly, it renders, with materials on the
+//! wrong shapes or output routed nowhere.
 //!
-//! "Exhaustive" means every `<connection>` attribute the ɴsɪ
-//! specification declares, which `tests/classifier.rs` pins by name.
-//! Rejecting is stricter than the renderer -- 3Delight accepts any
-//! destination -- and that is deliberate: a typo that reaches a renderer
-//! silently connects nothing, and this crate exists to make that loud.
-//! Most of these classes are *carried*, not resolved: a backend reads
-//! them off the edge list. Only membership, attribute binding, the
-//! shader slots and the output chain are walked.
+//! ɴsɪ's set of destinations is **open** -- its own §4.8 connects one
+//! `attributes` node to another's `visibility` to override a value --
+//! so it cannot be enumerated. Every `<connection>` attribute the
+//! specification declares has a name here, pinned by
+//! `tests/classifier.rs`; anything else becomes [`EdgeKind::Other`],
+//! carrying its own name.
+//!
+//! Most classes are *carried*, not resolved: a backend reads them off
+//! the edge list. Only membership, attribute binding, the shader slots,
+//! instancing and the output chain are walked, so an unrecognised
+//! destination cannot become a material by accident. The cost is that a
+//! typo is now quiet rather than loud -- as it is in the renderer.
 
 use crate::{OwnedArg, OwnedData};
-use core::fmt;
 
 /// What an ɴsɪ connection means, once classified.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -196,26 +199,6 @@ impl Edge {
     }
 }
 
-/// An ɴsɪ connection whose destination attribute has no mapping.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ClassifyError {
-    /// The destination attribute that has no mapping.
-    pub to_attr: String,
-}
-
-impl fmt::Display for ClassifyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "unmapped ɴsɪ connection destination attribute {:?}; refusing \
-             to guess -- add a case to nsi_intermediate::classify",
-            self.to_attr
-        )
-    }
-}
-
-impl core::error::Error for ClassifyError {}
-
 /// Classify a connection by its destination attribute.
 ///
 /// A *named* `from_attr` means the source names an output port, which
@@ -223,20 +206,17 @@ impl core::error::Error for ClassifyError {}
 /// ɴsɪ documents it as equivalent to `None`, meaning the `from` node
 /// itself is connected, so it classifies by destination like any other
 /// node-level connection.
-pub fn classify(
-    from_attr: Option<&str>,
-    to_attr: &str,
-) -> Result<EdgeKind, ClassifyError> {
+pub fn classify(from_attr: Option<&str>, to_attr: &str) -> EdgeKind {
     // A named source port is always a shader network edge, whatever the
     // destination is called.
     if let Some(from_port) = from_attr.filter(|port| !port.is_empty()) {
-        return Ok(EdgeKind::ShaderNetwork {
+        return EdgeKind::ShaderNetwork {
             from_port: from_port.to_string(),
             to_port: to_attr.to_string(),
-        });
+        };
     }
 
-    Ok(match to_attr {
+    match to_attr {
         "objects" => EdgeKind::SceneMember,
         "geometryattributes" => EdgeKind::AttributeBinding,
         "surfaceshader" => EdgeKind::SurfaceShader,
@@ -260,5 +240,5 @@ pub fn classify(
         other => EdgeKind::Other {
             to_attr: other.to_string(),
         },
-    })
+    }
 }

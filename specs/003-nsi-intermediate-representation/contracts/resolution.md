@@ -22,12 +22,12 @@ failed. A wrong world transform renders. A wrong material renders.
 | Nested transforms accumulate | Covered | `resolve.rs` `mul` | `resolve::tests::nested_transforms_compose` | -- |
 | A child's matrix applies before its parent's | Covered | `resolve.rs` `mul` doc + call order | `resolve::tests::child_transform_applies_before_parent` (non-commuting pair) | -- |
 | A transform's own matrix is included | Covered | `resolve.rs` `local_transform` | `resolve::tests::a_transforms_own_matrix_is_included` | -- |
-| A cycle is a typed error, not a hang and not an answer | Covered | `resolve.rs` `chain` visited set | `resolve::tests::a_cycle_is_an_error`; `binding_tests::a_cycle_is_an_error_for_bindings_too` | Only a two-node cycle entered from inside it is proven. A self-loop and a node hanging off a cycle are correct by reading, not by test. |
+| A cycle is a typed error, not a hang and not an answer | Covered | `resolve.rs` `chain` visited set | `resolve::tests::a_cycle_is_an_error`; `resolve::tests::a_cycle_is_an_error_for_bindings_too` | Only a two-node cycle entered from inside it is proven. A self-loop and a node hanging off a cycle are correct by reading, not by test. |
 | More than one parent is a typed error | Covered | `resolve.rs` `chain` | `resolve::tests::more_than_one_parent_is_an_error`, naming both parents | -- |
 | A detached node is an error, not identity | Covered | `resolve.rs` `chain` `Detached` | `resolve::tests::a_detached_node_is_an_error_not_identity`, `detachment_is_reported_at_the_node_that_fails_to_reach_root` | -- |
-| An instancing prototype gathers attributes through its instancer | Covered | `resolve.rs` `chain` follows `InstanceSource` | `binding_tests::an_instancing_prototype_is_not_detached` | -- |
-| A prototype has no single world transform | Covered | `resolve.rs` `transform_chain` refuses to pass an `instances` node; `ResolveError::Instanced` | `binding_tests::a_prototype_has_no_single_world_transform`. Answering with the instancer's own matrix put every instance in the same wrong place. | -- |
-| A prototype of two instancers is ambiguous | Covered | `resolve.rs` `chain_inner` counts instancers as parents | `binding_tests::a_prototype_of_two_instancers_is_ambiguous` | -- |
+| An instancing prototype gathers attributes through its instancer | Covered | `resolve.rs` `chain` follows `InstanceSource` | `resolve::tests::an_instancing_prototype_is_not_detached` | -- |
+| A prototype has no single world transform | Covered | `resolve.rs` `transform_chain` refuses to pass an `instances` node; `ResolveError::Instanced` | `resolve::tests::a_prototype_has_no_single_world_transform`. Answering with the instancer's own matrix put every instance in the same wrong place. | -- |
+| A prototype of two instancers is ambiguous | Covered | `resolve.rs` `chain_inner` counts instancers as parents | `resolve::tests::a_prototype_of_two_instancers_is_ambiguous` | -- |
 | A non-`f64` matrix is ignored, not reinterpreted | Covered | `resolve.rs` `matrix_of` matches `OwnedData::F64` only | `resolve::tests::a_non_f64_matrix_is_skipped_not_reinterpreted` | -- |
 | Motion-sampled transforms compose per sample | Covered | `resolve.rs` `world_transform_at`, `local_transform_at` | `resolve::tests::a_sampled_chain_resolves_per_sample`, `a_static_parent_composes_with_a_sampled_child` | -- |
 | A static node contributes at every time | Covered | `resolve.rs` `local_transform_at` | `resolve::tests::a_static_parent_composes_with_a_sampled_child`, `a_static_chain_has_no_motion_times` | -- |
@@ -35,30 +35,30 @@ failed. A wrong world transform renders. A wrong material renders.
 | Only *transform* samples count as motion | Covered | `resolve.rs` `motion_times` filters on `transformationmatrix` | `resolve::tests::a_static_chain_has_no_motion_times`, which carries an unrelated sampled attribute | -- |
 | A time between samples is an error, never an interpolation | Covered | `resolve.rs` `ResolveError::MissingSampleAtTime` | `resolve::tests::a_time_between_samples_is_an_error_not_an_interpolation`, `a_chain_sampled_at_different_times_is_an_error` | -- |
 | `world_transform` still refuses a sampled chain | Covered | `resolve.rs` `has_motion_transform` | `resolve::tests::a_motion_sampled_transform_is_an_error`, `motion_samples_of_other_attributes_do_not_block_resolution` | -- |
-| `attributes` dissolves to a shader | Covered | `resolve.rs` `geometry_binding` | `binding_tests::dissolves_attributes_to_a_shader` | -- |
-| Unbound geometry has no binding | Covered | `resolve.rs` `geometry_binding` | `binding_tests::unbound_geometry_has_no_binding` | -- |
-| `attributes` without a shader still binds | Covered | `resolve.rs` `geometry_binding` | `binding_tests::attributes_without_a_shader_still_bind` | -- |
-| One `attributes` node fans out to many shapes | Covered | `resolve.rs` resolves per geometry | `binding_tests::one_attributes_node_fans_out_to_every_shape` | -- |
-| A binding on an ancestor transform is inherited | Covered | `resolve.rs` `geometry_binding` searches the whole `chain` | `binding_tests::a_binding_on_an_ancestor_transform_is_inherited` | -- |
-| A binding on `.root` is gathered | Covered | `resolve.rs` `chain` includes `ROOT` | `binding_tests::a_binding_on_the_root_is_gathered` | -- |
-| **Every** `attributes` node on the path is kept | Covered | `resolve.rs` `geometry_binding` returns `Vec` | `binding_tests::every_attributes_node_on_the_path_is_gathered`, visibility on one node and the shader on another | -- |
-| Highest priority wins, then proximity | Covered | `resolve.rs` `sort_by` | `binding_tests::priority_beats_proximity`, `the_nearest_binding_wins_at_equal_priority` | -- |
-| A shader connection's own priority wins | Covered | `resolve.rs` `shader_on` | `binding_tests::a_surfaceshader_connection_priority_wins` | -- |
-| The shader agrees with the gathered order | Covered | `resolve.rs` `shader_on` `min_by` on `(priority, rank)` | `binding_tests::the_shader_agrees_with_the_gathered_order`; a last-wins `max_by` keyed on depth returns the other node's shader | -- |
-| All three shader slots resolve | Covered | `resolve.rs` `shader_on` per `EdgeKind` | `binding_tests::displacement_and_volume_shaders_resolve_too` | -- |
-| The output chain resolves end to end | Covered | `resolve.rs` `render_outputs` | `output_tests::resolves_the_whole_output_chain` | -- |
-| A screen with no layers still resolves | Covered | `resolve.rs` `render_outputs` | `output_tests::a_screen_without_layers_still_resolves` | -- |
-| Layer order is connection order | Covered | `resolve.rs` iterates `edges` in order | `output_tests::multiple_layers_keep_connection_order` | -- |
-| A layer may fan out to several drivers | Covered | `resolve.rs` `render_outputs` | `output_tests::a_layer_may_have_several_drivers` | -- |
-| Multiple screens yield multiple outputs | Covered | `resolve.rs` iterates every `Screen` edge | `output_tests::multiple_screens_yield_one_output_each` | -- |
-| Instance sources are ordered by their `index` argument | Covered | `resolve.rs` `instance_sources` sorts on `Edge::index` | `binding_tests::instance_sources_are_ordered_by_their_index_attribute`, whose connection order differs from its index order | -- |
-| Instance sources without an index keep connection order | Covered | `resolve.rs` sort key is `(index, order)` | `instance_tests::resolves_instance_source_models` | -- |
+| `attributes` dissolves to a shader | Covered | `resolve.rs` `geometry_binding` | `resolve::tests::dissolves_attributes_to_a_shader` | -- |
+| Unbound geometry has no binding | Covered | `resolve.rs` `geometry_binding` | `resolve::tests::unbound_geometry_has_no_binding` | -- |
+| `attributes` without a shader still binds | Covered | `resolve.rs` `geometry_binding` | `resolve::tests::attributes_without_a_shader_still_bind` | -- |
+| One `attributes` node fans out to many shapes | Covered | `resolve.rs` resolves per geometry | `resolve::tests::one_attributes_node_fans_out_to_every_shape` | -- |
+| A binding on an ancestor transform is inherited | Covered | `resolve.rs` `geometry_binding` searches the whole `chain` | `resolve::tests::a_binding_on_an_ancestor_transform_is_inherited` | -- |
+| A binding on `.root` is gathered | Covered | `resolve.rs` `chain` includes `ROOT` | `resolve::tests::a_binding_on_the_root_is_gathered` | -- |
+| **Every** `attributes` node on the path is kept | Covered | `resolve.rs` `geometry_binding` returns `Vec` | `resolve::tests::every_attributes_node_on_the_path_is_gathered`, visibility on one node and the shader on another | -- |
+| Highest priority wins, then proximity | Covered | `resolve.rs` `sort_by` | `resolve::tests::priority_beats_proximity`, `the_nearest_binding_wins_at_equal_priority` | -- |
+| A shader connection's own priority wins | Covered | `resolve.rs` `shader_on` | `resolve::tests::a_surfaceshader_connection_priority_wins` | -- |
+| The shader agrees with the gathered order | Covered | `resolve.rs` `shader_on` `min_by` on `(priority, rank)` | `resolve::tests::the_shader_agrees_with_the_gathered_order`; a last-wins `max_by` keyed on depth returns the other node's shader | -- |
+| All three shader slots resolve | Covered | `resolve.rs` `shader_on` per `EdgeKind` | `resolve::tests::displacement_and_volume_shaders_resolve_too` | -- |
+| The output chain resolves end to end | Covered | `resolve.rs` `render_outputs` | `resolve::tests::resolves_the_whole_output_chain` | -- |
+| A screen with no layers still resolves | Covered | `resolve.rs` `render_outputs` | `resolve::tests::a_screen_without_layers_still_resolves` | -- |
+| Layer order is connection order | Covered | `resolve.rs` iterates `edges` in order | `resolve::tests::multiple_layers_keep_connection_order` | -- |
+| A layer may fan out to several drivers | Covered | `resolve.rs` `render_outputs` | `resolve::tests::a_layer_may_have_several_drivers` | -- |
+| Multiple screens yield multiple outputs | Covered | `resolve.rs` iterates every `Screen` edge | `resolve::tests::multiple_screens_yield_one_output_each` | -- |
+| Instance sources are ordered by their `index` argument | Covered | `resolve.rs` `instance_sources` sorts on `Edge::index` | `resolve::tests::instance_sources_are_ordered_by_their_index_attribute`, whose connection order differs from its index order | -- |
+| Instance sources without an index keep connection order | Covered | `resolve.rs` sort key is `(index, order)` | `resolve::tests::resolves_instance_source_models` | -- |
 | A prototype's subtree resolves relative to an ancestor | Covered | `resolve.rs` `relative_transform` | `tests::a_prototype_subtree_resolves_relative_to_the_prototype`, `relative_transform_rejects_a_node_off_the_chain` | -- |
 | Composing *past* an instancer is refused | Covered | `resolve.rs` `linked_chain` records the instancer hop; `relative_transform` refuses to cross one | `tests::relative_transform_refuses_to_cross_an_instancer`. Composing through folded in the instancer's own matrix and left out the per-instance one -- a plausible wrong answer for the query the method exists to serve | -- |
-| A ragged matrix buffer is refused | Covered | `resolve.rs` `instance_transforms`, `ResolveError::MalformedInstanceMatrices` | `instance_tests::a_ragged_matrix_buffer_is_an_error`; it used to keep the whole matrices and drop the remainder | -- |
-| A model index matching no prototype is refused | Covered | `resolve.rs` `ResolveError::UnknownModelIndex` | `instance_tests::a_model_index_matching_no_prototype_is_an_error`; it used to drop the instance | -- |
-| A prototype placed directly resolves by that path | Covered | `resolve.rs` `chain_inner` counts an instancer as a parent only when there is no direct one | `binding_tests::a_prototype_placed_directly_resolves_by_that_path`; reporting the instancer as a second parent made a legal scene unresolvable | -- |
-| Instances pair their matrix with their prototype | Covered | `resolve.rs` `instance_transforms`, matching `modelindices` against the connection `index` | `instance_tests::instances_pair_their_matrix_with_their_prototype`, whose indices are deliberately not their positions; `a_negative_model_index_is_not_rendered`; `disabled_instances_are_omitted` | -- |
+| A ragged matrix buffer is refused | Covered | `resolve.rs` `instance_transforms`, `ResolveError::MalformedInstanceMatrices` | `resolve::tests::a_ragged_matrix_buffer_is_an_error`; it used to keep the whole matrices and drop the remainder | -- |
+| A model index matching no prototype is refused | Covered | `resolve.rs` `ResolveError::UnknownModelIndex` | `resolve::tests::a_model_index_matching_no_prototype_is_an_error`; it used to drop the instance | -- |
+| A prototype placed directly resolves by that path | Covered | `resolve.rs` `chain_inner` counts an instancer as a parent only when there is no direct one | `resolve::tests::a_prototype_placed_directly_resolves_by_that_path`; reporting the instancer as a second parent made a legal scene unresolvable | -- |
+| Instances pair their matrix with their prototype | Covered | `resolve.rs` `instance_transforms`, matching `modelindices` against the connection `index` | `resolve::tests::instances_pair_their_matrix_with_their_prototype`, whose indices are deliberately not their positions; `a_negative_model_index_is_not_rendered`; `disabled_instances_are_omitted` | -- |
 | An instanced node resolves to one transform per path | Open | `resolve.rs` `chain` rejects multi-parent | None | ɴsɪ's lightweight instancing has one world transform per path. The error is the honest stop-gap; decide the shape -- `Vec<[f64; 16]>` or a path-qualified handle -- then test a two-parent fixture. |
 
 | `INTERPOLATE_LINEAR` is honoured for a sampled transform | Open | `local_transform_at` requires an exact sample | None | ɴsɪ has a per-argument flag saying linear interpolation is intended. Where it is set, interpolating is the caller's stated wish rather than this crate's guess. |

@@ -93,11 +93,15 @@ impl OwnedArg {
     pub fn from_param<P: ParamValue>(param: &P) -> Self {
         let type_tag = param.type_tag();
 
-        // `ParamValue::len()` is the raw element count, not the C
-        // `count` field (which is `len / array_length`). Using the
-        // divided value here would under-read an `array_len`-ed
-        // argument and silently truncate it.
-        let scalars = param.len() * components_per_element(type_tag);
+        // The C call hands the renderer `count = len / array_length`
+        // elements, so a run that does not divide is *dropped there*.
+        // Copying `len` outright kept data 3Delight never saw -- and
+        // made this crate's own stream fail the count `nsi-parse`
+        // checks. Round the element count down the same way the C
+        // boundary does.
+        let array_length = param.array_length().max(1);
+        let elements = param.len() / array_length * array_length;
+        let scalars = elements * components_per_element(type_tag);
 
         let c = param
             .as_c_param()

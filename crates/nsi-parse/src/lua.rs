@@ -286,12 +286,25 @@ fn param_of(table: Table) -> mlua::Result<Param> {
 
     for value in values {
         match type_tag {
-            Type::String => param.strings.push(
-                value
+            Type::String => {
+                let text = value
                     .as_string_lossy()
-                    .ok_or_else(|| mlua::Error::runtime("expected a string"))?,
-            ),
-            Type::I32 => param.i32s.push(integer(&value)? as i32),
+                    .ok_or_else(|| mlua::Error::runtime("expected a string"))?;
+                // An interior NUL would panic in `CString::new` at the
+                // ɴsɪ boundary. The stream reader refuses it; so does
+                // this, which is the path that runs a script.
+                if text.contains('\0') {
+                    return Err(mlua::Error::runtime(
+                        "an ɴsɪ string cannot contain an interior NUL",
+                    ));
+                }
+                param.strings.push(text);
+            }
+            Type::I32 => {
+                param.i32s.push(i32::try_from(integer(&value)?).map_err(
+                    |_| mlua::Error::runtime("an ɴsɪ int does not fit 32 bits"),
+                )?)
+            }
             Type::I64 => param.i64s.push(integer(&value)?),
             Type::F64 | Type::MatrixF64 => param.f64s.push(number(&value)?),
             _ => param.f32s.push(number(&value)? as f32),
@@ -305,8 +318,14 @@ fn param_of(table: Table) -> mlua::Result<Param> {
         Type::MatrixF32 | Type::MatrixF64 => 16,
         _ => 1,
     };
+    // The count has to come from the buffer this type actually filled,
+    // or the `arraylength` check below compares against zero and lets
+    // anything through.
     let count = match type_tag {
-        Type::MatrixF64 => param.f64s.len(),
+        Type::F64 | Type::MatrixF64 => param.f64s.len(),
+        Type::I32 => param.i32s.len(),
+        Type::I64 => param.i64s.len(),
+        Type::String => param.strings.len(),
         _ => param.f32s.len(),
     };
     if width > 1 && !count.is_multiple_of(width) {

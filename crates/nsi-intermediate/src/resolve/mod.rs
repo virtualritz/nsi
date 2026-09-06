@@ -604,6 +604,11 @@ impl Scene {
             .enumerate()
             .flat_map(|(depth, node)| {
                 self.edges_to_attr(node, EdgeKind::AttributeBinding.to_attr())
+                    // A shader-network edge's `to_attr` is its *port*
+                    // name, so it shares this bucket with the named
+                    // class. Without the filter a port called
+                    // `geometryattributes` resolved as a binding.
+                    .filter(|edge| edge.kind == EdgeKind::AttributeBinding)
                     .enumerate()
                     .map(move |(order, edge)| {
                         (edge.priority(), depth, order, edge)
@@ -653,6 +658,7 @@ impl Scene {
             .enumerate()
             .flat_map(|(rank, (_, _, _, edge))| {
                 self.edges_to_attr(&edge.from, kind.to_attr())
+                    .filter(move |shader| shader.kind == *kind)
                     .map(move |shader| (shader.priority(), rank, shader))
             })
             // Highest priority, then earliest in the gathered order.
@@ -681,6 +687,7 @@ impl Scene {
                 let screen = &screen_edge.from;
                 let layers = self
                     .edges_to_attr(screen, EdgeKind::OutputLayer.to_attr())
+                    .filter(|edge| edge.kind == EdgeKind::OutputLayer)
                     .map(|layer_edge| OutputLayer {
                         handle: layer_edge.from.clone(),
                         drivers: self
@@ -688,6 +695,7 @@ impl Scene {
                                 &layer_edge.from,
                                 EdgeKind::OutputDriver.to_attr(),
                             )
+                            .filter(|edge| edge.kind == EdgeKind::OutputDriver)
                             .map(|edge| edge.from.clone())
                             .collect(),
                     })
@@ -883,6 +891,7 @@ impl Scene {
     fn sorted_instance_sources(&self, instances: &str) -> Vec<(i32, String)> {
         let mut sources = self
             .edges_to_attr(instances, EdgeKind::InstanceSource.to_attr())
+            .filter(|edge| edge.kind == EdgeKind::InstanceSource)
             .enumerate()
             .map(|(order, edge)| (edge.index(), order, edge.from.clone()))
             .collect::<Vec<_>>();

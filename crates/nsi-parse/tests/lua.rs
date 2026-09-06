@@ -208,3 +208,28 @@ fn short_tuple_data_is_refused() {
     .expect_err("must fail");
     assert!(matches!(error, nsi_parse::Error::Lua(_)), "got {error:?}");
 }
+
+/// The Lua path runs untrusted code, so it must not be the unguarded
+/// twin of the stream reader. Both of these previously got through: a
+/// NUL panicked at the ɴsɪ boundary, and a large integer became a
+/// different number -- the exact corruption `write_lua` refuses to emit.
+#[test]
+fn the_lua_reader_refuses_what_the_stream_reader_refuses() {
+    for (source, what) in [
+        (
+            r#"nsi.Create("m","mesh") nsi.SetAttribute("m",{name="s",data={"a\0b"},type=nsi.TypeString})"#,
+            "an interior NUL",
+        ),
+        (
+            r#"nsi.Create("m","mesh") nsi.SetAttribute("m",{name="i",data={1099511627776},type=nsi.TypeInteger})"#,
+            "an integer that does not fit 32 bits",
+        ),
+        (
+            r#"nsi.Create("m","mesh") nsi.SetAttribute("m",{name="i",arraylength=2,data={1,2,3},type=nsi.TypeInteger})"#,
+            "data that does not divide by arraylength",
+        ),
+    ] {
+        let recorder = Recorder::new();
+        assert!(run_lua(source, &recorder).is_err(), "must refuse {what}");
+    }
+}

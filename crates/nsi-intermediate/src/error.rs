@@ -1,6 +1,5 @@
 //! The error a recording call can fail with.
 
-use crate::ClassifyError;
 use core::fmt;
 
 /// Why an ɴsɪ call could not be recorded.
@@ -14,8 +13,6 @@ use core::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RecordError {
-    /// A connection whose destination attribute has no mapping.
-    Classify(ClassifyError),
     /// A call tried to delete one of ɴsɪ's reserved nodes.
     ///
     /// ɴsɪ: "it is not possible to delete the root or the global node."
@@ -53,7 +50,6 @@ pub enum RecordError {
 impl fmt::Display for RecordError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Classify(error) => error.fmt(f),
             Self::Reserved { handle } => write!(
                 f,
                 "ɴsɪ node {handle:?} is reserved and cannot be deleted"
@@ -78,19 +74,4 @@ impl fmt::Display for RecordError {
     }
 }
 
-impl core::error::Error for RecordError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        match self {
-            Self::Classify(error) => Some(error),
-            Self::Reserved { .. }
-            | Self::UnknownHandle { .. }
-            | Self::TypeMismatch { .. } => None,
-        }
-    }
-}
-
-impl From<ClassifyError> for RecordError {
-    fn from(error: ClassifyError) -> Self {
-        Self::Classify(error)
-    }
-}
+impl core::error::Error for RecordError {}

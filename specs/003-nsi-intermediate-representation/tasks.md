@@ -83,16 +83,16 @@ with every feature.
 
 - [x] T3.1 `world_transform` with row-vector composition.
       Evidence: `resolve::tests`, 4 composition cases.
-- [x] T3.2 `geometry_binding`. Evidence: `binding_tests`.
-- [x] T3.3 `render_outputs`. Evidence: `output_tests`.
-- [x] T3.4 `instance_sources`. Evidence: `instance_tests`.
+- [x] T3.2 `geometry_binding`. Evidence: `resolve::tests`.
+- [x] T3.3 `render_outputs`. Evidence: `resolve::tests`.
+- [x] T3.4 `instance_sources`. Evidence: `resolve::tests`.
 - [x] T3.5a **Motion-sampled transforms fail loudly.** A motion-blurred
       scene no longer resolves to its static pose.
       Evidence: `resolve::tests::a_motion_sampled_transform_is_an_error`,
       `motion_samples_of_other_attributes_do_not_block_resolution`.
       Spec: R13.
 - [x] T3.6 Two-screen fixture.
-      Evidence: `output_tests::multiple_screens_yield_one_output_each`.
+      Evidence: `resolve::tests::multiple_screens_yield_one_output_each`.
 - [x] T3.7 Test that a `MatrixF32` transform is skipped deliberately.
       Evidence: `resolve::tests::a_non_f64_matrix_is_skipped_not_reinterpreted`.
 - [x] T3.8 Multi-parent is a typed error, not the first parent's chain.
@@ -101,10 +101,10 @@ with every feature.
 - [x] T3.9 A cycle is a typed error, and the test asserts it. The
       previous `a_cycle_terminates` asserted nothing.
       Evidence: `resolve::tests::a_cycle_is_an_error`,
-      `binding_tests::a_cycle_is_an_error_for_bindings_too`. Spec: R9.
+      `resolve::tests::a_cycle_is_an_error_for_bindings_too`. Spec: R9.
 - [x] T3.10 Inherit `geometryattributes` from ancestor transforms, with
       `priority`. Evidence:
-      `binding_tests::a_binding_on_an_ancestor_transform_is_inherited`,
+      `resolve::tests::a_binding_on_an_ancestor_transform_is_inherited`,
       `the_nearest_binding_wins_at_equal_priority`,
       `priority_beats_proximity`;
       `recorder::tests::connect_records_the_priority_argument`.
@@ -122,7 +122,7 @@ with every feature.
       question was answered by reading the specification. See
       `research.md` D8.
 - [x] T3.13 Every shader slot honours its connection's `priority`.
-      Evidence: `binding_tests::a_surfaceshader_connection_priority_wins`.
+      Evidence: `resolve::tests::a_surfaceshader_connection_priority_wins`.
 
 ## User Story 4: Fidelity (P2)
 
@@ -153,14 +153,14 @@ Every item here is quoted from `nsi.pdf`. Each was implemented, not
 merely specced; see the commit `follow ɴsɪ's own rules`.
 
 - [x] T5.1 Gather **every** `attributes` node on the path, not one.
-      Evidence: `binding_tests::every_attributes_node_on_the_path_is_gathered`.
+      Evidence: `resolve::tests::every_attributes_node_on_the_path_is_gathered`.
       Spec: R12.
 - [x] T5.2 Include `.root` in the chain.
-      Evidence: `binding_tests::a_binding_on_the_root_is_gathered`.
+      Evidence: `resolve::tests::a_binding_on_the_root_is_gathered`.
 - [x] T5.3 The shader agrees with the gathered order.
-      Evidence: `binding_tests::the_shader_agrees_with_the_gathered_order`.
+      Evidence: `resolve::tests::the_shader_agrees_with_the_gathered_order`.
 - [x] T5.4 Classify `displacementshader` and `volumeshader`.
-      Evidence: `binding_tests::displacement_and_volume_shaders_resolve_too`.
+      Evidence: `resolve::tests::displacement_and_volume_shaders_resolve_too`.
 - [x] T5.5 The two setters replace each other per name.
       Evidence: `scene::tests::a_static_set_clears_the_motion_samples_of_that_name`,
       `a_sampled_set_clears_the_static_value_of_that_name`. Spec: R7.
@@ -169,7 +169,7 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       Spec: R17.
 - [x] T5.7 A detached node is an error, and a prototype is not detached.
       Evidence: `resolve::tests::a_detached_node_is_an_error_not_identity`,
-      `binding_tests::an_instancing_prototype_is_not_detached`. Spec: R20.
+      `resolve::tests::an_instancing_prototype_is_not_detached`. Spec: R20.
 - [x] T5.8 Escape strings on replay.
       Evidence: `stream::tests::a_string_cannot_inject_a_statement`,
       `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`.
@@ -189,19 +189,19 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
 
 - [x] T6.1 A prototype has no single world transform; attributes still
       gather through the instancer.
-      Evidence: `binding_tests::a_prototype_has_no_single_world_transform`,
+      Evidence: `resolve::tests::a_prototype_has_no_single_world_transform`,
       `an_instancing_prototype_is_not_detached`. Spec: R20.
 - [x] T6.2 A prototype that is *also* placed directly resolves by that
       path. The instancer was being reported as a second parent, which
       made a legal scene unresolvable.
-      Evidence: `binding_tests::a_prototype_placed_directly_resolves_by_that_path`.
+      Evidence: `resolve::tests::a_prototype_placed_directly_resolves_by_that_path`.
 - [x] T6.3 Reserved handles: never declared on replay, not deletable,
       attributes without a `create`.
       Evidence: `stream::tests::the_reserved_handles_are_never_declared`,
       `scene::tests::the_reserved_nodes_cannot_be_deleted`,
       `the_reserved_handles_take_attributes_without_a_create`. Spec: R23.
 - [x] T6.4 Instance sources ordered by their `index` argument.
-      Evidence: `binding_tests::instance_sources_are_ordered_by_their_index_attribute`.
+      Evidence: `resolve::tests::instance_sources_are_ordered_by_their_index_attribute`.
       Spec: R24.
 - [x] T6.5 Index the graph; resolution is linear.
       Evidence: measured, 20k meshes 655 ms debug / 50 ms release.
@@ -218,12 +218,12 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       Evidence: `classifier::every_connection_the_specification_declares_is_classified`.
 - [x] T6.9 `Scene::relative_transform`, so a prototype's subtree
       resolves in the space the instance matrix applies to.
-      Evidence: `binding_tests::a_prototype_subtree_resolves_relative_to_the_prototype`,
+      Evidence: `resolve::tests::a_prototype_subtree_resolves_relative_to_the_prototype`,
       `relative_transform_rejects_a_node_off_the_chain`. Spec: R29.
 - [x] T6.10 `Scene::instance_transforms`, pairing `transformationmatrices`
       with the prototype each draws through `modelindices`, and honouring
       `disabledinstances`.
-      Evidence: `instance_tests::instances_pair_their_matrix_with_their_prototype`,
+      Evidence: `resolve::tests::instances_pair_their_matrix_with_their_prototype`,
       `a_negative_model_index_is_not_rendered`,
       `disabled_instances_are_omitted`. Spec: R30.
 - [x] T6.11 Recursive `delete`, with ɴsɪ's two exceptions.
@@ -251,3 +251,28 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       on a trait bound, which is the correct pre-publish state.
 - [ ] T6.18b Publish, in order. Irreversible and needs credentials, so
       it is a person's action. See `plan.md`.
+
+## Found By Review, Round 8
+
+- [x] T8.1 `OwnedArg::from_param` copied every scalar, but the C call
+      hands the renderer `count = len / array_length` elements -- so a
+      run that does not divide was kept here and dropped there, and this
+      crate's own stream then failed the count `nsi-parse` checks.
+      Evidence: `owned::tests::an_array_len_run_is_rounded_down_as_the_c_call_does`,
+      `a_tuple_array_len_run_is_rounded_down_too`.
+- [x] T8.2 A shader-network edge's `to_attr` is its *port* name, so it
+      shared an index bucket with the class of that name and resolved as
+      one. Evidence:
+      `resolve::tests::a_shader_network_port_does_not_resolve_as_its_namesake_class`,
+      `a_port_named_like_a_binding_does_not_bind`.
+- [x] T8.3 `ClassifyError` became unreachable when the destination set
+      opened, but the type, the error variant and three spec files still
+      described a rejection that no longer happens. `classify` is now
+      total and returns `EdgeKind`.
+- [x] T8.4 Contract rows cited test modules that the test-file split had
+      renamed, so `cargo test -- binding_tests` ran nothing.
+- [ ] T8.5 `Scene::create` accepts a reserved handle and keeps the node,
+      which replay then drops -- so the scene changes on its first round
+      trip. 3Delight answers `E6002`.
+- [ ] T8.6 `nsi-trait` has no `include`, so `cargo package` ships a
+      stray `.claude/audit` log. Fix before releasing 0.4.0.

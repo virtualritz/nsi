@@ -84,3 +84,38 @@ fn owns_a_string() {
         OwnedData::String(vec!["dlPrincipled".to_string()])
     );
 }
+
+/// The C boundary hands the renderer `count = len / array_length`
+/// elements, so a run that does not divide is dropped *there*. Keeping
+/// it here made the recorder disagree with what 3Delight saw, and made
+/// this crate's own stream fail the count a reader checks.
+#[test]
+fn an_array_len_run_is_rounded_down_as_the_c_call_does() {
+    use std::num::NonZeroUsize;
+
+    let arg = nsi::f32_slice!("x", &[1.0f32, 2.0, 3.0])
+        .array_len(const { NonZeroUsize::new(2).unwrap() });
+    let owned = OwnedArg::from_param(&arg);
+
+    assert_eq!(
+        owned.data,
+        OwnedData::F32(vec![1.0, 2.0]),
+        "the renderer reads one element of float[2]; the third is not sent"
+    );
+}
+
+/// The same for a tuple type, where each element is three floats.
+#[test]
+fn a_tuple_array_len_run_is_rounded_down_too() {
+    use std::num::NonZeroUsize;
+
+    let points = [[0.0f32, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
+    let arg = nsi::point_slice!("P", &points)
+        .array_len(const { NonZeroUsize::new(2).unwrap() });
+    let owned = OwnedArg::from_param(&arg);
+
+    assert_eq!(
+        owned.data,
+        OwnedData::F32(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    );
+}

@@ -1325,3 +1325,45 @@ fn a_model_index_matching_no_prototype_is_an_error() {
         Err(ResolveError::UnknownModelIndex { model: 7, .. })
     ));
 }
+
+/// A shader-network edge's `to_attr` is its *port* name, so it lands in
+/// the same index bucket as a class of that name. Without the kind
+/// filter, a port called `surfaceshader` resolved as the material.
+#[test]
+fn a_shader_network_port_does_not_resolve_as_its_namesake_class() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("attr", "attributes").unwrap();
+    scene.create("tex", "shader").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .connect("attr", None, "mesh", "geometryattributes")
+        .unwrap();
+    // A *port* named like the class, not a node-level connection.
+    scene
+        .connect("tex", Some("outColor"), "attr", "surfaceshader")
+        .unwrap();
+
+    let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+    assert_eq!(
+        binding.surface_shader, None,
+        "a port edge is carried, not resolved as the material"
+    );
+}
+
+/// And the same at the attribute-binding position.
+#[test]
+fn a_port_named_like_a_binding_does_not_bind() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("tex", "shader").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .connect("tex", Some("outColor"), "mesh", "geometryattributes")
+        .unwrap();
+
+    assert!(
+        scene.geometry_binding("mesh").unwrap().is_none(),
+        "a port edge must not become an attributes node"
+    );
+}

@@ -2,49 +2,37 @@ use nsi_intermediate::{EdgeKind, classify};
 
 #[test]
 fn scene_membership() {
-    assert_eq!(classify(None, "objects").unwrap(), EdgeKind::SceneMember);
+    assert_eq!(classify(None, "objects"), EdgeKind::SceneMember);
 }
 
 #[test]
 fn geometry_attributes_dissolve() {
     assert_eq!(
-        classify(None, "geometryattributes").unwrap(),
+        classify(None, "geometryattributes"),
         EdgeKind::AttributeBinding
     );
 }
 
 #[test]
 fn surface_shader_is_a_material_reference() {
-    assert_eq!(
-        classify(None, "surfaceshader").unwrap(),
-        EdgeKind::SurfaceShader
-    );
+    assert_eq!(classify(None, "surfaceshader"), EdgeKind::SurfaceShader);
 }
 
 #[test]
 fn instancing_source_models() {
-    assert_eq!(
-        classify(None, "sourcemodels").unwrap(),
-        EdgeKind::InstanceSource
-    );
+    assert_eq!(classify(None, "sourcemodels"), EdgeKind::InstanceSource);
 }
 
 #[test]
 fn output_chain() {
-    assert_eq!(classify(None, "screens").unwrap(), EdgeKind::Screen);
-    assert_eq!(
-        classify(None, "outputlayers").unwrap(),
-        EdgeKind::OutputLayer
-    );
-    assert_eq!(
-        classify(None, "outputdrivers").unwrap(),
-        EdgeKind::OutputDriver
-    );
+    assert_eq!(classify(None, "screens"), EdgeKind::Screen);
+    assert_eq!(classify(None, "outputlayers"), EdgeKind::OutputLayer);
+    assert_eq!(classify(None, "outputdrivers"), EdgeKind::OutputDriver);
 }
 
 #[test]
 fn a_named_output_port_is_a_shader_network_edge() {
-    let kind = classify(Some("outColor"), "inColor").unwrap();
+    let kind = classify(Some("outColor"), "inColor");
     assert_eq!(
         kind,
         EdgeKind::ShaderNetwork {
@@ -66,7 +54,7 @@ fn a_named_output_port_is_a_shader_network_edge() {
 #[test]
 fn an_unlisted_destination_is_carried_with_its_name() {
     assert_eq!(
-        classify(None, "somethingnobodyimplemented").unwrap(),
+        classify(None, "somethingnobodyimplemented"),
         EdgeKind::Other {
             to_attr: "somethingnobodyimplemented".to_string()
         }
@@ -79,17 +67,11 @@ fn an_unlisted_destination_is_carried_with_its_name() {
 /// shader network edge, whatever its destination said.
 #[test]
 fn an_empty_source_port_is_not_a_port() {
-    assert_eq!(
-        classify(Some(""), "objects").unwrap(),
-        EdgeKind::SceneMember
-    );
-    assert_eq!(
-        classify(Some(""), "surfaceshader").unwrap(),
-        EdgeKind::SurfaceShader
-    );
+    assert_eq!(classify(Some(""), "objects"), EdgeKind::SceneMember);
+    assert_eq!(classify(Some(""), "surfaceshader"), EdgeKind::SurfaceShader);
     // And it is still not a shader-network edge.
     assert_eq!(
-        classify(Some(""), "nonsense").unwrap(),
+        classify(Some(""), "nonsense"),
         EdgeKind::Other {
             to_attr: "nonsense".to_string()
         }
@@ -102,10 +84,10 @@ fn an_empty_source_port_is_not_a_port() {
 /// `LightSet` is exactly this shape.
 #[test]
 fn set_membership_and_light_sets() {
-    assert_eq!(classify(None, "members").unwrap(), EdgeKind::SetMember);
-    assert_eq!(classify(None, "lightset").unwrap(), EdgeKind::LightSet);
+    assert_eq!(classify(None, "members"), EdgeKind::SetMember);
+    assert_eq!(classify(None, "lightset"), EdgeKind::LightSet);
     assert_eq!(
-        classify(None, "shaderattributes").unwrap(),
+        classify(None, "shaderattributes"),
         EdgeKind::ShaderAttributes
     );
 }
@@ -137,8 +119,11 @@ fn every_connection_the_specification_declares_is_classified() {
         "volumeshader",
         "facesets",
     ] {
-        let kind = classify(None, name)
-            .unwrap_or_else(|e| panic!("{name} is unclassified: {e}"));
+        let kind = classify(None, name);
+        assert!(
+            !matches!(kind, EdgeKind::Other { .. }),
+            "{name} is declared by the specification and must have a name"
+        );
         assert_eq!(kind.to_attr(), name, "{name} does not round-trip");
     }
 }

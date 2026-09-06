@@ -184,7 +184,7 @@ mod resolve;
 mod scene;
 mod stream;
 
-pub use edge::{ClassifyError, Edge, EdgeKind, classify};
+pub use edge::{Edge, EdgeKind, classify};
 pub use error::RecordError;
 #[cfg(feature = "lua")]
 pub use lua::{LuaError, write_lua};

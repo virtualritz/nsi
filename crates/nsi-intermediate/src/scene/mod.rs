@@ -423,7 +423,7 @@ impl Scene {
         to_attr: &str,
         args: Vec<OwnedArg>,
     ) -> Result<(), RecordError> {
-        let kind = classify(from_attr, to_attr)?;
+        let kind = classify(from_attr, to_attr);
 
         // ɴsɪ: "the nodes on which the connection is performed must
         // exist." `.root` and `.global` are reserved and need no
@@ -485,7 +485,7 @@ impl Scene {
         let kind = if to_attr == ALL {
             None
         } else {
-            Some(classify(from_attr, to_attr)?)
+            Some(classify(from_attr, to_attr))
         };
 
         let from_port = from_attr.unwrap_or_default();
