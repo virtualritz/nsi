@@ -317,3 +317,14 @@ against this API now.
       `a_geometryattributes_connection_priority_does_not_reorder`.
 - [x] T9.6 `RAY_TYPES` is public: a backend building a visibility mask
       needs exactly those eight, and a second copy would drift.
+- [x] T9.7 `priority_value` reads `int` only. The `I64` arm shipped in
+      `e8839cc` with no test covering it; 3Delight ignores an `int64`
+      priority (while accepting `int64` for the value itself), so the
+      arm would have ranked a node the renderer does not. Evidence:
+      `resolve::tests::an_int64_priority_is_ignored`.
+- [ ] T9.8 A node setting `ATTR.priority` without `ATTR` defines `ATTR`
+      at its default in 3Delight, and this crate skips it. Closing it
+      means carrying ɴsɪ's per-attribute defaults or widening
+      `AttributeValue`. Pinned by
+      `resolve::tests::a_priority_without_its_attribute_is_skipped`.
+      Gate: the `Open` row in `contracts/resolution.md`.

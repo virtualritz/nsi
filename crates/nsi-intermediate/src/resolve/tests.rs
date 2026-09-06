@@ -1679,3 +1679,64 @@ fn specificity_is_compared_before_proximity() {
     );
     assert_eq!(value.arg.name, "visibility.camera");
 }
+
+/// 3Delight ignores an `int64` `ATTR.priority`, so this does too.
+///
+/// Rendered: `far` sets `visibility 1` with an `int64`
+/// `visibility.priority` of 10 and still loses to `near`'s
+/// `visibility 0`. An `int64` *is* accepted for the `visibility` value
+/// itself, so the rejection is specific to the priority. The crate read
+/// it until round 11, and nothing was red.
+#[test]
+fn an_int64_priority_is_ignored() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                OwnedArg {
+                    name: "visibility.priority".to_string(),
+                    type_tag: Type::I64,
+                    array_length: 1,
+                    flags: 0,
+                    data: OwnedData::I64(vec![10]),
+                },
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near", "an int64 priority does not count");
+    assert_eq!(value.priority, 0);
+}
+
+/// The documented divergence, pinned so it cannot change silently.
+///
+/// A node setting only `visibility.priority` is a definition to
+/// 3Delight -- of `visibility` at its default -- and that node wins.
+/// This crate has no value to return for it and skips it, so the
+/// farther node answers instead. If this ever starts returning `near`,
+/// the `Open` row in `contracts/resolution.md` has been closed and the
+/// docs must follow.
+#[test]
+fn a_priority_without_its_attribute_is_skipped() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility.priority", vec![10])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("`far` defines it");
+    assert_eq!(
+        value.node, "far",
+        "3Delight answers `near` at the default; this crate cannot",
+    );
+}

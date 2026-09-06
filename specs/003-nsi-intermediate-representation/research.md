@@ -119,7 +119,8 @@ specification, and two review rounds found it inventing semantics that
 summarise where the specification states. Read `nsi.pdf` first. Where a
 rule here is chosen rather than quoted, the contract row says so.
 
-Connection order remains the third tie-break and is *not* in the
+Connection order remains a tie-break -- the second, since D12 removed
+the connection priority from the key -- and is *not* in the
 specification, which instead says such nodes "will all be considered" --
 which is why `Binding::attributes` is a list rather than a winner.
 

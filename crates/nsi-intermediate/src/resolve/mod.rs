@@ -292,15 +292,18 @@ pub struct AttributeValue<'a> {
 
 /// Read an `ATTR.priority`.
 ///
-/// ɴsɪ declares it `int`. A caller that recorded it as some other type
-/// has not set a priority this can read, so it stays `0` rather than
-/// being reinterpreted from a different layout.
+/// ɴsɪ declares it `int`, and 3Delight reads nothing else -- **not even
+/// `int64`**. Rendered: `visibility 1` with `"visibility.priority"` as
+/// an `int64` 10 loses to a nearer `visibility 0`, and loses to a rival
+/// `int` priority of 5. The `int64` is echoed back by `renderdl -cat`,
+/// so it is parsed and then ignored. `int64` *is* accepted for the
+/// `visibility` value itself, so the rejection is specific to the
+/// priority.
+///
+/// Reading one here would rank a node the renderer does not.
 fn priority_value(arg: &OwnedArg) -> Option<i32> {
     match &arg.data {
         OwnedData::I32(values) => values.first().copied(),
-        OwnedData::I64(values) => {
-            values.first().and_then(|value| i32::try_from(*value).ok())
-        }
         _ => None,
     }
 }
@@ -735,8 +738,24 @@ impl Scene {
     /// - Specificity is compared *before* proximity, so a distant
     ///   `visibility.camera` beats a nearer plain `visibility` at equal
     ///   priority. ɴsɪ gives the specificity rule without saying whether
-    ///   it outranks proximity.
-    /// - A non-integer `ATTR.priority` is ignored, leaving priority `0`.
+    ///   it outranks proximity. Confirmed against 3Delight.
+    /// - A priority that is not an `int` is ignored, leaving `0`. That
+    ///   includes `int64`, which 3Delight also ignores here.
+    ///
+    /// # Known divergence
+    ///
+    /// A node that sets `ATTR.priority` but **not** `ATTR` is a
+    /// definition to 3Delight -- of `ATTR` at its default value, with
+    /// that priority. Rendered: an `attributes` node carrying only
+    /// `visibility.priority` makes the geometry visible even though a
+    /// farther node sets `visibility 0`, and it does so at priority `0`
+    /// too; a node with no attributes at all does not. This function
+    /// skips such a node, because it has no recorded value to return
+    /// and this crate does not carry ɴsɪ's per-attribute defaults.
+    ///
+    /// A backend that cares can look for `<name>.priority` among
+    /// [`Binding::attributes`]. Tracked as an `Open` row in
+    /// `contracts/resolution.md`.
     ///
     /// # Errors
     ///
