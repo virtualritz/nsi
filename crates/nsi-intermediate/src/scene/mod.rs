@@ -33,6 +33,16 @@ pub struct Scene {
     nodes: IndexMap<String, Node>,
     /// Classified connections, in connection order.
     edges: Vec<Edge>,
+    /// `Evaluate` calls, in call order, each with the node count at the
+    /// time so replay can put them back where they were.
+    ///
+    /// ɴsɪ's `Evaluate` "includes a block of interface calls from an
+    /// external source" -- an archive, a Lua script or a compiled
+    /// procedural. This crate does not execute one, so whatever it
+    /// would have produced is absent from the scene; recording the call
+    /// at least means a stream carrying one is not silently reduced to
+    /// a scene missing its geometry, with no error and no trace.
+    evaluations: Vec<(usize, Vec<OwnedArg>)>,
     /// Edge positions keyed by source handle, and by destination.
     ///
     /// Resolution walks the graph per object, so without these every
@@ -55,6 +65,20 @@ impl Scene {
     /// The nodes, by handle, in creation order.
     pub fn nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
         self.nodes.iter()
+    }
+
+    /// The recorded `Evaluate` calls, in call order.
+    ///
+    /// Each is the argument list as given. A backend that wants
+    /// archives or procedurals has to execute them itself: this crate
+    /// records the call and does not define an execution model for it.
+    pub fn evaluations(&self) -> impl Iterator<Item = &[OwnedArg]> {
+        self.evaluations.iter().map(|(_, args)| args.as_slice())
+    }
+
+    /// Record an `Evaluate`, with where it fell among the nodes.
+    pub(crate) fn evaluate(&mut self, args: Vec<OwnedArg>) {
+        self.evaluations.push((self.nodes.len(), args));
     }
 
     /// One node by handle.

@@ -182,11 +182,15 @@ impl Nsi for Recorder {
         self.scene().disconnect(from, from_attr, to, to_attr)
     }
 
-    fn evaluate(&self, _args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
-        // Procedurals and Lua are out of scope until a backend exists.
-        // Recording them would imply an execution model we have not
-        // designed, and a silent no-op is easier to reason about than a
-        // half-recorded one.
+    fn evaluate(&self, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
+        // Not executed -- an archive, Lua script or compiled procedural
+        // implies an execution model this crate does not define -- but
+        // recorded. Dropping it meant a stream carrying `Evaluate` came
+        // back as a scene missing whatever it would have produced, with
+        // no error and nothing to show that anything had been asked
+        // for. `Scene::evaluations` hands the call to a backend that
+        // wants to run it.
+        self.scene().evaluate(Self::own(args));
         Ok(())
     }
 

@@ -261,6 +261,22 @@ pub fn write_stream_with<W: Write>(
 
 /// Write `scene` as an ɴsɪ stream.
 pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
+    // `Evaluate` first. The scene holds state, not a call log, so where
+    // one fell among the statements is not recorded -- but an archive
+    // or procedural usually *defines* nodes that later statements
+    // reference, and ɴsɪ requires the nodes a `Connect` names to exist
+    // already. Emitting them first is therefore the order that can
+    // work; emitting them last cannot, when anything here refers to
+    // what they produce. Dropping them, which this did before, loses
+    // them entirely.
+    for args in scene.evaluations() {
+        write!(out, "Evaluate")?;
+        for arg in args {
+            write_arg(out, arg)?;
+        }
+        writeln!(out)?;
+    }
+
     for (handle, node) in scene.nodes() {
         // ɴsɪ's reserved handles "don't need to be created using
         // NSICreate", and 3Delight writes no `Create` for them.

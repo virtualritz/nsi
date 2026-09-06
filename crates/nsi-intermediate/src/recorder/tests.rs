@@ -133,18 +133,40 @@ fn an_unlisted_disconnect_removes_the_edge_it_names() {
     assert_eq!(r.scene().edges().count(), 0);
 }
 
-/// `evaluate` is a no-op by decision, not omission: procedurals and
-/// Lua imply an execution model this crate does not define. See the
-/// `spec.md` non-goal.
+/// `evaluate` is recorded but not executed.
+///
+/// Not executing is still the decision: an archive, Lua script or
+/// compiled procedural implies an execution model this crate does not
+/// define. But *dropping* the call was a silent loss -- a stream
+/// carrying `Evaluate` came back as a scene missing whatever it would
+/// have produced, with no error and nothing to show anything had been
+/// asked for. This test asserted that loss ("evaluate changed the
+/// scene") as though it were the decision.
 #[test]
-fn evaluate_is_a_recorded_no_op() {
+fn evaluate_is_recorded_but_not_executed() {
     let r = Recorder::new();
     r.create("cam", "perspectivecamera", None).unwrap();
-    let before = r.scene().clone();
 
-    r.evaluate(&[nsi::string!("filename", "proc.lua")]).unwrap();
+    r.evaluate(&[
+        nsi::string!("filename", "proc.lua"),
+        nsi::string!("type", "lua"),
+    ])
+    .unwrap();
 
-    assert_eq!(*r.scene(), before, "evaluate changed the scene");
+    let scene = r.into_scene();
+
+    // Not executed: no node appeared.
+    assert_eq!(scene.nodes().count(), 1);
+
+    // But recorded, with its arguments intact.
+    let calls: Vec<&[OwnedArg]> = scene.evaluations().collect();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].len(), 2);
+    assert_eq!(calls[0][0].name, "filename");
+    assert_eq!(
+        calls[0][0].data,
+        OwnedData::String(vec![b"proc.lua".to_vec()]),
+    );
 }
 
 /// ɴsɪ's `"priority"` is the one `connect` argument that survives,

@@ -460,3 +460,37 @@ fn a_text_stream_with_high_bytes_is_not_taken_for_binary() {
         OwnedData::String(vec![b"\xCCx".to_vec()]),
     );
 }
+
+/// An `Evaluate` statement survives a round trip.
+///
+/// ɴsɪ's `Evaluate` "includes a block of interface calls from an
+/// external source" -- an archive, a Lua script, a compiled procedural,
+/// all ubiquitous in 3Delight pipelines. This crate parsed it and the
+/// recorder dropped it, so a stream carrying one came back as a scene
+/// missing whatever it would have produced, with no error and no trace
+/// that anything had been asked for. It is recorded now, and re-emitted.
+#[test]
+fn an_evaluate_statement_round_trips() {
+    let source = b"Evaluate\n  \"filename\" \"string\" 1 \"archive.nsi\"\n  \"type\" \"string\" 1 \"apistream\"\n";
+
+    let recorder = Recorder::new();
+    parse_stream(source, &recorder).expect("parse");
+    let scene = recorder.into_scene();
+
+    let calls: Vec<&[nsi_intermediate::OwnedArg]> =
+        scene.evaluations().collect();
+    assert_eq!(calls.len(), 1, "the call is recorded, not dropped");
+    assert_eq!(calls[0].len(), 2);
+
+    // And it re-emits, so a backend re-reading our stream sees it too.
+    let mut out = Vec::new();
+    nsi_intermediate::write_stream(&scene, &mut out).expect("write");
+    let text = String::from_utf8(out).expect("utf-8");
+    assert!(text.contains("Evaluate"), "not re-emitted:\n{text}");
+    assert!(text.contains("archive.nsi"), "arguments lost:\n{text}");
+
+    // Re-parsing our output records the same call.
+    let again = Recorder::new();
+    parse_stream(text.as_bytes(), &again).expect("re-parse");
+    assert_eq!(again.into_scene().evaluations().count(), 1);
+}
