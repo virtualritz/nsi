@@ -70,6 +70,9 @@
 //!   `outputconstant("albedo")`.
 //! - `denoise.normal` -- likewise for the normal, defaulting to `N`,
 //!   3Delight's built-in.
+//! - `denoise.depth` -- likewise for depth, defaulting to `z`. Reported
+//!   when missing, but not fed to the filter: OIDN's `RayTracing` has
+//!   no depth input.
 //!
 //! # Utility passes
 //!
@@ -82,9 +85,13 @@
 //! attribute, the layer it was told to look for, and the layers that
 //! were actually connected.
 //!
-//! This works because of how 3Delight names channels, measured from a
-//! real render rather than assumed. A custom AOV layer arrives prefixed
-//! with its `layername` and an index:
+//! The names are the renderer's own, not guesses off the channel list.
+//! 3Delight describes its output layers in the parameter array
+//! positionally -- a `layer` index, then that layer's `variablename`,
+//! `layername` and `layertype` -- and this driver reads those. It has
+//! to: channel names cannot identify a layer, because built-in
+//! variables arrive with no layer name at all. Measured from a real
+//! four-layer render:
 //!
 //! ```text
 //! ["r", "g", "b", "a",                                 <- Ci, bare
@@ -93,12 +100,12 @@
 //!  "z"]                                                <- depth, bare
 //! ```
 //!
-//! So albedo and normal are identifiable by name and depth is not --
-//! `Ci` and `z` come through under bare canonical channel names with no
-//! layer name attached. There is no `denoise.depth`: OIDN's
-//! `RayTracing` filter has no depth input, so a driver could not use
-//! one even if ndspy named it.
-use nsi_display::{Bucket, DisplayDriver, Error, Params, PixelFormat, Result};
+//! Only the custom AOV layers carry their `layername`. Reading the
+//! declared layers instead means depth is identifiable too, and a
+//! `layername` that differs from the variable it outputs is honoured.
+use nsi_display::{
+    Bucket, DisplayDriver, Error, Params, PixelFormat, Result, Value,
+};
 
 use exr::prelude::*;
 
@@ -152,6 +159,46 @@ fn channel_suffixes(name: &str, channels: usize) -> Vec<&'static str> {
         // naming them positionally keeps the file writable.
         _ => vec!["R", "G", "B", "A", "Y"],
     }
+}
+
+
+/// The output layers the renderer described, in order.
+///
+/// ndspy has no nesting, so 3Delight describes several output layers
+/// positionally: a `layer` index, then that layer's own parameters,
+/// repeated. Reading them is how a driver learns what each layer *is* --
+/// the channel names cannot say, because built-in variables arrive
+/// unprefixed (`Ci` as `r`,`g`,`b`,`a` and depth as a bare `z`).
+///
+/// Returns one name per layer, preferring `layername` and falling back
+/// to `variablename`, which is what 3Delight names the layer by when
+/// the scene sets no `layername`.
+fn layer_names(params: Params<'_>) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    let mut variable: Option<String> = None;
+    let mut explicit: Option<String> = None;
+
+    // A layer's parameters follow its `layer` index, so each new index
+    // closes the previous block.
+    let mut flush =
+        |variable: &mut Option<String>, explicit: &mut Option<String>| {
+            if let Some(name) = explicit.take().or_else(|| variable.take()) {
+                names.push(name);
+            }
+        };
+
+    for (name, value) in params.iter() {
+        match (name, value) {
+            ("layer", Value::Int(_)) => flush(&mut variable, &mut explicit),
+            ("variablename", Value::String(v)) => {
+                variable = Some(v.to_owned())
+            }
+            ("layername", Value::String(v)) => explicit = Some(v.to_owned()),
+            _ => {}
+        }
+    }
+    flush(&mut variable, &mut explicit);
+    names
 }
 
 impl Exr {
@@ -246,10 +293,31 @@ impl DisplayDriver for Exr {
             })
             .collect();
 
+        // Prefer the names the renderer gave us over the ones the
+        // channel-name parser could infer. They only line up when the
+        // renderer described exactly as many layers as the format
+        // parsed into; if they disagree, the parse is the thing we can
+        // still trust for offsets, so fall back rather than mislabel.
+        let declared = layer_names(params);
+        let named = declared.len() == format.len();
+        if !named && !declared.is_empty() {
+            eprintln!(
+                "rust_exr: the renderer described {} output layer(s) but \
+                 the pixel format parsed into {} -- falling back to names \
+                 inferred from channel names",
+                declared.len(),
+                format.len()
+            );
+        }
         let layers: Vec<LayerSpan> = format
             .iter()
-            .map(|layer| LayerSpan {
-                name: layer.name().to_owned(),
+            .enumerate()
+            .map(|(index, layer)| LayerSpan {
+                name: if named {
+                    declared[index].clone()
+                } else {
+                    layer.name().to_owned()
+                },
                 offset: layer.offset(),
                 channels: layer.channels(),
             })
@@ -279,15 +347,37 @@ impl DisplayDriver for Exr {
             params.string("denoise.albedo").unwrap_or("albedo").to_owned();
         let denoise_normal =
             params.string("denoise.normal").unwrap_or("N").to_owned();
+        // Only ever warned about, never fed to the filter, so it stays
+        // a local: OIDN's RayTracing has no depth input.
+        let denoise_depth =
+            params.string("denoise.depth").unwrap_or("z").to_owned();
 
         if denoise {
             // Warn before the render, not after it: this is the last
             // moment the answer is still useful. Naming the attribute
             // as well as the layer, because the usual cause is a
             // `layername` that does not match what this was told.
-            for (attribute, wanted) in [
-                ("denoise.albedo", &denoise_albedo),
-                ("denoise.normal", &denoise_normal),
+            for (attribute, wanted, consequence) in [
+                (
+                    "denoise.albedo",
+                    &denoise_albedo,
+                    "denoising will be worse without it",
+                ),
+                (
+                    "denoise.normal",
+                    &denoise_normal,
+                    "denoising will be worse without it",
+                ),
+                (
+                    "denoise.depth",
+                    &denoise_depth,
+                    // Said plainly rather than lumped in with the two
+                    // above: OIDN's RayTracing filter has no depth
+                    // input, so its absence costs nothing here.
+                    "OIDN does not consume depth, so this does not \
+                     affect denoising -- reported because a denoising \
+                     setup is normally expected to carry it",
+                ),
             ] {
                 if !layers.iter().any(|l| &l.name == wanted) {
                     let connected: Vec<&str> =
@@ -295,8 +385,8 @@ impl DisplayDriver for Exr {
                     eprintln!(
                         "rust_exr: denoise is on and {attribute} names \
                          layer `{wanted}`, which is not connected to this \
-                         driver -- denoising will be worse without it. \
-                         Connected layers: {connected:?}"
+                         driver -- {consequence}. Connected layers: \
+                         {connected:?}"
                     );
                 }
             }

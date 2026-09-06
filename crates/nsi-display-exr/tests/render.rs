@@ -29,8 +29,8 @@ impl Drop for CwdGuard {
     }
 }
 
-/// A 16x16 render with a beauty layer and a depth layer, both connected
-/// to one `rust_exr` driver -- so the driver sees a genuinely multi-AOV
+/// A 16x16 render with beauty, albedo, normal and depth layers, all on
+/// one `rust_exr` driver, with denoising on -- so the driver sees a genuinely multi-AOV
 /// `PixelFormat`, which is the case the layer-boundary parser used to
 /// get wrong.
 fn render_scene(out: &Path) {
@@ -53,6 +53,14 @@ fn render_scene(out: &Path) {
             nsi::string!("imagefilename", out.to_str().unwrap()),
             nsi::string!("compression", "zips"),
             nsi::string!("header.comment", "written by nsi-display"),
+            // Exercise the OIDN path with both auxiliary inputs.
+            nsi::i32!("denoise", 1),
+            nsi::string!("denoise.quality", "fast"),
+            // `albedo` and `N` are left at their defaults; the depth
+            // layer below is named `depth`, so say so. If any of the
+            // three cannot be found the driver warns, which is the
+            // point of naming them.
+            nsi::string!("denoise.depth", "depth"),
         ],
     );
 
@@ -69,6 +77,26 @@ fn render_scene(out: &Path) {
     );
     ctx.connect("beauty", None, "screen", "outputlayers", None);
     ctx.connect("driver", None, "beauty", "outputdrivers", None);
+
+    // Custom AOV layers. 3Delight prefixes their channels with
+    // `layername`, and -- more importantly -- declares that name in the
+    // per-layer parameters the driver reads.
+    for (handle, variable, kind) in
+        [("albedo", "albedo", "color"), ("N", "N", "vector")]
+    {
+        ctx.create(handle, nsi::OUTPUT_LAYER, None);
+        ctx.set_attribute(
+            handle,
+            &[
+                nsi::string!("variablename", variable),
+                nsi::string!("layername", handle),
+                nsi::string!("layertype", kind),
+                nsi::string!("scalarformat", "float"),
+            ],
+        );
+        ctx.connect(handle, None, "screen", "outputlayers", None);
+        ctx.connect("driver", None, handle, "outputdrivers", None);
+    }
 
     ctx.create("depth", nsi::OUTPUT_LAYER, None);
     ctx.set_attribute(
@@ -157,7 +185,16 @@ fn the_exr_driver_writes_every_connected_layer() {
     // the depth is OpenEXR's conventional `Z`. Both must survive: the
     // parser defect this exercises used to merge the second into the
     // first and drop a channel, leaving a five-channel "Ci".
-    for expected in ["A", "B", "G", "R", "Z"] {
+    // The layer names come from the renderer's own per-layer
+    // parameters, so the depth layer is known as `depth` -- the
+    // `layername` the scene gave it -- even though its single channel
+    // arrives as a bare `z` naming no layer at all.
+    for expected in [
+        "A", "B", "G", "R", // Ci
+        "albedo.R", "albedo.G", "albedo.B", // albedo AOV
+        "N.X", "N.Y", "N.Z", // normal AOV
+        "Z",  // depth
+    ] {
         assert!(
             names.iter().any(|n| n == expected),
             "channel {expected} missing from {names:?}"

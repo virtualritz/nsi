@@ -5,6 +5,17 @@ use core::{
     slice,
 };
 
+/// One parameter's value, for the scalar types ndspy uses.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Value<'a> {
+    /// A string.
+    String(&'a str),
+    /// An integer.
+    Int(i32),
+    /// A float.
+    Float(f32),
+}
+
 /// The parameters the renderer passes to `DspyImageOpen`.
 ///
 /// Borrowed, never owned: the array belongs to the renderer and is valid
@@ -81,6 +92,46 @@ impl<'a> Params<'a> {
         let param = self.find(name, b'i')?;
         // SAFETY: `value` addresses one `int`.
         Some(unsafe { *(param.value as *const i32) })
+    }
+
+    /// Every parameter, in the order the renderer laid them out.
+    ///
+    /// Order is data, not decoration: ndspy has no nesting, so a
+    /// renderer that wants to describe several output layers can only
+    /// do it positionally. 3Delight emits a `layer` index and then that
+    /// layer's own parameters, repeating per layer -- so `find`-style
+    /// lookup by name would silently return the first layer's value for
+    /// all of them.
+    ///
+    /// Parameters whose name is unreadable, or whose type is not one of
+    /// the three below, are skipped. A parameter with several values
+    /// yields its first.
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> + '_ {
+        self.raw.iter().filter_map(|p| {
+            if p.name.is_null() || p.value.is_null() {
+                return None;
+            }
+            // SAFETY: ndspy names are NUL-terminated C strings.
+            let name = unsafe { CStr::from_ptr(p.name) }.to_str().ok()?;
+            let value = match p.valueType as u8 {
+                b's' => {
+                    // SAFETY: `value` addresses one `char*`.
+                    let ptr = unsafe { *(p.value as *const *const c_char) };
+                    if ptr.is_null() {
+                        return None;
+                    }
+                    // SAFETY: NUL-terminated, per the ndspy contract.
+                    Value::String(
+                        unsafe { CStr::from_ptr(ptr) }.to_str().ok()?,
+                    )
+                }
+                // SAFETY: `value` addresses at least one `int`/`float`.
+                b'i' => Value::Int(unsafe { *(p.value as *const i32) }),
+                b'f' => Value::Float(unsafe { *(p.value as *const f32) }),
+                _ => return None,
+            };
+            Some((name, value))
+        })
     }
 
     /// Every string parameter, as `(name, value)`.

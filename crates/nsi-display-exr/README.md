@@ -77,6 +77,9 @@ a conversion.
   `outputconstant("albedo")`.
 - `denoise.normal` -- likewise for the normal, defaulting to `N`,
   3Delight's built-in.
+- `denoise.depth` -- likewise for depth, defaulting to `z`. Reported
+  when missing, but not fed to the filter: OIDN's `RayTracing` has
+  no depth input.
 
 ## Utility passes
 
@@ -89,9 +92,13 @@ before the render, while the answer is still useful -- naming the
 attribute, the layer it was told to look for, and the layers that
 were actually connected.
 
-This works because of how 3Delight names channels, measured from a
-real render rather than assumed. A custom AOV layer arrives prefixed
-with its `layername` and an index:
+The names are the renderer's own, not guesses off the channel list.
+3Delight describes its output layers in the parameter array
+positionally -- a `layer` index, then that layer's `variablename`,
+`layername` and `layertype` -- and this driver reads those. It has
+to: channel names cannot identify a layer, because built-in
+variables arrive with no layer name at all. Measured from a real
+four-layer render:
 
 ```text
 ["r", "g", "b", "a",                                 <- Ci, bare
@@ -100,11 +107,9 @@ with its `layername` and an index:
  "z"]                                                <- depth, bare
 ```
 
-So albedo and normal are identifiable by name and depth is not --
-`Ci` and `z` come through under bare canonical channel names with no
-layer name attached. There is no `denoise.depth`: OIDN's
-`RayTracing` filter has no depth input, so a driver could not use
-one even if ndspy named it.
+Only the custom AOV layers carry their `layername`. Reading the
+declared layers instead means depth is identifiable too, and a
+`layername` that differs from the variable it outputs is honoured.
 
 <!-- cargo-rdme end -->
 

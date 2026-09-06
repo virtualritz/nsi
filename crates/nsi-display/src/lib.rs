@@ -160,7 +160,7 @@
 //! on `ndspy-sys`.
 
 mod params;
-pub use params::Params;
+pub use params::{Params, Value};
 
 mod bucket;
 pub use bucket::Bucket;

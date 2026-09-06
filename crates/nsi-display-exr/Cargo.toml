@@ -22,7 +22,7 @@ ndspy-sys = "0.2"
 nsi-display = { version = "0.1", path = "../nsi-display" }
 # Default features on purpose: `rayon` is one of them, and it is what
 # compresses pixel blocks on several threads.
-exr = "1.7"
+exr = "1"
 oidn = "2.3"
 
 [dev-dependencies]
