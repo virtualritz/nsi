@@ -381,3 +381,15 @@ against this API now.
 - [x] T9.15 `attribute_samples_are_time_ordered` never called
       `attribute_samples`; reversing that function left it green. It now
       asserts on both.
+
+## Create Arguments
+
+- [x] T9.16 `create`'s arguments are inert, and dropping them is right.
+      The specification reads as though they were part of a node's
+      identity -- "does nothing if all other parameters match the call
+      which created that node" -- but it also says none are defined, and
+      rendering settles it: 3Delight accepts a repeat with a *different*
+      create argument and refuses one with a different **type**
+      (`E6002`). The crate already refused the type; the row was open on
+      a question that a single render answered. Evidence:
+      `recorder::tests::create_arguments_are_inert_but_the_type_is_not`.

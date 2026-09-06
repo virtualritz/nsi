@@ -245,3 +245,43 @@ fn a_callback_records_its_address_and_leaks_its_payload() {
          becomes 1, the leak is fixed and the contract row must change"
     );
 }
+
+/// `create`'s arguments are dropped, and that loses nothing.
+///
+/// ɴsɪ: "nparams, params ... There are no optional parameters defined
+/// as of now." The specification also says a repeated `create` "does
+/// nothing if all other parameters match the call which created that
+/// node. Otherwise, it emits an error", which reads as though the
+/// arguments were part of a node's identity.
+///
+/// Rendered, they are not. 3Delight accepts
+/// `Create "n" "attributes" "foo" "int" 1 [1]` followed by the same
+/// with `[2]` without complaint, and the node works. It *does* refuse a
+/// repeat with a different **type**: `E6002 error creating node 'extra'
+/// of type 'transform', already exists as type 'attributes'`. So the
+/// type is the identity and the arguments are inert.
+#[test]
+fn create_arguments_are_inert_but_the_type_is_not() {
+    let recorder = Recorder::new();
+    recorder
+        .create("n", "attributes", Some(&[nsi::i32!("foo", 1)]))
+        .expect("first create");
+    recorder
+        .create("n", "attributes", Some(&[nsi::i32!("foo", 2)]))
+        .expect("3Delight accepts a differing create argument");
+
+    assert!(
+        matches!(
+            recorder.create("n", "transform", None),
+            Err(RecordError::TypeMismatch { .. })
+        ),
+        "a differing type is E6002 in 3Delight",
+    );
+
+    let scene = recorder.into_scene();
+    assert_eq!(scene.node("n").unwrap().node_type, "attributes");
+    assert!(
+        scene.node("n").unwrap().attrs.is_empty(),
+        "a create argument is not an attribute",
+    );
+}
