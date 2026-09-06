@@ -424,3 +424,17 @@ against this API now.
       path and removed again: the clamp subsumes it, and removing it
       left the suite green. A line that guards nothing is worse than no
       line, because it reads as protection.
+
+## Foreign Parameters
+
+- [x] T9.20 `OwnedArg::from_param` is `pub(crate)`. It was `pub` and
+      carried two paths nothing could reach -- a panic when
+      `as_c_param` returns `None`, and an empty `f32` array for
+      `Type::Invalid` -- both reachable only by a *foreign*
+      `ParamValue`, and only because the function was public. Narrowing
+      makes them unreachable by construction rather than by argument,
+      which is cheaper than a `Result` every internal caller would
+      unwrap for a case that cannot arise. The `Invalid` arm is now
+      `unreachable!` rather than a silent empty array: it would have
+      recorded a different argument instead of refusing. Verified from
+      outside the workspace: `E0624`.

@@ -133,7 +133,21 @@ pub struct OwnedArg {
 
 impl OwnedArg {
     /// Copy a borrowed parameter into owned storage.
-    pub fn from_param<P: ParamValue>(param: &P) -> Self {
+    ///
+    /// `pub(crate)` on purpose. It carried two failure paths that
+    /// nothing in this crate can reach -- a panic if `as_c_param`
+    /// returned `None`, and an empty `f32` array for `Type::Invalid` --
+    /// because [`Recorder`](crate::Recorder)'s `Arg` GAT pins the
+    /// parameter to `nsi_ffi_wrap::Arg`, whose `as_c_param` always
+    /// returns `Some` and which never produces `Invalid`. Only a
+    /// *foreign* `ParamValue` could reach either, and only through this
+    /// being public.
+    ///
+    /// Narrowing it makes both unreachable by construction rather than
+    /// by argument, which is cheaper than a `Result` every internal
+    /// caller would have to unwrap for a case that cannot arise.
+    /// Callers wanting an [`OwnedArg`] build one from its fields.
+    pub(crate) fn from_param<P: ParamValue>(param: &P) -> Self {
         let type_tag = param.type_tag();
 
         // The C call hands the renderer `count = len / array_length`
@@ -146,6 +160,9 @@ impl OwnedArg {
         let elements = param.len() / array_length * array_length;
         let scalars = elements * components_per_element(type_tag);
 
+        // Unreachable while this is `pub(crate)`: the only implementor
+        // reaching here is `nsi_ffi_wrap::Arg`, whose `as_c_param`
+        // returns `Some` unconditionally.
         let c = param
             .as_c_param()
             .expect("nsi-ffi-wrap Arg always yields a C view");
@@ -195,7 +212,16 @@ impl OwnedArg {
                     .map(|p| HostPtr(*p))
                     .collect(),
                 ),
-                Type::Invalid => OwnedData::F32(Vec::new()),
+                // Also unreachable: `Invalid` is ɴsɪ's C sentinel for
+                // "no type" and nothing in this workspace produces it.
+                // It used to yield an empty `f32` array, which would
+                // have recorded a *different* argument rather than
+                // refusing -- the silent wrong answer this crate exists
+                // to avoid. If it ever fires, the pinned type has
+                // changed and this must be revisited, not patched over.
+                Type::Invalid => {
+                    unreachable!("nsi-ffi-wrap never yields Type::Invalid")
+                }
             }
         };
 

@@ -34,8 +34,6 @@ Checks that this spec set does not overclaim.
         node's own `transformationmatrices`;
       - `INTERPOLATE_LINEAR` on a sampled transform, which ɴsɪ provides
         and this crate ignores;
-      - `set_attribute` on an uncreated handle, which still fabricates
-        one even though `connect` no longer does;
       - `recursive` delete;
       - the attribute vocabulary, legacy versus documentation draft.
 - [x] `Covered` rows state what they do **not** prove where that is not
