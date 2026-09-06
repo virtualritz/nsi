@@ -8,6 +8,7 @@
 
 use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
+use indexmap::IndexMap;
 use nsi_trait::Type;
 use std::collections::HashSet;
 
@@ -338,8 +339,32 @@ enum Sampled<'a> {
     /// Sampled, but the last sample *naming* it cannot be read as the
     /// attribute's type -- so the attribute is unset, at every time.
     Unset,
-    /// The readable samples, in time order.
-    Yes(Vec<(f64, &'a OwnedArg)>),
+    /// The surviving tail of the node's `time_attrs`.
+    ///
+    /// A slice rather than a collected `Vec`: this is read per node per
+    /// query on the sampled paths, so collecting here allocated once
+    /// per node per time. Removing that allocation did **not** remove
+    /// the cost -- measured, the sampled paths are still about twice
+    /// the pre-rule shape, because the rule must know whether the last
+    /// naming sample is readable before it can decide anything, and so
+    /// scans to find the cut and then reads the tail. Two passes is the
+    /// price of the rule being right; see `contracts/resolution.md`.
+    Yes(&'a [(f64, IndexMap<String, OwnedArg>)]),
+}
+
+impl<'a> Sampled<'a> {
+    /// The surviving samples of `name`, in time order.
+    fn samples(
+        &self,
+        name: &'a str,
+    ) -> impl Iterator<Item = (f64, &'a OwnedArg)> {
+        let tail = match self {
+            Self::Yes(tail) => *tail,
+            Self::No | Self::Unset => &[][..],
+        };
+        tail.iter()
+            .filter_map(move |(time, attrs)| Some((*time, attrs.get(name)?)))
+    }
 }
 
 /// Apply ɴsɪ's typing rule to a node's samples of `name`.
@@ -389,14 +414,11 @@ fn sampled_attr<'a>(
         return Sampled::Unset;
     }
 
-    // Only the surviving tail is collected: no sample at or before
-    // `keep_from` can be readable, by construction.
-    Sampled::Yes(
-        node.time_attrs[keep_from..]
-            .iter()
-            .filter_map(|(time, attrs)| Some((*time, attrs.get(name)?)))
-            .collect(),
-    )
+    // Everything before `keep_from` is discarded; `keep_from - 1` is
+    // the last unreadable sample, when there is one. Handed back as a
+    // slice so a caller that only needs times or existence allocates
+    // nothing.
+    Sampled::Yes(&node.time_attrs[keep_from..])
 }
 
 /// Where a time falls among a set of samples.
@@ -758,12 +780,11 @@ impl Scene {
             .iter()
             .filter_map(|node| self.node(node))
             .flat_map(|node| {
-                match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+                sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
                     matrix_of(arg).is_some()
-                }) {
-                    Sampled::Yes(samples) => samples,
-                    Sampled::No | Sampled::Unset => Vec::new(),
-                }
+                })
+                .samples(TRANSFORMATION_MATRIX)
+                .collect::<Vec<_>>()
             })
             .map(|(time, _)| time)
             .collect::<Vec<_>>();
@@ -1008,12 +1029,13 @@ impl Scene {
         // reporting motion for it made `world_transform` refuse a node
         // the other accessors resolve to identity.
         self.node(handle).is_some_and(|node| {
-            matches!(
-                sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
-                    matrix_of(arg).is_some()
-                }),
-                Sampled::Yes(ref samples) if !samples.is_empty()
-            )
+            // No allocation: this runs per node per fold.
+            sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+                matrix_of(arg).is_some()
+            })
+            .samples(TRANSFORMATION_MATRIX)
+            .next()
+            .is_some()
         })
     }
 
@@ -1605,8 +1627,8 @@ impl Scene {
         }) {
             Sampled::No => None,
             Sampled::Unset => Some(Vec::new()),
-            Sampled::Yes(samples) => {
-                samples.last().map(|(_, arg)| match &arg.data {
+            found @ Sampled::Yes(_) => {
+                found.samples(name).last().map(|(_, arg)| match &arg.data {
                     OwnedData::I32(values) => values.to_vec(),
                     _ => Vec::new(),
                 })
@@ -1643,8 +1665,8 @@ impl Scene {
                 // there.
                 Sampled::No => return Ok(None),
                 Sampled::Unset => return Ok(Some(Vec::new())),
-                Sampled::Yes(kept) => kept
-                    .into_iter()
+                found @ Sampled::Yes(_) => found
+                    .samples(MATRICES)
                     .filter_map(|(t, arg)| match arg.data {
                         OwnedData::F64(ref values) => {
                             Some((t, values.as_slice()))
@@ -2167,18 +2189,16 @@ impl Scene {
         // A wrong-typed *last* sample unsets the attribute, so the
         // static value applies -- rendered, 3Delight draws the node at
         // identity rather than at the discarded earlier sample.
-        let sampled: Vec<(f64, [f64; 16])> =
-            match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
-                matrix_of(arg).is_some()
-            }) {
-                Sampled::No | Sampled::Unset => {
-                    return Ok(self.local_transform(handle));
-                }
-                Sampled::Yes(samples) => samples
-                    .into_iter()
-                    .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
-                    .collect(),
-            };
+        let found = sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+            matrix_of(arg).is_some()
+        });
+        if matches!(found, Sampled::No | Sampled::Unset) {
+            return Ok(self.local_transform(handle));
+        }
+        let sampled: Vec<(f64, [f64; 16])> = found
+            .samples(TRANSFORMATION_MATRIX)
+            .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
+            .collect();
 
         if sampled.is_empty() {
             return Ok(self.local_transform(handle));
@@ -2229,27 +2249,28 @@ impl Scene {
         // leaving this to error at one time and answer the discarded
         // sample at another. That inconsistency had one scene giving
         // three different answers across the three accessors.
-        let sampled = match sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
+        let found = sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
             matrix_of(arg).is_some()
-        }) {
-            Sampled::No | Sampled::Unset => {
-                return Ok(self.local_transform(handle));
-            }
-            Sampled::Yes(samples) => samples,
-        };
+        });
+        if matches!(found, Sampled::No | Sampled::Unset) {
+            return Ok(self.local_transform(handle));
+        }
 
-        if sampled.is_empty() {
+        if found.samples(TRANSFORMATION_MATRIX).next().is_none() {
             Ok(self.local_transform(handle))
         } else {
-            match sampled
-                .iter()
+            match found
+                .samples(TRANSFORMATION_MATRIX)
                 .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
             {
                 Some((_, arg)) => Ok(matrix_of(arg)),
                 None => Err(ResolveError::MissingSampleAtTime {
                     handle: handle.to_string(),
                     time,
-                    available: sampled.iter().map(|(t, _)| *t).collect(),
+                    available: found
+                        .samples(TRANSFORMATION_MATRIX)
+                        .map(|(t, _)| t)
+                        .collect(),
                 }),
             }
         }
