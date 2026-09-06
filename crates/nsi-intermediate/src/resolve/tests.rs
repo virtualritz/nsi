@@ -3940,3 +3940,103 @@ fn motion_times_and_attribute_times_differ_on_an_unreadable_sample() {
         "with the arguments, so a caller that knows the type can judge",
     );
 }
+
+/// An unreadable sample **discards every sample before it**.
+///
+/// This is the scene that settles the rule, and nothing in the suite
+/// distinguished it before: a good matrix at `t=0`, a `float` at `t=1`,
+/// a good one at `t=2` renders as a **static** object at the `t=2`
+/// matrix -- one lit band, where the control without the `float` sweeps
+/// across four. Keeping the two good samples and dropping the
+/// unreadable one, which this rule first said, produces that sweep.
+///
+/// `a_wrong_typed_earlier_sample_is_dropped` cannot catch it: with
+/// wrong@0 and good@1 both rules give the same answer.
+#[test]
+fn an_unreadable_sample_discards_the_ones_before_it() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 2.0, vec![translate(-3.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.motion_times("q").unwrap(),
+        vec![2.0],
+        "only the samples after the unreadable one survive",
+    );
+    assert_eq!(
+        scene.world_transform_samples("q").unwrap().len(),
+        1,
+        "so there is no sweep to report",
+    );
+    // One surviving sample is constant: the same matrix at every time.
+    for time in [0.0, 1.0, 2.0, 9.0] {
+        assert_eq!(
+            scene.world_transform_interpolated_at("q", time).unwrap()[12],
+            -3.0,
+            "static at the t=2 matrix, at {time}",
+        );
+    }
+}
+
+/// Sixteen `double`s are not a `doublematrix`.
+///
+/// `matrix_of` matched the payload and ignored the declared type, so a
+/// `"transformationmatrix" "double" 16 [...]` read as a matrix. 3Delight
+/// warns `E6007` and draws the node at identity. Six sites share this
+/// predicate, so the leniency defined the typing rule everywhere.
+#[test]
+fn a_double_typed_matrix_is_not_a_matrix() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    #[rustfmt::skip]
+    let sixteen = vec![
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        -1.5, 0.0, 0.0, 1.0,
+    ];
+    scene
+        .set_attribute(
+            "xf",
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F64,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F64(sixteen),
+            }],
+        )
+        .unwrap();
+
+    assert_eq!(
+        scene.world_transform("q").unwrap(),
+        super::IDENTITY,
+        "the declared type is not `doublematrix`, so there is no matrix",
+    );
+}

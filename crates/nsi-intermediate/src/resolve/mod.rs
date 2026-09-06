@@ -8,6 +8,7 @@
 
 use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
+use nsi_trait::Type;
 use std::collections::HashSet;
 
 /// A 4x4 identity, row-major.
@@ -343,38 +344,59 @@ enum Sampled<'a> {
 
 /// Apply ɴsɪ's typing rule to a node's samples of `name`.
 ///
-/// The last sample that *names* the attribute decides. If it cannot be
-/// read, the attribute is unset -- 3Delight warns `E6007` and renders
-/// as though it had never been set. Otherwise unreadable samples that
-/// are not last are dropped, and the readable ones remain.
+/// An unreadable sample **discards every sample before it**. 3Delight
+/// warns `E6007` and unsets the attribute at that call; only samples
+/// set afterwards rebuild it. So if the last sample naming the
+/// attribute is unreadable it is unset entirely, and otherwise the
+/// answer is the run of samples following the last unreadable one.
 ///
-/// Stated once because it was stated three times and only one of them
-/// was right: matching the type *inside* the lookup skips a wrong-typed
-/// later sample and answers from the discarded earlier one. Rendered, a
-/// good `doublematrix` at `t=0` followed by a `float` at `t=1` makes
-/// 3Delight draw **nothing**, while the crate drew the `t=0` set; on a
-/// transform node the three accessors gave three different answers for
-/// one scene.
+/// Rendered, and this is the case that settles it: a good
+/// `doublematrix` at `t=0`, a `float` at `t=1`, a good one at `t=2`
+/// draws a **static** object at the `t=2` matrix -- one lit band. The
+/// control without the `float` sweeps across four. Dropping the
+/// unreadable sample and keeping the two good ones, which this rule
+/// first said, produces that sweep: a motion blur the renderer does not
+/// draw.
+///
+/// Stated once because it was stated six times and only one was right.
+/// The correction matters more than the sharing: deduplicating a rule
+/// makes every site agree, and they agreed on the wrong answer until
+/// this scene was rendered.
 fn sampled_attr<'a>(
     node: &'a Node,
     name: &str,
     readable: impl Fn(&OwnedArg) -> bool,
 ) -> Sampled<'a> {
-    let named: Vec<(f64, &OwnedArg)> = node
-        .time_attrs
-        .iter()
-        .filter_map(|(time, attrs)| Some((*time, attrs.get(name)?)))
-        .collect();
+    // One pass for the last sample naming the attribute, and for the
+    // point after the last unreadable one.
+    let mut last_named = None;
+    let mut keep_from = 0;
+    for (index, (_, attrs)) in node.time_attrs.iter().enumerate() {
+        if let Some(arg) = attrs.get(name) {
+            last_named = Some(index);
+            if !readable(arg) {
+                keep_from = index + 1;
+            }
+        }
+    }
 
-    let Some((_, last)) = named.last() else {
+    let Some(last_named) = last_named else {
         return Sampled::No;
     };
 
-    if !readable(last) {
+    // The last naming sample is itself unreadable.
+    if keep_from > last_named {
         return Sampled::Unset;
     }
 
-    Sampled::Yes(named.into_iter().filter(|(_, arg)| readable(arg)).collect())
+    // Only the surviving tail is collected: no sample at or before
+    // `keep_from` can be readable, by construction.
+    Sampled::Yes(
+        node.time_attrs[keep_from..]
+            .iter()
+            .filter_map(|(time, attrs)| Some((*time, attrs.get(name)?)))
+            .collect(),
+    )
 }
 
 /// Where a time falls among a set of samples.
@@ -2240,6 +2262,15 @@ impl Scene {
 /// `doublematrix`, and silently reinterpreting an `f32` one would be
 /// worse than skipping it.
 fn matrix_of(arg: &OwnedArg) -> Option<[f64; 16]> {
+    // The declared type, not just the payload: sixteen `double`s are
+    // not a `doublematrix`. Rendered, `"transformationmatrix" "double"
+    // 16 [...]` is `E6007` and the node draws at identity, while this
+    // read it as a matrix -- and since six sites now share this
+    // predicate, that one leniency defined the rule everywhere.
+    if arg.type_tag != Type::MatrixF64 {
+        return None;
+    }
+
     match &arg.data {
         OwnedData::F64(values) if values.len() == 16 => {
             let mut matrix = [0.0; 16];
