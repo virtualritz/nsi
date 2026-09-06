@@ -31,7 +31,8 @@ connection classification (`classification.md`), graph resolution
 | `render_control` drives the state machine | Covered | `recorder.rs` `render_control` | `recorder::tests::render_control_drives_the_state_machine`, `wait_and_synchronize_do_not_change_state` | -- |
 | `evaluate` is a recorded no-op | Covered | `recorder.rs` `evaluate` returns `Ok(())`; the decision is a `spec.md` non-goal | `recorder::tests::evaluate_is_a_recorded_no_op`, asserting the scene is unchanged | -- |
 | `"value"` and `"strength"` survive recording | Covered | `edge.rs` `Edge::args` keeps the arguments whole | `recorder::tests::connect_records_the_priority_argument` proves the vector is carried; `stream_roundtrip` replays a prioritised connection against 3Delight | -- |
-| `delete` drops its arguments, `recursive` included | Open | `recorder.rs` `delete` ignores `_args` | None | ɴsɪ's `recursive` delete removes a subgraph. Implement it or state the limitation as a non-goal. |
+| The strength rule holds transitively | Covered | `scene.rs` `delete_recursive` checks strength on every edge into the doomed set, not only where a candidate is discovered | `scene::tests::strength_blocks_a_recursive_delete_through_a_second_path`; a node reached by a second, weak path was deleted despite holding a strong connection | -- |
+| `delete` honours `recursive` | Covered | `scene.rs` `delete_recursive`, `recorder.rs` `delete` reads the argument, `edge.rs` `Edge::strength` | `scene::tests::a_recursive_delete_takes_the_network_with_it`, `a_recursive_delete_spares_a_node_used_elsewhere`, `strength_blocks_a_recursive_delete`, `a_plain_delete_is_not_recursive`, `a_recursive_delete_still_refuses_the_reserved_nodes` | -- |
 | `create` drops its arguments | Open | `recorder.rs` `create` ignores `_args` | None | Determine whether any ɴsɪ `create` argument is load-bearing. |
 | A connection to an uncreated handle is refused | Covered | `scene.rs` `is_known`, `RecordError::UnknownHandle` | `scene::tests::connecting_an_uncreated_handle_is_an_error`, `the_reserved_handles_need_no_create` | -- |
 | `set_attribute` on an uncreated handle still fabricates one | Open | `scene.rs` `entry().or_default()` | None | `connect` refuses unknown handles; `set_attribute` does not, so a typo still invents one. The reserved handles are handled -- they are never declared on replay -- so what remains is rejecting the rest. |
@@ -63,7 +64,7 @@ connection classification (`classification.md`), graph resolution
   `Nsi` method takes. Recording through the same `Recorder` while a
   guard is alive deadlocks the calling thread, with no diagnostic. It is
   easier to hit than it looks: two calls in *one expression*, as in
-  `r.scene().nodes.len() + r.scene().edges.len()`, hold two guards at
+  `r.scene().len() + r.scene().edges().count()`, hold two guards at
   once and block forever. Documented on the method; not designed away.
 - **A malformed `Reference`** cannot be detected. A pointer is opaque;
   the recorder stores what it is given.

@@ -10,6 +10,15 @@
 //! reference is exactly the silent failure this module exists to
 //! prevent: a misclassified connection does not fail loudly, it renders,
 //! with materials on the wrong shapes or output routed nowhere.
+//!
+//! "Exhaustive" means every `<connection>` attribute the ɴsɪ
+//! specification declares, which `tests/classifier.rs` pins by name.
+//! Rejecting is stricter than the renderer -- 3Delight accepts any
+//! destination -- and that is deliberate: a typo that reaches a renderer
+//! silently connects nothing, and this crate exists to make that loud.
+//! Most of these classes are *carried*, not resolved: a backend reads
+//! them off the edge list. Only membership, attribute binding, the
+//! shader slots and the output chain are walked.
 
 use crate::{OwnedArg, OwnedData};
 use core::fmt;
@@ -34,6 +43,34 @@ pub enum EdgeKind {
     DisplacementShader,
     /// `shader -> attributes "volumeshader"`.
     VolumeShader,
+    /// `shader -> camera "lensshader"`. ɴsɪ: "a lens shader is an osl
+    /// network connected to a camera through the lensshader
+    /// connection".
+    LensShader,
+    /// `outputlayer -> outputlayer "backgroundlayer"`.
+    BackgroundLayer,
+    /// `geometry -> attributes "bounds"`.
+    Bounds,
+    /// `set -> attributes "visibility.set.subsurface"`.
+    SubsurfaceSet,
+    /// `set -> .global "exclusiveshading"`.
+    ExclusiveShading,
+    /// `set -> geometry "facesets"`. ɴsɪ's own Listing 3.2.
+    FaceSet,
+    /// A connection to some other attribute, carried but never
+    /// interpreted.
+    ///
+    /// ɴsɪ permits connecting a node to an arbitrary attribute -- the
+    /// specification's own §4.8 connects one `attributes` node to
+    /// another's `visibility` with a `"value"` argument -- so the set of
+    /// legal destinations is open and cannot be enumerated. Rejecting
+    /// what is not listed made legal scenes unrecordable; interpreting
+    /// it would be the guess this module exists to refuse. So it is
+    /// kept, with its name, and resolution ignores it.
+    Other {
+        /// The destination attribute, verbatim.
+        to_attr: String,
+    },
     /// `geo -> instances "sourcemodels"`.
     InstanceSource,
     /// `node -> set "members"`. A `set` node groups nodes so one
@@ -96,6 +133,13 @@ impl EdgeKind {
             Self::SurfaceShader => "surfaceshader",
             Self::DisplacementShader => "displacementshader",
             Self::VolumeShader => "volumeshader",
+            Self::LensShader => "lensshader",
+            Self::BackgroundLayer => "backgroundlayer",
+            Self::Bounds => "bounds",
+            Self::SubsurfaceSet => "visibility.set.subsurface",
+            Self::ExclusiveShading => "exclusiveshading",
+            Self::FaceSet => "facesets",
+            Self::Other { to_attr } => to_attr,
             Self::InstanceSource => "sourcemodels",
             Self::SetMember => "members",
             Self::LightSet => "lightset",
@@ -128,6 +172,14 @@ impl Edge {
     /// matched to the index attribute of the model connection".
     pub fn index(&self) -> i32 {
         self.integer_argument("index")
+    }
+
+    /// ɴsɪ's `"strength"` connection argument, or `0` when absent.
+    ///
+    /// ɴsɪ: "a connection with a strength greater than 0 will block the
+    /// progression of a recursive `NSIDelete`."
+    pub fn strength(&self) -> i32 {
+        self.integer_argument("strength")
     }
 
     /// One integer connection argument, or `0` when absent.
@@ -190,6 +242,11 @@ pub fn classify(
         "surfaceshader" => EdgeKind::SurfaceShader,
         "displacementshader" => EdgeKind::DisplacementShader,
         "volumeshader" => EdgeKind::VolumeShader,
+        "lensshader" => EdgeKind::LensShader,
+        "backgroundlayer" => EdgeKind::BackgroundLayer,
+        "bounds" => EdgeKind::Bounds,
+        "visibility.set.subsurface" => EdgeKind::SubsurfaceSet,
+        "exclusiveshading" => EdgeKind::ExclusiveShading,
         "sourcemodels" => EdgeKind::InstanceSource,
         "members" => EdgeKind::SetMember,
         "lightset" => EdgeKind::LightSet,
@@ -197,10 +254,11 @@ pub fn classify(
         "screens" => EdgeKind::Screen,
         "outputlayers" => EdgeKind::OutputLayer,
         "outputdrivers" => EdgeKind::OutputDriver,
-        other => {
-            return Err(ClassifyError {
-                to_attr: other.to_string(),
-            });
-        }
+        "facesets" => EdgeKind::FaceSet,
+        // Not an error: ɴsɪ's destinations are an open set. Carried,
+        // never resolved.
+        other => EdgeKind::Other {
+            to_attr: other.to_string(),
+        },
     })
 }

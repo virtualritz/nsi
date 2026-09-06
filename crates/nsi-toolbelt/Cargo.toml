@@ -15,7 +15,7 @@ documentation = "https://docs.rs/nsi-toolbelt/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 petname = { version = "3", default-features = false, features = ["default-rng", "default-words"] }
 rand = "0.10"
 ultraviolet = { version = "0.10", features = ["f64"] }

@@ -1,5 +1,101 @@
 # Changelog
 
+## Unreleased
+
+### `nsi-trait` 0.3.0 -> 0.4.0 (breaking)
+
+- The `where Self: 'call` bound is dropped from the `Nsi::Arg` GAT. An
+  implementor whose `Arg<'call>` borrows from `Self` would have relied
+  on it; none does, and keeping it made `impl Nsi for Context<'a>`
+  unprovable. Breaking for any implementor that repeated the bound,
+  hence the minor bump.
+
+### `nsi-ffi-wrap` 0.9.0 -> 0.10.0 (breaking)
+
+- `impl ParamValue for Arg` and `impl Nsi for Context`, which is what
+  lets a generic ɴsɪ consumer drive a live context, a recorder or a
+  parser through one trait.
+- Depends on `nsi-trait 0.4`, which is in its public API, so this is
+  breaking too.
+
+**These two bumps are the release chain.** The crates.io copies still
+carry the old code under `0.3.0` and `0.9.0`, so `nsi-intermediate` and
+`nsi-parse` cannot be published until they are released, in the order
+trait -> ffi-wrap -> intermediate -> parse.
+
+### `nsi-parse` (new crate)
+
+- Reads ɴsɪ scenes and drives a `nsi_trait::Nsi` sink, so the same
+  parser feeds a live renderer context, an `nsi-intermediate`
+  `Recorder`, or a backend's own implementation. It produces no scene
+  type of its own; one would force every consumer to translate.
+- `parse_stream` reads the `.nsi` stream. ɴsɪ publishes no grammar for
+  it, so the rules were read off the renderer: the format is
+  **keyword-terminated, not line-based** -- an entire scene on one line
+  parses, so the newlines and indents a renderer writes are formatting
+  rather than syntax.
+- `parse_compressed` detects gzip and zstd from the input's leading
+  bytes (`gzip`, `zstd` features).
+- `run_lua` reads a Lua scene by **running** it (`lua` feature). ɴsɪ's
+  Lua front end is a programming language -- a script may compute the
+  scene it describes -- so an interpreter is the only correct reader,
+  and that is a different trust decision from parsing a data file.
+- Errors name the byte offset of the offending token and what was
+  expected. A sink's own refusal is carried rather than stringified, and
+  the sink keeps the statements applied before the failure.
+- Gated against the renderer, not against this workspace: one test
+  parses what a real `apistream` context wrote, with grouped attributes
+  and wrapped continuation lines that our own writer never produces.
+
+### `nsi-intermediate`
+
+- **Resolution refuses the scenes that have no single answer** rather
+  than returning a plausible wrong one: more than one parent, a cycle, a
+  node not connected to `.root`, an instancing prototype asked for a
+  world transform, and a motion-sampled transform asked for at a time it
+  has no sample at.
+- Attributes are **gathered along the whole path**, `.root` included,
+  and every `attributes` node on it is kept -- ɴsɪ says they "will all
+  be considered". The previous winner-take-all resolution silently
+  dropped a shader whenever visibility sat on a nearer node.
+- Motion-sampled transforms resolve: `motion_times`,
+  `world_transform_at`, `world_transform_samples`. Nothing is
+  interpolated; element-wise interpolation of a matrix is wrong through
+  a rotation, so that decomposition stays the backend's.
+- Instancing is usable: `relative_transform` for a prototype's subtree,
+  and `instance_transforms` pairing each matrix with the prototype it
+  draws through `modelindices`.
+- `delete` honours `recursive`, with both of ɴsɪ's exceptions.
+- Node and connection identity follow ɴsɪ: a repeated `connect` updates
+  rather than duplicates, re-`create` with a different type is an error,
+  connections and attributes on unknown handles are refused, `.all`
+  works in all four `disconnect` positions, and the reserved handles
+  need no `create` and cannot be deleted.
+- Classification names every `<connection>` attribute the specification
+  declares -- five were missing, so an exporter using a lens shader or a
+  background layer could not record at all -- and **carries** any other
+  destination rather than refusing it. ɴsɪ's set is open: its §4.8
+  connects a node to another's `visibility`. A carried connection is
+  never resolved, so it cannot become a material by accident; the cost
+  is that a typo now does nothing quietly instead of failing loudly.
+- Replay was corrected against the renderer in several places that were
+  silently wrong: strings are escaped -- control bytes as three-digit
+  octal, which is what the renderer writes -- doubles are `%.17g` while
+  floats take the shorter of decimal and exponent form, argument flags are
+  letter prefixes inside the type name, an array is marked by a flag so
+  `array_len(1)` is real, an empty slice is `[ ]`, a pointer argument's
+  parameter line is omitted, and the reserved handles are never
+  declared.
+- New output formats behind features: `write_lua` (`lua`), and
+  `write_stream_with` with `Compression` (`gzip`, `zstd`). **Only gzip
+  is a format 3Delight reads**; zstd is for consumers of this workspace.
+- Resolution is linear in the scene rather than quadratic: an adjacency
+  index, which required `Scene`'s fields to become private. Read through
+  `nodes()`, `node()`, `edges()`, `edges_from()`, `edges_to()` and
+  `edges_to_attr()`; `Recorder::into_scene` hands the scene over without
+  copying it.
+
+
 ## 0.9.0
 
 ### `nsi-trait` (new crate)

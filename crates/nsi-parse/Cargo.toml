@@ -1,0 +1,37 @@
+[package]
+name = "nsi-parse"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "parser", "scene-description"]
+categories = ["graphics", "parser-implementations", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Fast parser for Nodal Scene Interface – ɴsɪ – streams and Lua scenes."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-parse/"
+repository = "https://github.com/virtualritz/nsi/"
+include = ["src/**/*", "/Cargo.toml", "/README.md"]
+
+[features]
+default = []
+# Read a Lua scene. This *runs* the script; see the crate documentation.
+lua = ["dep:mlua"]
+gzip = ["dep:flate2"]
+zstd = ["dep:zstd"]
+
+[dependencies]
+memchr = "2"
+smallvec = "1"
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
+flate2 = { version = "1", optional = true }
+mlua = { version = "0.10", features = ["lua54", "vendored"], optional = true }
+zstd = { version = "0.13", optional = true }
+
+[dev-dependencies]
+nsi-intermediate = { version = "0.1", path = "../nsi-intermediate", features = ["lua", "gzip", "zstd"] }
+
+[package.metadata.docs.rs]
+all-features = true

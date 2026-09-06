@@ -40,6 +40,40 @@ jobs:
         run: cargo build -p nsi-stream --features vulkan
       - name: Build nsi-stream (delight-bridge)
         run: cargo build -p nsi-stream --features delight-bridge
+      # `nsi-intermediate` and `nsi-parse`: everything except the gates
+      # that need a renderer. Those are named individually rather than
+      # excluded, so a new renderer-free test file is a deliberate
+      # addition here rather than something CI silently skips.
+      - name: Test nsi-intermediate
+        run: |
+          cargo test -p nsi-intermediate --lib --features lua,gzip,zstd
+          cargo test -p nsi-intermediate --test classifier
+      - name: Test nsi-parse
+        run: |
+          cargo test -p nsi-parse --features lua,gzip,zstd \
+            --lib --test roundtrip --test cross_crate --test lua \
+            --test compressed --test allocation
+
+  # Zero warnings, with every feature on. A feature-gated `match` arm
+  # that only becomes unreachable under `--all-features` is exactly what
+  # a default-feature clippy run misses.
+  lints:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Clippy
+        run: |
+          cargo clippy -p nsi-trait -p nsi-intermediate -p nsi-parse \
+            --all-targets --all-features -- -D warnings
+      - name: Format
+        run: cargo fmt -p nsi-intermediate -p nsi-parse --check
+      - name: Documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          cargo doc -p nsi-intermediate -p nsi-parse --no-deps
+          cargo doc -p nsi-intermediate -p nsi-parse --no-deps --all-features
 
   # Miri over the unsafe FFI marshalling and the display-driver lifecycle.
   #

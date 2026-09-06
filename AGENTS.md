@@ -20,13 +20,13 @@ cargo build
 cargo build --features output,toolbelt,delight
 
 # Run tests (requires 3Delight installed, DELIGHT env var set)
-cargo test --package nsi-core --features output
+cargo test --package nsi-ffi-wrap --features output
 
 # Run a specific test
-cargo test --package nsi-core test_sphere -- --nocapture
+cargo test --package nsi-ffi-wrap sphere -- --nocapture
 
 # Update expected test images (when making intentional render changes)
-RUST_TEST_UPDATE=1 cargo test --package nsi-core --features output
+RUST_TEST_UPDATE=1 cargo test --package nsi-ffi-wrap --features output
 
 # Run examples
 cargo run --example interactive
@@ -50,14 +50,26 @@ cargo doc --open
 
 ### Workspace Crates
 
-- **`nsi`** (root) -- Re-exports from nsi-core with feature-gated extensions.
-- **`nsi-core`** -- Core implementation: Context, Argument system, API bindings.
+- **`nsi`** (root) -- Re-exports from `nsi-ffi-wrap` with feature-gated
+  extensions.
+- **`nsi-trait`** -- The `Nsi` trait and its types, with no FFI
+  dependency. Everything else speaks through it.
+- **`nsi-ffi-wrap`** -- The FFI implementation: `Context`, the argument
+  system, the API bindings. Formerly `nsi-core`.
 - **`nsi-sys`** -- Low-level C FFI bindings generated via bindgen.
+- **`nsi-intermediate`** -- A renderer-agnostic intermediate
+  representation: records ɴsɪ calls, resolves the graph semantics into
+  flat facts, and writes `.nsi` streams and Lua scripts back out.
+  Specified in `specs/003-nsi-intermediate-representation`.
+- **`nsi-parse`** -- Reads `.nsi` streams and Lua scenes, driving any
+  `Nsi` implementation. Specified in `specs/004-nsi-parse`.
+- **`nsi-stream`** -- GPU-resident pixel streaming. Specified in
+  `specs/001-gpu-pixel-streaming`.
 - **`nsi-3delight`** -- 3Delight-specific nodes and shaders.
 - **`nsi-toolbelt`** -- Convenience methods for Context (scene setup helpers).
 - **`nsi-jupyter`** -- Jupyter notebook integration for rendering.
 
-### Key Components in nsi-core
+### Key Components in nsi-ffi-wrap
 
 **Context** (`context.rs`) -- Thread-safe handle for renderer communication. Uses `Arc<InnerContext>` for safe cloning. Lifetime parameter `'a` allows storing callbacks/references.
 
@@ -88,7 +100,7 @@ cargo doc --open
 
 ## Testing
 
-Tests are in `crates/nsi-core/tests/`. Image-based regression tests render at 320x240 and compare against expected images. The `output` feature is required for most tests.
+Tests are in `crates/nsi-ffi-wrap/tests/`. Image-based regression tests render at 320x240 and compare against expected images. The `output` feature is required for most tests.
 
 Key test files:
 

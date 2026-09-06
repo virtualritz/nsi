@@ -87,6 +87,35 @@
 //! recording is finished, [`Recorder::into_scene`] hands the scene over
 //! without copying it.
 //!
+//! # Output formats
+//!
+//! ɴsɪ has three front ends, and this crate can write two of them back
+//! out. Both are optional, so a backend that only wants the resolver
+//! pays for neither.
+//!
+//! | Feature | What it adds |
+//! | --- | --- |
+//! | *(none)* | [`write_stream`] -- the `.nsi` stream, ɴsɪ's own text format. |
+//! | `lua` | `write_lua` -- the same scene as a Lua script. |
+//! | `gzip` | `Compression::Gzip` for [`write_stream_with`]. |
+//! | `zstd` | `Compression::Zstd`. |
+//!
+//! The stream writer is unconditional because it is also this crate's
+//! verification backbone: the fidelity gate compares it against what
+//! 3Delight writes for the same calls.
+//!
+//! Compression is a property of the *file*, not of the format --
+//! 3Delight reads a compressed stream wherever it reads a plain one --
+//! so it is a parameter of [`write_stream_with`] rather than a separate
+//! emitter.
+//!
+//! Lua is not merely another spelling of the stream. ɴsɪ's Lua binding
+//! exposes fewer types than its C API: there is no `nsi.TypeDouble`, no
+//! `nsi.TypeInt64` and no pointer type. An attribute Lua cannot express
+//! is refused with a `LuaError::Inexpressible` rather than degraded,
+//! because emitting it untyped silently turns a double into a float and
+//! a large integer into a different number.
+//!
 //! # What it refuses to answer
 //!
 //! ɴsɪ permits scenes with no single correct answer, and this crate
@@ -147,6 +176,8 @@ pub const ALL: &str = ".all";
 
 mod edge;
 mod error;
+#[cfg(feature = "lua")]
+mod lua;
 mod owned;
 mod recorder;
 mod resolve;
@@ -155,8 +186,12 @@ mod stream;
 
 pub use edge::{ClassifyError, Edge, EdgeKind, classify};
 pub use error::RecordError;
+#[cfg(feature = "lua")]
+pub use lua::{LuaError, write_lua};
 pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
-pub use resolve::{Binding, IDENTITY, OutputLayer, RenderOutput, ResolveError};
+pub use resolve::{
+    Binding, IDENTITY, Instance, OutputLayer, RenderOutput, ResolveError,
+};
 pub use scene::{Node, Scene};
-pub use stream::write_stream;
+pub use stream::{Compression, write_stream, write_stream_with};

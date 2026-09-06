@@ -3,10 +3,11 @@
 Landed tasks are kept as the record of what shipped. Open tasks are the
 `Partial` and `Open` contract rows, and nothing else.
 
-Counts below are the modules as they stand: `owned` 5, `scene` 23,
-`recorder` 13, `stream` 3, `resolve` 41 (19 `tests`, 14 `binding_tests`,
-6 `output_tests`, 2 `instance_tests`), `classifier` 8,
-`stream_roundtrip` 1. Lib total 85; 94 with the integration tests.
+Counts below are the modules as they stand: `owned` 5, `recorder` 13,
+`resolve` 54, `scene` 33, `stream` 5 -- 110 in the library -- plus
+`classifier` 10, `compression` 4, `lua_roundtrip` 2,
+`stream_roundtrip` 1, and two doctests of which one is `ignore`d. 128
+with every feature.
 
 ## User Story 1: Record An ɴsɪ Scene (P1)
 
@@ -47,8 +48,7 @@ Counts below are the modules as they stand: `owned` 5, `scene` 23,
 - [x] T1.13a `connect` refuses an uncreated handle.
       Evidence: `scene::tests::connecting_an_uncreated_handle_is_an_error`,
       `the_reserved_handles_need_no_create`. Spec: R18.
-- [ ] T1.13b `set_attribute` on an uncreated handle still fabricates
-      one. Gate: `contracts/recording.md` uncreated-handle row.
+- [x] T1.13b `set_attribute` refuses an uncreated handle. See T6.7.
 - [x] T1.14 `disconnect` honours `.all` in all four positions.
       Evidence: `scene::tests::disconnect_all_matches_every_source`,
       `disconnect_all_matches_destinations_and_attributes`,
@@ -62,7 +62,7 @@ Counts below are the modules as they stand: `owned` 5, `scene` 23,
       `"value"` included. Evidence: `edge.rs` `Edge::args`;
       `recorder::tests::connect_records_the_priority_argument`.
       Spec: R16.
-- [ ] T1.16b `recursive` delete is still dropped.
+- [x] T1.16b `recursive` delete. See T6.11.
 - [ ] T1.17 Non-UTF-8 strings. The loss is at recording, not replay:
       the boundary is `nsi-ffi-wrap` `String::new`, which takes
       `Into<Vec<u8>>`. Making it `AsRef<str>` renders the bad case
@@ -184,3 +184,70 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
 - [ ] T5.13 Decide the attribute vocabulary: legacy or the documentation
       draft. `sourcemodels` to `objects` is the rename that fails
       silently. See `research.md` D10.
+
+## Found By Review, Rounds 3 And 4
+
+- [x] T6.1 A prototype has no single world transform; attributes still
+      gather through the instancer.
+      Evidence: `binding_tests::a_prototype_has_no_single_world_transform`,
+      `an_instancing_prototype_is_not_detached`. Spec: R20.
+- [x] T6.2 A prototype that is *also* placed directly resolves by that
+      path. The instancer was being reported as a second parent, which
+      made a legal scene unresolvable.
+      Evidence: `binding_tests::a_prototype_placed_directly_resolves_by_that_path`.
+- [x] T6.3 Reserved handles: never declared on replay, not deletable,
+      attributes without a `create`.
+      Evidence: `stream::tests::the_reserved_handles_are_never_declared`,
+      `scene::tests::the_reserved_nodes_cannot_be_deleted`,
+      `the_reserved_handles_take_attributes_without_a_create`. Spec: R23.
+- [x] T6.4 Instance sources ordered by their `index` argument.
+      Evidence: `binding_tests::instance_sources_are_ordered_by_their_index_attribute`.
+      Spec: R24.
+- [x] T6.5 Index the graph; resolution is linear.
+      Evidence: measured, 20k meshes 655 ms debug / 50 ms release.
+      `Scene`'s fields are private and it is `#[non_exhaustive]`.
+- [x] T6.6 `Recorder::into_scene`, and the `Scene` read accessors.
+- [x] T6.7 `set_attribute` refuses an uncreated handle. It fabricated a
+      typeless node that then satisfied the `connect` guard, silently
+      undoing T1.13a.
+      Evidence: `scene::tests::setting_an_attribute_on_an_uncreated_handle_is_an_error`.
+- [x] T6.8 Classify every `<connection>` the specification declares.
+      `lensshader`, `backgroundlayer`, `bounds`,
+      `visibility.set.subsurface` and `exclusiveshading` were rejected,
+      so an exporter using any of them could not record at all.
+      Evidence: `classifier::every_connection_the_specification_declares_is_classified`.
+- [x] T6.9 `Scene::relative_transform`, so a prototype's subtree
+      resolves in the space the instance matrix applies to.
+      Evidence: `binding_tests::a_prototype_subtree_resolves_relative_to_the_prototype`,
+      `relative_transform_rejects_a_node_off_the_chain`. Spec: R29.
+- [x] T6.10 `Scene::instance_transforms`, pairing `transformationmatrices`
+      with the prototype each draws through `modelindices`, and honouring
+      `disabledinstances`.
+      Evidence: `instance_tests::instances_pair_their_matrix_with_their_prototype`,
+      `a_negative_model_index_is_not_rendered`,
+      `disabled_instances_are_omitted`. Spec: R30.
+- [x] T6.11 Recursive `delete`, with ɴsɪ's two exceptions.
+      Evidence: `scene::tests::a_recursive_delete_takes_the_network_with_it`,
+      `a_recursive_delete_spares_a_node_used_elsewhere`,
+      `strength_blocks_a_recursive_delete`, `a_plain_delete_is_not_recursive`.
+      Spec: R31.
+- [x] T6.12 Lua and compressed stream output, behind features.
+      Evidence: `lua_roundtrip`, `compression`, and `contracts/output.md`.
+      Spec: R25-R28.
+- [ ] T6.13 Per-path world transforms for an instanced node. T6.9 and
+      T6.10 make instancing usable without them; this would make it
+      automatic.
+- [ ] T6.14 `INTERPOLATE_LINEAR` on a sampled transform.
+- [ ] T6.15 Sample times of an arbitrary attribute, for deforming
+      geometry whose `P` is sampled under a static transform.
+- [ ] T6.16 Decide the attribute vocabulary: legacy or documentation
+      draft. See `research.md` D10.
+- [x] T6.17 Test modules moved to their own files, per the workspace
+      rule that source files do not grow inline `#[cfg(test)]` blocks.
+      No source file is over 900 lines.
+- [x] T6.18a The release chain is prepared: `nsi-trait` 0.4.0,
+      `nsi-ffi-wrap` 0.10.0, every dependent repinned. `publish
+      --dry-run` now fails on the missing upstream *version* rather than
+      on a trait bound, which is the correct pre-publish state.
+- [ ] T6.18b Publish, in order. Irreversible and needs credentials, so
+      it is a person's action. See `plan.md`.

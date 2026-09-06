@@ -48,6 +48,7 @@ than it looks -- see the preconditions in `contracts/stream.md`.
 - [x] `contracts/classification.md`
 - [x] `contracts/resolution.md`
 - [x] `contracts/stream.md`
+- [x] `contracts/output.md`
 - [x] `quickstart.md`
 - [x] `tasks.md`
 - [x] `checklists/requirements.md`
@@ -81,16 +82,20 @@ still carries the `where Self: 'call` GAT bound that `b092555` dropped.
 Dropping it is a breaking change for any implementor that repeated it,
 so it needs a minor bump, not a patch.
 
-The order is therefore:
+The version numbers are now **prepared in the tree**: `nsi-trait` is
+`0.4.0`, `nsi-ffi-wrap` is `0.10.0`, and every dependent is repinned.
+What remains is the publishing itself, which is irreversible and needs
+credentials, so it is a person's action:
 
-1. `nsi-trait 0.4.0` -- the GAT change is breaking.
-2. `nsi-ffi-wrap 0.10.0` -- depends on the above, and `nsi-trait` is in
-   its public API, so this is breaking too.
-3. `nsi-intermediate 0.1.0`, pinning `nsi-trait = "0.4"` and
-   `nsi-ffi-wrap = "0.10"`.
-4. `nsi`, `nsi-toolbelt` and `nsi-3delight`, which re-export them.
+1. `cargo publish -p nsi-trait` -- 0.4.0, the GAT change is breaking.
+2. `cargo publish -p nsi-ffi-wrap` -- 0.10.0, depends on the above and
+   carries `nsi-trait` in its public API, so breaking too.
+3. `cargo publish -p nsi-intermediate` -- 0.1.0.
+4. `cargo publish -p nsi-parse` -- 0.1.0, dev-depends on the above.
+5. `nsi`, `nsi-toolbelt`, `nsi-3delight`, `nsi-jupyter` and `nsi-stream`
+   as they re-export them.
 
-This is a workspace-wide decision with semver consequences beyond this
-feature, which is why it is recorded here rather than taken. **A
-consumer in the same workspace, or one using a git dependency, is not
-blocked by any of it** -- only a crates.io release is.
+Until step 2 lands, `cargo publish --dry-run` for the last two fails
+with "no matching package named `nsi-ffi-wrap` found" -- which is the
+correct pre-publish state and not a defect. **A consumer in the same
+workspace, or one using a git dependency, is not blocked by any of it.**

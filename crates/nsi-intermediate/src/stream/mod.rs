@@ -54,8 +54,13 @@ fn quoted(value: &str) -> String {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
             '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
+            // Every other control byte is three-digit octal, which is
+            // what 3Delight writes -- a carriage return as `\015`. Left
+            // raw, it would end the statement.
+            control if (control as u32) < 0x20 => {
+                out.push_str(&format!("\\{:03o}", control as u32));
+            }
             _ => out.push(c),
         }
     }
@@ -109,6 +114,35 @@ fn format_f64(value: f64) -> String {
     }
 }
 
+/// Format an `f32` as 3Delight does.
+///
+/// A *different* printer from the one for doubles, which was a surprise
+/// worth writing down: a double is `%.17g` (`0.1` becomes
+/// `0.10000000000000001`), while a float is the shortest form that
+/// round-trips, written in whichever of decimal or exponent notation is
+/// shorter -- `1e5`, `1e-7`, but `123456790` and `0.1`. The exponent
+/// carries no `+` and no padding, where the double printer's does.
+///
+/// Rust's `Display` never chooses exponent notation, so `100000.0`
+/// would come out as `100000` where 3Delight writes `1e5`.
+fn format_f32(value: f32) -> String {
+    if value.is_finite() {
+        let decimal = format!("{value}");
+        let exponent = format!("{value:e}");
+        if exponent.len() < decimal.len() {
+            exponent
+        } else {
+            decimal
+        }
+    } else if value.is_nan() {
+        "nan".to_string()
+    } else if value.is_sign_negative() {
+        "-inf".to_string()
+    } else {
+        "inf".to_string()
+    }
+}
+
 /// Drop a decimal fraction's trailing zeros, and the point with them.
 fn trim_zeros(value: &str) -> String {
     if value.contains('.') {
@@ -118,6 +152,90 @@ fn trim_zeros(value: &str) -> String {
             .to_string()
     } else {
         value.to_string()
+    }
+}
+
+/// How a written ɴsɪ stream is compressed.
+///
+/// A compressed stream decompresses to exactly the plain one, so this
+/// is a property of the file rather than of the format.
+///
+/// **Only gzip is read by 3Delight.** `renderdl` reads a `.nsi.gz`
+/// wherever it reads a `.nsi`; handed a zstd stream it fails with
+/// `Invalid char`, and a context configured with
+/// `streamcompression="zstd"` writes plain text. So
+/// `Compression::Zstd` is for consumers of *this* crate -- archives,
+/// caches, transport -- and a file written with it is not something the
+/// renderer will read back.
+///
+/// Each variant beyond [`Compression::None`] costs a dependency and is
+/// behind the feature of the same name, so a consumer that wants neither
+/// pays for neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum Compression {
+    /// Write the stream as-is.
+    #[default]
+    None,
+    /// gzip, which 3Delight reads.
+    #[cfg(feature = "gzip")]
+    Gzip,
+    /// Zstandard.
+    ///
+    /// Not readable by 3Delight 2.9.207; see the type documentation.
+    #[cfg(feature = "zstd")]
+    Zstd,
+}
+
+impl Compression {
+    /// The conventional file-name suffix, appended to `.nsi`.
+    ///
+    /// Empty for [`Compression::None`].
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::None => "",
+            #[cfg(feature = "gzip")]
+            Self::Gzip => ".gz",
+            #[cfg(feature = "zstd")]
+            Self::Zstd => ".zst",
+        }
+    }
+}
+
+/// Write `scene` as an ɴsɪ stream, compressed.
+///
+/// Takes the writer by value because a compressor owns and must finish
+/// it; a half-written compressed stream is not a truncated file, it is
+/// an unreadable one.
+///
+/// # Errors
+///
+/// Any write failure, and any compressor failure.
+pub fn write_stream_with<W: Write>(
+    scene: &Scene,
+    mut out: W,
+    compression: Compression,
+) -> io::Result<()> {
+    match compression {
+        Compression::None => {
+            write_stream(scene, &mut out)?;
+            out.flush()
+        }
+        #[cfg(feature = "gzip")]
+        Compression::Gzip => {
+            let mut encoder = flate2::write::GzEncoder::new(
+                out,
+                flate2::Compression::default(),
+            );
+            write_stream(scene, &mut encoder)?;
+            encoder.finish()?.flush()
+        }
+        #[cfg(feature = "zstd")]
+        Compression::Zstd => {
+            let mut encoder = zstd::stream::write::Encoder::new(out, 0)?;
+            write_stream(scene, &mut encoder)?;
+            encoder.finish()?.flush()
+        }
     }
 }
 
@@ -208,7 +326,11 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
     }
 
     match &arg.data {
-        OwnedData::F32(v) => write_scalars(out, v)?,
+        OwnedData::F32(v) => {
+            let formatted: Vec<String> =
+                v.iter().copied().map(format_f32).collect();
+            write!(out, "{}", formatted.join(" "))?;
+        }
         OwnedData::F64(v) => {
             let formatted: Vec<String> =
                 v.iter().copied().map(format_f64).collect();
@@ -275,7 +397,10 @@ const fn components_per_element(type_tag: Type) -> usize {
 /// one -- `int` becomes `int[2]` under `array_len(2)`.
 fn type_name(arg: &OwnedArg) -> String {
     let base = base_type_name(arg.type_tag);
-    let sized = if arg.array_length > 1 {
+    // ɴsɪ marks an array with `NSIParamIsArray`, not by its length, and
+    // `array_len(1)` is a real one-element array: 3Delight writes
+    // `"al1" "float[1]" 2 [ 1 2 ]`. Keying on `> 1` dropped it.
+    let sized = if arg.flags & NSIParamFlags::IsArray.bits() != 0 {
         format!("{base}[{}]", arg.array_length)
     } else {
         base.to_string()
@@ -327,140 +452,4 @@ const fn base_type_name(type_tag: Type) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{format_f64, quoted};
-    use crate::{OwnedArg, OwnedData, Scene, write_stream};
-    use nsi_trait::Type;
-
-    /// The values 3Delight writes, captured from its own `apistream`
-    /// output. Rust's `Display` disagrees with every one of the first
-    /// four, so this is what stops the emitter drifting back.
-    #[test]
-    fn doubles_format_the_way_3delight_writes_them() {
-        for (value, expected) in [
-            (0.1f64, "0.10000000000000001"),
-            (1.0 / 3.0, "0.33333333333333331"),
-            (1e-7, "9.9999999999999995e-08"),
-            (1e20, "1e+20"),
-            (0.5, "0.5"),
-            (1.0, "1"),
-            (-0.0, "-0"),
-            (0.0, "0"),
-        ] {
-            assert_eq!(format_f64(value), expected, "for {value}");
-        }
-    }
-
-    /// ɴsɪ's `.global` "doesn't need to be created using NSICreate",
-    /// and 3Delight declares neither reserved handle. Emitting one
-    /// produces a `Create ".global" ""` that no renderer wrote -- and
-    /// every real scene sets `.global`.
-    #[test]
-    fn the_reserved_handles_are_never_declared() {
-        let mut scene = Scene::default();
-        scene.set_attribute(
-            crate::GLOBAL,
-            vec![OwnedArg {
-                name: "renderatlowpriority".to_string(),
-                type_tag: Type::I32,
-                array_length: 1,
-                flags: 0,
-                data: OwnedData::I32(vec![1]),
-            }],
-        );
-
-        let mut out = Vec::new();
-        write_stream(&scene, &mut out).expect("write");
-        let text = String::from_utf8(out).expect("utf-8");
-
-        assert!(
-            !text.contains("Create"),
-            "no Create for a reserved handle:\n{text}"
-        );
-        assert!(text.contains("SetAttribute \".global\""));
-    }
-
-    /// 3Delight writes an empty slice as `[ ]`, not as nothing. The rule
-    /// is "exactly one scalar is bare", not "more than one is
-    /// bracketed".
-    #[test]
-    fn an_empty_slice_still_brackets() {
-        let mut scene = Scene::default();
-        scene.create("m", "mesh").unwrap();
-        scene.set_attribute(
-            "m",
-            vec![OwnedArg {
-                name: "empty".to_string(),
-                type_tag: Type::F32,
-                array_length: 1,
-                flags: 0,
-                data: OwnedData::F32(Vec::new()),
-            }],
-        );
-
-        let mut out = Vec::new();
-        write_stream(&scene, &mut out).expect("write");
-        let text = String::from_utf8(out).expect("utf-8");
-
-        assert!(text.contains("[ ]"), "empty slice brackets:\n{text}");
-    }
-
-    /// A quote closes the literal and a newline ends the statement, so
-    /// an unescaped value turns into parseable ɴsɪ. The stream is a
-    /// persisted, cross-language format; this is data corruption, not
-    /// cosmetics.
-    #[test]
-    fn a_string_cannot_inject_a_statement() {
-        let injected = "say \"hi\"\nCreate \"evil\" \"mesh\"";
-        let escaped = quoted(injected);
-
-        assert!(!escaped.contains('\n'), "no raw newline: {escaped}");
-        assert_eq!(
-            escaped.matches('"').count() - escaped.matches("\\\"").count(),
-            2,
-            "only the delimiters are unescaped quotes"
-        );
-    }
-
-    /// The same, end to end: a handle and a value both carrying a quote
-    /// and a newline must leave the stream one statement per line.
-    #[test]
-    fn a_recorded_scene_with_hostile_strings_stays_one_statement_a_line() {
-        let mut scene = Scene::default();
-        scene.create("me\"ss\ny", "mesh").expect("new handle");
-        scene.set_attribute(
-            "me\"ss\ny",
-            vec![OwnedArg {
-                name: "na\"me".to_string(),
-                type_tag: Type::String,
-                array_length: 1,
-                flags: 0,
-                data: OwnedData::String(vec![
-                    "Create \"evil\" \"mesh\"".to_string(),
-                ]),
-            }],
-        );
-
-        let mut out = Vec::new();
-        write_stream(&scene, &mut out).expect("write");
-        let text = String::from_utf8(out).expect("utf-8");
-
-        assert_eq!(
-            text.lines().filter(|l| l.starts_with("Create ")).count(),
-            1,
-            "exactly one Create statement:\n{text}"
-        );
-
-        // And every quote on every line is either a delimiter or
-        // escaped, so a reader tokenises the line we meant to write.
-        for line in text.lines() {
-            let bare = line.replace("\\\\", "").matches('"').count()
-                - line.replace("\\\\", "").matches("\\\"").count();
-            assert_eq!(bare % 2, 0, "unbalanced quotes in {line:?}");
-            assert!(
-                !line.trim_start().starts_with("evil"),
-                "a value escaped its literal: {line:?}"
-            );
-        }
-    }
-}
+mod tests;

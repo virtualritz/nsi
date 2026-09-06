@@ -73,6 +73,7 @@ demonstrated rather than asserted.
 ## Non-Goals
 
 - Rendering. This surface produces no pixels.
+- `binarynsi`. See R28.
 - Any renderer-specific mapping. `Properties`, `SceneObject` and their
   kin belong to a backend spec.
 - `evaluate`. Procedurals and Lua imply an execution model this surface
@@ -90,13 +91,30 @@ demonstrated rather than asserted.
 - R3: Every argument except `Type::Reference` is copied during the call.
 - R4: `Type::Reference` stores the host address, never its contents, and
   is never forwarded to a renderer as an object link.
-- R5: Connection classification is exhaustive; an unknown destination
-  attribute is an error. A `from_attr` of `Some("")` is `None`. All
-  three ɴsɪ shader slots -- `surfaceshader`, `displacementshader`,
-  `volumeshader` -- are classified, as are `members`, `lightset` and
-  `shaderattributes`: ɴsɪ's documented light-set workflow connects
-  lights to a `set` node and that node to an `outputlayer`, and
-  rejecting either destination made the whole workflow unrecordable.
+- R5: Every `<connection>` attribute the specification declares is
+  classified by name. A `from_attr` of `Some("")` is `None`.
+
+  **A destination that is not one of them is carried, not refused.**
+  ɴsɪ's set of destinations is open: its own §4.8 connects one
+  `attributes` node to another's `visibility` to override a value, and
+  `facesets` appears in Listing 3.2. Enumerating them is therefore
+  impossible in principle, and refusing what is not listed made legal
+  scenes unrecordable -- an exporter using a lens shader or a face set
+  stopped on its first call.
+
+  The reason the classifier used to refuse still holds, and is met a
+  different way: an unlisted destination becomes `EdgeKind::Other`
+  carrying its own name, and **resolution never interprets it**. A
+  connection becomes a material, a transform link or an output route
+  only when its name says so, so the silent miscategorisation this
+  surface exists to prevent is still prevented.
+
+  The cost is real and worth stating: a typo'd destination is now
+  carried rather than rejected, so it silently does nothing instead of
+  failing loudly. 3Delight accepts it silently too, so this matches the
+  renderer rather than being stricter than it -- but a strictness that
+  caught real mistakes has been traded for the ability to record legal
+  scenes.
 - R6: Node and attribute order is insertion order.
 - R7: Motion samples are stored separately from static attributes and
   sorted by time. Sample times are keyed by a *total* order, so a `NaN`
@@ -148,8 +166,8 @@ demonstrated rather than asserted.
   documented on the method rather than designed away.
 - R16: Every `connect` argument is recorded whole, so `"strength"` --
   which blocks a recursive delete -- and `"value"` survive for a backend,
-  and replay emits what was passed. The arguments to `create` and
-  `delete` are still dropped.
+  and replay emits what was passed. `delete` reads `"recursive"` (R31).
+  ɴsɪ defines no `create` arguments, so there are none to drop.
 - R17: A node's identity is its handle. Re-`create` with the same type is
   a no-op and with a different type an error, because ɴsɪ says it
   "does nothing if all other parameters match ... Otherwise, it emits an
@@ -187,6 +205,58 @@ demonstrated rather than asserted.
   statement kept. Exactly one scalar is written bare; everything else is
   bracketed, an empty slice included, which 3Delight writes as `[ ]`.
 
+- R25: A recorded scene can be written back as an ɴsɪ stream (always),
+  as a compressed stream (`gzip` and `zstd` features), and as a Lua
+  script (`lua` feature). Compression is a property of the file, not the
+  format: a compressed stream decompresses to exactly the plain one.
+  **Only gzip is read by the renderer.** `renderdl` reads a `.nsi.gz`
+  wherever it reads a `.nsi`; handed a zstd stream it fails with
+  `Invalid char`, and a context configured with `streamcompression=
+  "zstd"` writes plain text. `zstd` is therefore for consumers of this
+  crate, and is documented as such rather than as an ɴsɪ format.
+- R26: ɴsɪ's Lua binding is narrower than its C API in three ways, and
+  an attribute it cannot express is refused rather than degraded:
+  - **Types.** `nsi.TypeDouble`, `nsi.TypeInt64` and a pointer type do
+    not exist. Those names are `nil`, and a parameter table whose `type`
+    is `nil` is a runtime error; passing the value untyped instead makes
+    a double a `float` and a large integer a different number.
+  - **Flags.** A parameter table has `name`, `data`, `type` and
+    `arraylength` and nothing else, so `per_vertex`, `per_face` and
+    `linear_interpolation` cannot be said. A per-vertex normal emitted
+    without its flag rebuilds a different surface.
+  - **Empty string arrays.** Setting one from Lua aborts the renderer
+    with a heap error rather than reporting a problem.
+- R27: A typed Lua parameter's `data` is always a table, even for a
+  single value. 3Delight reads a bare typed scalar as an empty array.
+- R28: `binarynsi` is a non-goal for now. ɴsɪ names it, but the encoding
+  is undocumented, and matching it means reading the renderer's bytes
+  rather than a specification.
+
+- R32: An argument is an array when ɴsɪ's `IsArray` flag says so, not
+  when its length exceeds one. `array_len(1)` is a real one-element
+  array and replays as `float[1]`.
+- R33: `f32` and `f64` replay through *different* printers, because
+  3Delight uses different ones. A double is `%.17g`. A float is written
+  as the shorter of decimal and exponent notation with an unpadded
+  exponent (`1e5`, `1e-7`), which agrees with the renderer on every
+  value the gate drives -- but **is not its algorithm**: 3Delight writes
+  `0.33333335` where Rust's shortest round-trip gives `0.33333334`, and
+  `2e-45` for the smallest denormal. Such values re-parse to the same
+  float, so the difference is textual, and the contract row says which
+  values are proven rather than claiming the general case.
+- R29: A node inside an instancing prototype has no world transform,
+  but it does have one relative to an ancestor, which is the space the
+  per-instance matrix applies in. `relative_transform` composes it.
+- R30: An `instances` node's `transformationmatrices` are paired with
+  the prototype each draws, matching `modelindices` against "the index
+  attribute of the model connection" rather than against position.
+  A negative model index and any handle in `disabledinstances` are not
+  rendered, as ɴsɪ says.
+- R31: `delete` honours ɴsɪ's `recursive`, with both documented
+  exceptions: a node is spared when it "also has connections which do
+  not eventually lead to the specified node", or when "their connection
+  to the deleted node was created with a strength greater than 0".
+
 ## Risks
 
 - **Silent connection miscategorisation.** A connection mapped to the
@@ -209,9 +279,12 @@ demonstrated rather than asserted.
   behaviour it does not exercise -- argument flags, float formatting,
   `Reference` payloads -- is unproven however green the gate is. Named
   per row in `contracts/stream.md` rather than folded into R10.
-- **Silently ignored call parameters.** ɴsɪ's `recursive` delete is
-  still dropped. R16 makes that a decision; the `Open` row in
-  `contracts/recording.md` makes it a tracked one.
+- **A gate shaped like its fixture.** Both round-trip gates prove only
+  what their scenes contain. Five separate defects -- argument flags in
+  Lua, `array_len(1)`, `f32` exponent formatting, empty slices and
+  `.global` -- were all invisible while green, and each was found by
+  widening the fixture rather than by the suite. Every new emitter rule
+  adds a case to the fixture for that reason.
 - **Reading the wrapper rather than the specification.** Two review
   rounds found this surface inventing semantics ɴsɪ already defines,
   because the `nsi-ffi-wrap` docstrings summarise where `nsi.pdf`

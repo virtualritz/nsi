@@ -1,6 +1,6 @@
 [package]
 name = "nsi-ffi-wrap"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
@@ -44,7 +44,7 @@ lazy_static = "1"
 log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
 nsi-sys = { version = "0.9", path = "../nsi-sys" }
-nsi-trait = { version = "0.3", path = "../nsi-trait" }
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
 null-terminated-str = "0.1"
 num_enum = "0.7"
 parking_lot = "0.12"

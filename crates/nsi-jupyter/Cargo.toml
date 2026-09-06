@@ -18,7 +18,7 @@ repository = "https://github.com/virtualritz/nsi/"
 base64 = "0.22"
 bytemuck = "1"
 evcxr_runtime = "1"
-nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = ["output"] }
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
 png = "0.18"
 rayon = "1"
 

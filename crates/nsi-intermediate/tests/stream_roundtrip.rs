@@ -103,6 +103,10 @@ where
         &[nsi::f32!("w_lin", 1.0).linear_interpolation()],
     )?;
 
+    // Control bytes. 3Delight writes these as three-digit octal, and a
+    // raw one would end the statement.
+    ctx.set_attribute("floats", &[nsi::string!("control", "a\u{1}b\rc\td")])?;
+
     // A string containing a quote and a newline. Unescaped, the newline
     // ends the statement and the rest parses as more of them.
     ctx.set_attribute(
@@ -118,6 +122,20 @@ where
     ctx.set_attribute(
         "floats",
         &[nsi::reference_stable!("callbackdata", &PAYLOAD)],
+    )?;
+
+    // Floats whose Rust `Display` and 3Delight's printer differ: it
+    // picks whichever of decimal and exponent notation is shorter.
+    ctx.set_attribute("floats", &[nsi::f32!("f_1e5", 100_000.0f32)])?;
+    ctx.set_attribute("floats", &[nsi::f32!("f_tiny", 1e-7f32)])?;
+    ctx.set_attribute("floats", &[nsi::f32!("f_wide", 123_456_792.0f32)])?;
+
+    // `array_len(1)` is a real one-element array. ɴsɪ marks it with a
+    // flag, not by its length, and 3Delight writes `float[1]`.
+    ctx.set_attribute(
+        "floats",
+        &[nsi::f32_slice!("one_array", &[1.0f32, 2.0])
+            .array_len(const { std::num::NonZeroUsize::new(1).unwrap() })],
     )?;
 
     // An empty slice: 3Delight writes `[ ]`, so the bracket rule is

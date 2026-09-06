@@ -13,7 +13,7 @@ because `Nsi` takes `&self` throughout. `Send + Sync`.
 | `state` | `Mutex<RenderState>` | owned |
 
 `type Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>`;
-`type Error = ClassifyError`.
+`type Error = RecordError`.
 
 ### `Scene`
 
@@ -69,11 +69,20 @@ asserted. Recorded from `Type::Reference`; never dereferenced.
 | `from` | `String` | |
 | `to` | `String` | |
 | `kind` | `EdgeKind` | |
-| `priority` | `i32` | ɴsɪ's `"priority"` connect argument, `0` when absent. Read only by `geometry_binding`. Not part of edge identity: `disconnect` ignores it. |
+| `args` | `Vec<OwnedArg>` | Every argument of the `connect` call, kept whole. `priority()`, `index()` and `strength()` read the three ɴsɪ defines. Not part of edge identity: `disconnect` ignores them. |
 
-`EdgeKind` is one of `SceneMember`, `AttributeBinding`, `SurfaceShader`,
-`DisplacementShader`, `VolumeShader`, `InstanceSource`, `Screen`,
-`OutputLayer`, `OutputDriver`, `ShaderNetwork { from_port, to_port }`.
+`EdgeKind` covers every `<connection>` attribute the ɴsɪ specification
+declares: `SceneMember`, `AttributeBinding`, `SurfaceShader`,
+`DisplacementShader`, `VolumeShader`, `LensShader`, `InstanceSource`,
+`SetMember`, `LightSet`, `ShaderAttributes`, `BackgroundLayer`,
+`Bounds`, `SubsurfaceSet`, `ExclusiveShading`, `Screen`, `OutputLayer`,
+`OutputDriver`, and `ShaderNetwork { from_port, to_port }`.
+`EdgeKind::to_attr` is the inverse of `classify`; they live together in
+`edge.rs` so the stream emitter, the Lua emitter and `disconnect` cannot
+drift apart.
+
+Most classes are *carried*, not resolved. Only membership, attribute
+binding, the shader slots, instancing and the output chain are walked.
 
 ### Resolved views
 
@@ -81,11 +90,15 @@ asserted. Recorded from `Type::Reference`; never dereferenced.
 volume_shader }` -- a list, because ɴsɪ considers *every* `attributes`
 node on the path;
 `RenderOutput { camera, screen, layers }`,
-`OutputLayer { handle, drivers }`. Produced on demand; not stored.
+`OutputLayer { handle, drivers }`,
+`Instance { source, transform }` -- one placement of an `instances`
+node, pairing its matrix with the position in `instance_sources` it
+draws. Produced on demand; not stored.
 
 ### `RecordError`
 
-Why a recording call failed: `Classify`, `UnknownHandle { handle }`,
+Why a recording call failed: `Classify`, `Reserved { handle }`,
+`UnknownHandle { handle }`,
 `TypeMismatch { handle, existing, requested }`. One type across every
 `Nsi` method, so a consumer matches on one thing.
 
@@ -93,7 +106,9 @@ Why a recording call failed: `Classify`, `UnknownHandle { handle }`,
 
 The scenes ɴsɪ permits and this crate refuses to answer for:
 `MultipleParents { handle, parents }`, `Cycle { handle }`,
-`Detached { handle }`, `MotionSampledTransform { handle }` and
+`Detached { handle }`, `Instanced { instancer }`,
+`NotAnAncestor { handle, ancestor }`,
+`MotionSampledTransform { handle }` and
 `MissingSampleAtTime { handle, time, available }`. Returned by
 `world_transform*`; the graph-shaped ones by `geometry_binding` too,
 since both walk the same chain.

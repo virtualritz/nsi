@@ -15,10 +15,10 @@ repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
 ash = { version = "0.38", optional = true }
-nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap", features = [
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = [
     "output",
 ], optional = true }
-nsi-trait = { version = "0.3", path = "../nsi-trait" }
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
 rustix = { version = "1", optional = true, features = [
     "event",
     "fs",

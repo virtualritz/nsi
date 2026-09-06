@@ -14,10 +14,11 @@ homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-intermediate/"
 repository = "https://github.com/virtualritz/nsi/"
 # Whitelist rather than blacklist, as the workspace root does: an
-# `exclude` list once shipped `.claude/` inside this very crate. The
-# stream gate is excluded deliberately -- it needs 3Delight and a
-# licence server, so shipping it makes `cargo test` fail for anyone who
-# installs the package without a renderer.
+# `exclude` list once shipped `.claude/` inside this very crate. Only
+# `tests/classifier.rs` ships: the other three test files each contain
+# at least one gate needing 3Delight and a licence server, so shipping
+# them would make `cargo test` fail for anyone who installs the package
+# without a renderer.
 include = [
     "src/**/*",
     "tests/classifier.rs",
@@ -25,8 +26,21 @@ include = [
     "/README.md",
 ]
 
+[features]
+default = []
+# Emit the scene as a Lua script, the third ɴsɪ front end alongside the
+# C API and the stream. Pulls in nothing; gated because not every
+# backend wants the surface.
+lua = []
+# `streamcompression` variants. ɴsɪ names `gzip` and `zstd`; each costs
+# a dependency, so each is its own flag.
+gzip = ["dep:flate2"]
+zstd = ["dep:zstd"]
+
 [dependencies]
 indexmap = "2"
+flate2 = { version = "1", optional = true }
+zstd = { version = "0.13", optional = true }
 # `nsi-ffi-wrap` is here for its `Arg` type only -- it is the shared
 # argument currency across backends, so consumers keep using the
 # `nsi::point_slice!` family unchanged. Constructing an `Arg` loads no
@@ -34,8 +48,8 @@ indexmap = "2"
 #
 # Path deps: this crate lives in the same workspace as what it depends
 # on, which is the whole point of it living here.
-nsi-ffi-wrap = { version = "0.9", path = "../nsi-ffi-wrap" }
-nsi-trait = { version = "0.3", path = "../nsi-trait" }
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
 
 [package.metadata.docs.rs]
 all-features = true

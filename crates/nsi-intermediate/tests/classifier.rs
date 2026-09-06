@@ -57,10 +57,20 @@ fn a_named_output_port_is_a_shader_network_edge() {
 /// The property that matters: an unknown destination must be an error,
 /// never a silently-defaulted reference. A misclassified connection does
 /// not fail loudly -- it renders, with materials on the wrong shapes.
+/// ɴsɪ's destinations are an open set: its own §4.8 connects a node to
+/// another's `visibility`, and `facesets` appears in Listing 3.2. So an
+/// unlisted destination is carried with its name rather than refused --
+/// and, crucially, never *resolved*, so it cannot become a material or
+/// an output route by accident. That was the reason the classifier
+/// rejected them, and it still holds.
 #[test]
-fn unknown_to_attr_is_rejected() {
-    let err = classify(None, "somethingnobodyimplemented").unwrap_err();
-    assert!(err.to_string().contains("somethingnobodyimplemented"));
+fn an_unlisted_destination_is_carried_with_its_name() {
+    assert_eq!(
+        classify(None, "somethingnobodyimplemented").unwrap(),
+        EdgeKind::Other {
+            to_attr: "somethingnobodyimplemented".to_string()
+        }
+    );
 }
 
 /// ɴsɪ documents `Some("")` as equivalent to `None`: both connect the
@@ -77,8 +87,13 @@ fn an_empty_source_port_is_not_a_port() {
         classify(Some(""), "surfaceshader").unwrap(),
         EdgeKind::SurfaceShader
     );
-    // And it still rejects, rather than falling back to a network edge.
-    assert!(classify(Some(""), "nonsense").is_err());
+    // And it is still not a shader-network edge.
+    assert_eq!(
+        classify(Some(""), "nonsense").unwrap(),
+        EdgeKind::Other {
+            to_attr: "nonsense".to_string()
+        }
+    );
 }
 
 /// ɴsɪ's documented light-set workflow connects lights to a `set` node,
@@ -95,25 +110,35 @@ fn set_membership_and_light_sets() {
     );
 }
 
-/// `to_attr` is the inverse of `classify`, and the two must change
-/// together. This is the property the stream roundtrip proves for the
-/// classes it drives; this proves it for all of them.
+/// The ɴsɪ specification declares exactly these `<connection>`
+/// attributes. A destination the classifier lacks is a hard stop for the
+/// exporter that uses it -- a scene with a lens shader or a background
+/// layer could not be recorded at all -- so the list is pinned here
+/// rather than grown one bug report at a time.
 #[test]
-fn to_attr_inverts_classify_for_every_class() {
+fn every_connection_the_specification_declares_is_classified() {
     for name in [
-        "objects",
-        "geometryattributes",
-        "surfaceshader",
+        "backgroundlayer",
+        "bounds",
         "displacementshader",
-        "volumeshader",
-        "sourcemodels",
-        "members",
+        "exclusiveshading",
+        "geometryattributes",
+        "lensshader",
         "lightset",
-        "shaderattributes",
-        "screens",
-        "outputlayers",
+        "members",
+        "objects",
         "outputdrivers",
+        "outputlayers",
+        "screens",
+        "shaderattributes",
+        "sourcemodels",
+        "surfaceshader",
+        "visibility.set.subsurface",
+        "volumeshader",
+        "facesets",
     ] {
-        assert_eq!(classify(None, name).unwrap().to_attr(), name);
+        let kind = classify(None, name)
+            .unwrap_or_else(|e| panic!("{name} is unclassified: {e}"));
+        assert_eq!(kind.to_attr(), name, "{name} does not round-trip");
     }
 }
