@@ -443,3 +443,16 @@ against this API now.
       `unreachable!` rather than a silent empty array: it would have
       recorded a different argument instead of refusing. Verified from
       outside the workspace: `E0624`.
+
+## Resolving Along A Placement
+
+- [x] T9.21 `placements_at`, `attribute_value_along` and
+      `shader_attribute_value_along`. Between them, `placements`
+      refusing a sampled node and `world_transform_interpolated_at`
+      refusing a multi-parent one left a *moving instanced* geometry
+      with no answer anywhere -- and instanced moving geometry is
+      ordinary content, not a corner. The path-based internals already
+      existed (`gathered_along`, `compose_along`); this exposes them.
+      `placements` and `placements_at` share `placements_with`, and
+      `attribute_value` shares `resolve_attribute` with its along-path
+      form, so neither pair can drift.

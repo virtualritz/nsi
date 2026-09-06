@@ -2965,3 +2965,172 @@ fn a_deep_chain_does_not_overflow_the_stack() {
     assert_eq!(placements.len(), 1);
     assert_eq!(placements[0].path.len(), DEPTH + 2);
 }
+
+// ---------------------------------------------------------------------
+// A moving instanced geometry, which no accessor could answer.
+// ---------------------------------------------------------------------
+
+/// A geometry under two *moving* parents.
+///
+/// `placements` refuses a sampled node and
+/// `world_transform_interpolated_at` refuses a multi-parent one, so
+/// this -- a crowd, foliage, a particle instance -- had no answer from
+/// either.
+#[test]
+fn a_moving_instanced_geometry_resolves_per_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xfA", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xfA", 1.0, vec![translate(10.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xfB", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xfB", 1.0, vec![translate(-4.0, 0.0, 0.0)])
+        .unwrap();
+
+    // Neither of the older accessors can answer this.
+    assert!(matches!(
+        scene.placements("q"),
+        Err(ResolveError::MotionSampledTransform { .. })
+    ));
+    assert!(matches!(
+        scene.world_transform_interpolated_at("q", 0.5),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+
+    let half = scene.placements_at("q", 0.5).unwrap();
+    assert_eq!(half.len(), 2);
+    assert_eq!(half[0].transform[12], 5.0);
+    assert_eq!(half[1].transform[12], -2.0);
+
+    // And the end sample is held, as the interpolating accessor does.
+    let after = scene.placements_at("q", 9.0).unwrap();
+    assert_eq!(after[0].transform[12], 10.0);
+}
+
+/// A static scene answers the same from both, so a backend can use
+/// `placements_at` alone.
+#[test]
+fn placements_at_agrees_with_placements_on_a_static_scene() {
+    let scene = scene_with_material();
+    assert_eq!(
+        scene.placements_at("mesh", 0.25).unwrap(),
+        scene.placements("mesh").unwrap(),
+    );
+}
+
+/// ɴsɪ's attribute rules apply *along a placement's path*.
+///
+/// `attribute_value` takes a geometry, so it refuses a multi-parent
+/// node -- meaning the `ATTR.priority` and `visibility.<ray>` rules
+/// could not be applied to an instanced object at all.
+#[test]
+fn attribute_rules_apply_along_a_placement_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.create("attrA", "attributes").unwrap();
+    scene.create("attrB", "attributes").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+    scene
+        .connect("attrA", None, "xfA", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("attrB", None, "xfB", "geometryattributes")
+        .unwrap();
+    // A path where the per-ray value must beat the default.
+    scene
+        .set_attribute(
+            "attrA",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.camera", vec![0]),
+            ],
+        )
+        .unwrap();
+    scene
+        .set_attribute("attrB", vec![integers("visibility", vec![1])])
+        .unwrap();
+
+    assert!(matches!(
+        scene.attribute_value("q", "visibility.camera"),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+
+    let placements = scene.placements("q").unwrap();
+    let a = scene
+        .attribute_value_along(&placements[0].path, "visibility.camera")
+        .expect("defined");
+    assert_eq!(a.node, "attrA");
+    assert_eq!(a.arg.name, "visibility.camera", "specificity still applies");
+
+    let b = scene
+        .attribute_value_along(&placements[1].path, "visibility.camera")
+        .expect("defined");
+    assert_eq!(b.node, "attrB");
+    assert_eq!(b.arg.name, "visibility", "falls back to the default");
+}
+
+/// The same for `shaderattributes`, including the primitive's own
+/// attributes outranking every container.
+#[test]
+fn shader_attributes_resolve_along_a_placement_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.create("saA", "attributes").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+    scene
+        .connect("saA", None, "xfA", "shaderattributes")
+        .unwrap();
+    scene
+        .set_attribute("saA", vec![integers("tint", vec![3])])
+        .unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(
+        scene
+            .shader_attribute_value_along(&placements[0].path, "tint")
+            .expect("on the A path")
+            .node,
+        "saA",
+    );
+    assert!(
+        scene
+            .shader_attribute_value_along(&placements[1].path, "tint")
+            .is_none(),
+        "nothing on the B path provides it",
+    );
+
+    // The primitive's own attribute still outranks the container.
+    scene
+        .set_attribute("q", vec![integers("tint", vec![9])])
+        .unwrap();
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(
+        scene
+            .shader_attribute_value_along(&placements[0].path, "tint")
+            .expect("on the primitive")
+            .node,
+        "q",
+    );
+}

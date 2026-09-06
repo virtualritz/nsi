@@ -953,7 +953,70 @@ impl Scene {
         name: &str,
     ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
         let gathered = self.gathered_attributes(geometry)?;
+        Ok(self.resolve_attribute(&gathered, name))
+    }
 
+    /// The same, along one [`Placement`]'s path.
+    ///
+    /// A geometry with more than one parent has no single path, so
+    /// [`Scene::attribute_value`] refuses it -- and then the rules it
+    /// applies could not be applied to an instanced object at all.
+    /// This takes the path from a placement instead.
+    ///
+    /// Infallible: the path has already been walked, so there is
+    /// nothing left to refuse.
+    pub fn attribute_value_along(
+        &self,
+        path: &[String],
+        name: &str,
+    ) -> Option<AttributeValue<'_>> {
+        let gathered = self.gathered_along(path, &EdgeKind::AttributeBinding);
+        self.resolve_attribute(&gathered, name)
+    }
+
+    /// The same, for the `shaderattributes` container.
+    ///
+    /// Proximity only, as [`Scene::shader_attribute_value`] explains,
+    /// and the geometry's own attributes still outrank every container.
+    pub fn shader_attribute_value_along(
+        &self,
+        path: &[String],
+        name: &str,
+    ) -> Option<AttributeValue<'_>> {
+        if let Some(geometry) = path.first()
+            && let Some((handle, node)) = self.node_entry(geometry)
+            && let Some(arg) = node.attrs.get(name)
+        {
+            return Some(AttributeValue {
+                node: handle,
+                arg,
+                priority: 0,
+            });
+        }
+
+        for (_, _, edge) in
+            self.gathered_along(path, &EdgeKind::ShaderAttributes)
+        {
+            let Some(node) = self.node(&edge.from) else {
+                continue;
+            };
+            if let Some(arg) = node.attrs.get(name) {
+                return Some(AttributeValue {
+                    node: &edge.from,
+                    arg,
+                    priority: 0,
+                });
+            }
+        }
+        None
+    }
+
+    /// ɴsɪ's attribute precedence over an already-gathered list.
+    fn resolve_attribute<'a>(
+        &'a self,
+        gathered: &[(usize, usize, &'a Edge)],
+        name: &str,
+    ) -> Option<AttributeValue<'a>> {
         // A per-ray visibility query also matches the default.
         let fallback = name
             .strip_prefix("visibility.")
@@ -998,7 +1061,7 @@ impl Scene {
             b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2))
         });
 
-        Ok(candidates.into_iter().next().map(|(_, _, _, value)| value))
+        candidates.into_iter().next().map(|(_, _, _, value)| value)
     }
 
     /// The sources of *shader* attributes for a geometry, in ɴsɪ's
@@ -1130,6 +1193,16 @@ impl Scene {
         &self,
         geometry: &str,
     ) -> Result<Vec<Placement>, ResolveError> {
+        self.placements_with(geometry, |path| self.compose_along(path))
+    }
+
+    /// The shared body of [`Scene::placements`] and
+    /// [`Scene::placements_at`], differing only in how a path composes.
+    fn placements_with(
+        &self,
+        geometry: &str,
+        compose: impl Fn(&[String]) -> Result<[f64; 16], ResolveError>,
+    ) -> Result<Vec<Placement>, ResolveError> {
         let mut paths = Vec::new();
         self.walk_placements(geometry, &mut paths)?;
 
@@ -1155,10 +1228,19 @@ impl Scene {
             };
         }
 
+        self.build_placements(paths, compose)
+    }
+
+    /// Resolve each walked path into a [`Placement`].
+    fn build_placements(
+        &self,
+        paths: Vec<Vec<String>>,
+        compose: impl Fn(&[String]) -> Result<[f64; 16], ResolveError>,
+    ) -> Result<Vec<Placement>, ResolveError> {
         paths
             .into_iter()
             .map(|path| {
-                let transform = self.compose_along(&path)?;
+                let transform = compose(&path)?;
                 let gathered =
                     self.gathered_along(&path, &EdgeKind::AttributeBinding);
                 let binding = if gathered.is_empty() {
@@ -1185,6 +1267,38 @@ impl Scene {
                 })
             })
             .collect()
+    }
+
+    /// Every placement of `geometry`, with each transform interpolated
+    /// at `time`.
+    ///
+    /// [`Scene::placements`] refuses a motion-sampled node and
+    /// [`Scene::world_transform_interpolated_at`] refuses a node with
+    /// more than one parent, so a *moving instanced* geometry -- a
+    /// crowd, foliage, a particle instance -- had no answer from either.
+    /// This is that answer.
+    ///
+    /// The end sample is held outside the sampled range, exactly as
+    /// [`Scene::world_transform_interpolated_at`] describes.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::placements`], less
+    /// [`ResolveError::MotionSampledTransform`], which is the case this
+    /// exists to answer.
+    pub fn placements_at(
+        &self,
+        geometry: &str,
+        time: f64,
+    ) -> Result<Vec<Placement>, ResolveError> {
+        self.placements_with(geometry, |path| {
+            path.iter().try_fold(IDENTITY, |matrix, node| {
+                Ok(match self.local_transform_interpolated_at(node, time)? {
+                    Some(local) => mul(matrix, local),
+                    None => matrix,
+                })
+            })
+        })
     }
 
     /// Depth-first over every parent, collecting root-ward paths.
