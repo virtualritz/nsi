@@ -13,6 +13,7 @@
 //! rather than a copy, because that is what ɴsɪ passes through.
 
 use core::ffi::{CStr, c_char, c_void};
+use nsi_ffi_wrap::Arg;
 use nsi_trait::{ParamValue, Type};
 
 /// A raw host address recorded from an ɴsɪ `Reference` argument.
@@ -147,7 +148,12 @@ impl OwnedArg {
     /// by argument, which is cheaper than a `Result` every internal
     /// caller would have to unwrap for a case that cannot arise.
     /// Callers wanting an [`OwnedArg`] build one from its fields.
-    pub(crate) fn from_param<P: ParamValue>(param: &P) -> Self {
+    ///
+    /// It takes `Arg` rather than any `ParamValue` for the same reason:
+    /// while it stayed generic, "unreachable" rested on nobody in this
+    /// crate ever passing something else, which is a habit rather than
+    /// a guarantee. Named, the compiler holds it.
+    pub(crate) fn from_param(param: &Arg<'_, '_>) -> Self {
         let type_tag = param.type_tag();
 
         // The C call hands the renderer `count = len / array_length`

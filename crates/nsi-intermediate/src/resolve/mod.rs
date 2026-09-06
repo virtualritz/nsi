@@ -579,19 +579,7 @@ impl Scene {
         handle: &str,
     ) -> Result<[f64; 16], ResolveError> {
         let chain = self.transform_chain(handle)?;
-
-        chain.iter().try_fold(IDENTITY, |matrix, node| {
-            if self.has_motion_transform(node) {
-                Err(ResolveError::MotionSampledTransform {
-                    handle: node.clone(),
-                })
-            } else {
-                Ok(match self.local_transform(node) {
-                    Some(local) => mul(matrix, local),
-                    None => matrix,
-                })
-            }
-        })
+        self.compose_along(&chain)
     }
 
     /// Every time at which a transform in `handle`'s chain is sampled,
@@ -1143,12 +1131,28 @@ impl Scene {
         geometry: &str,
     ) -> Result<Vec<Placement>, ResolveError> {
         let mut paths = Vec::new();
-        self.walk_placements(geometry, &mut Vec::new(), &mut paths)?;
+        self.walk_placements(geometry, &mut paths)?;
 
         if paths.is_empty() {
-            return Err(ResolveError::Detached {
-                handle: geometry.to_string(),
-            });
+            // A prototype reached only through an `instances` node has
+            // no *direct* placement, and 3Delight draws it -- the
+            // instancer supplies its matrices. Calling that `Detached`
+            // said "not in the scene" about something that renders, and
+            // contradicted both this function's own documentation and
+            // `an_instancing_prototype_is_not_detached`. An empty list
+            // is the honest answer: no direct placements, ask
+            // `instance_transforms` for the instancer's.
+            let instanced = self
+                .edges_from(geometry)
+                .any(|edge| edge.kind == EdgeKind::InstanceSource);
+
+            return if instanced {
+                Ok(Vec::new())
+            } else {
+                Err(ResolveError::Detached {
+                    handle: geometry.to_string(),
+                })
+            };
         }
 
         paths
@@ -1184,63 +1188,84 @@ impl Scene {
     }
 
     /// Depth-first over every parent, collecting root-ward paths.
+    ///
+    /// An explicit stack, not recursion: measured, the recursive form
+    /// aborted the process on a chain 40 000 deep on the main thread
+    /// and 10 000 deep on a spawned one -- and a stack overflow kills
+    /// the process rather than returning an error a backend could
+    /// handle. `chain` is iterative for the same reason.
     fn walk_placements(
         &self,
-        current: &str,
-        prefix: &mut Vec<String>,
+        geometry: &str,
         out: &mut Vec<Vec<String>>,
     ) -> Result<(), ResolveError> {
-        if prefix.iter().any(|seen| seen == current) {
-            return Err(ResolveError::Cycle {
-                handle: current.to_string(),
-            });
+        // (node, how many of its parents have been taken)
+        let mut stack: Vec<(String, usize)> = vec![(geometry.to_string(), 0)];
+        // The handles on the stack, for the cycle check. A set rather
+        // than scanning the stack, which was quadratic in the depth:
+        // 523 ms against 14 ms on a 20 000-node chain.
+        let mut on_path: HashSet<String> = HashSet::new();
+        on_path.insert(geometry.to_string());
+
+        while let Some((current, taken)) = stack.last().cloned() {
+            if taken == 0 && current == crate::ROOT {
+                out.push(
+                    stack.iter().map(|(handle, _)| handle.clone()).collect(),
+                );
+                stack.pop();
+                on_path.remove(&current);
+                continue;
+            }
+
+            // Only direct placements branch. An `instances` connection
+            // is not a path in this sense: the instancer holds a matrix
+            // per instance rather than one for the prototype.
+            let parent = self
+                .edges_from(&current)
+                .filter(|edge| edge.kind == EdgeKind::SceneMember)
+                .nth(taken)
+                .map(|edge| edge.to.clone());
+
+            let Some(parent) = parent else {
+                stack.pop();
+                on_path.remove(&current);
+                continue;
+            };
+
+            stack.last_mut().expect("just read").1 += 1;
+
+            if !on_path.insert(parent.clone()) {
+                return Err(ResolveError::Cycle { handle: parent });
+            }
+            stack.push((parent, 0));
         }
 
-        prefix.push(current.to_string());
-
-        if current == crate::ROOT {
-            out.push(prefix.clone());
-            prefix.pop();
-            return Ok(());
-        }
-
-        // Only direct placements branch. An `instances` connection is
-        // not a path in this sense: the instancer holds a matrix per
-        // instance rather than one for the prototype.
-        let parents: Vec<String> = self
-            .edges_from(current)
-            .filter(|edge| edge.kind == EdgeKind::SceneMember)
-            .map(|edge| edge.to.clone())
-            .collect();
-
-        for parent in parents {
-            self.walk_placements(&parent, prefix, out)?;
-        }
-
-        prefix.pop();
         Ok(())
     }
 
     /// Compose the transforms along an already-walked path.
+    ///
+    /// The one composition [`Scene::world_transform`] and
+    /// [`Scene::placements`] both use, so the two cannot disagree about
+    /// multiplication order or about refusing a sampled node -- it was
+    /// a copy of this fold, and a reversed `mul` in the copy went
+    /// unnoticed because every placement fixture used translations,
+    /// which commute.
     fn compose_along(
         &self,
         path: &[String],
     ) -> Result<[f64; 16], ResolveError> {
         path.iter().try_fold(IDENTITY, |matrix, node| {
-            if let Some(sampled) = self.node(node)
-                && sampled
-                    .time_attrs
-                    .iter()
-                    .any(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
-            {
-                return Err(ResolveError::MotionSampledTransform {
+            if self.has_motion_transform(node) {
+                Err(ResolveError::MotionSampledTransform {
                     handle: node.clone(),
-                });
+                })
+            } else {
+                Ok(match self.local_transform(node) {
+                    Some(local) => mul(matrix, local),
+                    None => matrix,
+                })
             }
-            Ok(match self.local_transform(node) {
-                Some(local) => mul(matrix, local),
-                None => matrix,
-            })
         })
     }
 

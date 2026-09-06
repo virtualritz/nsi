@@ -2776,3 +2776,192 @@ fn a_cyclic_placement_path_is_refused() {
         Err(ResolveError::Cycle { .. })
     ));
 }
+
+/// A prototype reached only through an `instances` node has no *direct*
+/// placement, and is not detached: 3Delight draws it, at the matrices
+/// the instancer carries.
+///
+/// This returned `Detached` -- "not in the scene" about something that
+/// renders -- contradicting both `placements`' own documentation and
+/// `an_instancing_prototype_is_not_detached`. Rendered: a quad reached
+/// only through an instancer translated `+15` appears at that offset.
+#[test]
+fn an_instancer_only_prototype_has_no_direct_placements() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "inst", "sourcemodels").unwrap();
+
+    assert_eq!(
+        scene.placements("q").unwrap(),
+        Vec::new(),
+        "no direct placements; the instancer carries them",
+    );
+
+    // A node reaching nothing at all is still an error, so the empty
+    // list means "ask the instancer", not "not drawn".
+    scene.create("orphan", "mesh").unwrap();
+    assert!(matches!(
+        scene.placements("orphan"),
+        Err(ResolveError::Detached { .. })
+    ));
+}
+
+/// A geometry both directly placed *and* instanced keeps its direct
+/// placement. 3Delight draws both copies.
+#[test]
+fn a_directly_placed_prototype_keeps_its_placement() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "inst", "sourcemodels").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute("xf", vec![translate(3.0, 0.0, 0.0)])
+        .unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(placements.len(), 1);
+    assert_eq!(placements[0].path, vec!["q", "xf", ".root"]);
+    assert_eq!(placements[0].transform[12], 3.0);
+}
+
+/// Composition order, with matrices that do **not** commute.
+///
+/// Every earlier placement fixture used pure translations, so reversing
+/// `mul` in the composition changed nothing and the mutation survived.
+#[test]
+fn placement_composition_order_matches_world_transform() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("q", None, "inner", "objects").unwrap();
+    scene.set_attribute("outer", vec![scale(2.0)]).unwrap();
+    scene
+        .set_attribute("inner", vec![translate(5.0, 0.0, 0.0)])
+        .unwrap();
+
+    // scale-then-translate gives 10; the reverse order gives 5.
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(placements[0].transform[12], 10.0);
+    assert_eq!(
+        placements[0].transform,
+        scene.world_transform("q").unwrap(),
+        "one composition, so the two cannot disagree",
+    );
+}
+
+/// A placement includes the node's own matrix, as `world_transform`
+/// does. Dropping the first entry of the path went unnoticed because
+/// every fixture asked about a geometry with no matrix of its own.
+#[test]
+fn a_placement_includes_the_nodes_own_matrix() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("parent", "transform").unwrap();
+    scene.connect("parent", None, ".root", "objects").unwrap();
+    scene.connect("xf", None, "parent", "objects").unwrap();
+    scene
+        .set_attribute("xf", vec![translate(4.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute("parent", vec![translate(1.0, 0.0, 0.0)])
+        .unwrap();
+
+    let placements = scene.placements("xf").unwrap();
+    assert_eq!(placements[0].transform[12], 5.0);
+    assert_eq!(
+        placements[0].transform,
+        scene.world_transform("xf").unwrap(),
+    );
+}
+
+/// A motion-sampled node on the path is refused, not silently treated
+/// as identity. `local_transform` reads only the static attributes, so
+/// deleting the check yielded identity for a moving parent.
+#[test]
+fn a_sampled_transform_refuses_a_placement() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(9.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert!(matches!(
+        scene.placements("q"),
+        Err(ResolveError::MotionSampledTransform { .. })
+    ));
+}
+
+/// The walk does not branch through an `instances` connection: that is
+/// not a path, and walking it would compose the instancer's identity in
+/// place of the per-instance matrices.
+#[test]
+fn the_placement_walk_does_not_follow_an_instancer() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("inst", None, "xf", "objects").unwrap();
+    scene.connect("q", None, "inst", "sourcemodels").unwrap();
+    scene
+        .set_attribute("xf", vec![translate(7.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.placements("q").unwrap(),
+        Vec::new(),
+        "reached only through the instancer, so no direct placement",
+    );
+}
+
+/// A deep chain must not abort the process.
+///
+/// The walk was recursive and, measured, overflowed the stack at about
+/// 10 000 nodes on a spawned thread -- which is what a test harness and
+/// most backends use. A stack overflow kills the process rather than
+/// returning an error a caller can handle, so depth is a correctness
+/// property here, not a performance one. 12 000 is past the recursive
+/// limit and cheap to build.
+#[test]
+fn a_deep_chain_does_not_overflow_the_stack() {
+    const DEPTH: usize = 12_000;
+
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    for level in 0..DEPTH {
+        scene.create(&format!("xf{level}"), "transform").unwrap();
+    }
+    scene.connect("xf0", None, ".root", "objects").unwrap();
+    for level in 1..DEPTH {
+        scene
+            .connect(
+                &format!("xf{level}"),
+                None,
+                &format!("xf{}", level - 1),
+                "objects",
+            )
+            .unwrap();
+    }
+    scene
+        .connect("q", None, &format!("xf{}", DEPTH - 1), "objects")
+        .unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(placements.len(), 1);
+    assert_eq!(placements[0].path.len(), DEPTH + 2);
+}
