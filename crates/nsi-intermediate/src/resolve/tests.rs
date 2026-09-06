@@ -4040,3 +4040,78 @@ fn a_double_typed_matrix_is_not_a_matrix() {
         "the declared type is not `doublematrix`, so there is no matrix",
     );
 }
+
+/// A count-changing sample drops **only itself**, unlike an unreadable
+/// one, which discards every sample before it.
+///
+/// The two rules sit next to each other and behave oppositely, and only
+/// one was tested. Rendered: three matrices at `t=0`, two at `t=0.5`,
+/// three at `t=1` gives an image **identical** to the same scene
+/// without the middle sample -- so `E6023` drops that sample and the
+/// neighbours still blur between them. `E6007`, the type error, does
+/// the other thing.
+///
+/// The earlier count test used two samples with the change last, where
+/// "drop it" and "discard before it" agree.
+#[test]
+fn a_count_change_drops_only_itself_unlike_a_type_error() {
+    let three_at = |x: f64| {
+        [
+            instance_matrix(-x),
+            instance_matrix(x),
+            instance_matrix(0.0),
+        ]
+        .concat()
+    };
+
+    let build = |with_middle: bool| {
+        let mut scene = Scene::default();
+        scene.create("inst", "instances").unwrap();
+        scene.create("proto", "mesh").unwrap();
+        scene.connect("inst", None, ".root", "objects").unwrap();
+        scene
+            .connect("proto", None, "inst", "sourcemodels")
+            .unwrap();
+        scene
+            .set_attribute_at_time(
+                "inst",
+                0.0,
+                vec![doubles("transformationmatrices", three_at(1.0))],
+            )
+            .unwrap();
+        if with_middle {
+            let two = [instance_matrix(-0.2), instance_matrix(0.2)].concat();
+            scene
+                .set_attribute_at_time(
+                    "inst",
+                    0.5,
+                    vec![doubles("transformationmatrices", two)],
+                )
+                .unwrap();
+        }
+        scene
+            .set_attribute_at_time(
+                "inst",
+                1.0,
+                vec![doubles("transformationmatrices", three_at(1.5))],
+            )
+            .unwrap();
+        scene
+    };
+
+    // Identical answers with and without the mismatched middle sample,
+    // as the renders are identical.
+    for time in [0.0, 0.25, 0.75, 1.0] {
+        assert_eq!(
+            build(true).instance_transforms_at("inst", time).unwrap(),
+            build(false).instance_transforms_at("inst", time).unwrap(),
+            "the count-changing sample is dropped, not a barrier, at {time}",
+        );
+    }
+
+    // And it still blurs across the middle, which "discard before"
+    // would have collapsed to the `t=1` set.
+    let mid = build(true).instance_transforms_at("inst", 0.5).unwrap();
+    assert_eq!(mid.len(), 3);
+    assert_eq!(mid[0].transform[12], -1.25, "halfway between -1 and -1.5");
+}
