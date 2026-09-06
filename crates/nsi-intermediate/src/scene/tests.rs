@@ -955,6 +955,21 @@ fn changes_are_not_part_of_scene_equality() {
     assert_eq!(synchronised, build());
 }
 
+/// What an [`Affected`]'s roots stand for, expanded.
+///
+/// The roots are the answer; this is what a consumer that wants the
+/// list does with them, and what these tests assert against.
+fn affected_nodes<'a>(
+    scene: &'a Scene,
+    affected: &Affected<'a>,
+) -> IndexSet<&'a str> {
+    let mut all = IndexSet::new();
+    for root in &affected.roots {
+        all.extend(scene.descendants(root));
+    }
+    all
+}
+
 /// A transform edit dirties everything under it -- the inverse of the
 /// chain walk resolution already does upward.
 #[test]
@@ -978,10 +993,13 @@ fn a_moved_transform_dirties_its_subtree() {
 
     let changes = scene.take_changes();
     let affected = scene.affected(&changes);
-    assert!(affected.nodes.contains("q"), "two levels down");
-    assert!(affected.nodes.contains("inner"));
     assert!(
-        !affected.nodes.contains("elsewhere"),
+        affected_nodes(&scene, &affected).contains("q"),
+        "two levels down"
+    );
+    assert!(affected_nodes(&scene, &affected).contains("inner"));
+    assert!(
+        !affected_nodes(&scene, &affected).contains("elsewhere"),
         "and nothing on another branch",
     );
 }
@@ -1028,8 +1046,14 @@ fn a_shader_edit_reaches_the_geometry_bound_through_it() {
 
     let changes = scene.take_changes();
     let affected = scene.affected(&changes);
-    assert!(affected.nodes.contains("q"), "through the set's members");
-    assert!(!affected.nodes.contains("other"), "not the whole scene");
+    assert!(
+        affected_nodes(&scene, &affected).contains("q"),
+        "through the set's members"
+    );
+    assert!(
+        !affected_nodes(&scene, &affected).contains("other"),
+        "not the whole scene"
+    );
     assert!(affected.shaders.contains("shader"));
 }
 
@@ -1059,9 +1083,9 @@ fn a_shader_parameter_edit_is_not_geometry_work() {
     let affected = scene.affected(&changes);
     assert!(affected.shaders.contains("shader"));
     assert!(
-        affected.nodes.is_empty(),
+        affected_nodes(&scene, &affected).is_empty(),
         "a material parameter costs no geometry work: {:?}",
-        affected.nodes,
+        affected_nodes(&scene, &affected),
     );
 }
 
@@ -1087,9 +1111,9 @@ fn a_prototypes_ancestor_reaches_the_instancer() {
 
     let changes = scene.take_changes();
     let affected = scene.affected(&changes);
-    assert!(affected.nodes.contains("proto"));
+    assert!(affected_nodes(&scene, &affected).contains("proto"));
     assert!(
-        affected.nodes.contains("inst"),
+        affected_nodes(&scene, &affected).contains("inst"),
         "the instancer draws it, and is reached the other way round",
     );
 }
@@ -1110,7 +1134,10 @@ fn a_global_edit_dirties_everything() {
     let changes = scene.take_changes();
     let affected = scene.affected(&changes);
     assert!(affected.everything);
-    assert!(affected.nodes.is_empty(), "not a copy of the scene");
+    assert!(
+        affected_nodes(&scene, &affected).is_empty(),
+        "not a copy of the scene"
+    );
 }
 
 /// A `disconnect` naming `.all` severs several children at once, and
@@ -1130,8 +1157,8 @@ fn a_wildcard_disconnect_dirties_every_child_it_severed() {
 
     let changes = scene.take_changes();
     let affected = scene.affected(&changes);
-    assert!(affected.nodes.contains("a"));
-    assert!(affected.nodes.contains("b"));
+    assert!(affected_nodes(&scene, &affected).contains("a"));
+    assert!(affected_nodes(&scene, &affected).contains("b"));
 }
 
 /// **The gate for the whole feature: `changed ⊆ affected`.**
@@ -1458,7 +1485,8 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 // Accepting either left the distinction the API sells
                 // unverified.
                 assert!(
-                    was == now || affected.nodes.contains(handle),
+                    was == now
+                        || affected_nodes(scene, affected).contains(handle),
                     "{what}: `{handle}` answers differently and is not in the \
                  affected set\n  before: {was}\n   after: {now}",
                 );

@@ -197,9 +197,16 @@ pub struct Changes {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Affected<'a> {
-    /// Geometry, transforms, instancers, cameras and lights whose
-    /// resolved answers may have moved.
-    pub nodes: IndexSet<&'a str>,
+    /// The **roots** of what may have moved: these nodes and
+    /// everything below them on the `objects` chain.
+    ///
+    /// Roots rather than an enumeration, because enumerating is
+    /// O(scene) for the edit that matters least -- moving one
+    /// transform near the top of a production scene names every
+    /// geometry under it, and a set-dressing scene has millions. The
+    /// consumer walks its own objects anyway;
+    /// [`Scene::descendants`] expands a root when it wants the list.
+    pub roots: IndexSet<&'a str>,
     /// Shader nodes whose own attributes or network changed.
     ///
     /// Kept apart because they map one-to-one onto a renderer's
@@ -216,6 +223,15 @@ pub struct Affected<'a> {
     /// When this is set, `nodes` is not filled: the answer is
     /// everything, and listing it would be a copy of the scene.
     pub everything: bool,
+}
+
+/// Name a root of the affected set.
+///
+/// A root stands for itself and everything below it, so a handle that
+/// is already named needs no second entry -- and a caller expanding
+/// two overlapping roots gets the union either way.
+fn insert_root<'a>(roots: &mut IndexSet<&'a str>, handle: &'a str) {
+    roots.insert(handle);
 }
 
 /// Record an edge in one of [`Changes`]'s lists, at most once.
@@ -361,12 +377,12 @@ impl Scene {
                     affected.shaders.insert(handle.as_str());
                 }
                 Some(node) if node.node_type == "attributes" => {
-                    self.through_bindings(handle, &mut affected.nodes);
+                    self.through_bindings(handle, &mut affected.roots);
                 }
                 // Anything else is a scene node: it may be the thing
                 // that moved, and it may be a transform with a subtree
                 // under it. The descent answers both.
-                _ => self.descend(handle, &mut affected.nodes),
+                _ => insert_root(&mut affected.roots, handle),
             }
             if self.is_output_node(handle) {
                 affected.outputs = true;
@@ -374,7 +390,7 @@ impl Scene {
         }
 
         for handle in &changes.created {
-            self.descend(handle, &mut affected.nodes);
+            insert_root(&mut affected.roots, handle);
         }
 
         // A deleted handle is gone from the graph, so there is nothing
@@ -382,7 +398,7 @@ impl Scene {
         // the edges the delete took with it, which is why they are
         // recorded in full.
         for handle in changes.deleted.keys() {
-            affected.nodes.insert(handle.as_str());
+            affected.roots.insert(handle.as_str());
         }
 
         for edge in changes
@@ -402,7 +418,7 @@ impl Scene {
                 // A child, a set member: whatever hung below the
                 // source now hangs somewhere else.
                 EdgeKind::SceneMember | EdgeKind::SetMember => {
-                    self.descend(&edge.from, &mut affected.nodes);
+                    insert_root(&mut affected.roots, &edge.from);
                     if self.is_output_node(&edge.from)
                         || self.is_output_node(&edge.to)
                     {
@@ -417,13 +433,13 @@ impl Scene {
                 // severed `sourcemodels` leaves the instancer drawing
                 // a prototype the scene no longer has.
                 EdgeKind::InstanceSource => {
-                    self.descend(&edge.from, &mut affected.nodes);
-                    affected.nodes.insert(edge.to.as_str());
+                    insert_root(&mut affected.roots, &edge.from);
+                    affected.roots.insert(edge.to.as_str());
                 }
                 // A container bound to something, or unbound from it.
                 EdgeKind::AttributeBinding | EdgeKind::ShaderAttributes => {
-                    self.descend(&edge.to, &mut affected.nodes);
-                    self.set_members(&edge.to, &mut affected.nodes);
+                    insert_root(&mut affected.roots, &edge.to);
+                    self.set_members(&edge.to, &mut affected.roots);
                 }
                 // A shader reaching an `attributes` node -- including a
                 // repeated `connect` that only changed `"priority"`,
@@ -432,7 +448,7 @@ impl Scene {
                 | EdgeKind::DisplacementShader
                 | EdgeKind::VolumeShader => {
                     affected.shaders.insert(edge.from.as_str());
-                    self.through_bindings(&edge.to, &mut affected.nodes);
+                    self.through_bindings(&edge.to, &mut affected.roots);
                 }
                 // The output chain, and the things hung off it. A
                 // light set and a background layer belong to an
@@ -458,8 +474,8 @@ impl Scene {
                 EdgeKind::Bounds
                 | EdgeKind::SubsurfaceSet
                 | EdgeKind::FaceSet => {
-                    self.descend(&edge.to, &mut affected.nodes);
-                    self.set_members(&edge.to, &mut affected.nodes);
+                    insert_root(&mut affected.roots, &edge.to);
+                    self.set_members(&edge.to, &mut affected.roots);
                 }
                 // A shader network edge is between shaders, and a
                 // carried connection this crate does not resolve is
@@ -470,7 +486,7 @@ impl Scene {
                         if self.is_shader_node(handle) {
                             affected.shaders.insert(handle.as_str());
                         } else {
-                            self.descend(handle, &mut affected.nodes);
+                            insert_root(&mut affected.roots, handle);
                         }
                     }
                 }
@@ -478,7 +494,7 @@ impl Scene {
         }
 
         if affected.everything {
-            affected.nodes.clear();
+            affected.roots.clear();
         }
 
         affected
@@ -487,10 +503,21 @@ impl Scene {
     /// Everything at or below `handle` on the `objects` chain, plus any
     /// instancer that draws a prototype found there.
     ///
+    /// This is what an [`Affected`] root stands for. Call it when the
+    /// list is actually wanted -- a backend that is walking its own
+    /// objects can compare against the roots instead and never build
+    /// it.
+    ///
     /// Iterative with an explicit stack: an ɴsɪ scene's depth is the
     /// caller's, not ours, and a recursive walk here would overflow on
     /// a deep chain. The `insert` doubles as the visited set, so a
     /// cycle terminates.
+    pub fn descendants<'a>(&'a self, handle: &'a str) -> IndexSet<&'a str> {
+        let mut out = IndexSet::new();
+        self.descend(handle, &mut out);
+        out
+    }
+
     fn descend<'a>(&'a self, handle: &'a str, out: &mut IndexSet<&'a str>) {
         let mut stack = vec![handle];
         while let Some(node) = stack.pop() {
@@ -522,7 +549,7 @@ impl Scene {
                 edge.kind.to_attr(),
                 "geometryattributes" | "shaderattributes"
             ) {
-                self.descend(&edge.to, out);
+                insert_root(out, &edge.to);
                 self.set_members(&edge.to, out);
             }
         }
@@ -536,7 +563,7 @@ impl Scene {
     /// through nested sets would name nodes the renderer never reaches.
     fn set_members<'a>(&'a self, handle: &str, out: &mut IndexSet<&'a str>) {
         for edge in self.edges_to_attr(handle, "members") {
-            self.descend(&edge.from, out);
+            insert_root(out, &edge.from);
         }
     }
 
