@@ -2194,3 +2194,111 @@ fn a_set_provides_shader_attributes_below_the_geometry() {
         vec!["mesh".to_string(), "sa".to_string(), "far".to_string()],
     );
 }
+
+// ---------------------------------------------------------------------
+// Deforming geometry: sample times of an arbitrary attribute.
+// ---------------------------------------------------------------------
+
+fn points(values: Vec<f32>) -> OwnedArg {
+    OwnedArg {
+        name: "P".to_string(),
+        type_tag: Type::Point,
+        array_length: 1,
+        flags: 0,
+        data: OwnedData::F32(values),
+    }
+}
+
+/// The gap this closes: a mesh whose `P` is sampled under a *static*
+/// transform has no motion times, so `motion_times` answers "static"
+/// for something that plainly deforms.
+#[test]
+fn a_deforming_mesh_reports_its_sample_times() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .set_attribute_at_time("mesh", 0.0, vec![points(vec![0.0, 0.0, 0.0])])
+        .unwrap();
+    scene
+        .set_attribute_at_time("mesh", 1.0, vec![points(vec![1.0, 0.0, 0.0])])
+        .unwrap();
+
+    assert!(
+        scene.motion_times("mesh").unwrap().is_empty(),
+        "the transform really is static",
+    );
+    assert_eq!(scene.attribute_times("mesh", "P").unwrap(), vec![0.0, 1.0]);
+
+    let samples = scene.attribute_samples("mesh", "P").unwrap();
+    assert_eq!(samples.len(), 2);
+    assert_eq!(samples[0].0, 0.0);
+    assert_eq!(samples[1].1.data, OwnedData::F32(vec![1.0, 0.0, 0.0]));
+}
+
+/// The times are per attribute, not per node.
+#[test]
+fn attribute_times_are_per_attribute() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene
+        .set_attribute_at_time("mesh", 0.0, vec![points(vec![0.0])])
+        .unwrap();
+    scene
+        .set_attribute_at_time("mesh", 1.0, vec![integers("N", vec![1])])
+        .unwrap();
+
+    assert_eq!(scene.attribute_times("mesh", "P").unwrap(), vec![0.0]);
+    assert_eq!(scene.attribute_times("mesh", "N").unwrap(), vec![1.0]);
+    assert!(scene.attribute_times("mesh", "absent").unwrap().is_empty());
+}
+
+/// A static value is not a sample. Reporting one would invent a time
+/// the caller never set.
+#[test]
+fn a_static_attribute_has_no_sample_times() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene
+        .set_attribute("mesh", vec![points(vec![0.0, 0.0, 0.0])])
+        .unwrap();
+
+    assert!(scene.attribute_times("mesh", "P").unwrap().is_empty());
+    assert!(scene.attribute_samples("mesh", "P").unwrap().is_empty());
+}
+
+/// An unknown handle is a caller mistake, not a scene fact. Answering
+/// "not sampled" would read as the latter.
+#[test]
+fn attribute_times_refuses_an_unknown_handle() {
+    let scene = Scene::default();
+    assert!(matches!(
+        scene.attribute_times("nope", "P"),
+        Err(ResolveError::UnknownHandle { .. })
+    ));
+    assert!(matches!(
+        scene.attribute_samples("nope", "P"),
+        Err(ResolveError::UnknownHandle { .. })
+    ));
+}
+
+/// Samples come back in ascending time however they were recorded.
+#[test]
+fn attribute_samples_are_time_ordered() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    for time in [2.0, 0.0, 1.0] {
+        scene
+            .set_attribute_at_time(
+                "mesh",
+                time,
+                vec![points(vec![time as f32])],
+            )
+            .unwrap();
+    }
+
+    assert_eq!(
+        scene.attribute_times("mesh", "P").unwrap(),
+        vec![0.0, 1.0, 2.0],
+    );
+}

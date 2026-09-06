@@ -74,6 +74,15 @@ pub enum ResolveError {
         /// The node that does not reach `.root`.
         handle: String,
     },
+    /// No node with that handle exists.
+    ///
+    /// Asking about an attribute of a node that was never created is a
+    /// caller mistake, and answering "not sampled" would read as a fact
+    /// about the scene rather than about the question.
+    UnknownHandle {
+        /// The handle that names nothing.
+        handle: String,
+    },
     /// The node is an instancing prototype, so it has no single world
     /// transform.
     ///
@@ -162,6 +171,9 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ transform chain revisits node {handle:?}; a cyclic \
                  scene has no world transform"
             ),
+            Self::UnknownHandle { handle } => {
+                write!(f, "no ɴsɪ node is named {handle:?}")
+            }
             Self::Detached { handle } => write!(
                 f,
                 "ɴsɪ node {handle:?} is not connected to {root:?}, so it \
@@ -582,6 +594,72 @@ impl Scene {
         times.dedup_by(|a, b| a.total_cmp(b) == Ordering::Equal);
 
         Ok(times)
+    }
+
+    /// Every time at which `name` is sampled on `handle`, ascending.
+    ///
+    /// Empty when the attribute is static or absent, which is the check
+    /// a backend makes before asking for
+    /// [`Scene::attribute_samples`] -- the same shape as
+    /// [`Scene::motion_times`] and [`Scene::world_transform_samples`].
+    ///
+    /// This is what makes deforming geometry resolvable: a mesh whose
+    /// `P` is sampled under a *static* transform has no motion times at
+    /// all, so [`Scene::motion_times`] answers "static" for something
+    /// that plainly moves. Ask this for `"P"`, and take the union with
+    /// [`Scene::motion_times`] when a backend needs every time the
+    /// object changes -- ɴsɪ does not require the two to agree.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::UnknownHandle`] if no such node exists.
+    pub fn attribute_times(
+        &self,
+        handle: &str,
+        name: &str,
+    ) -> Result<Vec<f64>, ResolveError> {
+        let node =
+            self.node(handle)
+                .ok_or_else(|| ResolveError::UnknownHandle {
+                    handle: handle.to_string(),
+                })?;
+
+        // `time_attrs` is kept in `total_cmp` order as it is recorded,
+        // and each time appears once, so this needs no sort or dedup.
+        Ok(node
+            .time_attrs
+            .iter()
+            .filter(|(_, attrs)| attrs.contains_key(name))
+            .map(|(time, _)| *time)
+            .collect())
+    }
+
+    /// The recorded samples of `name` on `handle`, ascending by time.
+    ///
+    /// Empty on the same terms as [`Scene::attribute_times`]. The
+    /// static value, if any, is *not* included: a sampled attribute and
+    /// a static one are separate recordings, and mixing them would
+    /// invent a sample at a time the caller never set.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::UnknownHandle`] if no such node exists.
+    pub fn attribute_samples(
+        &self,
+        handle: &str,
+        name: &str,
+    ) -> Result<Vec<(f64, &OwnedArg)>, ResolveError> {
+        let node =
+            self.node(handle)
+                .ok_or_else(|| ResolveError::UnknownHandle {
+                    handle: handle.to_string(),
+                })?;
+
+        Ok(node
+            .time_attrs
+            .iter()
+            .filter_map(|(time, attrs)| attrs.get(name).map(|arg| (*time, arg)))
+            .collect())
     }
 
     /// Compose the transform chain applying to `handle` at `time`.

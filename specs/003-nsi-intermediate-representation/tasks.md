@@ -179,8 +179,14 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       `instances` node's `transformationmatrices` / `modelindices`.
       Gate: two `Open` rows in `contracts/resolution.md`.
 - [ ] T5.11 Honour `INTERPOLATE_LINEAR` on a sampled transform.
-- [ ] T5.12 Sample times of an arbitrary attribute, for deforming
+- [x] T5.12 Sample times of an arbitrary attribute, for deforming
       geometry whose `P` is sampled under a static transform.
+      `attribute_times` and `attribute_samples`. A mesh deforming under
+      a static transform had no motion times at all, so a backend
+      checking `motion_times` rendered it without deformation. An
+      unknown handle is `ResolveError::UnknownHandle` rather than an
+      empty list, which would have read as "static". Evidence: five
+      tests in `resolve::tests`, each falsified.
 - [ ] T5.13 Decide the attribute vocabulary: legacy or the documentation
       draft. `sourcemodels` to `objects` is the rename that fails
       silently. See `research.md` D10.

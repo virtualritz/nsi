@@ -34,7 +34,6 @@ Checks that this spec set does not overclaim.
         node's own `transformationmatrices`;
       - `INTERPOLATE_LINEAR` on a sampled transform, which ɴsɪ provides
         and this crate ignores;
-      - deforming geometry, whose sampled `P` reports no motion times;
       - `set_attribute` on an uncreated handle, which still fabricates
         one even though `connect` no longer does;
       - non-UTF-8 strings, lost at recording rather than at replay;
