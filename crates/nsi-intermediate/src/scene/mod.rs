@@ -25,6 +25,34 @@ pub struct Node {
     pub time_attrs: Vec<(f64, IndexMap<String, OwnedArg>)>,
 }
 
+impl Node {
+    /// This node's effective value for an attribute.
+    ///
+    /// **Use this, not `attrs`.** `SetAttributeAtTime` on an attribute
+    /// that is not motion data sets it for the whole shutter, exactly
+    /// as `SetAttribute` would: rendered, an `attributes` node whose
+    /// `visibility` is set only through `SetAttributeAtTime` hides the
+    /// object, identically to the static form. Reading [`Node::attrs`]
+    /// alone answers "not set" for an attribute the renderer honours,
+    /// which is a silent wrong answer -- and was one here until it was
+    /// rendered.
+    ///
+    /// Static first, then the last sample naming it. The two never
+    /// coexist: `set_attribute` clears that name from every sample and
+    /// `set_attribute_at_time` clears the static value.
+    ///
+    /// This is what the resolver reads, so a backend asking a node
+    /// directly gets the same answer the resolver would.
+    pub fn effective(&self, name: &str) -> Option<&OwnedArg> {
+        self.attrs.get(name).or_else(|| {
+            self.time_attrs
+                .iter()
+                .rev()
+                .find_map(|(_, attrs)| attrs.get(name))
+        })
+    }
+}
+
 /// The recorded scene graph.
 #[derive(Debug, Clone, Default, PartialEq)]
 #[non_exhaustive]

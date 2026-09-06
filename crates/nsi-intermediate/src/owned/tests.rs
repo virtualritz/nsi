@@ -144,3 +144,47 @@ fn recording_keeps_a_non_utf8_byte() {
         "the byte survives; U+FFFD would be `ef bf bd`",
     );
 }
+
+/// The typed accessors read the payload they name and refuse the rest.
+///
+/// Every consumer wrote the same `match &arg.data` by hand, and the
+/// interesting part is what they must *not* do: read the first
+/// component of a colour as a scalar, or sixteen `double`s as a matrix.
+#[test]
+fn typed_accessors_refuse_the_wrong_layout() {
+    let fov = OwnedArg::from_param(&nsi::f32!("fov", 45.0));
+    assert_eq!(fov.as_f32(), Some(45.0));
+    assert_eq!(fov.as_f32s(), Some(&[45.0f32][..]));
+    assert!(fov.as_i32s().is_none());
+    assert!(fov.as_matrix().is_none());
+
+    // A colour is three `f32`s, so the scalar accessor must decline.
+    let c = OwnedArg::from_param(&nsi::color!("c", &[0.1, 0.2, 0.3]));
+    assert_eq!(c.as_f32s().map(<[f32]>::len), Some(3));
+    assert_eq!(c.as_f32(), None, "not the first component of a colour");
+
+    #[rustfmt::skip]
+    let m = [
+        1.0f64, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        7.0, 0.0, 0.0, 1.0,
+    ];
+    let matrix = OwnedArg::from_param(&nsi::matrix_f64!("m", &m));
+    assert_eq!(matrix.as_matrix().map(|v| v[12]), Some(7.0));
+
+    // Sixteen `double`s are not a `doublematrix`; 3Delight refuses it.
+    let sixteen = OwnedArg {
+        name: "m".to_string(),
+        type_tag: Type::F64,
+        array_length: 1,
+        flags: 0,
+        data: OwnedData::F64(m.to_vec()),
+    };
+    assert_eq!(sixteen.as_matrix(), None);
+    assert_eq!(sixteen.as_f64s().map(<[f64]>::len), Some(16));
+
+    let s = OwnedArg::from_param(&nsi::string!("f", b"caf\xE9".to_vec()));
+    assert_eq!(s.as_strings(), Some(&[b"caf\xE9".to_vec()][..]));
+    assert!(s.as_f32s().is_none());
+}

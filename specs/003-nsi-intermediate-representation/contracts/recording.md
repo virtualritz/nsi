@@ -80,3 +80,6 @@ connection classification (`classification.md`), graph resolution
 - To close the uncreated-handle row: a test asserting
   `set_attribute` on an unknown handle is an error, plus a `stream/mod.rs`
   test asserting no `Create` is emitted for one.
+
+| Reading a value needs no `match` | Covered | `owned/mod.rs` `as_f32s`/`as_f64s`/`as_i32s`/`as_i64s`/`as_strings`/`as_f32`/`as_i32`/`as_matrix`; `scene/mod.rs` `Node::effective` | `owned::tests::typed_accessors_refuse_the_wrong_layout`, `scene::tests::effective_reads_a_sampled_attribute`. Every consumer was writing the same `match &arg.data`; the external consumer crate now reads a value in one expression and no longer imports `OwnedData` at all. The accessors refuse the wrong layout rather than obliging -- a colour's first component is not `as_f32`, and sixteen `double`s are not `as_matrix`, which 3Delight also refuses | -- |
+| `Node::effective` is the rule, not `attrs` | Covered | `scene/mod.rs` `Node::effective`, read by the resolver | Same tests. A public `Node::get` reading `attrs` alone would have reinstated the silent wrong answer fixed two commits earlier -- an attribute set only with `SetAttributeAtTime` is honoured by 3Delight and invisible in `attrs`. One method, used by the resolver and offered to callers, so the two cannot disagree | -- |

@@ -633,3 +633,28 @@ fn the_reserved_handles_cannot_be_created() {
         assert!(scene.node(handle).is_none(), "nothing recorded");
     }
 }
+
+/// `Node::effective` is what the resolver reads, so asking a node
+/// directly gives the resolver's answer.
+///
+/// Reading `attrs` alone answers "not set" for an attribute set with
+/// `SetAttributeAtTime`, which the renderer honours -- the silent wrong
+/// answer this method exists to prevent a caller from reinventing.
+#[test]
+fn effective_reads_a_sampled_attribute() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    scene
+        .set_attribute_at_time("a", 0.0, vec![arg("visibility", 0.0)])
+        .unwrap();
+
+    let node = scene.node("a").expect("created");
+    assert!(
+        node.attrs.get("visibility").is_none(),
+        "it is not a static attribute",
+    );
+    assert!(
+        node.effective("visibility").is_some(),
+        "but it is the node's effective value",
+    );
+}

@@ -346,32 +346,6 @@ pub struct Placement {
     pub binding: Option<Binding>,
 }
 
-/// A node's effective value for an attribute, sampled or not.
-///
-/// `SetAttributeAtTime` on an attribute that is not motion data sets it
-/// for the whole shutter, exactly as `SetAttribute` would. Rendered: an
-/// `attributes` node whose `visibility` is set **only** through
-/// `SetAttributeAtTime` hides the object, identically to the static
-/// form, where a scene with nothing set renders it.
-///
-/// Reading `node.attrs` alone therefore answered "not set" for an
-/// attribute the renderer honours -- a silent wrong answer, and the
-/// same rule this crate already applied to an instancer's
-/// `modelindices` and `disabledinstances`.
-///
-/// Static first, then the last sample naming it. The two never coexist:
-/// `set_attribute` clears that name from every sample and
-/// `set_attribute_at_time` clears the static value, so there is nothing
-/// to arbitrate.
-fn effective_attr<'a>(node: &'a Node, name: &str) -> Option<&'a OwnedArg> {
-    node.attrs.get(name).or_else(|| {
-        node.time_attrs
-            .iter()
-            .rev()
-            .find_map(|(_, attrs)| attrs.get(name))
-    })
-}
-
 /// What a node's samples of one attribute amount to.
 #[derive(Clone, Copy)]
 enum Sampled<'a> {
@@ -1277,7 +1251,7 @@ impl Scene {
     ) -> Option<AttributeValue<'_>> {
         if let Some(geometry) = path.first()
             && let Some((handle, node)) = self.node_entry(geometry)
-            && let Some(arg) = effective_attr(node, name)
+            && let Some(arg) = node.effective(name)
         {
             return Some(AttributeValue {
                 node: handle,
@@ -1292,7 +1266,7 @@ impl Scene {
             let Some(node) = self.node(&edge.from) else {
                 continue;
             };
-            if let Some(arg) = effective_attr(node, name) {
+            if let Some(arg) = node.effective(name) {
                 return Some(AttributeValue {
                     node: &edge.from,
                     arg,
@@ -1325,10 +1299,11 @@ impl Scene {
                 .chain(fallback.map(|name| (0u8, name)));
 
             for (specificity, key) in keys {
-                let Some(arg) = effective_attr(node, key) else {
+                let Some(arg) = node.effective(key) else {
                     continue;
                 };
-                let priority = effective_attr(node, &format!("{key}.priority"))
+                let priority = node
+                    .effective(&format!("{key}.priority"))
                     .and_then(priority_value)
                     .unwrap_or(0);
 

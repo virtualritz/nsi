@@ -134,6 +134,88 @@ pub struct OwnedArg {
 }
 
 impl OwnedArg {
+    /// The payload as `f32` scalars, or `None` for another layout.
+    ///
+    /// Colour, point, vector, normal and an `f32` matrix all share this
+    /// storage flattened; [`OwnedArg::type_tag`] tells them apart.
+    pub fn as_f32s(&self) -> Option<&[f32]> {
+        match &self.data {
+            OwnedData::F32(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// The payload as `f64` scalars, or `None` for another layout.
+    pub fn as_f64s(&self) -> Option<&[f64]> {
+        match &self.data {
+            OwnedData::F64(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// The payload as 32-bit integers, or `None` for another layout.
+    pub fn as_i32s(&self) -> Option<&[i32]> {
+        match &self.data {
+            OwnedData::I32(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// The payload as 64-bit integers, or `None` for another layout.
+    pub fn as_i64s(&self) -> Option<&[i64]> {
+        match &self.data {
+            OwnedData::I64(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// The payload as strings, or `None` for another layout.
+    ///
+    /// Bytes, not `str`: see [`OwnedData::String`]. A path may need
+    /// `${VAR}` expanding before use.
+    pub fn as_strings(&self) -> Option<&[Vec<u8>]> {
+        match &self.data {
+            OwnedData::String(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// A single `f32`, for the common scalar case.
+    ///
+    /// `None` unless the payload is exactly one `f32`, so a caller
+    /// cannot silently read the first component of a colour as a float.
+    pub fn as_f32(&self) -> Option<f32> {
+        match self.as_f32s() {
+            Some([value]) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// A single `i32`, on the same terms as [`OwnedArg::as_f32`].
+    pub fn as_i32(&self) -> Option<i32> {
+        match self.as_i32s() {
+            Some([value]) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// A 4x4 `doublematrix`, row-major.
+    ///
+    /// `None` unless the declared type is [`nsi_trait::Type::MatrixF64`]
+    /// with sixteen values: sixteen `double`s are not a `doublematrix`,
+    /// and 3Delight refuses that too.
+    pub fn as_matrix(&self) -> Option<[f64; 16]> {
+        if self.type_tag != Type::MatrixF64 {
+            return None;
+        }
+        match &self.data {
+            OwnedData::F64(values) if values.len() == 16 => {
+                Some(values[..16].try_into().expect("length checked"))
+            }
+            _ => None,
+        }
+    }
+
     /// Copy a borrowed parameter into owned storage.
     ///
     /// `pub(crate)` on purpose. It carried two failure paths that
