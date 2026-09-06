@@ -402,3 +402,61 @@ fn a_non_utf8_identifier_is_refused_in_every_position() {
         );
     }
 }
+
+/// A `binarynsi` stream is named, not left to fail as bad encoding.
+///
+/// ɴsɪ has three stream formats and this crate reads one. `autonsi` --
+/// 3Delight's default for a name not ending `.nsia` -- selects the
+/// binary one, so a caller can be handed a file they did not choose the
+/// format of. Every `renderdl -cat -binary` output begins `cc 00`,
+/// whatever statement comes first; `0xCC` is a UTF-8 continuation byte,
+/// so a text stream can never start with it.
+///
+/// Without the check this failed as "at byte 0: not UTF-8" -- true, and
+/// useless: it sends the reader after an encoding problem.
+#[test]
+fn a_binary_stream_is_named_as_such() {
+    // The header, then the length-tagged keyword 3Delight writes.
+    let mut binary = vec![0xCC, 0x00, 0x96];
+    binary.extend_from_slice(b"Create");
+
+    let recorder = Recorder::new();
+    let error = parse_stream(&binary, &recorder).expect_err("not readable");
+    assert!(
+        matches!(error, nsi_parse::Error::BinaryStream),
+        "got {error:?}",
+    );
+    assert!(
+        error.to_string().contains("binarynsi"),
+        "the message must name the format: {error}",
+    );
+}
+
+/// And a text stream that merely *contains* a high byte is not mistaken
+/// for one.
+///
+/// This does **not** prove the second header byte earns its place:
+/// narrowing the check to `0xCC` alone leaves the suite green, and no
+/// test can distinguish the two, because a text stream must begin with
+/// a keyword and so can never start with `0xCC` at all. The second byte
+/// is kept because it is what 3Delight writes, not because anything
+/// here would catch its absence.
+#[test]
+fn a_text_stream_with_high_bytes_is_not_taken_for_binary() {
+    // `0xCC` inside a string value, where the byte fidelity work says
+    // it must survive. The sniff looks only at the first two bytes.
+    let mut source = Vec::new();
+    source.extend_from_slice(b"Create \"d\" \"outputdriver\"\n");
+    source.extend_from_slice(
+        b"SetAttribute \"d\" \"f\" \"string\" 1 \"\xCCx\"\n",
+    );
+
+    let recorder = Recorder::new();
+    parse_stream(&source, &recorder).expect("a leading keyword makes it text");
+
+    use nsi_intermediate::OwnedData;
+    assert_eq!(
+        recorder.into_scene().node("d").unwrap().attrs["f"].data,
+        OwnedData::String(vec![b"\xCCx".to_vec()]),
+    );
+}

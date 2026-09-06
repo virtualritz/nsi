@@ -81,6 +81,17 @@ pub enum Error<E> {
         /// Byte offset.
         offset: usize,
     },
+    /// The input is a `binarynsi` stream, which this crate cannot read.
+    ///
+    /// ɴsɪ has three stream formats and this reads one of them. The
+    /// binary encoding is undocumented, and `autonsi` -- 3Delight's
+    /// default for a name not ending `.nsia` -- selects it, so a caller
+    /// can be handed one without having chosen it.
+    ///
+    /// Detected rather than left to fail as "not UTF-8 at byte 0",
+    /// which is true and useless: it sends the reader looking for an
+    /// encoding problem instead of a format one.
+    BinaryStream,
     /// An escape sequence this format does not define.
     BadEscape {
         /// Byte offset of the backslash.
@@ -109,6 +120,11 @@ impl<E: fmt::Display> fmt::Display for Error<E> {
             Self::UnterminatedString { offset } => {
                 write!(f, "at byte {offset}: unterminated string")
             }
+            Self::BinaryStream => write!(
+                f,
+                "this is a binarynsi stream, which this crate does not \
+                 read; re-write it as text with `renderdl -cat`"
+            ),
             Self::NotUtf8 { offset } => {
                 write!(f, "at byte {offset}: not UTF-8")
             }
@@ -154,6 +170,14 @@ where
     N: Nsi,
     for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
 {
+    // `0xCC` is a UTF-8 continuation byte, so a text stream can never
+    // begin with it. Measured: every `renderdl -cat -binary` output
+    // starts `cc 00`, whatever statement comes first -- the third byte
+    // is a length tag for the keyword that follows.
+    if input.starts_with(&[0xCC, 0x00]) {
+        return Err(Error::BinaryStream);
+    }
+
     parse::parse(input, sink)
 }
 
