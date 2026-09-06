@@ -419,12 +419,14 @@ fn sampled_attr<'a>(
         return Sampled::No;
     };
 
+    // A time named by the order and missing from the table is skipped
+    // rather than trusted: the two are kept in step by the recorder,
+    // but both are public and a caller can edit one of them, and a
+    // resolver that panicked on that would be a worse answer than an
+    // attribute that goes quiet.
     let mut keep_from = 0;
     for (index, time) in times.iter().enumerate() {
-        let arg = node
-            .sample(*time, name)
-            .expect("`sample_order` names a recorded sample");
-        if !readable(arg) {
+        if node.sample(*time, name).is_some_and(|arg| !readable(arg)) {
             keep_from = index + 1;
         }
     }
@@ -443,14 +445,16 @@ fn sampled_attr<'a>(
     // of answering the renderer's order rather than the storage's.
     let mut samples: Vec<(f64, &OwnedArg)> = times[keep_from..]
         .iter()
-        .map(|time| {
-            let arg = node
-                .sample(*time, name)
-                .expect("`sample_order` names a recorded sample");
-            (*time, arg)
-        })
+        .filter_map(|time| Some((*time, node.sample(*time, name)?)))
         .collect();
-    let last_defined = samples.last().expect("a survivor").1;
+
+    // Empty only when the order named times the table does not hold,
+    // which the recorder never produces; `Unset` is then the honest
+    // answer, and it is the one that draws nothing rather than the one
+    // that draws something stale.
+    let Some((_, last_defined)) = samples.last().copied() else {
+        return Sampled::Unset;
+    };
     samples.sort_by(|(a, _), (b, _)| a.total_cmp(b));
 
     Sampled::Yes {

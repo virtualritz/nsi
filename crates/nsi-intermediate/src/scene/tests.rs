@@ -686,6 +686,48 @@ fn re_setting_a_sample_moves_it_to_the_end_of_the_call_order() {
     );
 }
 
+/// Every field of a [`Node`] is public, so a caller can put the call
+/// order and the sample table out of step by hand. Reading such a node
+/// must not panic: a resolver that aborted a render over it would be a
+/// worse answer than an attribute that goes quiet.
+#[test]
+fn a_hand_edited_node_does_not_panic_the_readers() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![arg("transformationmatrix", 1.0)],
+        )
+        .unwrap();
+
+    // The order now names a sample the table does not hold.
+    scene
+        .nodes
+        .get_mut("xf")
+        .expect("created")
+        .time_attrs
+        .clear();
+
+    let node = scene.node("xf").expect("created");
+    assert!(node.effective("transformationmatrix").is_none());
+    assert!(scene.motion_times("q").unwrap().is_empty());
+    assert!(scene.world_transform("q").is_ok());
+
+    let mut out = Vec::new();
+    crate::write_stream(&scene, &mut out).expect("writes");
+    assert!(
+        !String::from_utf8(out)
+            .unwrap()
+            .contains("SetAttributeAtTime"),
+        "the sample it cannot find is not invented",
+    );
+}
+
 /// A static call clears the call order with the samples, so the two
 /// tables and the order cannot fall out of step.
 #[test]

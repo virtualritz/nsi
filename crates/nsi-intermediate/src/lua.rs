@@ -177,10 +177,12 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
 
         // In call order, as `write_stream` explains.
         for (name, times) in &node.sample_order {
+            // As `write_stream`: a time the table does not hold is
+            // skipped rather than unwrapped.
             for time in times {
-                let arg = node
-                    .sample(*time, name)
-                    .expect("`sample_order` names a recorded sample");
+                let Some(arg) = node.sample(*time, name) else {
+                    continue;
+                };
                 write!(
                     out,
                     "nsi.SetAttributeAtTime({}, {}, ",

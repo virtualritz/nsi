@@ -48,6 +48,12 @@ pub struct Node {
     /// Maintained beside the two tables above and empty for an
     /// attribute that is not sampled. Setting an attribute statically
     /// clears its entry, as it clears its samples.
+    ///
+    /// The recorder keeps this in step with [`Node::time_attrs`].
+    /// Both are public, so a caller can edit one of them and put the
+    /// pair out of step; a time named here and missing there is then
+    /// skipped by every reader -- the attribute goes quiet rather than
+    /// panicking a render.
     pub sample_order: IndexMap<String, Vec<f64>>,
 }
 
