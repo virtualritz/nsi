@@ -994,10 +994,25 @@ impl Scene {
             }
         }
 
+        // Through the index, not over every edge in the scene. A
+        // repeated `connect` has to be detected before one is appended,
+        // and scanning `edges` for it made recording **quadratic**:
+        // measured, one transform with 1000 children took 67 ms to
+        // build, 4000 took 749 ms and 16 000 took 17 s. An interactive
+        // host connects per edit, so it paid that on every one.
+        let existing = self
+            .by_from
+            .get(from)
+            .into_iter()
+            .flatten()
+            .copied()
+            .find(|&at| {
+                let edge = &self.edges[at];
+                edge.to == to && edge.kind == kind
+            });
+
         let mut rearmed = None;
-        match self.edges.iter_mut().find(|edge| {
-            edge.from == from && edge.to == to && edge.kind == kind
-        }) {
+        match existing.map(|at| &mut self.edges[at]) {
             Some(existing) => {
                 // No edge appears or disappears here, and ɴsɪ's
                 // `"priority"` rides on these arguments -- so a record
