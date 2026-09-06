@@ -3682,3 +3682,62 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
     let at = scene.instance_transforms_at("inst", 0.5).unwrap();
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
+
+/// The documented divergence, pinned: this crate keys on the last
+/// sample by **time**, 3Delight on the last **defined**.
+///
+/// A stream that sets `t=1` before `t=0` separates them. 3Delight
+/// applies the `t=0` value, because it was defined last; this applies
+/// the `t=1` value, because `time_attrs` is sorted by time and
+/// definition order is not recorded anywhere -- `Scene` holds nodes and
+/// edges, and `OwnedArg` has no sequence.
+///
+/// Rendered: `disabledinstances [0]` at `t=1` defined first, then `[1]`
+/// at `t=0`, draws instance **0** -- the `t=0` value. This crate
+/// answers instance 1.
+///
+/// Asserting the divergence rather than the renderer, on purpose: a
+/// future commit that records definition order should redden this test
+/// and close the `Open` row, instead of silently agreeing with a rule
+/// nothing checks.
+#[test]
+fn definition_order_is_not_recorded_and_this_is_what_that_costs() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    scene
+        .set_attribute("inst", vec![doubles("transformationmatrices", two)])
+        .unwrap();
+
+    // Defined later-time first, as an out-of-order stream would.
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![integers("disabledinstances", vec![0])],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![integers("disabledinstances", vec![1])],
+        )
+        .unwrap();
+
+    let at = scene.instance_transforms_at("inst", 0.5).unwrap();
+    assert_eq!(at.len(), 1);
+    assert_eq!(
+        at[0].transform[12], 1.0,
+        "this crate takes the `t=1` sample `[0]`, disabling instance 0 \
+         and leaving instance 1 at x=+1. 3Delight takes the `t=0` \
+         sample because it was defined last, disables instance 1, and \
+         draws x=-1 -- rendered. See the `Open` row on definition order \
+         in `contracts/resolution.md`",
+    );
+}
