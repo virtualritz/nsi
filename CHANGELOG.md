@@ -133,6 +133,15 @@ trait -> ffi-wrap -> intermediate -> parse.
   draws nothing rather than falling back to the sample before it.
   Without this a backend had to re-derive it from `attribute_samples`,
   which reports what was recorded.
+- `world_transform_samples` **resolves the chain once** instead of per
+  time. It asked `world_transform_interpolated_at` at each motion time,
+  and each of those re-applied the typing rule and re-decoded every
+  matrix on every node -- T x N over the samples, on the accessor a
+  backend calls to build a motion block. Measured back to back on one
+  debug profile, five sampled transforms deep: 100 times/node 100.0 ms
+  -> 5.4 ms, 400 1.2 s -> 21.3 ms, 1000 8.0 s -> 53.8 ms. Composition
+  stayed one fold, parameterised over pre-resolved nodes rather than
+  copied -- a copied composition has drifted four times in this crate.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,

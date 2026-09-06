@@ -489,29 +489,110 @@ fn locate_sample<T>(samples: &[(f64, T)], time: f64) -> Option<Located<'_, T>> {
     // querying at `-0.0` errored on a sample that exists.
     let time = time + 0.0;
 
+    // A NaN names no sample and brackets nothing. The linear scan
+    // refused it for free -- every comparison against a NaN is false --
+    // but a search does not: `total_cmp` sorts a NaN above every real,
+    // so the partition would put it past the last sample and **hold
+    // the end**, answering where the scan errored. The suite caught
+    // that; this is what it caught.
+    if time.is_nan() {
+        return None;
+    }
+
     let first = samples.first()?;
     let last = samples.last()?;
 
-    if let Some((_, value)) = samples
-        .iter()
-        .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
+    // The samples are in time order, so the scan is a search. It used
+    // to be three linear passes -- an exact-hit `find`, then the two
+    // clamps, then a `windows(2)` -- which is the T x N that made
+    // `world_transform_samples` quadratic in a scene sampled per
+    // frame. The answers are the same three.
+    let at =
+        samples.partition_point(|(t, _)| t.total_cmp(&time) == Ordering::Less);
+
+    if let Some((t, value)) = samples.get(at)
+        && t.total_cmp(&time) == Ordering::Equal
     {
         return Some(Located::At(value));
     }
 
-    if time <= first.0 {
+    // Before the first sample or after the last: the end is held,
+    // never extrapolated.
+    if at == 0 {
         return Some(Located::At(&first.1));
     }
-    if time >= last.0 {
+    if at == samples.len() {
         return Some(Located::At(&last.1));
     }
 
-    samples
-        .windows(2)
-        .find(|pair| pair[0].0 < time && time < pair[1].0)
-        .map(|pair| {
-            let alpha = (time - pair[0].0) / (pair[1].0 - pair[0].0);
-            Located::Between(&pair[0].1, &pair[1].1, alpha)
+    let (from_time, from) = &samples[at - 1];
+    let (to_time, to) = &samples[at];
+    let alpha = (time - from_time) / (to_time - from_time);
+    Some(Located::Between(from, to, alpha))
+}
+
+/// One chain node's transform with the typing rule already applied.
+enum Local {
+    /// Constant at every time; `None` when the node sets none.
+    Constant(Option<[f64; 16]>),
+    /// Sampled, in time order.
+    Sampled(Vec<(f64, [f64; 16])>),
+}
+
+/// One node's transform at `time`.
+///
+/// Outside the sampled range the end sample is held, because that is
+/// what 3Delight does. Rendered: samples at `t=0` and `t=1` with the
+/// shutter open over `[-1, 2]` leaves **zero** alpha beyond the two
+/// sampled positions -- an extrapolating renderer would sweep half
+/// again as far each way -- with a peak at each end, 2.7x the swept
+/// middle, where a third of the shutter is held. `locate_sample`
+/// states that rule once.
+fn local_at(
+    handle: &str,
+    local: &Local,
+    time: f64,
+) -> Result<Option<[f64; 16]>, ResolveError> {
+    let samples = match local {
+        Local::Constant(matrix) => return Ok(*matrix),
+        Local::Sampled(samples) => samples,
+    };
+
+    match locate_sample(samples, time) {
+        Some(Located::At(matrix)) => Ok(Some(*matrix)),
+        Some(Located::Between(from, to, alpha)) => {
+            let mut out = [0.0f64; 16];
+            for (index, slot) in out.iter_mut().enumerate() {
+                *slot = from[index] * (1.0 - alpha) + to[index] * alpha;
+            }
+            Ok(Some(out))
+        }
+        None => Err(ResolveError::MissingSampleAtTime {
+            handle: handle.to_string(),
+            time,
+            available: samples.iter().map(|(t, _)| *t).collect(),
+        }),
+    }
+}
+
+/// Compose an already-resolved chain at `time`.
+///
+/// The one interpolating fold: `world_transform_interpolated_at`
+/// resolves the chain and calls it once, `world_transform_samples`
+/// resolves the chain and calls it per time. A copied composition has
+/// drifted four times in this crate, which is why the second caller
+/// takes this rather than a fold of its own.
+fn interpolate_resolved(
+    resolved: &[(&str, Local)],
+    time: f64,
+) -> Result<[f64; 16], ResolveError> {
+    resolved
+        .iter()
+        .try_fold(IDENTITY, |matrix, (handle, local)| {
+            Ok(match local_at(handle, local, time)? {
+                Some(local) => mul(matrix, local),
+                None => matrix,
+            })
         })
 }
 
@@ -1079,12 +1160,11 @@ impl Scene {
         path: &[String],
         time: f64,
     ) -> Result<[f64; 16], ResolveError> {
-        path.iter().try_fold(IDENTITY, |matrix, node| {
-            Ok(match self.local_transform_interpolated_at(node, time)? {
-                Some(local) => mul(matrix, local),
-                None => matrix,
-            })
-        })
+        let resolved: Vec<(&str, Local)> = path
+            .iter()
+            .map(|node| (node.as_str(), self.local_resolved(node)))
+            .collect();
+        interpolate_resolved(&resolved, time)
     }
 
     /// Compose the transform chain applying to `handle` at `time`.
@@ -1131,11 +1211,19 @@ impl Scene {
         &self,
         handle: &str,
     ) -> Result<Vec<(f64, [f64; 16])>, ResolveError> {
+        // Resolve the chain **once**, then compose at each time. Asking
+        // `world_transform_interpolated_at` per time re-applied the
+        // typing rule and re-decoded every matrix on every node at
+        // every time, which is the T x N this row was `Open` for.
+        let chain = self.chain(handle)?;
+        let resolved: Vec<(&str, Local)> = chain
+            .iter()
+            .map(|node| (node.as_str(), self.local_resolved(node)))
+            .collect();
+
         self.motion_times(handle)?
             .into_iter()
-            .map(|time| {
-                Ok((time, self.world_transform_interpolated_at(handle, time)?))
-            })
+            .map(|time| Ok((time, interpolate_resolved(&resolved, time)?)))
             .collect()
     }
 
@@ -2324,13 +2412,16 @@ impl Scene {
     /// Linear between the bracketing samples, and held at the nearest
     /// sample outside the sampled range -- which is what 3Delight does;
     /// see [`Scene::world_transform_interpolated_at`].
-    fn local_transform_interpolated_at(
-        &self,
-        handle: &str,
-        time: f64,
-    ) -> Result<Option<[f64; 16]>, ResolveError> {
+    /// One chain node's transform, resolved once: the typing rule
+    /// applied and the matrices decoded.
+    ///
+    /// Split from answering *at a time* because a caller asking at
+    /// many times paid for this at every one of them --
+    /// `world_transform_samples` asks at T times over N nodes, and
+    /// re-resolving made that T x N over the samples.
+    fn local_resolved(&self, handle: &str) -> Local {
         let Some(node) = self.node(handle) else {
-            return Ok(None);
+            return Local::Constant(None);
         };
 
         // A wrong-typed *last* sample unsets the attribute, so the
@@ -2340,35 +2431,15 @@ impl Scene {
             matrix_of(arg).is_some()
         });
         if matches!(found, Sampled::No | Sampled::Unset) {
-            return Ok(self.local_transform(handle));
+            return Local::Constant(self.local_transform(handle));
         }
-        let sampled: Vec<(f64, [f64; 16])> = found
-            .samples()
-            .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
-            .collect();
 
-        // Outside the sampled range the end sample is held, because
-        // that is what 3Delight does. Rendered: samples at t=0 and t=1
-        // with the shutter open over [-1, 2] leaves **zero** alpha
-        // beyond the two sampled positions -- an extrapolating renderer
-        // would sweep half again as far each way -- with a peak at each
-        // end, 2.7x the swept middle, where a third of the shutter is
-        // held. `locate_sample` states that rule once.
-        match locate_sample(&sampled, time) {
-            Some(Located::At(matrix)) => Ok(Some(*matrix)),
-            Some(Located::Between(from, to, alpha)) => {
-                let mut out = [0.0f64; 16];
-                for (index, slot) in out.iter_mut().enumerate() {
-                    *slot = from[index] * (1.0 - alpha) + to[index] * alpha;
-                }
-                Ok(Some(out))
-            }
-            None => Err(ResolveError::MissingSampleAtTime {
-                handle: handle.to_string(),
-                time,
-                available: sampled.iter().map(|(t, _)| *t).collect(),
-            }),
-        }
+        Local::Sampled(
+            found
+                .samples()
+                .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
+                .collect(),
+        )
     }
 
     fn local_transform_at(

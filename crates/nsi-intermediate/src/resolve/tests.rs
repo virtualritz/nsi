@@ -3939,6 +3939,61 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
 
+/// The two interpolating accessors are one fold, and answer alike.
+///
+/// `world_transform_samples` resolves the chain once and composes at
+/// each time; `world_transform_interpolated_at` resolves and composes
+/// at one. They must agree at every sampled time and between them --
+/// a second composition would be the fifth copy of a rule that has
+/// drifted four times here, and this is what would catch it.
+#[test]
+fn the_sampled_and_the_single_time_accessors_agree() {
+    let mut scene = Scene::default();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("q", None, "inner", "objects").unwrap();
+
+    // Two nodes sampled at *different* times, so the composition has
+    // to interpolate one while holding or hitting the other.
+    for (time, x) in [(0.0, -1.0), (1.0, 1.0)] {
+        scene
+            .set_attribute_at_time("outer", time, vec![translate(x, 0.0, 0.0)])
+            .unwrap();
+    }
+    for (time, y) in [(0.25, 0.0), (0.75, 2.0)] {
+        scene
+            .set_attribute_at_time("inner", time, vec![translate(0.0, y, 0.0)])
+            .unwrap();
+    }
+
+    let samples = scene.world_transform_samples("q").unwrap();
+    assert_eq!(
+        samples.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+        scene.motion_times("q").unwrap(),
+        "one entry per motion time",
+    );
+    for (time, matrix) in &samples {
+        assert_eq!(
+            *matrix,
+            scene.world_transform_interpolated_at("q", *time).unwrap(),
+            "the two accessors disagree at t={time}",
+        );
+    }
+
+    // And between the sampled times, where interpolation actually runs.
+    for time in [0.1, 0.5, 0.9] {
+        let composed =
+            scene.world_transform_interpolated_at("q", time).unwrap();
+        assert!(
+            composed[12] > -1.0 && composed[12] < 1.0,
+            "swept, not held, at t={time}",
+        );
+    }
+}
+
 /// The instancer's matrices are a `doublematrix`, declared, not
 /// sixteen doubles per instance that happen to be there.
 ///
