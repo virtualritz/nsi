@@ -2802,11 +2802,16 @@ fn interpolating_outside_the_sampled_range_holds_the_end_sample() {
         0.0,
     );
 
-    // A NaN brackets nothing and names no sample.
-    assert!(matches!(
-        scene.world_transform_interpolated_at("mesh", f64::NAN),
-        Err(ResolveError::MissingSampleAtTime { .. })
-    ));
+    // A NaN brackets nothing and names no sample -- and the error
+    // says which samples there were, which nothing pinned until a
+    // reviewer emptied the list and watched the suite stay green.
+    let error = scene
+        .world_transform_interpolated_at("mesh", f64::NAN)
+        .unwrap_err();
+    let ResolveError::MissingSampleAtTime { available, .. } = &error else {
+        panic!("a NaN names no sample: {error:?}");
+    };
+    assert_eq!(available, &vec![0.0, 1.0]);
 }
 
 /// Each node is interpolated from its **own** samples and the results
@@ -4069,6 +4074,70 @@ fn instancer_matrices_are_a_doublematrix_by_declaration() {
             .unwrap()
             .is_empty(),
         "the last call is not a doublematrix, so nothing is drawn",
+    );
+
+    // The **array suffix is part of the declaration**. Rendered:
+    // `"doublematrix[2]" 1` and `"doublematrix[1]" 2` are both `E6007`
+    // and draw nothing, where the plain `"doublematrix" 2` draws two
+    // copies. ɴsɪ marks an array with `NSIParamIsArray` rather than by
+    // length, so this is a different *type*, and reading the tag alone
+    // drew the instances anyway.
+    let as_array = |mut arg: OwnedArg| {
+        arg.flags |= nsi_ffi_wrap::nsi_sys::NSIParamFlags::IsArray.bits();
+        arg
+    };
+    assert!(
+        build(as_array(doubles("transformationmatrices", two())))
+            .instance_transforms("inst")
+            .unwrap()
+            .is_empty(),
+        "a doublematrix[n] is not a doublematrix",
+    );
+
+    // And on a transform, where the same leniency moved a node the
+    // renderer leaves at identity.
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute("xf", vec![as_array(translate(50.0, 0.0, 0.0))])
+        .unwrap();
+    assert_eq!(
+        scene.world_transform("q").unwrap(),
+        super::IDENTITY,
+        "3Delight logs E6007 and leaves the node at identity",
+    );
+}
+
+/// The two interpolating accessors refuse the same scenes, with the
+/// same error.
+///
+/// `world_transform_samples` walked `chain`, which passes *through* an
+/// `instances` node, while its single-time twin and `motion_times`
+/// walk `transform_chain`. Where both succeeded they agreed, so the
+/// suite saw nothing; where they refused, one said `Detached` and the
+/// other `Instanced` for the same handle. A reviewer found it by
+/// mutating the line and watching nothing go red.
+#[test]
+fn the_two_interpolating_accessors_refuse_alike() {
+    // A prototype under an instancer that never reaches `.root`.
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    let sampled = scene.world_transform_samples("proto").unwrap_err();
+    let single = scene
+        .world_transform_interpolated_at("proto", 0.0)
+        .unwrap_err();
+    assert_eq!(
+        core::mem::discriminant(&sampled),
+        core::mem::discriminant(&single),
+        "one said {sampled:?}, the other {single:?}",
     );
 }
 

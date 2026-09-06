@@ -35,7 +35,7 @@ with every feature.
       `an_unmapped_disconnect_is_an_error`.
       Closed `contracts/recording.md` `disconnect`.
 - [x] T1.9 Decide `evaluate`. Decided: a no-op, per the `spec.md`
-      non-goal. Evidence: `recorder::tests::evaluate_is_a_recorded_no_op`.
+      non-goal. Evidence: `recorder::tests::evaluate_is_recorded_but_not_executed`.
 - [x] T1.10 Prove a `Reference` through `Nsi::set_attribute`, the only
       path a consumer has and the only one the `'static` pin governs.
       Evidence: `recorder::tests::a_reference_through_the_trait_records_the_host_address`.
@@ -43,7 +43,7 @@ with every feature.
       Evidence: `recorder::tests::a_callback_records_its_address_and_leaks_its_payload`,
       asserting the reclaim count stays `0`. Spec: R14.
 - [x] T1.12 Key motion samples on a total order.
-      Evidence: `scene::tests::a_nan_sample_time_matches_itself`,
+      Evidence: `scene::tests::a_non_finite_sample_time_is_refused`,
       `negative_zero_is_a_distinct_sample_time`. Spec: R7.
 - [x] T1.13a `connect` refuses an uncreated handle.
       Evidence: `scene::tests::connecting_an_uncreated_handle_is_an_error`,

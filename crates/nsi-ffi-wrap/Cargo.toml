@@ -31,8 +31,6 @@ nightly = []
 ustr_handles = []
 # Use CString for tokens instead of Ustr. Default is Ustr (interned).
 cstring_tokens = []
-# Manually initialize API
-manual_init = []
 
 [build-dependencies]
 reqwest = { version = "0.13", features = ["blocking"], optional = true }

@@ -8,7 +8,6 @@
 
 use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
-use nsi_trait::Type;
 use std::collections::HashSet;
 
 /// A 4x4 identity, row-major.
@@ -1202,11 +1201,22 @@ impl Scene {
     /// This is the shape a renderer wants for motion blur: the sample
     /// times, and the composed matrix at each. Empty for a static chain.
     ///
+    /// A chain whose nodes are sampled at *different* times resolves:
+    /// each node is interpolated from its own samples and the results
+    /// composed, and the answer agrees with
+    /// [`Scene::world_transform_interpolated_at`] at every time. This
+    /// paragraph said the opposite -- that such a chain was
+    /// `MissingSampleAtTime` -- for several commits after it stopped
+    /// being true.
+    ///
     /// # Errors
     ///
-    /// Every variant of [`ResolveError`]. `MissingSampleAtTime` means
-    /// the chain mixes nodes sampled at different times, which has no
-    /// answer without interpolation.
+    /// Whatever walking the chain refuses, and exactly what
+    /// [`Scene::world_transform_interpolated_at`] refuses for the same
+    /// scene: the two walk one chain and are held to the same error by
+    /// `the_two_interpolating_accessors_refuse_alike`.
+    /// `MissingSampleAtTime` cannot arise here -- the times come from
+    /// [`Scene::motion_times`], so every one of them has a sample.
     pub fn world_transform_samples(
         &self,
         handle: &str,
@@ -1215,13 +1225,19 @@ impl Scene {
         // `world_transform_interpolated_at` per time re-applied the
         // typing rule and re-decoded every matrix on every node at
         // every time, which is the T x N this row was `Open` for.
-        let chain = self.chain(handle)?;
+        // `transform_chain`, as `world_transform_interpolated_at` and
+        // `motion_times` use: `chain` walks *through* an `instances`
+        // node, so the two accessors refused a prototype under a
+        // detached or shared instancer with different errors -- one
+        // saying `Detached`, its twin `Instanced`. A reviewer found it
+        // by mutating this line and watching nothing go red.
+        let chain = self.transform_chain(handle)?;
         let resolved: Vec<(&str, Local)> = chain
             .iter()
             .map(|node| (node.as_str(), self.local_resolved(node)))
             .collect();
 
-        self.motion_times(handle)?
+        self.motion_times_along(&chain)
             .into_iter()
             .map(|time| Ok((time, interpolate_resolved(&resolved, time)?)))
             .collect()
@@ -2491,42 +2507,23 @@ impl Scene {
 /// `doublematrix`, and silently reinterpreting an `f32` one would be
 /// worse than skipping it.
 fn matrices_of(arg: &OwnedArg) -> Option<&[f64]> {
-    // The declared type again, and for the same reason. Rendered:
-    // `"transformationmatrices" "doublematrix" 2` draws two copies,
-    // while the *same thirty-two doubles* declared `"double" 32` are
-    // `E6007` and 3Delight draws **nothing**. Reading the payload
-    // alone drew two instances the renderer refuses -- the wrong
-    // answer this crate exists to not give, and it survived the commit
-    // that fixed `matrix_of` because the instancer kept its own
-    // predicate at two sites.
-    if arg.type_tag != Type::MatrixF64 {
-        return None;
-    }
-
-    match &arg.data {
-        OwnedData::F64(values) => Some(values),
-        _ => None,
-    }
+    // The declared type, array suffix included -- one statement of it,
+    // in `OwnedArg::as_matrices`. Rendered twice over: sixteen
+    // `double`s are not a `doublematrix`, and a `doublematrix[2]` is
+    // not one either (`E6007`, nothing drawn, where the plain
+    // `doublematrix` draws two copies). Both leniencies drew what the
+    // renderer refuses, and the second outlived the first because the
+    // rule was stated in three places.
+    arg.as_matrices()
 }
 
+/// A `transformationmatrix` argument as a row-major 4x4.
+///
+/// Non-`f64` matrices yield `None`: ɴsɪ documents the attribute as
+/// `doublematrix`, and silently reinterpreting an `f32` one would be
+/// worse than skipping it.
 fn matrix_of(arg: &OwnedArg) -> Option<[f64; 16]> {
-    // The declared type, not just the payload: sixteen `double`s are
-    // not a `doublematrix`. Rendered, `"transformationmatrix" "double"
-    // 16 [...]` is `E6007` and the node draws at identity, while this
-    // read it as a matrix -- and since six sites now share this
-    // predicate, that one leniency defined the rule everywhere.
-    if arg.type_tag != Type::MatrixF64 {
-        return None;
-    }
-
-    match &arg.data {
-        OwnedData::F64(values) if values.len() == 16 => {
-            let mut matrix = [0.0; 16];
-            matrix.copy_from_slice(values);
-            Some(matrix)
-        }
-        _ => None,
-    }
+    arg.as_matrix()
 }
 
 #[cfg(test)]

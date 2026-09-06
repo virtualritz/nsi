@@ -39,7 +39,6 @@ use self::linked as api;
 
 // API initalization/on-demand loading of lib3delight -----------------
 
-#[cfg(not(feature = "manual_init"))]
 lazy_static::lazy_static! {
     static ref NSI_API: api::ApiImpl =
         api::ApiImpl::new().expect("Could not load lib3delight");

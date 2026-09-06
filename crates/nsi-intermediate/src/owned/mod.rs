@@ -135,6 +135,30 @@ pub struct OwnedArg {
 }
 
 impl OwnedArg {
+    /// One recorded argument, built by hand.
+    ///
+    /// [`Scene::set_attribute`](crate::Scene::set_attribute) and its
+    /// timed twin take these, and the struct is `#[non_exhaustive]` so
+    /// that a later field is not a breaking change -- which also means
+    /// a struct literal will not compile outside this crate. Without
+    /// this, half of `Scene`'s public surface could only ever be
+    /// handed an empty vector.
+    pub fn new(
+        name: impl Into<String>,
+        type_tag: Type,
+        array_length: usize,
+        flags: i32,
+        data: OwnedData,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            type_tag,
+            array_length,
+            flags,
+            data,
+        }
+    }
+
     /// The payload as `f32` scalars, or `None` for another layout.
     ///
     /// Colour, point, vector, normal and an `f32` matrix all share this
@@ -206,15 +230,39 @@ impl OwnedArg {
     /// with sixteen values: sixteen `double`s are not a `doublematrix`,
     /// and 3Delight refuses that too.
     pub fn as_matrix(&self) -> Option<[f64; 16]> {
-        if self.type_tag != Type::MatrixF64 {
-            return None;
-        }
-        match &self.data {
-            OwnedData::F64(values) if values.len() == 16 => {
+        match self.as_matrices()? {
+            [] => None,
+            values if values.len() == 16 => {
                 Some(values[..16].try_into().expect("length checked"))
             }
             _ => None,
         }
+    }
+
+    /// The payload of a `doublematrix` argument, however many.
+    ///
+    /// **The array suffix is part of the declaration.** ɴsɪ marks an
+    /// array with `NSIParamIsArray` rather than by length, and
+    /// 3Delight reads `doublematrix[2]` as a different type from
+    /// `doublematrix`: rendered, an instancer whose
+    /// `transformationmatrices` is declared `"doublematrix[2]" 1` --
+    /// or `"doublematrix[1]" 2`, the same values again -- is `E6007`
+    /// and **nothing draws**, where the plain `"doublematrix" 2` draws
+    /// two copies. Reading the tag alone drew them anyway.
+    pub fn as_matrices(&self) -> Option<&[f64]> {
+        if self.type_tag != Type::MatrixF64 || self.is_array() {
+            return None;
+        }
+        match &self.data {
+            OwnedData::F64(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// Whether ɴsɪ's `NSIParamIsArray` is set, which makes the
+    /// argument's type `T[n]` rather than `T`.
+    pub fn is_array(&self) -> bool {
+        self.flags & nsi_ffi_wrap::nsi_sys::NSIParamFlags::IsArray.bits() != 0
     }
 
     /// Copy a borrowed parameter into owned storage.
@@ -231,7 +279,7 @@ impl OwnedArg {
     /// Narrowing it makes both unreachable by construction rather than
     /// by argument, which is cheaper than a `Result` every internal
     /// caller would have to unwrap for a case that cannot arise.
-    /// Callers wanting an [`OwnedArg`] build one from its fields.
+    /// Callers wanting an [`OwnedArg`] use [`OwnedArg::new`].
     ///
     /// It takes `Arg` rather than any `ParamValue` for the same reason:
     /// while it stayed generic, "unreachable" rested on nobody in this
