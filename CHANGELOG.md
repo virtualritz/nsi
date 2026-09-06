@@ -125,6 +125,14 @@ trait -> ffi-wrap -> intermediate -> parse.
   the crate now answers both. All three motion-sample divergences are
   closed, and the three tables that had to agree are one field that
   cannot disagree with itself.
+- ɴsɪ's **typing rule is public**: `Scene::sampled_attribute` takes the
+  readability predicate this crate cannot supply -- a backend knows `P`
+  is a `point` -- and applies the rule the resolver applies to
+  transforms. Rendered on a deforming `P`, it is the same rule: an
+  unreadable call unsets the attribute at the call, and 3Delight then
+  draws nothing rather than falling back to the sample before it.
+  Without this a backend had to re-derive it from `attribute_samples`,
+  which reports what was recorded.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,

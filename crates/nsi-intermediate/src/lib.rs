@@ -228,7 +228,7 @@ pub use owned::{HostPtr, OwnedArg, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
     AttributeValue, Binding, IDENTITY, Instance, OutputLayer, Placement,
-    RAY_TYPES, RenderOutput, ResolveError,
+    RAY_TYPES, RenderOutput, ResolveError, Sampled,
 };
 pub use scene::{Node, Scene};
 pub use stream::{Compression, write_stream, write_stream_with};

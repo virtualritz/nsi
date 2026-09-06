@@ -346,12 +346,26 @@ pub struct Placement {
 }
 
 /// What a node's samples of one attribute amount to.
+/// What ɴsɪ's typing rule makes of one attribute's samples.
+///
+/// Returned by [`Scene::sampled_attribute`], and what the resolver
+/// itself reads for `transformationmatrix` and the instancer's
+/// attributes.
 #[derive(Clone)]
-enum Sampled<'a> {
-    /// Not sampled; the static value applies.
+#[non_exhaustive]
+pub enum Sampled<'a> {
+    /// Not sampled; the static value applies, and
+    /// [`Node::effective`] gives it.
     No,
-    /// Sampled, but the last definition cannot be read as the
-    /// attribute's type -- so the attribute is unset, at every time.
+    /// Sampled, but the last call cannot be read as the attribute's
+    /// type -- so the attribute is unset, at every time.
+    ///
+    /// This is not "no samples": 3Delight rejects the argument at the
+    /// call and the attribute has no value at all afterwards.
+    /// Rendered on a mesh's `P` -- good at `t=0`, a `float` at `t=1` --
+    /// it logs `E6007` and then `E6020`, and **draws nothing**. A
+    /// backend that fell back to the earlier sample here would draw a
+    /// mesh the renderer does not.
     Unset,
     /// The surviving samples.
     ///
@@ -939,6 +953,41 @@ impl Scene {
             .get(name)
             .map(|calls| crate::scene::latest_per_time(calls))
             .unwrap_or_default())
+    }
+
+    /// The same, with ɴsɪ's **typing rule** applied.
+    ///
+    /// [`Scene::attribute_samples`] reports what was recorded, because
+    /// `name` is any attribute and this crate does not carry ɴsɪ's
+    /// type for each one. A backend does know: it knows `P` is a
+    /// `point` and `N` a `normal`. Hand that knowledge in as
+    /// `readable` and this applies the rule the resolver applies to
+    /// `transformationmatrix`, rather than making every backend
+    /// re-derive it.
+    ///
+    /// The rule, rendered on a mesh's deforming `P` and identical to
+    /// the transform case: an unreadable call unsets the attribute
+    /// **at the call**, so it discards what was defined before it and
+    /// only later calls rebuild it. Good at `t=0` with a `float` at
+    /// `t=1` draws **nothing** (`Sampled::Unset`); the same two with a
+    /// good `P` re-set at `t=1` afterwards draws static at that `P`.
+    /// A backend that dropped the unreadable sample and kept the rest
+    /// would sweep through both, which is the answer 3Delight gives to
+    /// neither.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::UnknownHandle`] if no such node exists.
+    pub fn sampled_attribute(
+        &self,
+        handle: &str,
+        name: &str,
+        readable: impl Fn(&OwnedArg) -> bool,
+    ) -> Result<Sampled<'_>, ResolveError> {
+        let Some(node) = self.existing_node(handle)? else {
+            return Ok(Sampled::No);
+        };
+        Ok(sampled_attr(node, name, readable))
     }
 
     /// The world transform at `time`, interpolating linearly between

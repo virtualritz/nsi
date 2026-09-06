@@ -3,7 +3,7 @@
 //! Separate file per the workspace rule: source files do not grow
 //! inline `#[cfg(test)]` modules.
 
-use crate::{OwnedArg, OwnedData, ResolveError, Scene};
+use crate::{OwnedArg, OwnedData, ResolveError, Sampled, Scene};
 use nsi_trait::Type;
 
 /// A 4x4 row-major translation, the shape ɴsɪ stores in
@@ -3937,6 +3937,90 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
 
     let at = scene.instance_transforms_at("inst", 0.5).unwrap();
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
+}
+
+/// The typing rule, over an attribute the crate has no type for.
+///
+/// Rendered on a mesh's deforming `P`, and identical to the transform
+/// case: good at `t=0` with a `float` at `t=1` **draws nothing**
+/// (`E6007`, then `E6020` for the missing `P`), while the same two
+/// followed by a good `P` at `t=1` draws static at that `P`. A backend
+/// asking for `P` needs that rule and cannot get it from
+/// `attribute_samples`, which reports what was recorded because the
+/// crate does not know `P` is a `point`. The caller supplies what
+/// readable means; the rule is the resolver's own.
+#[test]
+fn the_typing_rule_is_available_for_any_attribute() {
+    let point = |x: f32| OwnedArg {
+        name: "P".to_string(),
+        type_tag: Type::Point,
+        array_length: 1,
+        flags: 0,
+        data: OwnedData::F32(vec![x, 0.0, 0.0]),
+    };
+    let readable = |arg: &OwnedArg| arg.type_tag == Type::Point;
+
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene
+        .set_attribute_at_time("q", 0.0, vec![point(-1.0)])
+        .unwrap();
+
+    assert!(
+        matches!(
+            scene.sampled_attribute("q", "P", readable).unwrap(),
+            Sampled::Yes { .. }
+        ),
+        "one good sample stands",
+    );
+    assert!(
+        matches!(
+            scene.sampled_attribute("q", "nosuch", readable).unwrap(),
+            Sampled::No
+        ),
+        "an attribute that was never sampled",
+    );
+
+    // A float at t=1 unsets it: 3Delight draws nothing for this mesh.
+    scene
+        .set_attribute_at_time(
+            "q",
+            1.0,
+            vec![OwnedArg {
+                name: "P".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    assert!(
+        matches!(
+            scene.sampled_attribute("q", "P", readable).unwrap(),
+            Sampled::Unset
+        ),
+        "the last call is unreadable, so the attribute is unset -- not \
+         a fall back to the t=0 sample, which would draw a mesh the \
+         renderer does not",
+    );
+    assert_eq!(
+        scene.attribute_samples("q", "P").unwrap().len(),
+        2,
+        "while the untyped accessor still reports what was recorded",
+    );
+
+    // And a good one after it rebuilds the attribute, alone.
+    scene
+        .set_attribute_at_time("q", 1.0, vec![point(1.0)])
+        .unwrap();
+    let Sampled::Yes { samples, .. } =
+        scene.sampled_attribute("q", "P", readable).unwrap()
+    else {
+        panic!("rebuilt by the later call");
+    };
+    assert_eq!(samples.len(), 1, "the t=0 sample did not survive");
+    assert_eq!(samples[0].0, 1.0);
 }
 
 /// Survivors come back in **time** order however they were set.
