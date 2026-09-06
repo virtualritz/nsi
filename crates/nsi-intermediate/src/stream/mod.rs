@@ -294,8 +294,16 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             write_arg(out, arg)?;
         }
 
-        for (time, attrs) in &node.time_attrs {
-            for arg in attrs.values() {
+        // In call order, per attribute: `time_attrs` is sorted by time,
+        // and replaying in that order hands the reader a different
+        // scene than was recorded -- the renderer applies the last
+        // call, so re-ordering the calls re-orders the answer. See
+        // `Node::sample_order`.
+        for (name, times) in &node.sample_order {
+            for time in times {
+                let arg = node
+                    .sample(*time, name)
+                    .expect("`sample_order` names a recorded sample");
                 writeln!(
                     out,
                     "SetAttributeAtTime {} {}",

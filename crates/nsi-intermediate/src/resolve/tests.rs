@@ -3939,25 +3939,18 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
     assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
 
-/// The documented divergence, pinned: this crate keys on the last
-/// sample by **time**, 3Delight on the last **defined**.
+/// The last **defined** sample wins, not the last by time.
 ///
-/// A stream that sets `t=1` before `t=0` separates them. 3Delight
-/// applies the `t=0` value, because it was defined last; this applies
-/// the `t=1` value, because `time_attrs` is sorted by time and
-/// definition order is not recorded anywhere -- `Scene` holds nodes and
-/// edges, and `OwnedArg` has no sequence.
+/// A stream that sets `t=1` before `t=0` separates the two, and
+/// `time_attrs` is sorted by time, so `Node::sample_order` is what
+/// carries the difference.
 ///
 /// Rendered: `disabledinstances [0]` at `t=1` defined first, then `[1]`
-/// at `t=0`, draws instance **0** -- the `t=0` value. This crate
-/// answers instance 1.
-///
-/// Asserting the divergence rather than the renderer, on purpose: a
-/// future commit that records definition order should redden this test
-/// and close the `Open` row, instead of silently agreeing with a rule
-/// nothing checks.
+/// at `t=0`, draws instance **0** -- the `t=0` value, because it was
+/// defined last. This crate answered instance 1 until the order was
+/// recorded, which was an `Open` row and a wrong answer.
 #[test]
-fn definition_order_is_not_recorded_and_this_is_what_that_costs() {
+fn the_last_defined_sample_wins_not_the_last_by_time() {
     let mut scene = Scene::default();
     scene.create("inst", "instances").unwrap();
     scene.create("proto", "mesh").unwrap();
@@ -3989,12 +3982,9 @@ fn definition_order_is_not_recorded_and_this_is_what_that_costs() {
     let at = scene.instance_transforms_at("inst", 0.5).unwrap();
     assert_eq!(at.len(), 1);
     assert_eq!(
-        at[0].transform[12], 1.0,
-        "this crate takes the `t=1` sample `[0]`, disabling instance 0 \
-         and leaving instance 1 at x=+1. 3Delight takes the `t=0` \
-         sample because it was defined last, disables instance 1, and \
-         draws x=-1 -- rendered. See the `Open` row on definition order \
-         in `contracts/resolution.md`",
+        at[0].transform[12], -1.0,
+        "the `t=0` sample `[1]` was defined last, so instance 1 is \
+         disabled and instance 0 draws at x=-1 -- what 3Delight renders",
     );
 }
 
@@ -4455,17 +4445,16 @@ fn a_same_time_reset_after_an_unreadable_sample_diverges() {
 /// unset anything. This crate sorts by time, sees the `float` last, and
 /// answers identity.
 ///
-/// Same root cause as the other two divergences: `E6007` acts at *call*
-/// time and this crate applies the rule over time-sorted samples.
-/// Recording definition order closes this one and the definition-order
-/// row; the same-time row needs the replaced sample kept as well, since
-/// after a same-time replace the unreadable sample is gone from the
-/// record entirely.
+/// `E6007` acts at **call** time, so a later definition supersedes an
+/// unreadable one whatever their times.
 ///
-/// Asserted as the divergence, so a commit that records enough to fix
-/// it reddens this.
+/// The `float` is at `t=1` and defined *first*; the good matrix at
+/// `t=0` comes after and rebuilds the attribute. 3Delight draws static
+/// at the `t=0` matrix. Reading the rule over time-sorted samples made
+/// the `float` the last sample and unset the attribute, which is why
+/// `Node::sample_order` exists.
 #[test]
-fn an_unreadable_sample_defined_before_a_good_one_diverges() {
+fn a_later_definition_supersedes_an_unreadable_sample() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene.create("q", "mesh").unwrap();
@@ -4491,11 +4480,10 @@ fn an_unreadable_sample_defined_before_a_good_one_diverges() {
         .unwrap();
 
     assert_eq!(
-        scene.world_transform_interpolated_at("q", 0.0).unwrap(),
-        super::IDENTITY,
-        "this crate: the float is last by time, so the attribute is \
-         unset. 3Delight draws static at the t=0 matrix (-1.5), because \
-         the float was superseded by a later call",
+        scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
+        -1.5,
+        "the float was superseded by a later call, so the t=0 matrix \
+         stands alone and is held -- what 3Delight draws",
     );
 }
 
@@ -4534,22 +4522,32 @@ fn sampled_reads_the_attribute_it_was_asked_for() {
     );
 }
 
-/// The **truncation** path diverges too, not just the unset one.
+/// The **truncation** path, in all four call orders 3Delight
+/// distinguishes.
 ///
-/// A `float` at `t=0.5` defined *first*, then good matrices at `t=0`
-/// and `t=1`. Rendered, 3Delight sweeps between the two good samples --
-/// pixel-identical to the same scene without the `float` -- because
-/// both were defined after it and rebuilt the attribute. This crate
-/// sorts by time, sees the `float` in the middle, and cuts everything
-/// before it: a static object at the `t=1` matrix.
+/// One `float` and two good matrices, and where the `float` falls in
+/// the *call* order decides what survives it. All four build
+/// byte-identical `time_attrs`, since that is sorted by time -- so
+/// nothing but `Node::sample_order` can tell them apart, and this crate
+/// gave all four the same answer until it recorded one.
 ///
-/// The earlier divergence test only reached the `Unset` arm, where the
-/// unreadable sample is last by time. This reaches the `keep_from`
-/// truncation, which the settling render validated only for a stream
-/// whose definition order matched its time order. Recording definition
-/// order closes both.
+/// Rendered, each explained by "an unreadable call unsets the attribute
+/// at call time, and what comes after rebuilds it":
+///
+///   float, g0, g1  -> sweeps        (both goods rebuilt it)
+///   g0, float, g1  -> static -3.0   (only g1 survives)
+///   g1, float, g0  -> static -1.5   (only g0 survives)
+///   g0, g1, float  -> identity      (nothing rebuilt it)
 #[test]
-fn the_truncation_path_diverges_when_definition_order_differs() {
+fn an_unreadable_sample_discards_only_what_was_defined_before_it() {
+    let float = || OwnedArg {
+        name: "transformationmatrix".to_string(),
+        type_tag: Type::F32,
+        array_length: 1,
+        flags: 0,
+        data: OwnedData::F32(vec![0.5]),
+    };
+
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene.create("q", "mesh").unwrap();
@@ -4557,17 +4555,7 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
     scene.connect("q", None, "xf", "objects").unwrap();
 
     scene
-        .set_attribute_at_time(
-            "xf",
-            0.5,
-            vec![OwnedArg {
-                name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
-                array_length: 1,
-                flags: 0,
-                data: OwnedData::F32(vec![0.5]),
-            }],
-        )
+        .set_attribute_at_time("xf", 0.5, vec![float()])
         .unwrap();
     scene
         .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
@@ -4578,36 +4566,21 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
 
     assert_eq!(
         scene.motion_times("q").unwrap(),
-        vec![1.0],
-        "this crate cuts at the float; 3Delight keeps both good samples \
-         and sweeps, because both were defined after it",
+        vec![0.0, 1.0],
+        "both goods were defined after the float, so both survive",
     );
     assert_eq!(
         scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
-        -3.0,
-        "static at the t=1 matrix here; 3Delight sweeps",
+        -1.5,
+        "and the sweep starts at the t=0 matrix",
     );
 
-    // The same three calls in three more orders. Because this crate
-    // sorts by time, all four build byte-identical `time_attrs` -- so
-    // these add no discriminating power over the assertion above, and
-    // are here to pin the *divergence* against the renderer's four
-    // different pictures, each explained by "an unreadable call unsets
-    // the attribute at call time":
-    //
-    //   float, g0, g1  -> sweeps        (both goods rebuilt it)
-    //   g0, float, g1  -> static -3.0   (only g1 survives; we agree)
-    //   g1, float, g0  -> static -1.5   (only g0 survives)
-    //   g0, g1, float  -> identity      (nothing rebuilt it)
-    //
-    // The last is the opposite of the `Unset`-arm divergence: there the
-    // crate unsets and the renderer keeps; here the renderer unsets and
-    // the crate truncates.
+    // The same three calls in the three other orders.
     type Calls = [(f64, Option<f64>); 3];
     let orders: [(Calls, f64); 3] = [
         ([(0.0, Some(-1.5)), (0.5, None), (1.0, Some(-3.0))], -3.0),
-        ([(1.0, Some(-3.0)), (0.5, None), (0.0, Some(-1.5))], -3.0),
-        ([(0.0, Some(-1.5)), (1.0, Some(-3.0)), (0.5, None)], -3.0),
+        ([(1.0, Some(-3.0)), (0.5, None), (0.0, Some(-1.5))], -1.5),
+        ([(0.0, Some(-1.5)), (1.0, Some(-3.0)), (0.5, None)], 0.0),
     ];
     for (calls, expected) in orders {
         let mut scene = Scene::default();
@@ -4618,20 +4591,14 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
         for (time, x) in calls {
             let arg = match x {
                 Some(x) => translate(x, 0.0, 0.0),
-                None => OwnedArg {
-                    name: "transformationmatrix".to_string(),
-                    type_tag: Type::F32,
-                    array_length: 1,
-                    flags: 0,
-                    data: OwnedData::F32(vec![0.5]),
-                },
+                None => float(),
             };
             scene.set_attribute_at_time("xf", time, vec![arg]).unwrap();
         }
         assert_eq!(
             scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
             expected,
-            "this crate is order-blind; 3Delight is not",
+            "call order decides what the float discarded",
         );
     }
 }

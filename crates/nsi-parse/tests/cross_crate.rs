@@ -210,3 +210,44 @@ fn the_round_trip_is_idempotent() {
     parse_stream(twice.as_bytes(), &third).expect("parse");
     assert_eq!(stream_of(&third.into_scene()), twice);
 }
+
+/// Call order survives the round trip.
+///
+/// A scene's samples resolve by the order they were *set* in, and
+/// `Node::time_attrs` is sorted by time -- so a writer that walked it
+/// would hand the reader a scene that resolves differently from the one
+/// it wrote, silently. The `t=1` call comes first here and the `t=0`
+/// call last, which is the order 3Delight answers by and the opposite
+/// of the timeline.
+#[test]
+fn the_order_the_samples_were_set_in_survives_the_round_trip() {
+    let original = Recorder::new();
+    original.create("a", "attributes", None).expect("create");
+    original
+        .set_attribute_at_time("a", 1.0, &[nsi::i32!("visibility", 0)])
+        .expect("set");
+    original
+        .set_attribute_at_time("a", 0.0, &[nsi::i32!("visibility", 1)])
+        .expect("set");
+    let written = stream_of(&original.into_scene());
+
+    let reparsed = Recorder::new();
+    parse_stream(written.as_bytes(), &reparsed).expect("parse");
+    let scene = reparsed.into_scene();
+
+    assert_eq!(
+        scene.node("a").expect("node").sample_order["visibility"],
+        vec![1.0, 0.0],
+        "the t=0 call was last on both sides",
+    );
+    assert_eq!(
+        scene
+            .node("a")
+            .expect("node")
+            .effective("visibility")
+            .expect("set at a time")
+            .as_i32(),
+        Some(1),
+        "which is the value 3Delight renders",
+    );
+}

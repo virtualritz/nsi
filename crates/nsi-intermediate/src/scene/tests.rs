@@ -634,6 +634,95 @@ fn the_reserved_handles_cannot_be_created() {
     }
 }
 
+/// The value is the last **call**'s, not the greatest time's.
+///
+/// Rendered, with `visibility` set only through `SetAttributeAtTime`:
+/// `t=1 -> 0` then `t=0 -> 1` leaves the object **visible**, and
+/// `t=1 -> 1` then `t=0 -> 0` hides it. The same two times, opposite
+/// answers, and reading the greatest time gets both backwards -- which
+/// is what this did until `Node::sample_order` recorded the order.
+#[test]
+fn effective_takes_the_last_call_not_the_greatest_time() {
+    for (first, second, expected) in
+        [(0.0, 1.0, 1.0), (1.0, 0.0, 0.0), (2.0, 3.0, 3.0)]
+    {
+        let mut scene = Scene::default();
+        scene.create("a", "attributes").unwrap();
+        // The later time is set first, so the two orders disagree.
+        scene
+            .set_attribute_at_time("a", 1.0, vec![arg("visibility", first)])
+            .unwrap();
+        scene
+            .set_attribute_at_time("a", 0.0, vec![arg("visibility", second)])
+            .unwrap();
+
+        let node = scene.node("a").expect("created");
+        assert_eq!(
+            node.effective("visibility").expect("set at a time").data,
+            OwnedData::F32(vec![expected]),
+            "the t=0 call came last",
+        );
+    }
+}
+
+/// Re-setting a sample makes it the latest definition, so its time
+/// moves to the end of the call order rather than staying where it
+/// first appeared.
+#[test]
+fn re_setting_a_sample_moves_it_to_the_end_of_the_call_order() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    for (time, value) in [(0.0, 1.0), (1.0, 2.0), (0.0, 3.0)] {
+        scene
+            .set_attribute_at_time("a", time, vec![arg("visibility", value)])
+            .unwrap();
+    }
+
+    let node = scene.node("a").expect("created");
+    assert_eq!(node.sample_order["visibility"], vec![1.0, 0.0]);
+    assert_eq!(
+        node.effective("visibility").expect("set at a time").data,
+        OwnedData::F32(vec![3.0]),
+    );
+}
+
+/// A static call clears the call order with the samples, so the two
+/// tables and the order cannot fall out of step.
+#[test]
+fn a_static_call_clears_the_call_order() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    scene
+        .set_attribute_at_time("a", 1.0, vec![arg("visibility", 1.0)])
+        .unwrap();
+    scene
+        .set_attribute("a", vec![arg("visibility", 2.0)])
+        .unwrap();
+
+    let node = scene.node("a").expect("created");
+    assert!(node.sample_order.get("visibility").is_none());
+    assert!(node.time_attrs.is_empty(), "the sample went with it");
+    assert_eq!(
+        node.effective("visibility").expect("static").data,
+        OwnedData::F32(vec![2.0]),
+    );
+}
+
+/// And `delete_attribute` forgets it too.
+#[test]
+fn delete_attribute_clears_the_call_order() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    scene
+        .set_attribute_at_time("a", 1.0, vec![arg("visibility", 1.0)])
+        .unwrap();
+    scene.delete_attribute("a", "visibility");
+
+    let node = scene.node("a").expect("created");
+    assert!(node.sample_order.get("visibility").is_none());
+    assert!(node.effective("visibility").is_none());
+}
+
 /// `Node::effective` is what the resolver reads, so asking a node
 /// directly gives the resolver's answer.
 ///

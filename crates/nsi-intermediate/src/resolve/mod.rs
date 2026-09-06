@@ -8,7 +8,6 @@
 
 use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
-use indexmap::IndexMap;
 use nsi_trait::Type;
 use std::collections::HashSet;
 
@@ -347,48 +346,41 @@ pub struct Placement {
 }
 
 /// What a node's samples of one attribute amount to.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Sampled<'a> {
     /// Not sampled; the static value applies.
     No,
-    /// Sampled, but the last sample *naming* it cannot be read as the
+    /// Sampled, but the last definition cannot be read as the
     /// attribute's type -- so the attribute is unset, at every time.
     Unset,
-    /// The surviving tail of the node's `time_attrs`.
+    /// The surviving samples.
     ///
-    /// Never empty of the attribute: `keep_from` is one past the last
-    /// *unreadable* naming sample, and the last naming sample is
-    /// readable whenever this variant is built, so it is always in the
-    /// tail. Three call sites carried an `is_empty` branch for a case
-    /// that cannot arise; they are gone.
+    /// Never empty: `keep_from` is one past the last *unreadable*
+    /// definition and equals the count only in the `Unset` case, so at
+    /// least one survivor is always left. Three call sites carried an
+    /// `is_empty` branch for a case that cannot arise; they are gone.
     ///
-    /// A slice rather than a collected `Vec`: this is read per node per
-    /// query on the sampled paths, so collecting here allocated once
-    /// per node per time.
-    ///
-    /// The remaining cost is **one hash lookup per sample per pass**,
-    /// not the two passes as such: the rule needs the last naming
-    /// sample before it can decide anything, and each pass pays an
-    /// `IndexMap<String, _>` probe for every sample. Streaming it in a
-    /// single pass was measured and costs the same -- it trades the
-    /// second lookup for a push. See `contracts/resolution.md`; an
-    /// earlier version of this comment blamed the pass count, which the
-    /// measurement does not support.
-    Yes(&'a [(f64, IndexMap<String, OwnedArg>)]),
+    /// The name is resolved here rather than at every consumer, which
+    /// is what lets the survivors be an arbitrary subset of the
+    /// timeline.
+    Yes {
+        /// In **time** order, which is what interpolation needs.
+        samples: Vec<(f64, &'a OwnedArg)>,
+        /// The survivor defined **last**, which is what an attribute
+        /// that is not motion data takes for the whole shutter -- and
+        /// is not the sample at the greatest time for a scene whose
+        /// samples did not arrive in time order.
+        last_defined: &'a OwnedArg,
+    },
 }
 
 impl<'a> Sampled<'a> {
-    /// The surviving samples of `name`, in time order.
-    fn samples(
-        self,
-        name: &'a str,
-    ) -> impl Iterator<Item = (f64, &'a OwnedArg)> {
-        let tail = match self {
-            Self::Yes(tail) => tail,
-            Self::No | Self::Unset => &[][..],
-        };
-        tail.iter()
-            .filter_map(move |(time, attrs)| Some((*time, attrs.get(name)?)))
+    /// The surviving samples, in time order.
+    fn samples(self) -> impl Iterator<Item = (f64, &'a OwnedArg)> {
+        match self {
+            Self::Yes { samples, .. } => samples.into_iter(),
+            Self::No | Self::Unset => Vec::new().into_iter(),
+        }
     }
 }
 
@@ -417,36 +409,54 @@ fn sampled_attr<'a>(
     name: &str,
     readable: impl Fn(&OwnedArg) -> bool,
 ) -> Sampled<'a> {
-    // One pass for the last sample naming the attribute, and for the
-    // point after the last unreadable one.
-    let mut last_named = None;
-    let mut keep_from = 0;
-    for (index, (_, attrs)) in node.time_attrs.iter().enumerate() {
-        if let Some(arg) = attrs.get(name) {
-            last_named = Some(index);
-            if !readable(arg) {
-                keep_from = index + 1;
-            }
-        }
-    }
-
-    let Some(last_named) = last_named else {
+    // In **call** order, not time order: 3Delight rejects an unreadable
+    // argument at the call, so what survives is what was set after it.
+    // `Node::sample_order` is the only record of that order; walking
+    // `time_attrs` instead answers by position on the timeline, which
+    // is a different set of survivors for any scene whose samples did
+    // not arrive in time order.
+    let Some(times) = node.sample_order.get(name) else {
         return Sampled::No;
     };
 
-    // The last naming sample is itself unreadable.
-    if keep_from > last_named {
+    let mut keep_from = 0;
+    for (index, time) in times.iter().enumerate() {
+        let arg = node
+            .sample(*time, name)
+            .expect("`sample_order` names a recorded sample");
+        if !readable(arg) {
+            keep_from = index + 1;
+        }
+    }
+
+    // The last definition is itself unreadable, so nothing survives it
+    // and the attribute is unset at every time.
+    if keep_from == times.len() {
         return Sampled::Unset;
     }
 
-    // Everything before `keep_from` is discarded; `keep_from - 1` is
-    // the last unreadable sample, when there is one. The sample *at*
-    // `keep_from` is the first survivor and is readable whenever it
-    // names the attribute -- an earlier comment here claimed nothing at
-    // or before it could be readable, which was false of the boundary
-    // and of every discarded sample. Handed back as a slice so a caller
-    // that only needs times or existence allocates nothing.
-    Sampled::Yes(&node.time_attrs[keep_from..])
+    // The survivors, back in time order, which is what interpolation
+    // needs. Collected rather than sliced: the survivors are a suffix
+    // in call order and an arbitrary subset of the timeline, so no
+    // slice of `time_attrs` can name them. That costs one small
+    // allocation per node per query on the sampled paths -- the price
+    // of answering the renderer's order rather than the storage's.
+    let mut samples: Vec<(f64, &OwnedArg)> = times[keep_from..]
+        .iter()
+        .map(|time| {
+            let arg = node
+                .sample(*time, name)
+                .expect("`sample_order` names a recorded sample");
+            (*time, arg)
+        })
+        .collect();
+    let last_defined = samples.last().expect("a survivor").1;
+    samples.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+
+    Sampled::Yes {
+        samples,
+        last_defined,
+    }
 }
 
 /// Where a time falls among a set of samples.
@@ -834,7 +844,7 @@ impl Scene {
                 sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
                     matrix_of(arg).is_some()
                 })
-                .samples(TRANSFORMATION_MATRIX)
+                .samples()
             })
             .map(|(time, _)| time)
             .collect::<Vec<_>>();
@@ -1085,7 +1095,7 @@ impl Scene {
             sampled_attr(node, TRANSFORMATION_MATRIX, |arg| {
                 matrix_of(arg).is_some()
             })
-            .samples(TRANSFORMATION_MATRIX)
+            .samples()
             .next()
             .is_some()
         })
@@ -1694,8 +1704,12 @@ impl Scene {
         }) {
             Sampled::No => None,
             Sampled::Unset => Some(Vec::new()),
-            found @ Sampled::Yes(_) => {
-                found.samples(name).last().map(|(_, arg)| match &arg.data {
+            // The last *defined*, which 3Delight applies for the whole
+            // shutter as an overwriting `SetAttribute` would. Taking
+            // the last by time answered a different sample for any
+            // scene whose samples did not arrive in time order.
+            Sampled::Yes { last_defined, .. } => {
+                Some(match &last_defined.data {
                     OwnedData::I32(values) => values.to_vec(),
                     _ => Vec::new(),
                 })
@@ -1732,8 +1746,8 @@ impl Scene {
                 // there.
                 Sampled::No => return Ok(None),
                 Sampled::Unset => return Ok(Some(Vec::new())),
-                found @ Sampled::Yes(_) => found
-                    .samples(MATRICES)
+                found @ Sampled::Yes { .. } => found
+                    .samples()
                     .filter_map(|(t, arg)| match arg.data {
                         OwnedData::F64(ref values) => {
                             Some((t, values.as_slice()))
@@ -2259,7 +2273,7 @@ impl Scene {
             return Ok(self.local_transform(handle));
         }
         let sampled: Vec<(f64, [f64; 16])> = found
-            .samples(TRANSFORMATION_MATRIX)
+            .samples()
             .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
             .collect();
 
@@ -2316,17 +2330,15 @@ impl Scene {
         }
 
         match found
-            .samples(TRANSFORMATION_MATRIX)
+            .clone()
+            .samples()
             .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
         {
             Some((_, arg)) => Ok(matrix_of(arg)),
             None => Err(ResolveError::MissingSampleAtTime {
                 handle: handle.to_string(),
                 time,
-                available: found
-                    .samples(TRANSFORMATION_MATRIX)
-                    .map(|(t, _)| t)
-                    .collect(),
+                available: found.samples().map(|(t, _)| t).collect(),
             }),
         }
     }

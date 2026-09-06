@@ -22,7 +22,33 @@ pub struct Node {
     /// transform composition has to happen per sample: flattening an
     /// ɴsɪ transform chain into a single world matrix is a per-time
     /// operation, not a one-off.
+    ///
+    /// **Sorted by time, which is not the order the values were set
+    /// in.** Read an attribute through [`Node::effective`] or the
+    /// resolver rather than walking this: 3Delight keeps the value of
+    /// the last *call*, and reading the last sample here answers with
+    /// the greatest *time* -- a different value for any scene whose
+    /// samples did not arrive in time order, and a rendered wrong
+    /// answer. [`Node::sample_order`] is what records the difference.
     pub time_attrs: Vec<(f64, IndexMap<String, OwnedArg>)>,
+    /// Per attribute, the times it was set at, **in call order**.
+    ///
+    /// [`Node::time_attrs`] is sorted by time and cannot express which
+    /// call came last, and 3Delight answers by call. Rendered: with
+    /// `visibility` set only at times, `t=1 -> 0` then `t=0 -> 1`
+    /// leaves the object **visible** while `t=0 -> 1` then `t=1 -> 0`
+    /// hides it -- the same two samples, the same times, opposite
+    /// answers, and the greatest time gets both backwards.
+    ///
+    /// The same order decides which samples an unreadable one
+    /// discards: 3Delight rejects the argument at the call, so what
+    /// survives is what was set *after* it, not what sits later on the
+    /// timeline.
+    ///
+    /// Maintained beside the two tables above and empty for an
+    /// attribute that is not sampled. Setting an attribute statically
+    /// clears its entry, as it clears its samples.
+    pub sample_order: IndexMap<String, Vec<f64>>,
 }
 
 impl Node {
@@ -37,19 +63,30 @@ impl Node {
     /// which is a silent wrong answer -- and was one here until it was
     /// rendered.
     ///
-    /// Static first, then the last sample naming it. The two never
-    /// coexist: `set_attribute` clears that name from every sample and
-    /// `set_attribute_at_time` clears the static value.
+    /// Static first, then the sample set **last**, which is not the
+    /// sample at the greatest time -- see [`Node::sample_order`] for
+    /// the render that separates the two. The static value and the
+    /// samples never coexist: `set_attribute` clears that name from
+    /// every sample and `set_attribute_at_time` clears the static
+    /// value, which is ɴsɪ's own rule and 3Delight's behaviour.
     ///
     /// This is what the resolver reads, so a backend asking a node
     /// directly gets the same answer the resolver would.
     pub fn effective(&self, name: &str) -> Option<&OwnedArg> {
-        self.attrs.get(name).or_else(|| {
-            self.time_attrs
-                .iter()
-                .rev()
-                .find_map(|(_, attrs)| attrs.get(name))
-        })
+        if let Some(arg) = self.attrs.get(name) {
+            return Some(arg);
+        }
+        let time = *self.sample_order.get(name)?.last()?;
+        self.sample(time, name)
+    }
+
+    /// One sample of one attribute, by time.
+    pub(crate) fn sample(&self, time: f64, name: &str) -> Option<&OwnedArg> {
+        self.time_attrs
+            .iter()
+            .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)?
+            .1
+            .get(name)
     }
 }
 
@@ -390,6 +427,7 @@ impl Scene {
             for (_, sample) in &mut node.time_attrs {
                 sample.shift_remove(&arg.name);
             }
+            node.sample_order.shift_remove(&arg.name);
             node.attrs.insert(arg.name.clone(), arg);
         }
         node.time_attrs.retain(|(_, sample)| !sample.is_empty());
@@ -465,6 +503,14 @@ impl Scene {
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
             node.attrs.shift_remove(&arg.name);
+
+            // Call order, which `time_attrs` cannot hold: re-setting a
+            // sample makes it the latest definition, so the time moves
+            // to the end rather than staying where it first appeared.
+            let order = node.sample_order.entry(arg.name.clone()).or_default();
+            order.retain(|t| t.total_cmp(&time) != Ordering::Equal);
+            order.push(time);
+
             node.time_attrs[slot].1.insert(arg.name.clone(), arg);
         }
 
@@ -479,6 +525,7 @@ impl Scene {
             for (_, attrs) in &mut node.time_attrs {
                 attrs.shift_remove(name);
             }
+            node.sample_order.shift_remove(name);
         }
     }
 

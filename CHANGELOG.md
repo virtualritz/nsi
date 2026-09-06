@@ -102,6 +102,21 @@ trait -> ffi-wrap -> intermediate -> parse.
   and `name` carries the attribute that won, which used to be read off
   `arg.name`. The defaults themselves are not carried here: they are a
   renderer's to know, and a stale table would be worse than none.
+- **An attribute resolves by the order it was set in**, which is what
+  3Delight does and what `time_attrs` -- sorted by time -- cannot say.
+  Rendered, with `visibility` set only through `SetAttributeAtTime`:
+  `t=1 -> 0` then `t=0 -> 1` leaves the object visible, and `t=1 -> 1`
+  then `t=0 -> 0` hides it. The same two times, opposite answers, and
+  reading the greatest time gets both backwards. `Node::sample_order`
+  records the times of each attribute in call order; `Node::effective`
+  takes the last, `sampled_attr` walks them -- so an unreadable sample
+  discards what was defined *before* it rather than what sits earlier
+  on the timeline -- and both emitters replay them in that order, so a
+  round trip through the writer no longer hands back a scene that
+  resolves differently from the one it wrote. Three `Open` divergence
+  rows become two `Covered` ones; the third, a same-time re-set that
+  erases an unreadable sample, is the only one call order does not
+  close.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,
