@@ -788,6 +788,19 @@ impl Scene {
     /// [`Scene::motion_times`] when a backend needs every time the
     /// object changes -- ɴsɪ does not require the two to agree.
     ///
+    /// # Every recorded time, including unreadable ones
+    ///
+    /// [`Scene::motion_times`] drops a sample whose type it cannot
+    /// read, because 3Delight unsets such an attribute and it knows
+    /// `transformationmatrix` is a `doublematrix`. This cannot: `name`
+    /// is any attribute, and the crate does not carry ɴsɪ's type for
+    /// each one, so "unreadable" has no meaning here. It reports what
+    /// was recorded and [`Scene::attribute_samples`] hands over the
+    /// arguments for a caller that knows the type to judge.
+    ///
+    /// So the two disagree by design on a scene with a wrong-typed
+    /// transform sample, and that is the one case worth knowing about.
+    ///
     /// # Errors
     ///
     /// [`ResolveError::UnknownHandle`] if no such node exists.
@@ -1561,24 +1574,22 @@ impl Scene {
     /// which 3Delight itself never writes -- resolves to the other one.
     /// Recorded in `contracts/resolution.md`.
     fn instance_ints(&self, node: &Node, name: &str) -> Option<Vec<i32>> {
-        // The last sample that *names* the attribute wins, whatever
-        // type it carries. Matching `I32` inside the lookup instead
-        // skipped a wrong-typed later sample and answered from the
-        // earlier one -- returning a value the renderer discarded, which
-        // is the failure this rule was corrected for. Rendered: a good
-        // `int` at `t=0` followed by an `int64` draws *both* instances,
-        // so a wrong-typed later definition clears rather than being
-        // ignored, exactly as the static reading already modelled.
-        let arg = node
-            .time_attrs
-            .iter()
-            .rev()
-            .find_map(|(_, attrs)| attrs.get(name))?;
-
-        Some(match &arg.data {
-            OwnedData::I32(values) => values.to_vec(),
-            _ => Vec::new(),
-        })
+        // The shared typing rule, not a sixth hand-rolled copy of it:
+        // the last sample that *names* the attribute wins, and a type
+        // that cannot be read unsets it. Rendered, a good `int` at
+        // `t=0` followed by an `int64` draws *both* instances.
+        match sampled_attr(node, name, |arg| {
+            matches!(arg.data, OwnedData::I32(_))
+        }) {
+            Sampled::No => None,
+            Sampled::Unset => Some(Vec::new()),
+            Sampled::Yes(samples) => {
+                samples.last().map(|(_, arg)| match &arg.data {
+                    OwnedData::I32(values) => values.to_vec(),
+                    _ => Vec::new(),
+                })
+            }
+        }
     }
 
     /// The instancer's matrices at `time`, when they are sampled.

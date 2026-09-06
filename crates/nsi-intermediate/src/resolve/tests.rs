@@ -3885,3 +3885,58 @@ fn a_wrong_typed_earlier_sample_is_dropped() {
         "and it is not a motion time either",
     );
 }
+
+/// `motion_times` and `attribute_times` disagree on a wrong-typed
+/// transform sample, **by design**.
+///
+/// `motion_times` knows `transformationmatrix` is a `doublematrix`, so
+/// it applies ɴsɪ's typing rule and drops what it cannot read.
+/// `attribute_times` takes any attribute name and this crate does not
+/// carry ɴsɪ's type for each one, so "unreadable" has no meaning there:
+/// it reports what was recorded, and `attribute_samples` hands over the
+/// arguments for a caller that knows the type.
+///
+/// Pinned because the two answering differently on one scene is the
+/// shape of every defect these rounds have found, and this is the one
+/// place it is intended.
+#[test]
+fn motion_times_and_attribute_times_differ_on_an_unreadable_sample() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene
+        .set_attribute_at_time(
+            "xf",
+            0.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(2.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.motion_times("xf").unwrap(),
+        vec![1.0],
+        "the unreadable sample is not a motion time",
+    );
+    assert_eq!(
+        scene.attribute_times("xf", "transformationmatrix").unwrap(),
+        vec![0.0, 1.0],
+        "but it was recorded, and this reports what was recorded",
+    );
+    assert_eq!(
+        scene
+            .attribute_samples("xf", "transformationmatrix")
+            .unwrap()
+            .len(),
+        2,
+        "with the arguments, so a caller that knows the type can judge",
+    );
+}
