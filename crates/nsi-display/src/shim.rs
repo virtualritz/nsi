@@ -90,6 +90,73 @@ fn guard(body: impl FnOnce() -> Error) -> ndspy_sys::PtDspyError {
     }
 }
 
+/// Body shared by [`shim_open`] and [`concurrent_shim_open`].
+///
+/// The two differ only in which trait supplies the pixel type and the
+/// `open` implementation, so both are passed in rather than duplicated:
+/// a fix here -- the pre-nulled `*image`, say -- lands in both shims at
+/// once.
+///
+/// # Safety
+/// The ndspy contract's pointers, as handed to `DspyImageOpen`.
+#[allow(clippy::too_many_arguments)]
+unsafe fn open_impl<D>(
+    image: *mut ndspy_sys::PtDspyImageHandle,
+    width: c_int,
+    height: c_int,
+    param_count: c_int,
+    parameters: *const ndspy_sys::UserParameter,
+    format_count: c_int,
+    format: *mut ndspy_sys::PtDspyDevFormat,
+    flags: *mut ndspy_sys::PtFlagStuff,
+    ndspy_type: u32,
+    open: impl FnOnce(Params<'_>, usize, usize, &PixelFormat) -> Result<D>,
+) -> Error {
+    if image.is_null() || format.is_null() || format_count <= 0 {
+        return Error::BadParameters;
+    }
+
+    // Every path out of here must leave a defined handle. ndspy does
+    // not promise the caller pre-nulled `*image`, and an author is
+    // free to return `Err(Error::None)` -- which reports success --
+    // so without this the renderer could be handed whatever `*image`
+    // happened to contain on entry.
+    // SAFETY: `image` is non-null per the check above.
+    unsafe { *image = core::ptr::null_mut() };
+
+    // SAFETY: the renderer guarantees `format_count` entries.
+    let format = unsafe {
+        core::slice::from_raw_parts_mut(format, format_count as usize)
+    };
+    // This driver's scalar is what the renderer must deliver.
+    format.iter_mut().for_each(|f| f.type_ = ndspy_type);
+
+    let pixel_format = PixelFormat::from_ndspy(format);
+    // SAFETY: borrowed for this call only.
+    let params = unsafe { Params::from_raw(parameters, param_count) };
+
+    let driver =
+        match open(params, width as usize, height as usize, &pixel_format) {
+            Ok(driver) => driver,
+            Err(error) => return error,
+        };
+
+    // The handle is ours: reclaimed in the matching close shim, once.
+    let handle = Box::new(Handle {
+        driver,
+        format: pixel_format,
+    });
+    // SAFETY: `image` and `flags` are valid per the ndspy contract.
+    unsafe {
+        *image = Box::into_raw(handle) as _;
+        if !flags.is_null() {
+            (*flags).flags &=
+                !(ndspy_sys::PkDspyFlagsWantsEmptyBuckets as c_int);
+        }
+    }
+    Error::None
+}
+
 /// # Safety
 /// Called by the renderer with the ndspy contract's pointers.
 #[allow(clippy::too_many_arguments)]
@@ -105,56 +172,20 @@ pub unsafe fn shim_open<D: DisplayDriver>(
     format: *mut ndspy_sys::PtDspyDevFormat,
     flags: *mut ndspy_sys::PtFlagStuff,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if image.is_null() || format.is_null() || format_count <= 0 {
-            return Error::BadParameters;
-        }
-
-        // Every path out of here must leave a defined handle. ndspy does
-        // not promise the caller pre-nulled `*image`, and an author is
-        // free to return `Err(Error::None)` -- which reports success --
-        // so without this the renderer could be handed whatever `*image`
-        // happened to contain on entry.
-        // SAFETY: `image` is non-null per the check above.
-        unsafe { *image = core::ptr::null_mut() };
-
-        // SAFETY: the renderer guarantees `format_count` entries.
-        let format = unsafe {
-            core::slice::from_raw_parts_mut(format, format_count as usize)
-        };
-        // This driver's scalar is what the renderer must deliver.
-        format
-            .iter_mut()
-            .for_each(|f| f.type_ = D::Pixel::NDSPY_TYPE);
-
-        let pixel_format = PixelFormat::from_ndspy(format);
-        // SAFETY: borrowed for this call only.
-        let params = unsafe { Params::from_raw(parameters, param_count) };
-
-        let driver = match D::open(
-            params,
-            width as usize,
-            height as usize,
-            &pixel_format,
-        ) {
-            Ok(driver) => driver,
-            Err(error) => return error,
-        };
-
-        // The handle is ours: reclaimed in `shim_close`, once.
-        let handle = Box::new(Handle {
-            driver,
-            format: pixel_format,
-        });
-        // SAFETY: `image` and `flags` are valid per the ndspy contract.
-        unsafe {
-            *image = Box::into_raw(handle) as _;
-            if !flags.is_null() {
-                (*flags).flags &=
-                    !(ndspy_sys::PkDspyFlagsWantsEmptyBuckets as c_int);
-            }
-        }
-        Error::None
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe {
+        open_impl(
+            image,
+            width,
+            height,
+            param_count,
+            parameters,
+            format_count,
+            format,
+            flags,
+            D::Pixel::NDSPY_TYPE,
+            D::open,
+        )
     })
 }
 
@@ -173,56 +204,20 @@ pub unsafe fn concurrent_shim_open<D: ConcurrentDisplayDriver>(
     format: *mut ndspy_sys::PtDspyDevFormat,
     flags: *mut ndspy_sys::PtFlagStuff,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if image.is_null() || format.is_null() || format_count <= 0 {
-            return Error::BadParameters;
-        }
-
-        // Every path out of here must leave a defined handle. ndspy does
-        // not promise the caller pre-nulled `*image`, and an author is
-        // free to return `Err(Error::None)` -- which reports success --
-        // so without this the renderer could be handed whatever `*image`
-        // happened to contain on entry.
-        // SAFETY: `image` is non-null per the check above.
-        unsafe { *image = core::ptr::null_mut() };
-
-        // SAFETY: the renderer guarantees `format_count` entries.
-        let format = unsafe {
-            core::slice::from_raw_parts_mut(format, format_count as usize)
-        };
-        // This driver's scalar is what the renderer must deliver.
-        format
-            .iter_mut()
-            .for_each(|f| f.type_ = D::Pixel::NDSPY_TYPE);
-
-        let pixel_format = PixelFormat::from_ndspy(format);
-        // SAFETY: borrowed for this call only.
-        let params = unsafe { Params::from_raw(parameters, param_count) };
-
-        let driver = match D::open(
-            params,
-            width as usize,
-            height as usize,
-            &pixel_format,
-        ) {
-            Ok(driver) => driver,
-            Err(error) => return error,
-        };
-
-        // The handle is ours: reclaimed in `concurrent_shim_close`, once.
-        let handle = Box::new(Handle {
-            driver,
-            format: pixel_format,
-        });
-        // SAFETY: `image` and `flags` are valid per the ndspy contract.
-        unsafe {
-            *image = Box::into_raw(handle) as _;
-            if !flags.is_null() {
-                (*flags).flags &=
-                    !(ndspy_sys::PkDspyFlagsWantsEmptyBuckets as c_int);
-            }
-        }
-        Error::None
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe {
+        open_impl(
+            image,
+            width,
+            height,
+            param_count,
+            parameters,
+            format_count,
+            format,
+            flags,
+            D::Pixel::NDSPY_TYPE,
+            D::open,
+        )
     })
 }
 
@@ -388,23 +383,35 @@ pub unsafe fn concurrent_shim_data<D: ConcurrentDisplayDriver>(
     })
 }
 
+/// Body shared by [`shim_close`] and [`concurrent_shim_close`], which
+/// differ only in which trait's `close` consumes the driver.
+///
+/// # Safety
+/// `image` must have come from the matching open shim and not been
+/// closed.
+unsafe fn close_impl<D>(
+    image: ndspy_sys::PtDspyImageHandle,
+    close: impl FnOnce(D) -> Result<()>,
+) -> Error {
+    if image.is_null() {
+        return Error::BadParameters;
+    }
+    // SAFETY: ours, reclaimed exactly here. `close` consumes the
+    // driver, so the type system prevents a second use.
+    let handle = unsafe { Box::from_raw(image as *mut Handle<D>) };
+    match close(handle.driver) {
+        Ok(()) => Error::None,
+        Err(error) => error,
+    }
+}
+
 /// # Safety
 /// `image` must have come from `shim_open` and not been closed.
 pub unsafe fn shim_close<D: DisplayDriver>(
     image: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if image.is_null() {
-            return Error::BadParameters;
-        }
-        // SAFETY: ours, reclaimed exactly here. `close` consumes the
-        // driver, so the type system prevents a second use.
-        let handle = unsafe { Box::from_raw(image as *mut Handle<D>) };
-        match handle.driver.close() {
-            Ok(()) => Error::None,
-            Err(error) => error,
-        }
-    })
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe { close_impl(image, D::close) })
 }
 
 /// # Safety
@@ -414,18 +421,58 @@ pub unsafe fn shim_close<D: DisplayDriver>(
 pub unsafe fn concurrent_shim_close<D: ConcurrentDisplayDriver>(
     image: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if image.is_null() {
-            return Error::BadParameters;
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe { close_impl(image, D::close) })
+}
+
+/// Body shared by [`shim_query`] and [`concurrent_shim_query`].
+///
+/// The whole difference between the two is `multithread`: a driver
+/// whose `write` takes `&mut self` answers `0` and the renderer
+/// serialises; one whose `write` takes `&self` answers `1` and the
+/// renderer may deliver buckets from several threads at once. Neither
+/// answer depends on the driver type, so this body is not generic.
+///
+/// # Safety
+/// `data` must point to `data_len` bytes of the struct the query names.
+unsafe fn query_impl(
+    query_type: ndspy_sys::PtDspyQueryType,
+    data_len: c_int,
+    data: *mut c_void,
+    multithread: ndspy_sys::PtDspyUnsigned8,
+) -> Error {
+    if data.is_null() || data_len <= 0 {
+        return Error::BadParameters;
+    }
+    match query_type {
+        ndspy_sys::PtDspyQueryType::Thread => {
+            if (data_len as usize)
+                < core::mem::size_of::<ndspy_sys::PtDspyThreadInfo>()
+            {
+                return Error::BadParameters;
+            }
+            // SAFETY: length checked above.
+            unsafe {
+                (*(data as *mut ndspy_sys::PtDspyThreadInfo)).multithread =
+                    multithread;
+            }
+            Error::None
         }
-        // SAFETY: ours, reclaimed exactly here. `close` consumes the
-        // driver, so the type system prevents a second use.
-        let handle = unsafe { Box::from_raw(image as *mut Handle<D>) };
-        match handle.driver.close() {
-            Ok(()) => Error::None,
-            Err(error) => error,
+        ndspy_sys::PtDspyQueryType::Progressive => {
+            if (data_len as usize)
+                < core::mem::size_of::<ndspy_sys::PtDspyProgressiveInfo>()
+            {
+                return Error::BadParameters;
+            }
+            // SAFETY: length checked above.
+            unsafe {
+                (*(data as *mut ndspy_sys::PtDspyProgressiveInfo))
+                    .acceptProgressive = 1;
+            }
+            Error::None
         }
-    })
+        _ => Error::Unsupported,
+    }
 }
 
 /// # Safety
@@ -436,41 +483,9 @@ pub unsafe fn shim_query<D: DisplayDriver>(
     data_len: c_int,
     data: *mut c_void,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if data.is_null() || data_len <= 0 {
-            return Error::BadParameters;
-        }
-        match query_type {
-            ndspy_sys::PtDspyQueryType::Thread => {
-                if (data_len as usize)
-                    < core::mem::size_of::<ndspy_sys::PtDspyThreadInfo>()
-                {
-                    return Error::BadParameters;
-                }
-                // `write` is `&mut self`: the renderer must serialise.
-                // SAFETY: length checked above.
-                unsafe {
-                    (*(data as *mut ndspy_sys::PtDspyThreadInfo)).multithread =
-                        0;
-                }
-                Error::None
-            }
-            ndspy_sys::PtDspyQueryType::Progressive => {
-                if (data_len as usize)
-                    < core::mem::size_of::<ndspy_sys::PtDspyProgressiveInfo>()
-                {
-                    return Error::BadParameters;
-                }
-                // SAFETY: length checked above.
-                unsafe {
-                    (*(data as *mut ndspy_sys::PtDspyProgressiveInfo))
-                        .acceptProgressive = 1;
-                }
-                Error::None
-            }
-            _ => Error::Unsupported,
-        }
-    })
+    // `write` is `&mut self`: the renderer must serialise.
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe { query_impl(query_type, data_len, data, 0) })
 }
 
 /// # Safety
@@ -481,42 +496,10 @@ pub unsafe fn concurrent_shim_query<D: ConcurrentDisplayDriver>(
     data_len: c_int,
     data: *mut c_void,
 ) -> ndspy_sys::PtDspyError {
-    guard(|| {
-        if data.is_null() || data_len <= 0 {
-            return Error::BadParameters;
-        }
-        match query_type {
-            ndspy_sys::PtDspyQueryType::Thread => {
-                if (data_len as usize)
-                    < core::mem::size_of::<ndspy_sys::PtDspyThreadInfo>()
-                {
-                    return Error::BadParameters;
-                }
-                // `write` is `&self`: the renderer may deliver buckets
-                // from several threads at once.
-                // SAFETY: length checked above.
-                unsafe {
-                    (*(data as *mut ndspy_sys::PtDspyThreadInfo)).multithread =
-                        1;
-                }
-                Error::None
-            }
-            ndspy_sys::PtDspyQueryType::Progressive => {
-                if (data_len as usize)
-                    < core::mem::size_of::<ndspy_sys::PtDspyProgressiveInfo>()
-                {
-                    return Error::BadParameters;
-                }
-                // SAFETY: length checked above.
-                unsafe {
-                    (*(data as *mut ndspy_sys::PtDspyProgressiveInfo))
-                        .acceptProgressive = 1;
-                }
-                Error::None
-            }
-            _ => Error::Unsupported,
-        }
-    })
+    // `write` is `&self`: the renderer may deliver buckets from several
+    // threads at once.
+    // SAFETY: forwarded unchanged; the caller's obligation is ours.
+    guard(|| unsafe { query_impl(query_type, data_len, data, 1) })
 }
 
 #[cfg(test)]
