@@ -712,6 +712,18 @@ impl Scene {
     /// is not a visibility one. This applies both rules and returns the
     /// answer itself.
     ///
+    /// # Scope
+    ///
+    /// This resolves `attributes` nodes reached through
+    /// `geometryattributes`. ɴsɪ has a *second* container with a
+    /// *different* rule: a `shaderattributes` node is gathered along the
+    /// same path, but "priority is given to nodes attached closest to
+    /// the geometric primitive, with the highest priority given to
+    /// attributes set directly on the geometric primitive", with no
+    /// `ATTR.priority` in it at all. Those are not resolved here and
+    /// asking for one returns `None`. Tracked as an `Open` row in
+    /// `contracts/resolution.md`.
+    ///
     /// # Precedence
     ///
     /// ɴsɪ: "When an attribute is defined multiple times along this

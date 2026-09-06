@@ -328,3 +328,9 @@ against this API now.
       `AttributeValue`. Pinned by
       `resolve::tests::a_priority_without_its_attribute_is_skipped`.
       Gate: the `Open` row in `contracts/resolution.md`.
+- [ ] T9.9 Resolve `shaderattributes` nodes. They classify but nothing
+      reads them, and their gathering rule is *not* the one
+      `attribute_value` implements: proximity only, no `ATTR.priority`,
+      and values may sit directly on the geometric primitive. Asking
+      `attribute_value` for one returns `None` indistinguishably from
+      "not set". Gate: the `Open` row in `contracts/resolution.md`.
