@@ -1838,6 +1838,58 @@ fn a_higher_priority_value_beats_a_defaulted_definition() {
     assert_eq!(value.priority, 20);
 }
 
+/// A priority is exactly one `int`, in count as well as in type.
+/// Rendered (`F1a`, `F1b`): with the priority written `"int" 2
+/// [ 10 10 ]`, and again as the identical `"int[2]" 1 [ 10 10 ]`, the
+/// geometry stays hidden -- 3Delight ranked nothing on it and the
+/// nearer `visibility 0` answered -- while the one-value control
+/// (`F1ctl`) shows it. Taking the first of several would rank a node
+/// the renderer does not.
+#[test]
+fn a_multi_valued_priority_is_ignored() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "far",
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10, 10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined on the path");
+    assert_eq!(value.node, "near", "two ints are not a priority");
+    assert_eq!(value.priority, 0);
+}
+
+/// A lone priority answers a per-ray query through the same
+/// specificity fallback a real value gets. Rendered (`H`): `near`
+/// carries only `visibility.priority 10`, `far` sets
+/// `visibility.camera 0`, and the geometry is visible -- the defaulted
+/// `visibility` outranks the more specific value on priority.
+#[test]
+fn a_lone_priority_answers_a_per_ray_query_through_the_fallback() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility.priority", vec![10])])
+        .unwrap();
+    scene
+        .set_attribute("far", vec![integers("visibility.camera", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility.camera").unwrap();
+    let value = value.expect("the lone priority defines the default");
+    assert_eq!(value.node, "near");
+    assert_eq!(value.name, "visibility", "the less specific key won");
+    assert_eq!(value.arg, None);
+    assert_eq!(value.priority, 10);
+}
+
 /// A priority 3Delight cannot read is not a definition either.
 /// Rendered (`D`): with the lone priority written as an `int64` the
 /// geometry is **hidden**, so the farther `visibility 0` answers -- if

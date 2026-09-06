@@ -70,7 +70,7 @@ pub struct Scene {
     /// would have produced is absent from the scene; recording the call
     /// at least means a stream carrying one is not silently reduced to
     /// a scene missing its geometry, with no error and no trace.
-    evaluations: Vec<(usize, Vec<OwnedArg>)>,
+    evaluations: Vec<Vec<OwnedArg>>,
     /// Edge positions keyed by source handle, and by destination.
     ///
     /// Resolution walks the graph per object, so without these every
@@ -101,12 +101,17 @@ impl Scene {
     /// archives or procedurals has to execute them itself: this crate
     /// records the call and does not define an execution model for it.
     pub fn evaluations(&self) -> impl Iterator<Item = &[OwnedArg]> {
-        self.evaluations.iter().map(|(_, args)| args.as_slice())
+        self.evaluations.iter().map(Vec::as_slice)
     }
 
-    /// Record an `Evaluate`, with where it fell among the nodes.
+    /// Record an `Evaluate`.
+    ///
+    /// Only the call, not where it fell among the nodes: replay emits
+    /// every `Evaluate` first, nothing reads a position, and a node
+    /// count kept here would be wrong the moment a `delete` shifted
+    /// it.
     pub(crate) fn evaluate(&mut self, args: Vec<OwnedArg>) {
-        self.evaluations.push((self.nodes.len(), args));
+        self.evaluations.push(args);
     }
 
     /// One node by handle.

@@ -548,12 +548,16 @@ pub struct AttributeValue<'a> {
 /// `visibility` value itself, so the rejection is specific to the
 /// priority.
 ///
-/// Reading one here would rank a node the renderer does not.
+/// The **count** is as strict as the type: exactly one, which is what
+/// [`OwnedArg::as_i32`] means. Rendered: the same scene with the
+/// priority written `"int" 2 [ 10 10 ]` -- or `"int[2]" 1 [ 10 10 ]`,
+/// which is the same argument spelled the other way -- leaves the
+/// geometry hidden, so 3Delight ranked nothing on it, while the
+/// one-value control shows it. Taking the first of several would rank
+/// a node the renderer does not, which is the same mistake as reading
+/// the `int64`.
 fn priority_value(arg: &OwnedArg) -> Option<i32> {
-    match &arg.data {
-        OwnedData::I32(values) => values.first().copied(),
-        _ => None,
-    }
+    arg.as_i32()
 }
 
 /// One renderable output: a camera paired with a screen, and the AOVs
