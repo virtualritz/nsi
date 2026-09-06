@@ -976,8 +976,9 @@ impl Scene {
         geometry: &str,
         name: &str,
     ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
-        let gathered = self.gathered_attributes(geometry)?;
-        Ok(self.resolve_attribute(&gathered, name))
+        // As above: the geometry form is the path form over its chain.
+        let chain = self.chain(geometry)?;
+        Ok(self.attribute_value_along(&chain, name))
     }
 
     /// The same, along one [`Placement`]'s path.
@@ -1001,7 +1002,10 @@ impl Scene {
     /// The same, for the `shaderattributes` container.
     ///
     /// Proximity only, as [`Scene::shader_attribute_value`] explains,
-    /// and the geometry's own attributes still outrank every container.
+    /// and the path's first node -- the geometry -- still outranks every
+    /// container. This is the body
+    /// [`Scene::shader_attribute_value`] runs over a geometry's own
+    /// chain, not a second copy of the rule.
     pub fn shader_attribute_value_along(
         &self,
         path: &[String],
@@ -1160,37 +1164,13 @@ impl Scene {
         geometry: &str,
         name: &str,
     ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
-        // ɴsɪ ranks the primitive's own attributes above every
-        // container: "with the highest priority given to attributes set
-        // directly on the geometric primitive". Rendered, a `tint` on
-        // the mesh beats one on an `attributes` node attached to that
-        // same mesh, in both directions, and beats one carrying a
-        // `tint.priority` too.
-        if let Some((handle, node)) = self.node_entry(geometry)
-            && let Some(arg) = node.attrs.get(name)
-        {
-            return Ok(Some(AttributeValue {
-                node: handle,
-                arg,
-                priority: 0,
-            }));
-        }
-
-        for (_, _, edge) in
-            self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
-        {
-            let Some(node) = self.node(&edge.from) else {
-                continue;
-            };
-            if let Some(arg) = node.attrs.get(name) {
-                return Ok(Some(AttributeValue {
-                    node: &edge.from,
-                    arg,
-                    priority: 0,
-                }));
-            }
-        }
-        Ok(None)
+        // The path form *is* this rule; asking about a geometry is
+        // asking along its own chain. Kept as one body because a copy
+        // of a resolution rule has drifted three times in this crate --
+        // `compose_along` from `world_transform`'s fold, `placements_at`
+        // from the interpolating one, and these two were next.
+        let chain = self.chain(geometry)?;
+        Ok(self.shader_attribute_value_along(&chain, name))
     }
 
     /// Every way `geometry` is placed in the scene.
