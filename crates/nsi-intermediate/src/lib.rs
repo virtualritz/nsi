@@ -69,17 +69,36 @@
 //!         assert_eq!(binding.attributes, vec!["attr".to_string()]);
 //!     }
 //!
-//!     // Transform. Ask whether it moves before asking where it is.
-//!     let matrices = if scene.motion_times(handle)?.is_empty() {
+//!     // Transform, at whatever times the backend samples. Use the
+//!     // *interpolating* accessor: `world_transform_samples` answers
+//!     // only where every node on the chain has a sample at exactly
+//!     // that time, and refuses a chain whose nodes are sampled at
+//!     // different times -- a scene 3Delight renders.
+//!     let times = scene.motion_times(handle)?;
+//!     let matrices: Vec<(f64, [f64; 16])> = if times.is_empty() {
 //!         vec![(0.0, scene.world_transform(handle)?)]
 //!     } else {
-//!         scene.world_transform_samples(handle)?
+//!         times
+//!             .iter()
+//!             .map(|&t| {
+//!                 Ok((t, scene.world_transform_interpolated_at(handle, t)?))
+//!             })
+//!             .collect::<Result<_, nsi_intermediate::ResolveError>>()?
 //!     };
 //!     assert_eq!(matrices.len(), 1);
 //! }
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! A geometry with more than one `objects` parent is ɴsɪ's lightweight
+//! instancing and has no single transform or binding. Use
+//! [`Scene::placements`] (or [`Scene::placements_at`] when it moves),
+//! which returns one entry per path with the transform *and* the
+//! binding resolved along it, and agrees with the single-answer
+//! accessors when there is only one path. Its `binding.attributes` is a
+//! list of nodes; [`Scene::attribute_value_along`] applies ɴsɪ's
+//! precedence to one attribute along that same path.
 //!
 //! Borrowing the scene while recording is possible but narrow:
 //! [`Recorder::scene`] holds the lock every [`nsi_trait::Nsi`] method
@@ -120,23 +139,40 @@
 //!
 //! ɴsɪ permits scenes with no single correct answer, and this crate
 //! returns a typed error for each rather than a plausible wrong one: a
-//! node with two `objects` parents (ɴsɪ's lightweight instancing), a
-//! cycle, a node that never reaches `.root`, and a motion-sampled
-//! transform asked for at a time it has no sample at. Nothing here
-//! interpolates between motion samples -- element-wise interpolation of
-//! a matrix is wrong for anything containing a rotation, and the right
-//! decomposition is the backend's to choose.
+//! a cycle, a node that never reaches `.root`, and -- from the
+//! *exact-hit* accessors only -- a motion-sampled transform asked for
+//! at a time it has no sample at.
+//!
+//! A node with two `objects` parents is refused by the single-answer
+//! accessors for the same reason, because there is no single answer;
+//! [`Scene::placements`] enumerates them instead.
+//!
+//! Interpolation is available and is the renderer's own model, not a
+//! guess: [`Scene::world_transform_interpolated_at`] interpolates
+//! element-wise, which is what 3Delight does -- its rotation blur fits
+//! component-wise far better than slerp -- and holds the end sample
+//! outside the sampled range, as 3Delight holds it. An earlier version
+//! of this section said nothing here interpolates and that the
+//! decomposition was the backend's; both stopped being true several
+//! releases of this crate ago.
 //!
 //! # What it does not resolve
 //!
 //! Shader networks are classified and carried with their ports intact,
 //! because their consumer is OSL rather than a graph walk. `evaluate`
 //! is a no-op: procedurals and Lua imply an execution model this
-//! surface does not define. An instanced node is detected and refused,
-//! not expanded into one transform per path: asking a prototype for a
-//! world transform is [`ResolveError::Instanced`], because ɴsɪ gives an
-//! `instances` node one matrix per instance rather than one for the
-//! prototype.
+//! surface does not define, and a stream carrying `Evaluate` records as
+//! a scene without whatever it would have produced, silently.
+//!
+//! Asking an instancing *prototype* for a world transform is
+//! [`ResolveError::Instanced`], because ɴsɪ gives an `instances` node
+//! one matrix per instance rather than one for the prototype -- ask
+//! [`Scene::instance_transforms`], or
+//! [`Scene::instance_transforms_at`] when the instancer is animated.
+//! Lightweight instancing (a node under two parents) *is* expanded, by
+//! [`Scene::placements`]; an earlier version of this section said it
+//! was refused and not expanded, which was true only before that method
+//! existed.
 //!
 //! # The ɴsɪ copy contract
 //!

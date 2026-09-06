@@ -126,7 +126,8 @@ pub struct OwnedArg {
     /// ɴsɪ's `array_len`. The C `count` field is `len / array_length`.
     pub array_length: usize,
     /// ɴsɪ's argument flags: `per_vertex`, `per_face` and the like.
-    /// Recorded but not yet replayed; see `contracts/stream.md`.
+    /// Replayed as the letter prefix 3Delight writes -- `"v point"`,
+    /// `"f float"`, `"vl float"`; see `contracts/stream.md`.
     pub flags: i32,
     /// The payload, copied unless it is a pointer.
     pub data: OwnedData,

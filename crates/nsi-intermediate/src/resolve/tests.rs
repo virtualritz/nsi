@@ -4201,8 +4201,10 @@ fn a_same_time_reset_after_an_unreadable_sample_diverges() {
 ///
 /// Same root cause as the other two divergences: `E6007` acts at *call*
 /// time and this crate applies the rule over time-sorted samples.
-/// Recording definition order closes all three at once, which is why
-/// they are cross-referenced rather than listed as separate problems.
+/// Recording definition order closes this one and the definition-order
+/// row; the same-time row needs the replaced sample kept as well, since
+/// after a same-time replace the unreadable sample is gone from the
+/// record entirely.
 ///
 /// Asserted as the divergence, so a commit that records enough to fix
 /// it reddens this.
@@ -4330,8 +4332,10 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
         "static at the t=1 matrix here; 3Delight sweeps",
     );
 
-    // The same three calls in three more orders. This crate sorts by
-    // time, so it answers identically for all four; 3Delight gives four
+    // The same three calls in three more orders. Because this crate
+    // sorts by time, all four build byte-identical `time_attrs` -- so
+    // these add no discriminating power over the assertion above, and
+    // are here to pin the *divergence* against the renderer's four
     // different pictures, each explained by "an unreadable call unsets
     // the attribute at call time":
     //
@@ -4374,4 +4378,93 @@ fn the_truncation_path_diverges_when_definition_order_differs() {
             "this crate is order-blind; 3Delight is not",
         );
     }
+}
+
+/// An attribute set only through `SetAttributeAtTime` is gathered.
+///
+/// Rendered: an `attributes` node whose `visibility` is `0` set **only**
+/// with `SetAttributeAtTime` hides the object -- alpha 0.000, identical
+/// to setting it statically, where a scene with nothing set renders at
+/// 1.000. `SetAttributeAtTime` on an attribute that is not motion data
+/// sets it for the whole shutter.
+///
+/// This crate read `node.attrs` alone and answered "not set", which is
+/// a silent wrong answer: a backend would have drawn a hidden object.
+/// The same rule was already applied to an instancer's `modelindices`
+/// and `disabledinstances`, and to nothing else.
+#[test]
+fn an_attribute_set_only_at_a_time_is_gathered() {
+    let mut scene = Scene::default();
+    scene.create("m", "mesh").unwrap();
+    scene.create("a", "attributes").unwrap();
+    scene.connect("m", None, ".root", "objects").unwrap();
+    scene.connect("a", None, "m", "geometryattributes").unwrap();
+    scene
+        .set_attribute_at_time("a", 0.0, vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("m", "visibility").unwrap();
+    let value = value.expect("3Delight honours it; so must this");
+    assert_eq!(value.node, "a");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![0]));
+}
+
+/// And its `ATTR.priority` is read the same way, so a sampled priority
+/// still outranks proximity.
+#[test]
+fn a_sampled_attr_priority_is_read() {
+    let mut scene = scene_with_two_attribute_levels();
+    scene
+        .set_attribute("near", vec![integers("visibility", vec![0])])
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "far",
+            0.0,
+            vec![
+                integers("visibility", vec![1]),
+                integers("visibility.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined");
+    assert_eq!(value.node, "far", "the sampled priority still wins");
+    assert_eq!(value.priority, 10);
+}
+
+/// The same for a shader attribute, including on the primitive itself.
+#[test]
+fn a_sampled_shader_attribute_is_gathered() {
+    let mut scene = Scene::default();
+    scene.create("m", "mesh").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene.connect("m", None, ".root", "objects").unwrap();
+    scene.connect("sa", None, "m", "shaderattributes").unwrap();
+    scene
+        .set_attribute_at_time("sa", 0.0, vec![integers("tint", vec![5])])
+        .unwrap();
+
+    assert_eq!(
+        scene
+            .shader_attribute_value("m", "tint")
+            .unwrap()
+            .unwrap()
+            .node,
+        "sa",
+    );
+
+    // And on the primitive, which outranks every container.
+    scene
+        .set_attribute_at_time("m", 0.0, vec![integers("tint", vec![9])])
+        .unwrap();
+    assert_eq!(
+        scene
+            .shader_attribute_value("m", "tint")
+            .unwrap()
+            .unwrap()
+            .node,
+        "m",
+    );
 }

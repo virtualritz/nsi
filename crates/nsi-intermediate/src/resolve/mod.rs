@@ -151,12 +151,26 @@ pub enum ResolveError {
     /// A node in the chain is motion-sampled, but has no sample at the
     /// requested time.
     ///
-    /// This crate does not interpolate between samples. Element-wise
-    /// interpolation of a matrix is wrong for anything containing a
-    /// rotation, and choosing a decomposition here would bake one
-    /// renderer's answer into every backend. Ask at a time in
-    /// [`Scene::motion_times`], or interpolate in the backend, where the
-    /// right decomposition is known.
+    /// From the **exact-hit** accessors only -- [`Scene::world_transform_at`],
+    /// [`Scene::world_transform_samples`] and
+    /// [`Scene::instance_transforms`] answer where a sample exists and
+    /// refuse elsewhere, which is the right answer to "what did the
+    /// caller record".
+    ///
+    /// For "where is it mid-shutter", ask
+    /// [`Scene::world_transform_interpolated_at`],
+    /// [`Scene::placements_at`] or
+    /// [`Scene::instance_transforms_at`]. Those interpolate
+    /// element-wise, which is the renderer's own model rather than a
+    /// guess -- 3Delight's rotation blur fits component-wise far better
+    /// than slerp -- and they hold the end sample outside the sampled
+    /// range, as it does.
+    ///
+    /// The interpolating accessors still return this for a time that
+    /// names no sample at all, such as a NaN. An earlier version of
+    /// this said the crate never interpolates and that the
+    /// decomposition was the backend's; that stopped being true when
+    /// those accessors were added.
     MissingSampleAtTime {
         /// The node with no sample at that time.
         handle: String,
@@ -330,6 +344,32 @@ pub struct Placement {
     /// The same shape [`Scene::geometry_binding`] returns, resolved
     /// against this path rather than against "the" path.
     pub binding: Option<Binding>,
+}
+
+/// A node's effective value for an attribute, sampled or not.
+///
+/// `SetAttributeAtTime` on an attribute that is not motion data sets it
+/// for the whole shutter, exactly as `SetAttribute` would. Rendered: an
+/// `attributes` node whose `visibility` is set **only** through
+/// `SetAttributeAtTime` hides the object, identically to the static
+/// form, where a scene with nothing set renders it.
+///
+/// Reading `node.attrs` alone therefore answered "not set" for an
+/// attribute the renderer honours -- a silent wrong answer, and the
+/// same rule this crate already applied to an instancer's
+/// `modelindices` and `disabledinstances`.
+///
+/// Static first, then the last sample naming it. The two never coexist:
+/// `set_attribute` clears that name from every sample and
+/// `set_attribute_at_time` clears the static value, so there is nothing
+/// to arbitrate.
+fn effective_attr<'a>(node: &'a Node, name: &str) -> Option<&'a OwnedArg> {
+    node.attrs.get(name).or_else(|| {
+        node.time_attrs
+            .iter()
+            .rev()
+            .find_map(|(_, attrs)| attrs.get(name))
+    })
 }
 
 /// What a node's samples of one attribute amount to.
@@ -1131,9 +1171,9 @@ impl Scene {
     /// same path, but "priority is given to nodes attached closest to
     /// the geometric primitive, with the highest priority given to
     /// attributes set directly on the geometric primitive", with no
-    /// `ATTR.priority` in it at all. Those are not resolved here and
-    /// asking for one returns `None`. Tracked as an `Open` row in
-    /// `contracts/resolution.md`.
+    /// `ATTR.priority` in it at all. Ask
+    /// [`Scene::shader_attribute_value`] for those; this one returns
+    /// `None` for them.
     ///
     /// # Precedence
     ///
@@ -1225,7 +1265,7 @@ impl Scene {
     ) -> Option<AttributeValue<'_>> {
         if let Some(geometry) = path.first()
             && let Some((handle, node)) = self.node_entry(geometry)
-            && let Some(arg) = node.attrs.get(name)
+            && let Some(arg) = effective_attr(node, name)
         {
             return Some(AttributeValue {
                 node: handle,
@@ -1240,7 +1280,7 @@ impl Scene {
             let Some(node) = self.node(&edge.from) else {
                 continue;
             };
-            if let Some(arg) = node.attrs.get(name) {
+            if let Some(arg) = effective_attr(node, name) {
                 return Some(AttributeValue {
                     node: &edge.from,
                     arg,
@@ -1273,12 +1313,10 @@ impl Scene {
                 .chain(fallback.map(|name| (0u8, name)));
 
             for (specificity, key) in keys {
-                let Some(arg) = node.attrs.get(key) else {
+                let Some(arg) = effective_attr(node, key) else {
                     continue;
                 };
-                let priority = node
-                    .attrs
-                    .get(&format!("{key}.priority"))
+                let priority = effective_attr(node, &format!("{key}.priority"))
                     .and_then(priority_value)
                     .unwrap_or(0);
 
