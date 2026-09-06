@@ -333,6 +333,7 @@ pub struct Placement {
 }
 
 /// What a node's samples of one attribute amount to.
+#[derive(Clone, Copy)]
 enum Sampled<'a> {
     /// Not sampled; the static value applies.
     No,
@@ -341,25 +342,35 @@ enum Sampled<'a> {
     Unset,
     /// The surviving tail of the node's `time_attrs`.
     ///
+    /// Never empty of the attribute: `keep_from` is one past the last
+    /// *unreadable* naming sample, and the last naming sample is
+    /// readable whenever this variant is built, so it is always in the
+    /// tail. Three call sites carried an `is_empty` branch for a case
+    /// that cannot arise; they are gone.
+    ///
     /// A slice rather than a collected `Vec`: this is read per node per
     /// query on the sampled paths, so collecting here allocated once
-    /// per node per time. Removing that allocation did **not** remove
-    /// the cost -- measured, the sampled paths are still about twice
-    /// the pre-rule shape, because the rule must know whether the last
-    /// naming sample is readable before it can decide anything, and so
-    /// scans to find the cut and then reads the tail. Two passes is the
-    /// price of the rule being right; see `contracts/resolution.md`.
+    /// per node per time.
+    ///
+    /// The remaining cost is **one hash lookup per sample per pass**,
+    /// not the two passes as such: the rule needs the last naming
+    /// sample before it can decide anything, and each pass pays an
+    /// `IndexMap<String, _>` probe for every sample. Streaming it in a
+    /// single pass was measured and costs the same -- it trades the
+    /// second lookup for a push. See `contracts/resolution.md`; an
+    /// earlier version of this comment blamed the pass count, which the
+    /// measurement does not support.
     Yes(&'a [(f64, IndexMap<String, OwnedArg>)]),
 }
 
 impl<'a> Sampled<'a> {
     /// The surviving samples of `name`, in time order.
     fn samples(
-        &self,
+        self,
         name: &'a str,
     ) -> impl Iterator<Item = (f64, &'a OwnedArg)> {
         let tail = match self {
-            Self::Yes(tail) => *tail,
+            Self::Yes(tail) => tail,
             Self::No | Self::Unset => &[][..],
         };
         tail.iter()
@@ -787,7 +798,6 @@ impl Scene {
                     matrix_of(arg).is_some()
                 })
                 .samples(TRANSFORMATION_MATRIX)
-                .collect::<Vec<_>>()
             })
             .map(|(time, _)| time)
             .collect::<Vec<_>>();
@@ -1679,10 +1689,6 @@ impl Scene {
                     .collect(),
             };
 
-        if samples.is_empty() {
-            return Ok(None);
-        }
-
         // A sample that changes the instance *count* describes a
         // different set, not a moved one, and 3Delight refuses the
         // change rather than the instancer: `E6023 ... incompatible
@@ -2203,10 +2209,6 @@ impl Scene {
             .filter_map(|(t, arg)| matrix_of(arg).map(|m| (t, m)))
             .collect();
 
-        if sampled.is_empty() {
-            return Ok(self.local_transform(handle));
-        }
-
         // Outside the sampled range the end sample is held, because
         // that is what 3Delight does. Rendered: samples at t=0 and t=1
         // with the shutter open over [-1, 2] leaves **zero** alpha
@@ -2259,9 +2261,7 @@ impl Scene {
             return Ok(self.local_transform(handle));
         }
 
-        if found.samples(TRANSFORMATION_MATRIX).next().is_none() {
-            Ok(self.local_transform(handle))
-        } else {
+        {
             match found
                 .samples(TRANSFORMATION_MATRIX)
                 .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)

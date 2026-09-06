@@ -4190,3 +4190,88 @@ fn a_same_time_reset_after_an_unreadable_sample_diverges() {
         "this crate sweeps; 3Delight draws static at the t=1 matrix (-3.0)",
     );
 }
+
+/// An unreadable sample defined *before* a good one at an earlier time.
+///
+/// Rendered: `float`@1 defined first, then a good matrix@0, draws
+/// **static at the t=0 matrix** -- pixel-identical to the good sample
+/// alone. The `float` was superseded by a later call, so it never
+/// unset anything. This crate sorts by time, sees the `float` last, and
+/// answers identity.
+///
+/// Same root cause as the other two divergences: `E6007` acts at *call*
+/// time and this crate applies the rule over time-sorted samples.
+/// Recording definition order closes all three at once, which is why
+/// they are cross-referenced rather than listed as separate problems.
+///
+/// Asserted as the divergence, so a commit that records enough to fix
+/// it reddens this.
+#[test]
+fn an_unreadable_sample_defined_before_a_good_one_diverges() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    // Defined first, at the later time.
+    scene
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.0).unwrap(),
+        super::IDENTITY,
+        "this crate: the float is last by time, so the attribute is \
+         unset. 3Delight draws static at the t=0 matrix (-1.5), because \
+         the float was superseded by a later call",
+    );
+}
+
+/// `Sampled::samples` must look up the attribute it was asked for.
+///
+/// Nothing pinned the `name` argument: reading the slot's first value
+/// instead survived the whole suite, because no fixture recorded two
+/// attributes in one time slot with the non-queried one first.
+#[test]
+fn sampled_reads_the_attribute_it_was_asked_for() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    // Two attributes in one slot, the queried one second.
+    for (time, x) in [(0.0, -1.5), (1.0, -3.0)] {
+        scene
+            .set_attribute_at_time(
+                "xf",
+                time,
+                vec![
+                    integers("disabledinstances", vec![0]),
+                    translate(x, 0.0, 0.0),
+                ],
+            )
+            .unwrap();
+    }
+
+    assert_eq!(scene.motion_times("q").unwrap(), vec![0.0, 1.0]);
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        -2.25,
+        "the transform, not whichever attribute happens to be first",
+    );
+}
