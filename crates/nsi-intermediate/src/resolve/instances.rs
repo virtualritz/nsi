@@ -5,6 +5,7 @@ use super::{
     motion::{Located, locate_sample, matrices_of, sampled_attr},
     *,
 };
+use std::collections::{HashMap, HashSet};
 
 impl Scene {
     /// The effective value of an integer instancer attribute that was
@@ -216,6 +217,93 @@ impl Scene {
         })
     }
 
+    /// The instancer's instances, **without copying the matrices**.
+    ///
+    /// The streaming twin of [`Scene::instance_transforms`], with the
+    /// same rules: `modelindices` matched against each connection's
+    /// index attribute rather than connection order,
+    /// `disabledinstances` applied, and a sampled instancer refused
+    /// rather than reported empty -- ask
+    /// [`Scene::instance_transforms_at`] for that one.
+    ///
+    /// This is the shape a renderer's own instancer wants: create one
+    /// object per [`Scene::instance_sources`] entry, then feed it
+    /// `(source, transform)` pairs. Measured on a million instances,
+    /// the copying form spends 110 ms and returns 136 MB against the
+    /// 128 MB the scene already holds; this borrows.
+    ///
+    /// Both per-instance lookups are hashed rather than scanned. The
+    /// copying form scans the source list and the disabled list for
+    /// every instance, which is fine for the ten-prototype scene it
+    /// was written against and quadratic for a set-dressing instancer
+    /// with thousands.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::instance_transforms`].
+    pub fn instances(
+        &self,
+        instances: &str,
+    ) -> Result<InstanceIter<'_>, ResolveError> {
+        let Some(node) = self.node(instances) else {
+            return Ok(InstanceIter::empty());
+        };
+
+        // Refuses a sampled instancer exactly as the copying form
+        // does, and for the same reason: an interpolated matrix is
+        // computed, so there is nothing to borrow.
+        self.instance_matrices_at(node, instances, None)?;
+
+        let matrices = node
+            .attrs
+            .get(MATRICES)
+            .and_then(matrices_of)
+            .unwrap_or(&[]);
+        if !matrices.len().is_multiple_of(16) {
+            return Err(ResolveError::MalformedInstanceMatrices {
+                instances: instances.to_string(),
+                values: matrices.len(),
+            });
+        }
+
+        let model_indices = match node.attrs.get(MODEL_INDICES) {
+            Some(arg) => arg.as_i32s().unwrap_or(&[]),
+            None => &[],
+        };
+        let disabled: HashSet<i32> = match node.attrs.get(DISABLED) {
+            Some(arg) => arg.as_i32s().unwrap_or(&[]).iter().copied().collect(),
+            None => HashSet::new(),
+        };
+
+        let sources = self.sorted_instance_sources(instances);
+        let by_model: HashMap<i32, usize> = sources
+            .iter()
+            .enumerate()
+            .map(|(position, (index, _))| (*index, position))
+            .collect();
+
+        // Every model index is checked once, here, so iterating is
+        // infallible: a stream that yields a `Result` per instance
+        // makes every consumer handle an error that is a property of
+        // the scene, not of the instance.
+        for model in model_indices.iter().copied().filter(|model| *model >= 0) {
+            if !by_model.contains_key(&model) {
+                return Err(ResolveError::UnknownModelIndex {
+                    instances: instances.to_string(),
+                    model,
+                });
+            }
+        }
+
+        Ok(InstanceIter {
+            matrices: matrices.as_chunks::<16>().0,
+            model_indices,
+            by_model,
+            disabled,
+            at: 0,
+        })
+    }
+
     /// The instances an `instances` node places.
     ///
     /// Reads ɴsɪ's `transformationmatrices` for the per-instance
@@ -387,5 +475,63 @@ impl Scene {
             .into_iter()
             .map(|(index, _, from)| (index, from))
             .collect()
+    }
+}
+
+/// The instances of one `instances` node, borrowed.
+///
+/// Returned by [`Scene::instances`]. Yields in instance order, with
+/// the disabled ones and those whose `modelindices` entry is negative
+/// left out -- ɴsɪ says a negative index draws nothing.
+pub struct InstanceIter<'a> {
+    matrices: &'a [[f64; 16]],
+    model_indices: &'a [i32],
+    by_model: HashMap<i32, usize>,
+    disabled: HashSet<i32>,
+    at: usize,
+}
+
+impl InstanceIter<'_> {
+    fn empty() -> Self {
+        Self {
+            matrices: &[],
+            model_indices: &[],
+            by_model: HashMap::new(),
+            disabled: HashSet::new(),
+            at: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for InstanceIter<'a> {
+    type Item = InstanceRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.at < self.matrices.len() {
+            let at = self.at;
+            self.at += 1;
+
+            if self.disabled.contains(&i32::try_from(at).unwrap_or(-1)) {
+                continue;
+            }
+            let model = self.model_indices.get(at).copied().unwrap_or_default();
+            if model < 0 {
+                continue;
+            }
+            // Checked in `Scene::instances`, so this cannot miss.
+            let Some(source) = self.by_model.get(&model).copied() else {
+                continue;
+            };
+
+            return Some(InstanceRef {
+                source,
+                transform: &self.matrices[at],
+            });
+        }
+        None
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.matrices.len() - self.at))
     }
 }

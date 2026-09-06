@@ -4000,6 +4000,83 @@ fn the_sampled_and_the_single_time_accessors_agree() {
     }
 }
 
+/// The streaming form answers exactly what the copying one does.
+///
+/// Two APIs over one rule is how a rule drifts, so they are held to
+/// the same answer on a scene that exercises every branch: several
+/// prototypes matched by index attribute rather than connection
+/// order, a disabled instance, and a negative model index.
+#[test]
+fn the_borrowed_instances_agree_with_the_copied_ones() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    for (handle, index) in [("a", 7), ("b", 3), ("c", 11)] {
+        scene.create(handle, "mesh").unwrap();
+        scene
+            .connect_with_args(
+                handle,
+                None,
+                "inst",
+                "sourcemodels",
+                vec![integers("index", vec![index])],
+            )
+            .unwrap();
+    }
+    let four = [
+        instance_matrix(-1.0),
+        instance_matrix(1.0),
+        instance_matrix(2.0),
+        instance_matrix(3.0),
+    ]
+    .concat();
+    scene
+        .set_attribute(
+            "inst",
+            vec![
+                doubles("transformationmatrices", four),
+                // Index attributes, not connection order.
+                integers("modelindices", vec![11, 3, -1, 7]),
+                integers("disabledinstances", vec![1]),
+            ],
+        )
+        .unwrap();
+
+    let copied = scene.instance_transforms("inst").unwrap();
+    let borrowed: Vec<_> = scene.instances("inst").unwrap().collect();
+
+    assert_eq!(copied.len(), 2, "one disabled, one negative index");
+    assert_eq!(borrowed.len(), copied.len());
+    for (copy, borrow) in copied.iter().zip(&borrowed) {
+        assert_eq!(copy.source, borrow.source);
+        assert_eq!(&copy.transform, borrow.transform);
+    }
+
+    // And it refuses a sampled instancer for the same reason.
+    let mut sampled = Scene::default();
+    sampled.create("inst", "instances").unwrap();
+    sampled.create("proto", "mesh").unwrap();
+    sampled.connect("inst", None, ".root", "objects").unwrap();
+    sampled
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+    sampled
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![doubles("transformationmatrices", instance_matrix(0.0))],
+        )
+        .unwrap();
+    assert!(matches!(
+        sampled.instances("inst"),
+        Err(ResolveError::MotionSampledTransform { .. })
+    ));
+    assert!(matches!(
+        sampled.instance_transforms("inst"),
+        Err(ResolveError::MotionSampledTransform { .. })
+    ));
+}
+
 /// The instancer's matrices are a `doublematrix`, declared, not
 /// sixteen doubles per instance that happen to be there.
 ///

@@ -21,6 +21,7 @@ mod outputs;
 // already had: a chain walk, a time rule, an attribute rule, the
 // instancer, and the output chain. `mod.rs` keeps what all five need
 // so none of them has to reach sideways.
+pub use instances::InstanceIter;
 pub use motion::Sampled;
 
 /// A 4x4 identity, row-major.
@@ -401,6 +402,24 @@ pub struct RenderOutput {
     pub screen: String,
     /// AOVs in connection order; may be empty.
     pub layers: Vec<OutputLayer>,
+}
+
+/// One instance, borrowing the matrix the scene already holds.
+///
+/// [`Scene::instance_transforms`] copies: for a set-dressing
+/// instancer with a million entries that is 136 MB of `Instance`
+/// against the 128 MB `doublematrix` array it was copied from.
+/// [`Scene::instances`] hands out these instead, which is the shape a
+/// renderer's own instancer wants -- a prototype index and a matrix it
+/// can read in place.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct InstanceRef<'a> {
+    /// Which prototype this instance draws, as a position in
+    /// [`Scene::instance_sources`].
+    pub source: usize,
+    /// This instance's transform, in the `instances` node's space.
+    pub transform: &'a [f64; 16],
 }
 
 /// One instance an `instances` node places.

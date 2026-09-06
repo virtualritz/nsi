@@ -185,19 +185,28 @@ pub struct Changes {
 /// moves only one of them; a handle-level answer makes the consumer
 /// re-resolve both. Correct, and coarse for a crowd -- path-precision
 /// is an optimisation to ask for with a measurement.
-#[derive(Debug, Clone, Default, PartialEq)]
+/// # Why it borrows
+///
+/// Every handle in here already lives in the [`Scene`] or in the
+/// [`Changes`] it was computed from, so owning them meant a `String`
+/// clone per named node on a path an interactive host walks every
+/// frame. Measured, one transform with *n* children, debug build,
+/// best of ten: 1000 nodes 2.08 ms, 10 000 27.3 ms, 50 000 88.9 ms --
+/// about 2 us a node, four to five allocations of it. Borrowing costs
+/// a lifetime on the type and nothing else.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Affected {
+pub struct Affected<'a> {
     /// Geometry, transforms, instancers, cameras and lights whose
     /// resolved answers may have moved.
-    pub nodes: IndexSet<String>,
+    pub nodes: IndexSet<&'a str>,
     /// Shader nodes whose own attributes or network changed.
     ///
     /// Kept apart because they map one-to-one onto a renderer's
     /// material parameters and cost no geometry work: only the *root*
     /// shader's identity reaches geometry, and that is a
     /// `surfaceshader` edge, which lands in `nodes`.
-    pub shaders: IndexSet<String>,
+    pub shaders: IndexSet<&'a str>,
     /// Whether the camera/screen/layer/driver chain changed, so the
     /// outputs need re-reading.
     pub outputs: bool,
@@ -339,7 +348,7 @@ impl Scene {
     /// - `.root` or `.global`: everything.
     ///
     /// Over-approximate on purpose -- see [`Affected`].
-    pub fn affected(&self, changes: &Changes) -> Affected {
+    pub fn affected<'a>(&'a self, changes: &'a Changes) -> Affected<'a> {
         let mut affected = Affected::default();
 
         for (handle, _) in &changes.attributes {
@@ -349,7 +358,7 @@ impl Scene {
             }
             match self.nodes.get(handle) {
                 Some(node) if node.node_type == "shader" => {
-                    affected.shaders.insert(handle.clone());
+                    affected.shaders.insert(handle.as_str());
                 }
                 Some(node) if node.node_type == "attributes" => {
                     self.through_bindings(handle, &mut affected.nodes);
@@ -373,7 +382,7 @@ impl Scene {
         // the edges the delete took with it, which is why they are
         // recorded in full.
         for handle in changes.deleted.keys() {
-            affected.nodes.insert(handle.clone());
+            affected.nodes.insert(handle.as_str());
         }
 
         for edge in changes
@@ -409,7 +418,7 @@ impl Scene {
                 // a prototype the scene no longer has.
                 EdgeKind::InstanceSource => {
                     self.descend(&edge.from, &mut affected.nodes);
-                    affected.nodes.insert(edge.to.clone());
+                    affected.nodes.insert(edge.to.as_str());
                 }
                 // A container bound to something, or unbound from it.
                 EdgeKind::AttributeBinding | EdgeKind::ShaderAttributes => {
@@ -422,7 +431,7 @@ impl Scene {
                 EdgeKind::SurfaceShader
                 | EdgeKind::DisplacementShader
                 | EdgeKind::VolumeShader => {
-                    affected.shaders.insert(edge.from.clone());
+                    affected.shaders.insert(edge.from.as_str());
                     self.through_bindings(&edge.to, &mut affected.nodes);
                 }
                 // The output chain, and the things hung off it. A
@@ -459,7 +468,7 @@ impl Scene {
                 EdgeKind::ShaderNetwork { .. } | EdgeKind::Other { .. } => {
                     for handle in [&edge.from, &edge.to] {
                         if self.is_shader_node(handle) {
-                            affected.shaders.insert(handle.clone());
+                            affected.shaders.insert(handle.as_str());
                         } else {
                             self.descend(handle, &mut affected.nodes);
                         }
@@ -482,28 +491,32 @@ impl Scene {
     /// caller's, not ours, and a recursive walk here would overflow on
     /// a deep chain. The `insert` doubles as the visited set, so a
     /// cycle terminates.
-    fn descend(&self, handle: &str, out: &mut IndexSet<String>) {
-        let mut stack = vec![handle.to_string()];
+    fn descend<'a>(&'a self, handle: &'a str, out: &mut IndexSet<&'a str>) {
+        let mut stack = vec![handle];
         while let Some(node) = stack.pop() {
-            if !out.insert(node.clone()) {
+            if !out.insert(node) {
                 continue;
             }
-            for edge in self.edges_to_attr(&node, "objects") {
-                stack.push(edge.from.clone());
+            for edge in self.edges_to_attr(node, "objects") {
+                stack.push(&edge.from);
             }
             // A prototype's mover moves every instancer drawing it, and
             // the instancer is not below the transform that moved --
             // it is reached the other way, through `sourcemodels`.
-            for edge in self.edges_from(&node) {
+            for edge in self.edges_from(node) {
                 if edge.kind.to_attr() == "sourcemodels" {
-                    stack.push(edge.to.clone());
+                    stack.push(&edge.to);
                 }
             }
         }
     }
 
     /// Everything an `attributes` node is bound to, and below that.
-    fn through_bindings(&self, handle: &str, out: &mut IndexSet<String>) {
+    fn through_bindings<'a>(
+        &'a self,
+        handle: &str,
+        out: &mut IndexSet<&'a str>,
+    ) {
         for edge in self.edges_from(handle) {
             if matches!(
                 edge.kind.to_attr(),
@@ -521,7 +534,7 @@ impl Scene {
     /// nothing to what a geometry inherits -- rendered, and pinned by
     /// `a_nested_sets_attributes_are_not_inherited` -- so descending
     /// through nested sets would name nodes the renderer never reaches.
-    fn set_members(&self, handle: &str, out: &mut IndexSet<String>) {
+    fn set_members<'a>(&'a self, handle: &str, out: &mut IndexSet<&'a str>) {
         for edge in self.edges_to_attr(handle, "members") {
             self.descend(&edge.from, out);
         }
