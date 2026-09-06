@@ -91,7 +91,8 @@ fn an_empty_slice_still_brackets() {
 #[test]
 fn a_string_cannot_inject_a_statement() {
     let injected = "say \"hi\"\nCreate \"evil\" \"mesh\"";
-    let escaped = quoted(injected);
+    let escaped = String::from_utf8(quoted(injected.as_bytes()))
+        .expect("ASCII escapes keep it UTF-8");
 
     assert!(!escaped.contains('\n'), "no raw newline: {escaped}");
     assert_eq!(
@@ -116,7 +117,7 @@ fn a_recorded_scene_with_hostile_strings_stays_one_statement_a_line() {
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::String(vec![
-                    "Create \"evil\" \"mesh\"".to_string(),
+                    b"Create \"evil\" \"mesh\"".to_vec(),
                 ]),
             }],
         )
@@ -143,4 +144,48 @@ fn a_recorded_scene_with_hostile_strings_stays_one_statement_a_line() {
             "a value escaped its literal: {line:?}"
         );
     }
+}
+
+/// A byte at or above `0x7f` replays raw, which is what 3Delight
+/// writes: `renderdl -cat` echoes a Latin-1 `café.exr` back unchanged
+/// rather than escaping it, and reads our own output the same way.
+///
+/// Storing `String` here replaced the byte with U+FFFD at *recording*
+/// time, so no care at replay could have recovered it.
+#[test]
+fn a_non_utf8_byte_replays_raw() {
+    let mut scene = Scene::default();
+    scene.create("d", "outputdriver").unwrap();
+    scene
+        .set_attribute(
+            "d",
+            vec![OwnedArg {
+                name: "imagefilename".to_string(),
+                type_tag: Type::String,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
+            }],
+        )
+        .unwrap();
+
+    let mut out = Vec::new();
+    write_stream(&scene, &mut out).expect("write");
+
+    assert!(
+        out.windows(8).any(|w| w == b"caf\xE9.exr"),
+        "the byte is written raw, not escaped or replaced",
+    );
+    assert!(
+        !out.windows(3).any(|w| w == [0xEF, 0xBF, 0xBD]),
+        "no U+FFFD anywhere",
+    );
+}
+
+/// A control byte is still octal-escaped, and a high byte is still not.
+/// The two rules are separate and one must not swallow the other.
+#[test]
+fn control_bytes_escape_but_high_bytes_do_not() {
+    let escaped = quoted(b"a\x01b\xE9c");
+    assert_eq!(escaped, b"\"a\\001b\xE9c\"".to_vec());
 }

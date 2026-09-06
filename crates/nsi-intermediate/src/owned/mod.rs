@@ -63,7 +63,17 @@ pub enum OwnedData {
     /// 64-bit integers.
     I64(Vec<i64>),
     /// Strings, copied out of their C representation.
-    String(Vec<String>),
+    ///
+    /// **Bytes, not `String`.** An ɴsɪ string is whatever the C API was
+    /// handed. 3Delight writes a byte at or above `0x7f` raw and reads
+    /// it back unchanged, and a file name on Linux is not required to be
+    /// UTF-8 -- so an `imagefilename` naming `café.exr` in Latin-1 is a
+    /// value this crate must carry, not one it may repair. Storing
+    /// `String` here replaced the byte with U+FFFD at *recording* time,
+    /// which no amount of care at replay could undo.
+    ///
+    /// Use `String::from_utf8_lossy` where text is wanted.
+    String(Vec<Vec<u8>>),
     /// Raw host pointers. ɴsɪ calls this `Reference` (`Pointer` in the C
     /// API); it is not an object link and is never forwarded to a
     /// renderer as one. Stored so output-driver callbacks survive a
@@ -139,11 +149,7 @@ impl OwnedArg {
                     );
                     OwnedData::String(
                         ptrs.iter()
-                            .map(|p| {
-                                CStr::from_ptr(*p)
-                                    .to_string_lossy()
-                                    .into_owned()
-                            })
+                            .map(|p| CStr::from_ptr(*p).to_bytes().to_vec())
                             .collect(),
                     )
                 }

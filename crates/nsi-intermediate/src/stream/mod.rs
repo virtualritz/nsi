@@ -46,26 +46,40 @@ use std::io::{self, Write};
 /// stream is a persisted, cross-language format, so that is a
 /// correctness hole rather than a cosmetic one. 3Delight escapes the
 /// same way.
-fn quoted(value: &str) -> String {
-    let mut out = String::with_capacity(value.len() + 2);
-    out.push('"');
-    for c in value.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
+fn quoted(value: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(value.len() + 2);
+    out.push(b'"');
+    for &byte in value {
+        match byte {
+            b'"' => out.extend_from_slice(b"\\\""),
+            b'\\' => out.extend_from_slice(b"\\\\"),
+            b'\n' => out.extend_from_slice(b"\\n"),
+            b'\t' => out.extend_from_slice(b"\\t"),
             // Every other control byte is three-digit octal, which is
             // what 3Delight writes -- a carriage return as `\015`. Left
             // raw, it would end the statement.
-            control if (control as u32) < 0x20 => {
-                out.push_str(&format!("\\{:03o}", control as u32));
+            control if control < 0x20 => {
+                out.extend_from_slice(format!("\\{control:03o}").as_bytes());
             }
-            _ => out.push(c),
+            // A byte at or above 0x7f goes out raw, which is what
+            // 3Delight writes: `renderdl -cat` echoes a Latin-1 file
+            // name back unchanged rather than escaping it.
+            _ => out.push(byte),
         }
     }
-    out.push('"');
+    out.push(b'"');
     out
+}
+
+/// [`quoted`] for an identifier, which the scene stores as text.
+///
+/// Escaping only ever substitutes ASCII sequences and copies every other
+/// byte through, so UTF-8 in gives UTF-8 out. The fallback is
+/// unreachable rather than a repair.
+fn quoted_str(value: &str) -> String {
+    String::from_utf8(quoted(value.as_bytes())).unwrap_or_else(|error| {
+        String::from_utf8_lossy(error.as_bytes()).into_owned()
+    })
 }
 
 /// Format an `f64` as 3Delight does: C's `printf("%.17g")`.
@@ -248,13 +262,13 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             writeln!(
                 out,
                 "Create {} {}",
-                quoted(handle),
-                quoted(&node.node_type)
+                quoted_str(handle),
+                quoted_str(&node.node_type)
             )?;
         }
 
         for arg in node.attrs.values() {
-            writeln!(out, "SetAttribute {}", quoted(handle))?;
+            writeln!(out, "SetAttribute {}", quoted_str(handle))?;
             write_arg(out, arg)?;
         }
 
@@ -263,7 +277,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
                 writeln!(
                     out,
                     "SetAttributeAtTime {} {}",
-                    quoted(handle),
+                    quoted_str(handle),
                     format_f64(*time)
                 )?;
                 write_arg(out, arg)?;
@@ -281,10 +295,10 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
         writeln!(
             out,
             "Connect {} {} {} {}",
-            quoted(&edge.from),
-            quoted(from_port),
-            quoted(&edge.to),
-            quoted(to_port)
+            quoted_str(&edge.from),
+            quoted_str(from_port),
+            quoted_str(&edge.to),
+            quoted_str(to_port)
         )?;
         // ɴsɪ emits connection arguments as indented parameter lines
         // under the `Connect`, exactly as for `SetAttribute`.
@@ -309,8 +323,8 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
     write!(
         out,
         "  {} {} {} ",
-        quoted(&arg.name),
-        quoted(&type_name(arg)),
+        quoted_str(&arg.name),
+        quoted_str(&type_name(arg)),
         element_count(arg)
     )?;
 
@@ -339,8 +353,12 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
         OwnedData::I32(v) => write_scalars(out, v)?,
         OwnedData::I64(v) => write_scalars(out, v)?,
         OwnedData::String(v) => {
-            let values: Vec<String> = v.iter().map(|s| quoted(s)).collect();
-            write!(out, "{}", values.join(" "))?;
+            for (index, value) in v.iter().enumerate() {
+                if index > 0 {
+                    out.write_all(b" ")?;
+                }
+                out.write_all(&quoted(value))?;
+            }
         }
         // Returned above; a `Reference` never reaches here.
         OwnedData::Reference(_) => {}

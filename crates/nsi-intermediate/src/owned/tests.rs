@@ -81,7 +81,7 @@ fn owns_a_string() {
     assert_eq!(owned.type_tag, Type::String);
     assert_eq!(
         owned.data,
-        OwnedData::String(vec!["dlPrincipled".to_string()])
+        OwnedData::String(vec![b"dlPrincipled".to_vec()])
     );
 }
 
@@ -117,5 +117,30 @@ fn a_tuple_array_len_run_is_rounded_down_too() {
     assert_eq!(
         owned.data,
         OwnedData::F32(vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    );
+}
+
+/// Recording must not repair a non-UTF-8 string.
+///
+/// `nsi::String::new` takes `Into<Vec<u8>>`, so a caller -- or
+/// `nsi-parse` reading a stream 3Delight wrote -- can hand across a
+/// Latin-1 file name. Converting it here with `to_string_lossy`
+/// replaced the byte with U+FFFD before replay could ever see it, and
+/// the loss was silent: the stream still parsed, it just named a
+/// different file.
+///
+/// This is the recording end specifically. Reverting the conversion
+/// reddened only `nsi-parse`'s round-trip tests, so this crate did not
+/// guard its own boundary.
+#[test]
+fn recording_keeps_a_non_utf8_byte() {
+    let arg = nsi::string!("imagefilename", b"caf\xE9.exr".to_vec());
+    let owned = OwnedArg::from_param(&arg);
+
+    assert_eq!(owned.type_tag, Type::String);
+    assert_eq!(
+        owned.data,
+        OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
+        "the byte survives; U+FFFD would be `ef bf bd`",
     );
 }

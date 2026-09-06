@@ -164,13 +164,13 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
             writeln!(
                 out,
                 "nsi.Create({}, {})",
-                quoted(handle),
-                quoted(&node.node_type)
+                quoted_str(handle),
+                quoted_str(&node.node_type)
             )?;
         }
 
         for arg in node.attrs.values() {
-            write!(out, "nsi.SetAttribute({}, ", quoted(handle))?;
+            write!(out, "nsi.SetAttribute({}, ", quoted_str(handle))?;
             write_arg(out, handle, arg)?;
             writeln!(out, ")")?;
         }
@@ -180,7 +180,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
                 write!(
                     out,
                     "nsi.SetAttributeAtTime({}, {}, ",
-                    quoted(handle),
+                    quoted_str(handle),
                     lua_number(*time)
                 )?;
                 write_arg(out, handle, arg)?;
@@ -200,10 +200,10 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
         write!(
             out,
             "nsi.Connect({}, {}, {}, {}",
-            quoted(&edge.from),
-            quoted(from_port),
-            quoted(&edge.to),
-            quoted(to_port)
+            quoted_str(&edge.from),
+            quoted_str(from_port),
+            quoted_str(&edge.to),
+            quoted_str(to_port)
         )?;
         for arg in &edge.args {
             write!(out, ", ")?;
@@ -250,7 +250,7 @@ fn write_arg<W: Write>(
             type_tag: arg.type_tag,
         })?;
 
-    write!(out, "{{name={}", quoted(&arg.name))?;
+    write!(out, "{{name={}", quoted_str(&arg.name))?;
     if arg.flags & NSIParamFlags::IsArray.bits() != 0 {
         write!(out, ", arraylength={}", arg.array_length)?;
     }
@@ -265,9 +265,12 @@ fn write_arg<W: Write>(
         OwnedData::I32(values) => write_numbers(out, values)?,
         OwnedData::I64(values) => write_numbers(out, values)?,
         OwnedData::String(values) => {
-            let quoted: Vec<String> =
-                values.iter().map(|value| self::quoted(value)).collect();
-            write!(out, "{}", quoted.join(", "))?;
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    out.write_all(b", ")?;
+                }
+                out.write_all(&self::quoted(value))?;
+            }
         }
         OwnedData::Reference(_) => {
             // Unreachable: `lua_type_name` rejected it above.
@@ -339,21 +342,32 @@ fn lua_number(value: f64) -> String {
 }
 
 /// One Lua string literal, escaped.
-fn quoted(value: &str) -> String {
-    let mut out = String::with_capacity(value.len() + 2);
-    out.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            _ => out.push(character),
+fn quoted(value: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(value.len() + 2);
+    out.push(b'"');
+    for &byte in value {
+        match byte {
+            b'"' => out.extend_from_slice(b"\\\""),
+            b'\\' => out.extend_from_slice(b"\\\\"),
+            b'\n' => out.extend_from_slice(b"\\n"),
+            b'\r' => out.extend_from_slice(b"\\r"),
+            b'\t' => out.extend_from_slice(b"\\t"),
+            _ => out.push(byte),
         }
     }
-    out.push('"');
+    out.push(b'"');
     out
+}
+
+/// [`quoted`] for an identifier, which the scene stores as text.
+///
+/// Escaping only ever substitutes ASCII sequences and copies every other
+/// byte through, so UTF-8 in gives UTF-8 out. The fallback is
+/// unreachable rather than a repair.
+fn quoted_str(value: &str) -> String {
+    String::from_utf8(quoted(value.as_bytes())).unwrap_or_else(|error| {
+        String::from_utf8_lossy(error.as_bytes()).into_owned()
+    })
 }
 
 /// The `nsi.Type*` name for an ɴsɪ type, where Lua has one.

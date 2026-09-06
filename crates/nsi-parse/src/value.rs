@@ -105,7 +105,10 @@ pub(crate) struct Scratch<'a> {
     i32s: Vec<i32>,
     i64s: Vec<i64>,
     /// Borrowed from the input unless the literal carried escapes.
-    strings: Vec<Cow<'a, str>>,
+    ///
+    /// Bytes: an ɴsɪ string value is whatever the C API was handed, and
+    /// a file name is not required to be UTF-8.
+    strings: Vec<Cow<'a, [u8]>>,
     /// Colour, point, vector and normal, which the argument types take
     /// as triples rather than as a flat slice.
     triples: Vec<[f32; 3]>,
@@ -136,13 +139,15 @@ impl<'a> Scratch<'a> {
                 // parameter's first string as the action.
                 && d.end - d.start == 1
         })?;
+        // Byte literals: string values are bytes, and an action that
+        // is not one of these six is `None` either way.
         match self.strings.get(descriptor.start)?.as_ref() {
-            "start" => Some(Action::Start),
-            "stop" => Some(Action::Stop),
-            "suspend" => Some(Action::Suspend),
-            "resume" => Some(Action::Resume),
-            "wait" => Some(Action::Wait),
-            "synchronize" => Some(Action::Synchronize),
+            b"start" => Some(Action::Start),
+            b"stop" => Some(Action::Stop),
+            b"suspend" => Some(Action::Suspend),
+            b"resume" => Some(Action::Resume),
+            b"wait" => Some(Action::Wait),
+            b"synchronize" => Some(Action::Synchronize),
             _ => None,
         }
     }
@@ -167,7 +172,8 @@ impl<'a> Scratch<'a> {
         skip: Option<&str>,
         apply: impl FnOnce(&[Arg<'_, 'static>]) -> Result<T, E>,
     ) -> Result<T, E> {
-        // `StringSlice` wants `&[&str]`. The view is on the stack:
+        // `StringSlice` takes anything `Into<Vec<u8>>`, so byte slices
+        // pass straight through. The view is on the stack:
         // heap-allocating it would put an allocation back on every
         // statement that carries a string.
         let borrowed: SmallStrs<'_> =
@@ -248,6 +254,8 @@ pub(crate) fn read<'a, E>(
         });
     };
     let type_offset = lexer.offset();
+    // A type spelling names something, so it must be text.
+    let spelling = spelling.into_ident(type_offset)?;
 
     let (base, array_length, per_vertex, per_face, linear) =
         parse_type(spelling.as_str()).ok_or(Error::Syntax {
@@ -430,7 +438,7 @@ fn push<'a, E>(
             // refuses, because silently dropping half a string is the
             // kind of quiet wrong answer the crate exists to avoid.
             let text = text.into_cow();
-            if text.contains('\0') {
+            if text.contains(&0) {
                 return Err(Error::Syntax {
                     offset,
                     expected: "a string without an interior NUL",
@@ -512,5 +520,5 @@ mod alloc_free {
     use nsi_ffi_wrap::Arg;
 
     pub(super) type SmallArgs<'a> = smallvec::SmallVec<[Arg<'a, 'static>; 8]>;
-    pub(super) type SmallStrs<'a> = smallvec::SmallVec<[&'a str; 8]>;
+    pub(super) type SmallStrs<'a> = smallvec::SmallVec<[&'a [u8]; 8]>;
 }

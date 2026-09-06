@@ -42,7 +42,7 @@ about such a scene. This is not a caveat on the gate; it is its domain.
 | A repeated `create` | Covered | `scene/mod.rs` `create` is a no-op for a matching type and an error otherwise | `scene::tests::recreating_with_the_same_type_is_a_no_op`. 3Delight logs the repeated call and the recorder does not, so this stays an R10 precondition. | -- |
 | `connect` arguments emit | Covered | `stream/mod.rs` writes `edge.args` under the `Connect` | `stream_roundtrip` connects with `"priority"`, which 3Delight writes as an indented parameter line | -- |
 | Strings are escaped | Covered | `stream/mod.rs` `quoted` | `stream::tests::a_string_cannot_inject_a_statement`, `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`; `stream_roundtrip` carries a value holding a quote and a newline | -- |
-| Non-UTF-8 string bytes replay | Open | `owned/mod.rs` `to_string_lossy` | None | The byte is lost at recording, not at replay; see `recording.md`. |
+| Non-UTF-8 string bytes replay | Covered | `stream/mod.rs` `quoted` escapes bytes, passing `0x7f` and above through raw | `stream::tests::a_non_utf8_byte_replays_raw` and `control_bytes_escape_but_high_bytes_do_not`; escaping high bytes reddens both. Verified end to end against the renderer: a stream carrying a raw `0xE9`, parsed by `nsi-parse`, recorded and re-emitted, is read back by `renderdl -cat` with the byte intact | -- |
 | The reserved handles are never declared | Covered | `stream/mod.rs` skips `Create` for `crate::is_reserved` | `stream::tests::the_reserved_handles_are_never_declared`; `stream_roundtrip` sets `.global`, which 3Delight never declares | -- |
 
 ## Invariants

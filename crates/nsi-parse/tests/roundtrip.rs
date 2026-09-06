@@ -220,7 +220,7 @@ fn octal_escapes_are_decoded() {
     use nsi_intermediate::OwnedData;
     assert_eq!(
         scene.node("m").unwrap().attrs["s"].data,
-        OwnedData::String(vec!["a\u{1}b\rc\td\ne".to_string()])
+        OwnedData::String(vec![b"a\x01b\rc\td\ne".to_vec()])
     );
 }
 
@@ -298,7 +298,7 @@ fn a_short_octal_escape_is_decoded() {
     use nsi_intermediate::OwnedData;
     assert_eq!(
         recorder.into_scene().node("m").unwrap().attrs["s"].data,
-        OwnedData::String(vec!["a\u{1}b\u{f}c".to_string()])
+        OwnedData::String(vec![b"a\x01b\x0fc".to_vec()])
     );
 }
 
@@ -312,5 +312,74 @@ fn a_zero_count_action_does_not_steal_the_next_value() {
     assert!(
         parse_stream(source, &recorder).is_err(),
         "no usable action, so the statement is malformed"
+    );
+}
+
+/// A byte at or above `0x7f` in a string *value* survives parsing.
+///
+/// 3Delight writes such a byte raw -- `renderdl -cat` echoes a Latin-1
+/// `café.exr` back unchanged -- so this is a stream the renderer
+/// produces. The parser rejected it outright with `NotUtf8`, which made
+/// the crate unable to read its own renderer's output, and a file name
+/// on Linux is not required to be UTF-8 in the first place.
+#[test]
+fn a_non_utf8_string_value_survives_parsing() {
+    let mut source = Vec::new();
+    source.extend_from_slice(b"Create \"d\" \"outputdriver\"\n");
+    source.extend_from_slice(
+        b"SetAttribute \"d\" \"imagefilename\" \"string\" 1 \"caf",
+    );
+    source.push(0xE9);
+    source.extend_from_slice(b".exr\"\n");
+
+    let recorder = Recorder::new();
+    parse_stream(&source, &recorder).expect("3Delight writes this");
+
+    use nsi_intermediate::OwnedData;
+    let scene = recorder.into_scene();
+    assert_eq!(
+        scene.node("d").unwrap().attrs["imagefilename"].data,
+        OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
+        "the byte is preserved, not replaced with U+FFFD",
+    );
+}
+
+/// The same byte in an *escaped* value, so the unescape path keeps it
+/// too rather than validating at the end.
+#[test]
+fn a_non_utf8_byte_survives_an_escaped_value() {
+    let mut source = Vec::new();
+    source.extend_from_slice(b"Create \"d\" \"outputdriver\"\n");
+    source.extend_from_slice(b"SetAttribute \"d\" \"s\" \"string\" 1 \"a\\tb");
+    source.push(0xE9);
+    source.extend_from_slice(b"\"\n");
+
+    let recorder = Recorder::new();
+    parse_stream(&source, &recorder).expect("parse");
+
+    use nsi_intermediate::OwnedData;
+    assert_eq!(
+        recorder.into_scene().node("d").unwrap().attrs["s"].data,
+        OwnedData::String(vec![b"a\tb\xE9".to_vec()]),
+    );
+}
+
+/// A *handle* is an identifier, not a value: ɴsɪ compares it, so a
+/// non-UTF-8 one is a stream this crate cannot act on. Values are
+/// bytes; names are text.
+#[test]
+fn a_non_utf8_handle_is_still_refused() {
+    let mut source = Vec::new();
+    source.extend_from_slice(b"Create \"me");
+    source.push(0xE9);
+    source.extend_from_slice(b"sh\" \"mesh\"\n");
+
+    let recorder = Recorder::new();
+    assert!(
+        matches!(
+            parse_stream(&source, &recorder),
+            Err(nsi_parse::Error::NotUtf8 { .. })
+        ),
+        "an identifier must be text",
     );
 }

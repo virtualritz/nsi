@@ -29,25 +29,61 @@ pub(crate) enum Token<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Quoted<'a> {
     /// No escapes: a slice of the input.
-    Borrowed(&'a str),
+    Borrowed(&'a [u8]),
     /// Escapes were decoded.
-    Owned(String),
+    Owned(Vec<u8>),
 }
 
 impl<'a> Quoted<'a> {
-    /// The text, still borrowed from the input where it was.
-    pub(crate) fn into_cow(self) -> Cow<'a, str> {
+    /// The bytes, still borrowed from the input where they were.
+    ///
+    /// **Bytes, not text.** An ɴsɪ string is whatever the C API was
+    /// handed, and 3Delight writes a byte at or above `0x7f` raw: a
+    /// stream naming `café.exr` in Latin-1 is one this crate must read,
+    /// and a file name on Linux is not required to be UTF-8 at all.
+    /// Validating here rejected such a stream outright.
+    pub(crate) fn into_cow(self) -> Cow<'a, [u8]> {
         match self {
-            Self::Borrowed(text) => Cow::Borrowed(text),
-            Self::Owned(text) => Cow::Owned(text),
+            Self::Borrowed(bytes) => Cow::Borrowed(bytes),
+            Self::Owned(bytes) => Cow::Owned(bytes),
         }
     }
 
-    pub(crate) fn as_str(&self) -> &str {
+    /// The same, as text, for a position that names something.
+    ///
+    /// Handles, node types, parameter names and type spellings are
+    /// identifiers: ɴsɪ compares them, and a non-UTF-8 one is a stream
+    /// this crate cannot act on rather than a value it can carry
+    /// through. Only string *values* are bytes.
+    pub(crate) fn into_ident(
+        self,
+        offset: usize,
+    ) -> Result<Ident<'a>, LexError> {
         match self {
-            Self::Borrowed(text) => text,
-            Self::Owned(text) => text,
+            Self::Borrowed(bytes) => str::from_utf8(bytes)
+                .map(|text| Ident(Cow::Borrowed(text)))
+                .map_err(|_| LexError::NotUtf8 { offset }),
+            Self::Owned(bytes) => String::from_utf8(bytes)
+                .map(|text| Ident(Cow::Owned(text)))
+                .map_err(|_| LexError::NotUtf8 { offset }),
         }
+    }
+}
+
+/// A quoted token in a position that names something.
+///
+/// Validated as UTF-8 once, where it is read, so the call sites that
+/// pass it to [`nsi_trait::Nsi`] need no further check.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Ident<'a>(Cow<'a, str>);
+
+impl<'a> Ident<'a> {
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub(crate) fn into_cow(self) -> Cow<'a, str> {
+        self.0
     }
 }
 
@@ -178,11 +214,10 @@ impl<'a> Lexer<'a> {
         self.position += 1;
 
         if escaped {
-            unescape(raw, start).map(|text| Token::Quoted(Quoted::Owned(text)))
+            unescape(raw, start)
+                .map(|bytes| Token::Quoted(Quoted::Owned(bytes)))
         } else {
-            str::from_utf8(raw)
-                .map(|text| Token::Quoted(Quoted::Borrowed(text)))
-                .map_err(|_| LexError::NotUtf8 { offset: start })
+            Ok(Token::Quoted(Quoted::Borrowed(raw)))
         }
     }
 }
@@ -192,17 +227,13 @@ impl<'a> Lexer<'a> {
 /// Measured, not assumed: the renderer writes `\"`, `\\`, `\t` and
 /// `\n` by name, every other byte below `0x20` as **three-digit
 /// octal** (`\001`, `\015`), and every byte at or above `0x7f`
-/// **raw**. There is no `\xHH`; decoding that instead rejected `\001`
-/// outright, which made any stream carrying a tab or a carriage return
-/// in a string unreadable.
-///
-/// Measured, not assumed: the renderer writes `\"`, `\\`, `\t` and
-/// `\n` by name, every other byte below `0x20` as **three-digit
-/// octal** (`\001`, `\015`), and every byte at or above `0x7f`
 /// **raw**. There is no `\xHH`; an earlier version of this function
 /// decoded that and rejected `\001`, which made a stream containing a
 /// tab-separated attribute or a Windows path unreadable.
-fn unescape(raw: &[u8], offset: usize) -> Result<String, LexError> {
+///
+/// The result is bytes: the raw high bytes above are exactly what must
+/// survive, so this cannot end in a UTF-8 check.
+fn unescape(raw: &[u8], offset: usize) -> Result<Vec<u8>, LexError> {
     let mut out = Vec::with_capacity(raw.len());
     let mut index = 0;
 
@@ -252,5 +283,6 @@ fn unescape(raw: &[u8], offset: usize) -> Result<String, LexError> {
         }
     }
 
-    String::from_utf8(out).map_err(|_| LexError::NotUtf8 { offset })
+    let _ = offset;
+    Ok(out)
 }

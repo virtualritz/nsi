@@ -50,3 +50,10 @@ guessed.
   compare.
 - A 3Delight gate: parse what the renderer wrote, re-emit, compare.
 - A malformed-input case per error variant.
+
+## Byte Fidelity
+
+| Behavior | Status | Source Evidence | Test/QA Evidence | Required Next Evidence |
+| --- | --- | --- | --- | --- |
+| A non-UTF-8 string *value* parses | Covered | `lex.rs` `Quoted` holds `&[u8]` / `Vec<u8>`; `unescape` returns bytes | `roundtrip::a_non_utf8_string_value_survives_parsing`, `a_non_utf8_byte_survives_an_escaped_value`; re-adding the UTF-8 check reddens the first. The parser used to **refuse** such a stream outright, so it could not read what 3Delight writes -- `renderdl -cat` echoes a raw `0xE9` in a file name back unchanged | -- |
+| A non-UTF-8 *identifier* is refused | Covered | `lex.rs` `Quoted::into_ident`, called where a handle, node type, parameter name or type spelling is read | `roundtrip::a_non_utf8_handle_is_still_refused`; making the conversion lossy reddens it. Values are bytes because ɴsɪ carries them through; names are text because ɴsɪ compares them, and a lossy handle would silently address a different node | -- |

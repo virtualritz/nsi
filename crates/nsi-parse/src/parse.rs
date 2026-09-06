@@ -7,7 +7,7 @@
 
 use crate::{
     Error,
-    lex::{Lexer, Quoted, Token},
+    lex::{Ident, Lexer, Token},
     value::{self, Scratch},
 };
 use nsi_trait::Nsi;
@@ -187,13 +187,18 @@ where
     }
 }
 
-/// One quoted operand.
+/// One quoted operand that names something.
+///
+/// Every caller is a handle, node type, attribute name or type
+/// spelling, so the UTF-8 check belongs here rather than at each use.
+/// A string *value* is read by `value::read` and stays bytes.
 fn string<'a, E>(
     lexer: &mut Lexer<'a>,
     expected: &'static str,
-) -> Result<Quoted<'a>, Error<E>> {
+) -> Result<Ident<'a>, Error<E>> {
+    let offset = lexer.offset();
     match lexer.next_token()? {
-        Some(Token::Quoted(text)) => Ok(text),
+        Some(Token::Quoted(text)) => Ok(text.into_ident(offset)?),
         _ => Err(Error::Syntax {
             offset: lexer.offset(),
             expected,
@@ -230,7 +235,8 @@ fn parameters<'a, E>(
             // A quoted token here is a parameter name: parameter names
             // are always quoted and keywords never are.
             Some(Token::Quoted(name)) => {
-                value::read(name.into_cow(), lexer, scratch)?;
+                let name = name.into_ident(lexer.offset())?.into_cow();
+                value::read(name, lexer, scratch)?;
             }
             other => return Ok(other),
         }
