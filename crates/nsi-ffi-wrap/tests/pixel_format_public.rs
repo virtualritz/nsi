@@ -211,3 +211,36 @@ fn a_lone_alpha_belongs_to_the_layer_before_it() {
     assert_eq!(4, pixel_format.channels());
     assert!(pixel_format[0].has_alpha());
 }
+
+/// What 3Delight actually sends. Measured, not assumed: a beauty plus a
+/// depth output layer, both connected to one driver, arrive as five
+/// channels with **no layer prefix at all** --
+/// `["r", "g", "b", "a", "z"]`.
+///
+/// So a layer boundary cannot be found from the name alone. The `z`
+/// here is a layer of its own: it cannot be the third channel of a
+/// group that already holds four.
+#[test]
+fn unprefixed_channels_still_separate_into_layers() {
+    let pixel_format = parse(&["r", "g", "b", "a", "z"]);
+
+    let layers: Vec<(&str, usize, usize)> = pixel_format
+        .iter()
+        .map(|l| (l.name(), l.channels(), l.offset()))
+        .collect();
+
+    assert_eq!(vec![("Ci", 4, 0), ("z", 1, 4)], layers);
+    assert_eq!(5, pixel_format.channels());
+}
+
+/// An unprefixed normal is a vector, not three separate scalars.
+#[test]
+fn unprefixed_vector_channels_stay_one_layer() {
+    let pixel_format = parse(&["r", "g", "b", "a", "x", "y", "z"]);
+
+    let layers: Vec<(&str, usize)> =
+        pixel_format.iter().map(|l| (l.name(), l.channels())).collect();
+
+    assert_eq!(vec![("Ci", 4), ("x", 3)], layers);
+    assert_eq!(7, pixel_format.channels());
+}

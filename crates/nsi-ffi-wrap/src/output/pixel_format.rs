@@ -262,9 +262,18 @@ impl PixelFormat {
 
         let mut flush = |name: &str, ids: &mut Vec<&str>, offset: &mut usize| {
             for depth in Self::depths_for(ids.len(), ids.first().copied()) {
+                let unnamed = if layers.is_empty() {
+                    // The first unnamed layer is the beauty pass.
+                    "Ci"
+                } else {
+                    // A later one has no name to take: 3Delight sends
+                    // built-in variables unprefixed, so all this layer
+                    // is known by is its first channel.
+                    ids.first().copied().unwrap_or("Ci")
+                };
                 layers.push(Layer {
-                    // An unnamed layer is the beauty pass.
-                    name: if name.is_empty() { "Ci" } else { name }.to_string(),
+                    name: if name.is_empty() { unnamed } else { name }
+                        .to_string(),
                     depth,
                     offset: *offset,
                 });
@@ -281,13 +290,18 @@ impl PixelFormat {
             let (layer_name, channel_id) =
                 Self::split_into_layer_name_and_channel_id(channel);
 
-            // A bare `a` after a named layer is that layer's alpha, not
-            // a layer of its own.
-            let is_lone_alpha = layer_name.is_empty()
-                && "a" == channel_id
-                && !channel_ids.is_empty();
+            // Two ways a channel can belong to the layer being
+            // accumulated. Its name must match -- and when there are no
+            // names, as 3Delight does for built-in variables, its role
+            // must continue the sequence.
+            // A bare `a` is the previous layer's alpha even though it
+            // carries no name of its own.
+            let named_the_same = layer_name == name
+                || (layer_name.is_empty() && "a" == channel_id);
+            let continues =
+                named_the_same && Self::continues(&channel_ids, channel_id);
 
-            if !channel_ids.is_empty() && !is_lone_alpha && layer_name != name {
+            if !channel_ids.is_empty() && !continues {
                 flush(name, &mut channel_ids, &mut offset);
             }
             if channel_ids.is_empty() {
@@ -298,6 +312,46 @@ impl PixelFormat {
         flush(name, &mut channel_ids, &mut offset);
 
         PixelFormat(layers)
+    }
+
+    /// Whether `channel_id` continues the layer accumulated so far.
+    ///
+    /// 3Delight names channels of built-in variables with no layer
+    /// prefix at all -- a beauty plus a depth arrives as
+    /// `["r","g","b","a","z"]`, measured, not assumed. So when the name
+    /// part cannot separate two layers, their channel *roles* must:
+    /// `r`,`g`,`b` and `x`,`y`,`z` are positional, so a channel
+    /// continues only from the position its predecessor left off, and
+    /// `a` closes a layer rather than opening one. A trailing `z` after
+    /// `r`,`g`,`b`,`a` is therefore a new layer -- it cannot be the
+    /// third channel of a group that already holds four.
+    fn continues(accumulated: &[&str], channel_id: &str) -> bool {
+        if accumulated.is_empty() {
+            return true;
+        }
+        // An alpha joins whatever it follows, and closes it.
+        if "a" == channel_id {
+            return accumulated.len() < 5
+                && accumulated.last() != Some(&"a");
+        }
+        let position = |id: &str| match id {
+            "r" | "x" => Some(0),
+            "g" | "y" => Some(1),
+            "b" | "z" => Some(2),
+            _ => None,
+        };
+        let family = |id: &str| match id {
+            "r" | "g" | "b" => Some(0),
+            "x" | "y" | "z" => Some(1),
+            _ => None,
+        };
+        match (position(channel_id), accumulated.first()) {
+            (Some(next), Some(first)) => {
+                next == accumulated.len() && family(channel_id) == family(first)
+            }
+            // A scalar -- an indexed channel, say -- is a layer of its own.
+            _ => false,
+        }
     }
 
     /// The [`LayerDepth`]s spanning `count` channels, whose first is
