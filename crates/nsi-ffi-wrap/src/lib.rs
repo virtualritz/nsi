@@ -27,6 +27,23 @@ pub use token::Token;
 
 // Crate features -----------------------------------------------------
 
+// `dlopen2` and `link_lib3delight` are two answers to the same
+// question -- resolve the renderer at runtime, or link it at build
+// time -- and `dlopen2` is on by default, so `--all-features` turns
+// both on. That used to compile the linked backend against the
+// dynamic one's expectations and fail with eleven `cannot find
+// function NSIBegin` errors that named neither feature. Say it once,
+// in a sentence, at the place the choice is made.
+#[cfg(all(feature = "dlopen2", feature = "link_lib3delight"))]
+compile_error!(
+    "features `dlopen2` and `link_lib3delight` are mutually exclusive: \
+     the first resolves lib3delight at runtime, the second links it at \
+     build time. `dlopen2` is a default feature, so to link instead \
+     use `--no-default-features --features link_lib3delight`. This is \
+     also why `--all-features` is not a configuration this crate has; \
+     test with `--features output`."
+);
+
 #[cfg(not(feature = "link_lib3delight"))]
 mod dynamic;
 #[cfg(feature = "link_lib3delight")]

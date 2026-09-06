@@ -9,6 +9,13 @@
 //! These tests capture an `Arc` in the callback and watch it through a
 //! `Weak`: if the callback is reclaimed, the `Weak` dies.
 
+// The renderer's pixel-streaming API lives behind `output`, so this
+// file is empty without it. Without the gate the whole test target
+// failed to compile for any configuration that did not happen to
+// enable the feature -- which is every configuration `--all-features`
+// is not.
+#![cfg(feature = "output")]
+
 use nsi_ffi_wrap as nsi;
 use std::sync::{Arc, Weak};
 

@@ -1000,16 +1000,12 @@ impl Scene {
         // measured, one transform with 1000 children took 67 ms to
         // build, 4000 took 749 ms and 16 000 took 17 s. An interactive
         // host connects per edit, so it paid that on every one.
-        let existing = self
-            .by_from
-            .get(from)
-            .into_iter()
-            .flatten()
-            .copied()
-            .find(|&at| {
+        let existing = self.by_from.get(from).and_then(|positions| {
+            positions.iter().copied().find(|&at| {
                 let edge = &self.edges[at];
                 edge.to == to && edge.kind == kind
-            });
+            })
+        });
 
         let mut rearmed = None;
         match existing.map(|at| &mut self.edges[at]) {

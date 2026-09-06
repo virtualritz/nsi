@@ -15,6 +15,11 @@
 //! golden, and the next run compared against *that*. Regenerate
 //! deliberately, look at the image, and commit it on purpose.
 
+// Renders through the pixel-streaming API, which lives behind
+// `output`; `test_utils` is gated the same way, so this target cannot
+// build without it.
+#![cfg(feature = "output")]
+
 mod common;
 mod test_utils;
 

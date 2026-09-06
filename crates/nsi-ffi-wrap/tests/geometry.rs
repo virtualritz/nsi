@@ -1,5 +1,10 @@
 //! Geometry rendering tests for NSI.
 
+// Renders through the pixel-streaming API, which lives behind
+// `output`; `test_utils` is gated the same way, so this target cannot
+// build without it.
+#![cfg(feature = "output")]
+
 use nsi_ffi_wrap as nsi;
 
 mod common;

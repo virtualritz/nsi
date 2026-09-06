@@ -1,4 +1,11 @@
 //! `PixelFormat` must be constructible by out-of-crate display drivers.
+// The renderer's pixel-streaming API lives behind `output`, so this
+// file is empty without it. Without the gate the whole test target
+// failed to compile for any configuration that did not happen to
+// enable the feature -- which is every configuration `--all-features`
+// is not.
+#![cfg(feature = "output")]
+
 use nsi_ffi_wrap::output::PixelFormat;
 use std::ffi::CString;
 

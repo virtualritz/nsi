@@ -3,6 +3,13 @@
 //! This module provides utilities for rendering test scenes and comparing
 //! the output images with expected results.
 
+// The renderer's pixel-streaming API lives behind `output`, so this
+// file is empty without it. Without the gate the whole test target
+// failed to compile for any configuration that did not happen to
+// enable the feature -- which is every configuration `--all-features`
+// is not.
+#![cfg(feature = "output")]
+
 use anyhow::{Context as _, Result};
 use nsi_ffi_wrap as nsi;
 use std::{

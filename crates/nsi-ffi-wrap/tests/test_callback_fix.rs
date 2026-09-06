@@ -1,5 +1,12 @@
 //! Test to verify the callback memory management fix
 
+// The renderer's pixel-streaming API lives behind `output`, so this
+// file is empty without it. Without the gate the whole test target
+// failed to compile for any configuration that did not happen to
+// enable the feature -- which is every configuration `--all-features`
+// is not.
+#![cfg(feature = "output")]
+
 use nsi_ffi_wrap as nsi;
 use std::{
     num::NonZeroUsize,
