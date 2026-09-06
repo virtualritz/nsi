@@ -283,6 +283,32 @@ pub const RAY_TYPES: [&str; 8] = [
     "volume",
 ];
 
+/// One placement of a geometry in the scene.
+///
+/// ɴsɪ's *lightweight* instancing: connecting a node to two transforms
+/// draws it twice, once per path. Rendered, a quad under two transforms
+/// translated `-2` and `+2` appears at both positions, and putting
+/// `visibility 1` on one parent and `visibility 0` on the other draws
+/// **one** copy -- so a path carries its own attributes as well as its
+/// own transform, and a backend emitting one instance per placement
+/// needs both together.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Placement {
+    /// The nodes from the geometry to `.root`, geometry first.
+    ///
+    /// Two placements of one geometry differ here, and that is what
+    /// makes them distinguishable: the handle alone does not.
+    pub path: Vec<String>,
+    /// The world transform along this path.
+    pub transform: [f64; 16],
+    /// What binds along this path, or `None` when nothing does.
+    ///
+    /// The same shape [`Scene::geometry_binding`] returns, resolved
+    /// against this path rather than against "the" path.
+    pub binding: Option<Binding>,
+}
+
 /// The winning definition of one attribute, gathered along a path.
 ///
 /// Returned by [`Scene::attribute_value`].
@@ -1092,6 +1118,132 @@ impl Scene {
         Ok(None)
     }
 
+    /// Every way `geometry` is placed in the scene.
+    ///
+    /// [`Scene::world_transform`] and [`Scene::geometry_binding`]
+    /// answer for *the* path and refuse a node with more than one
+    /// parent, because there is no single answer. This enumerates them
+    /// instead: one [`Placement`] per path, in the order the parents
+    /// were connected, each with the transform and the binding resolved
+    /// along that path.
+    ///
+    /// A singly-placed geometry yields exactly one placement, agreeing
+    /// with those two methods, so a backend can use this alone.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::Cycle`] for a path that revisits a node, and
+    /// [`ResolveError::Detached`] for a geometry that reaches no root
+    /// at all. A node reached only through an `instances` node is
+    /// *skipped* rather than refused -- an `instances` node carries one
+    /// matrix per instance, which [`Scene::instance_transforms`]
+    /// answers; see [`ResolveError::Instanced`].
+    pub fn placements(
+        &self,
+        geometry: &str,
+    ) -> Result<Vec<Placement>, ResolveError> {
+        let mut paths = Vec::new();
+        self.walk_placements(geometry, &mut Vec::new(), &mut paths)?;
+
+        if paths.is_empty() {
+            return Err(ResolveError::Detached {
+                handle: geometry.to_string(),
+            });
+        }
+
+        paths
+            .into_iter()
+            .map(|path| {
+                let transform = self.compose_along(&path)?;
+                let gathered =
+                    self.gathered_along(&path, &EdgeKind::AttributeBinding);
+                let binding = if gathered.is_empty() {
+                    None
+                } else {
+                    let shader =
+                        |kind: &EdgeKind| self.shader_on(&gathered, kind);
+                    Some(Binding {
+                        surface_shader: shader(&EdgeKind::SurfaceShader),
+                        displacement_shader: shader(
+                            &EdgeKind::DisplacementShader,
+                        ),
+                        volume_shader: shader(&EdgeKind::VolumeShader),
+                        attributes: gathered
+                            .iter()
+                            .map(|(_, _, edge)| edge.from.clone())
+                            .collect(),
+                    })
+                };
+                Ok(Placement {
+                    path,
+                    transform,
+                    binding,
+                })
+            })
+            .collect()
+    }
+
+    /// Depth-first over every parent, collecting root-ward paths.
+    fn walk_placements(
+        &self,
+        current: &str,
+        prefix: &mut Vec<String>,
+        out: &mut Vec<Vec<String>>,
+    ) -> Result<(), ResolveError> {
+        if prefix.iter().any(|seen| seen == current) {
+            return Err(ResolveError::Cycle {
+                handle: current.to_string(),
+            });
+        }
+
+        prefix.push(current.to_string());
+
+        if current == crate::ROOT {
+            out.push(prefix.clone());
+            prefix.pop();
+            return Ok(());
+        }
+
+        // Only direct placements branch. An `instances` connection is
+        // not a path in this sense: the instancer holds a matrix per
+        // instance rather than one for the prototype.
+        let parents: Vec<String> = self
+            .edges_from(current)
+            .filter(|edge| edge.kind == EdgeKind::SceneMember)
+            .map(|edge| edge.to.clone())
+            .collect();
+
+        for parent in parents {
+            self.walk_placements(&parent, prefix, out)?;
+        }
+
+        prefix.pop();
+        Ok(())
+    }
+
+    /// Compose the transforms along an already-walked path.
+    fn compose_along(
+        &self,
+        path: &[String],
+    ) -> Result<[f64; 16], ResolveError> {
+        path.iter().try_fold(IDENTITY, |matrix, node| {
+            if let Some(sampled) = self.node(node)
+                && sampled
+                    .time_attrs
+                    .iter()
+                    .any(|(_, attrs)| attrs.contains_key(TRANSFORMATION_MATRIX))
+            {
+                return Err(ResolveError::MotionSampledTransform {
+                    handle: node.clone(),
+                });
+            }
+            Ok(match self.local_transform(node) {
+                Some(local) => mul(matrix, local),
+                None => matrix,
+            })
+        })
+    }
+
     /// Every `attributes` node on a geometry's path, in ɴsɪ's
     /// precedence order.
     ///
@@ -1156,12 +1308,25 @@ impl Scene {
         kind: &EdgeKind,
     ) -> Result<Vec<(usize, usize, &Edge)>, ResolveError> {
         let chain = self.chain(geometry)?;
+        Ok(self.gathered_along(&chain, kind))
+    }
 
+    /// The same, along a path already walked.
+    ///
+    /// Split out because a geometry with more than one parent has more
+    /// than one path, and the containers on each are **different** --
+    /// rendered, two parents carrying `visibility 1` and `visibility 0`
+    /// draw one copy, not two or none.
+    fn gathered_along(
+        &self,
+        chain: &[String],
+        kind: &EdgeKind,
+    ) -> Vec<(usize, usize, &Edge)> {
         // The geometry, then the sets it belongs to directly, then the
         // transforms above it. With no set memberships this is `chain`
         // and the walk is unchanged.
         let mut sources: Vec<&String> = Vec::with_capacity(chain.len() + 1);
-        for node in &chain {
+        for node in chain {
             sources.push(node);
             sources.extend(
                 self.edges_from(node.as_str())
@@ -1176,7 +1341,7 @@ impl Scene {
         let mut seen = HashSet::new();
         sources.retain(|handle| seen.insert(handle.as_str()));
 
-        let mut gathered = sources
+        let mut gathered: Vec<(usize, usize, &Edge)> = sources
             .into_iter()
             .enumerate()
             .flat_map(|(depth, node)| {
@@ -1196,7 +1361,7 @@ impl Scene {
         // establishing it.
         gathered.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-        Ok(gathered)
+        gathered
     }
 
     /// The shader of one kind reached from any gathered `attributes`

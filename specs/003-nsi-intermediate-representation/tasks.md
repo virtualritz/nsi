@@ -124,9 +124,14 @@ with every feature.
       is it mid-shutter" -- which
       `world_transform_interpolated_at` now answers, on that measured
       model. See T9.17.
-- [ ] T3.11 Per-path transforms for an instanced node.
-      Gate: `contracts/resolution.md` instancing row. T3.8 refuses the
-      case; this answers it.
+- [x] T3.11 Per-path transforms for an instanced node: `placements`.
+      T3.8 refused the case; this answers it. The row asked only for a
+      transform per path -- `Vec<[f64; 16]>` or a path-qualified handle
+      -- but rendering showed the paths also gather **different
+      attributes**: `visibility 1` on one parent and `visibility 0` on
+      the other draws one copy. So a per-path transform with a shared
+      binding would have been a new silent wrong answer, and
+      `Placement` carries the binding too.
 - [x] T3.12 `priority`'s direction and tie-break are in `nsi.pdf`, not
       merely plausible: highest wins, then closest to the geometry. The
       question was answered by reading the specification. See

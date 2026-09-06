@@ -2656,3 +2656,123 @@ fn a_single_sample_node_is_constant() {
         );
     }
 }
+
+// ---------------------------------------------------------------------
+// Lightweight instancing: one placement per path.
+// ---------------------------------------------------------------------
+
+/// `q` under two transforms is drawn twice, once per path, each with
+/// its own transform. Rendered: a quad under transforms translated -2
+/// and +2 appears at both positions, where one parent gives one.
+#[test]
+fn a_two_parent_geometry_has_two_placements() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene
+        .set_attribute("xfA", vec![translate(-2.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute("xfB", vec![translate(2.0, 0.0, 0.0)])
+        .unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(placements.len(), 2);
+    assert_eq!(placements[0].transform[12], -2.0);
+    assert_eq!(placements[1].transform[12], 2.0);
+    // In connection order, and the path names which is which.
+    assert_eq!(placements[0].path, vec!["q", "xfA", ".root"]);
+    assert_eq!(placements[1].path, vec!["q", "xfB", ".root"]);
+
+    // The single-answer accessors still refuse, because there is none.
+    assert!(matches!(
+        scene.world_transform("q"),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+}
+
+/// Each path carries its **own** attributes. Rendered: `visibility 1`
+/// on one parent and `visibility 0` on the other draws one copy, not
+/// two and not none -- so a per-path transform without a per-path
+/// binding would hand a backend the wrong material or the wrong
+/// visibility for one of the two.
+#[test]
+fn each_placement_binds_along_its_own_path() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    scene.create("xfA", "transform").unwrap();
+    scene.create("xfB", "transform").unwrap();
+    scene.create("visA", "attributes").unwrap();
+    scene.create("visB", "attributes").unwrap();
+    scene.connect("xfA", None, ".root", "objects").unwrap();
+    scene.connect("xfB", None, ".root", "objects").unwrap();
+    scene
+        .connect("visA", None, "xfA", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("visB", None, "xfB", "geometryattributes")
+        .unwrap();
+    scene.connect("q", None, "xfA", "objects").unwrap();
+    scene.connect("q", None, "xfB", "objects").unwrap();
+
+    let placements = scene.placements("q").unwrap();
+    assert_eq!(
+        placements[0].binding.as_ref().unwrap().attributes,
+        vec!["visA".to_string()],
+    );
+    assert_eq!(
+        placements[1].binding.as_ref().unwrap().attributes,
+        vec!["visB".to_string()],
+    );
+}
+
+/// A singly-placed geometry yields one placement that agrees with the
+/// single-answer accessors, so a backend can use this alone.
+#[test]
+fn a_single_placement_agrees_with_the_single_answer_accessors() {
+    let scene = scene_with_material();
+
+    let placements = scene.placements("mesh").unwrap();
+    assert_eq!(placements.len(), 1);
+    assert_eq!(
+        placements[0].transform,
+        scene.world_transform("mesh").unwrap()
+    );
+    assert_eq!(
+        placements[0].binding,
+        scene.geometry_binding("mesh").unwrap(),
+    );
+}
+
+/// A geometry reaching no root has no placements, and says so rather
+/// than returning an empty list a caller would read as "not drawn but
+/// fine".
+#[test]
+fn a_detached_geometry_has_no_placements() {
+    let mut scene = Scene::default();
+    scene.create("q", "mesh").unwrap();
+    assert!(matches!(
+        scene.placements("q"),
+        Err(ResolveError::Detached { .. })
+    ));
+}
+
+/// A cycle on a path is refused rather than walked forever.
+#[test]
+fn a_cyclic_placement_path_is_refused() {
+    let mut scene = Scene::default();
+    scene.create("a", "transform").unwrap();
+    scene.create("b", "transform").unwrap();
+    scene.connect("a", None, "b", "objects").unwrap();
+    scene.connect("b", None, "a", "objects").unwrap();
+
+    assert!(matches!(
+        scene.placements("a"),
+        Err(ResolveError::Cycle { .. })
+    ));
+}
