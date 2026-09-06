@@ -244,3 +244,42 @@ fn unprefixed_vector_channels_stay_one_layer() {
     assert_eq!(vec![("Ci", 4), ("x", 3)], layers);
     assert_eq!(7, pixel_format.channels());
 }
+
+/// The full shape 3Delight sends for a denoise-ready scene. Measured
+/// from a real render with four output layers on one driver:
+///
+/// - `Ci` (colour, with alpha) and a `z` depth layer arrive under their
+///   bare canonical channel names,
+/// - while custom AOV layers are prefixed with their `layername` and an
+///   index: `albedo.000.r`, `N.001.y`.
+///
+/// So the two passes OIDN actually consumes -- albedo and normal -- are
+/// identifiable by name, and depth is not. A display driver's
+/// pass detection depends on this, so it is pinned here.
+#[test]
+fn a_real_denoise_scene_parses_into_its_four_layers() {
+    let pixel_format = parse(&[
+        "r",
+        "g",
+        "b",
+        "a",
+        "albedo.000.r",
+        "albedo.001.g",
+        "albedo.002.b",
+        "N.000.x",
+        "N.001.y",
+        "N.002.z",
+        "z",
+    ]);
+
+    let layers: Vec<(&str, usize, usize)> = pixel_format
+        .iter()
+        .map(|l| (l.name(), l.channels(), l.offset()))
+        .collect();
+
+    assert_eq!(
+        vec![("Ci", 4, 0), ("albedo", 3, 4), ("N", 3, 7), ("z", 1, 10)],
+        layers
+    );
+    assert_eq!(11, pixel_format.channels());
+}

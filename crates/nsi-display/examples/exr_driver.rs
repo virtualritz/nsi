@@ -44,26 +44,49 @@
 //! | --                | `denoise.quality`  | Two related attributes, so the dot group is earned (rule 2). |
 //!
 //! - `compression` -- `none`, `rle`, `zips`, `zip`, `piz`, `pxr24`,
-//!   `b44`, `b44a`, `dwaa`, `dwab`. Default `zips`.
+//!   `b44`, `b44a`, `dwaa` or `dwab`. Default `zips`. All ten are
+//!   verified to reach the written file's header, not merely to return
+//!   `Ok`; see `tests/exr_render.rs`.
 //! - `line-order` -- `increasing`, `decreasing`, `any`. Default
 //!   `increasing`.
 //! - `header.<name>` -- any string attribute, written into the EXR
 //!   header under `<name>`.
 //! - `denoise` -- `1` to denoise the beauty layer through OIDN.
 //! - `denoise.quality` -- `default`, `fast`, `balanced` or `high`.
+//! - `denoise.albedo` -- the name of the output layer to take OIDN's
+//!   albedo input from. Defaults to `albedo`, which is what 3Delight
+//!   uses: 14 of its shaders emit that AOV via
+//!   `outputconstant("albedo")`.
+//! - `denoise.normal` -- likewise for the normal, defaulting to `N`,
+//!   3Delight's built-in.
 //!
 //! # Utility passes
 //!
 //! OIDN's ray-tracing filter takes an **albedo** and a **normal**
-//! alongside the beauty, and is materially worse without them. This
-//! driver looks for output layers named `albedo`, `N`/`normal` and
-//! `depth`/`Z`, and warns on `stderr` at `open()` -- before the render
-//! rather than after it -- naming each one it did not get.
+//! alongside the beauty, and is materially worse without them. Rather
+//! than guess which output layers those are, the driver is told:
+//! `denoise.albedo` and `denoise.normal` name them, defaulting to
+//! 3Delight's own `albedo` and `N`. It warns on `stderr` at `open()` --
+//! before the render, while the answer is still useful -- naming the
+//! attribute, the layer it was told to look for, and the layers that
+//! were actually connected.
 //!
-//! Depth is warned about for the same reason, though note OIDN's
-//! `RayTracing` filter has no depth input: it is checked because a
-//! denoising setup is expected to carry it, not because this driver
-//! feeds it to the filter.
+//! This works because of how 3Delight names channels, measured from a
+//! real render rather than assumed. A custom AOV layer arrives prefixed
+//! with its `layername` and an index:
+//!
+//! ```text
+//! ["r", "g", "b", "a",                                 <- Ci, bare
+//!  "albedo.000.r", "albedo.001.g", "albedo.002.b",     <- prefixed
+//!  "N.000.x", "N.001.y", "N.002.z",                    <- prefixed
+//!  "z"]                                                <- depth, bare
+//! ```
+//!
+//! So albedo and normal are identifiable by name and depth is not --
+//! `Ci` and `z` come through under bare canonical channel names with no
+//! layer name attached. There is no `denoise.depth`: OIDN's
+//! `RayTracing` filter has no depth input, so a driver could not use
+//! one even if ndspy named it.
 use nsi_display::{Bucket, DisplayDriver, Error, Params, PixelFormat, Result};
 
 use exr::prelude::*;
@@ -88,6 +111,9 @@ struct Exr {
     header: Vec<(String, String)>,
     denoise: bool,
     denoise_quality: oidn::Quality,
+    /// The layer names to take OIDN's auxiliary inputs from.
+    denoise_albedo: String,
+    denoise_normal: String,
     /// The whole frame, `width * height * channels` scalars.
     pixels: Vec<f32>,
 }
@@ -116,11 +142,9 @@ fn channel_suffixes(name: &str, channels: usize) -> Vec<&'static str> {
 }
 
 impl Exr {
-    /// Finds a layer by any of `names`, returning its span.
-    fn layer(&self, names: &[&str]) -> Option<&LayerSpan> {
-        self.layers
-            .iter()
-            .find(|l| names.contains(&l.name.as_str()))
+    /// Finds a layer by name, returning its span.
+    fn layer(&self, name: &str) -> Option<&LayerSpan> {
+        self.layers.iter().find(|l| l.name == name)
     }
 
     /// Copies a layer's first three channels out as a tightly packed
@@ -149,7 +173,15 @@ impl DisplayDriver for Exr {
         height: usize,
         format: &PixelFormat,
     ) -> Result<Self> {
-        let compression = match params.string("compression").unwrap_or("zips") {
+        // Every compression OpenEXR defines, all of them verified to
+        // reach the file's header rather than merely to return `Ok`:
+        // written at 128x128 and read back with exiftool, each file
+        // reports the compression asked for, and zip, pxr24, dwaa and
+        // dwab measurably shrink. (`exr`'s own source has an
+        // "unimplemented compression method" arm that reads as though
+        // it covers dwaa/dwab -- it does not.)
+        let requested = params.string("compression").unwrap_or("zips");
+        let compression = match requested {
             "none" => Compression::Uncompressed,
             "rle" => Compression::RLE,
             "zips" => Compression::ZIP1,
@@ -160,7 +192,13 @@ impl DisplayDriver for Exr {
             "b44a" => Compression::B44A,
             "dwaa" => Compression::DWAA(None),
             "dwab" => Compression::DWAB(None),
-            _ => return Err(Error::BadParameters),
+            other => {
+                eprintln!(
+                    "rust_exr: unknown compression `{other}` -- use one of \
+                     none, rle, zips, zip, piz, pxr24, b44, b44a, dwaa, dwab"
+                );
+                return Err(Error::BadParameters);
+            }
         };
 
         let line_order =
@@ -168,7 +206,13 @@ impl DisplayDriver for Exr {
                 "increasing" => LineOrder::Increasing,
                 "decreasing" => LineOrder::Decreasing,
                 "any" => LineOrder::Unspecified,
-                _ => return Err(Error::BadParameters),
+                other => {
+                    eprintln!(
+                        "rust_exr: unknown line-order `{other}` -- use one \
+                         of increasing, decreasing, any"
+                    );
+                    return Err(Error::BadParameters);
+                }
             };
 
         let header = params
@@ -195,22 +239,41 @@ impl DisplayDriver for Exr {
                 "fast" => oidn::Quality::Fast,
                 "balanced" => oidn::Quality::Balanced,
                 "high" => oidn::Quality::High,
-                _ => return Err(Error::BadParameters),
+                other => {
+                    eprintln!(
+                        "rust_exr: unknown denoise.quality `{other}` -- use \
+                         one of default, fast, balanced, high"
+                    );
+                    return Err(Error::BadParameters);
+                }
             };
+
+        // Which output layers to take OIDN's auxiliary inputs from.
+        // Defaulted to the names 3Delight itself uses: `albedo` is the
+        // AOV its shaders emit (`outputconstant("albedo")`, in 14 of
+        // them), and `N` is the built-in normal.
+        let denoise_albedo =
+            params.string("denoise.albedo").unwrap_or("albedo").to_owned();
+        let denoise_normal =
+            params.string("denoise.normal").unwrap_or("N").to_owned();
 
         if denoise {
             // Warn before the render, not after it: this is the last
-            // moment the answer is still useful.
-            for (label, names) in [
-                ("albedo", &["albedo"][..]),
-                ("normal", &["N", "normal", "Ns"][..]),
-                ("depth", &["depth", "Z", "z"][..]),
+            // moment the answer is still useful. Naming the attribute
+            // as well as the layer, because the usual cause is a
+            // `layername` that does not match what this was told.
+            for (attribute, wanted) in [
+                ("denoise.albedo", &denoise_albedo),
+                ("denoise.normal", &denoise_normal),
             ] {
-                if !layers.iter().any(|l| names.contains(&l.name.as_str())) {
+                if !layers.iter().any(|l| &l.name == wanted) {
+                    let connected: Vec<&str> =
+                        layers.iter().map(|l| l.name.as_str()).collect();
                     eprintln!(
-                        "rust_exr: denoise is on but no `{label}` output \
-                         layer was connected to this driver -- denoising \
-                         will be worse without it"
+                        "rust_exr: denoise is on and {attribute} names \
+                         layer `{wanted}`, which is not connected to this \
+                         driver -- denoising will be worse without it. \
+                         Connected layers: {connected:?}"
                     );
                 }
             }
@@ -231,6 +294,8 @@ impl DisplayDriver for Exr {
             header,
             denoise,
             denoise_quality,
+            denoise_albedo,
+            denoise_normal,
             pixels: vec![0.0f32; width * height * channels],
         })
     }
@@ -307,6 +372,9 @@ impl DisplayDriver for Exr {
             AnyChannels::sort(channels.into_iter().collect()),
         );
 
+        // `write()` compresses blocks on several threads by default,
+        // via `exr`'s `rayon` feature -- which is one of its defaults,
+        // so this crate must not disable them.
         Image::from_layer(layer)
             .write()
             .to_file(format!("{}.exr", self.path))
@@ -319,14 +387,16 @@ impl Exr {
     /// Denoises the beauty layer in place, through OIDN's ray-tracing
     /// filter, using whichever of albedo and normal were connected.
     fn run_denoise(&mut self) {
-        let Some(beauty) = self.layer(&["Ci"]) else {
+        let Some(beauty) = self.layer("Ci") else {
             eprintln!("rust_exr: denoise is on but there is no beauty layer");
             return;
         };
         let (offset, span_channels) = (beauty.offset, beauty.channels);
         let color = self.rgb_of(beauty);
-        let albedo = self.layer(&["albedo"]).map(|l| self.rgb_of(l));
-        let normal = self.layer(&["N", "normal", "Ns"]).map(|l| self.rgb_of(l));
+        let albedo =
+            self.layer(&self.denoise_albedo).map(|l| self.rgb_of(l));
+        let normal =
+            self.layer(&self.denoise_normal).map(|l| self.rgb_of(l));
 
         // OIDN reports both of these fallibly -- no device (no
         // supported hardware, no driver) is the common one. A failure

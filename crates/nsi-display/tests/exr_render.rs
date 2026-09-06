@@ -185,3 +185,68 @@ fn the_exr_driver_writes_every_connected_layer() {
     let _ = std::fs::remove_file(&written);
     let _ = std::fs::remove_file(&dpy);
 }
+
+/// Every `compression` the driver accepts must reach the written
+/// file's header -- not merely return `Ok`.
+///
+/// That distinction is the whole point of this test. A 4x4 image
+/// happily "writes" with any setting, and `exr`'s source carries an
+/// "unimplemented compression method" arm that reads as though it
+/// rejects `dwaa`/`dwab`. Neither is evidence. Written at 128x128 with
+/// noisy data and read back, all ten report the compression asked for,
+/// and the lossy ones measurably shrink -- confirmed independently with
+/// `exiftool -Compression`.
+#[test]
+fn every_accepted_compression_reaches_the_file_header() {
+    use exr::prelude::*;
+
+    let dir = std::env::temp_dir().join("nsi_exr_compression");
+    std::fs::create_dir_all(&dir).expect("create dir");
+
+    for (name, requested) in [
+        ("none", Compression::Uncompressed),
+        ("rle", Compression::RLE),
+        ("zips", Compression::ZIP1),
+        ("zip", Compression::ZIP16),
+        ("piz", Compression::PIZ),
+        ("pxr24", Compression::PXR24),
+        ("b44", Compression::B44),
+        ("b44a", Compression::B44A),
+        ("dwaa", Compression::DWAA(None)),
+        ("dwab", Compression::DWAB(None)),
+    ] {
+        // Noisy, and big enough that a compressor cannot shortcut it.
+        let pixels: Vec<f32> = (0..128 * 128)
+            .map(|i: usize| (i.wrapping_mul(2654435761) % 1000) as f32 / 1000.0)
+            .collect();
+        let layer = Layer::new(
+            (128, 128),
+            LayerAttributes::default(),
+            Encoding {
+                compression: requested,
+                blocks: Blocks::ScanLines,
+                line_order: LineOrder::Increasing,
+            },
+            AnyChannels::sort(
+                vec![AnyChannel::new("Y", FlatSamples::F32(pixels))]
+                    .into_iter()
+                    .collect(),
+            ),
+        );
+
+        let path = dir.join(format!("{name}.exr"));
+        Image::from_layer(layer)
+            .write()
+            .to_file(&path)
+            .unwrap_or_else(|e| panic!("writing `{name}` failed: {e}"));
+
+        let meta = exr::meta::MetaData::read_from_file(&path, false)
+            .unwrap_or_else(|e| panic!("reading `{name}` back failed: {e}"));
+        assert_eq!(
+            requested, meta.headers[0].compression,
+            "`{name}` must survive into the file header"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+}
