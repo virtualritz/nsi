@@ -7,6 +7,7 @@
 //! set to a staging directory rather than an environment variable --
 //! there isn't one for display drivers.
 use std::{
+    env,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -72,8 +73,18 @@ fn the_example_driver_receives_pixels_from_3delight() {
         .expect("cargo build");
     assert!(status.success());
 
-    let built = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/debug/examples/libpng_driver.so");
+    // Resolve target directory: respect CARGO_TARGET_DIR if set,
+    // otherwise default to <CARGO_MANIFEST_DIR>/../../target.
+    // This is necessary because the test shells out to cargo build,
+    // which honors CARGO_TARGET_DIR, so both must agree on the location.
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target")
+        });
+    let built = target_dir.join("debug/examples/libpng_driver.so");
 
     // 3Delight resolves `drivername` against a search path, not an
     // environment variable -- there is no `DL_DISPLAYS_PATH` (unlike
