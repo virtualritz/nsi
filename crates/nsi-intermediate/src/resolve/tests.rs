@@ -4000,6 +4000,62 @@ fn the_sampled_and_the_single_time_accessors_agree() {
     }
 }
 
+/// The batch walk answers what the per-geometry accessor answers.
+///
+/// Composing on the way down and composing on the way up are two
+/// statements of the same rule, so they are held to the same matrices
+/// -- including for a geometry under two parents, where the batch form
+/// yields one entry per path and `world_transform` refuses outright.
+#[test]
+fn the_batch_walk_agrees_with_the_single_accessor() {
+    let mut scene = Scene::default();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.create("shared", "mesh").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("q", None, "inner", "objects").unwrap();
+    // Two parents: lightweight instancing.
+    scene.connect("shared", None, "outer", "objects").unwrap();
+    scene.connect("shared", None, "inner", "objects").unwrap();
+    scene
+        .set_attribute("outer", vec![translate(1.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute("inner", vec![translate(0.0, 2.0, 0.0)])
+        .unwrap();
+
+    let flat: Vec<_> = scene.world_transforms().collect();
+
+    // Single-parent nodes must match the accessor exactly.
+    for (handle, matrix) in &flat {
+        if *handle == "shared" {
+            continue;
+        }
+        assert_eq!(
+            scene.world_transform(handle).unwrap(),
+            *matrix,
+            "`{handle}` differs between the two walks",
+        );
+    }
+
+    // The two-parent node appears once per path, and the accessor
+    // refuses it because there is no single answer.
+    let shared: Vec<_> = flat
+        .iter()
+        .filter(|(handle, _)| *handle == "shared")
+        .collect();
+    assert_eq!(shared.len(), 2, "one entry per path");
+    assert!(matches!(
+        scene.world_transform("shared"),
+        Err(ResolveError::MultipleParents { .. })
+    ));
+    let mut ys: Vec<f64> = shared.iter().map(|(_, m)| m[13]).collect();
+    ys.sort_by(f64::total_cmp);
+    assert_eq!(ys, vec![0.0, 2.0], "under `outer`, and under `inner`");
+}
+
 /// The streaming form answers exactly what the copying one does.
 ///
 /// Two APIs over one rule is how a rule drifts, so they are held to

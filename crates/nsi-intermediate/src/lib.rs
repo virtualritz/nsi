@@ -235,6 +235,7 @@ pub use recorder::{Recorder, RenderState};
 pub use resolve::{
     AttributeValue, Binding, IDENTITY, Instance, InstanceIter, InstanceRef,
     OutputLayer, Placement, RAY_TYPES, RenderOutput, ResolveError, Sampled,
+    WorldTransforms,
 };
 pub use scene::{Affected, Changes, Node, Scene};
 pub use stream::{Compression, write_stream, write_stream_with};

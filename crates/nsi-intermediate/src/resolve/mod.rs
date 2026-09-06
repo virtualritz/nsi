@@ -21,6 +21,7 @@ mod outputs;
 // already had: a chain walk, a time rule, an attribute rule, the
 // instancer, and the output chain. `mod.rs` keeps what all five need
 // so none of them has to reach sideways.
+pub use chain::WorldTransforms;
 pub use instances::InstanceIter;
 pub use motion::Sampled;
 
