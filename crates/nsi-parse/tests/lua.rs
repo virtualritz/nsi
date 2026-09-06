@@ -315,7 +315,10 @@ fn the_order_the_samples_were_set_in_survives_the_lua_round_trip() {
     let node = scene.node("a").expect("node");
 
     assert_eq!(
-        node.sample_order["visibility"],
+        node.samples["visibility"]
+            .iter()
+            .map(|(time, _)| *time)
+            .collect::<Vec<_>>(),
         vec![1.0, 0.0],
         "the t=0 call was last on both sides",
     );

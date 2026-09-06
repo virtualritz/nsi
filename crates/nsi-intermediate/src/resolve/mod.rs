@@ -411,54 +411,34 @@ fn sampled_attr<'a>(
 ) -> Sampled<'a> {
     // In **call** order, not time order: 3Delight rejects an unreadable
     // argument at the call, so what survives is what was set after it.
-    // `Node::sample_order` is the only record of that order; walking
-    // `time_attrs` instead answers by position on the timeline, which
-    // is a different set of survivors for any scene whose samples did
-    // not arrive in time order.
-    let Some(times) = node.sample_order.get(name) else {
+    // `Node::samples` is a call log for exactly this reason; a table
+    // keyed by time answers by position on the timeline, which is a
+    // different set of survivors for any scene whose samples did not
+    // arrive in time order.
+    let Some(calls) = node.samples.get(name) else {
         return Sampled::No;
     };
 
-    // A time named by the order and missing from the table is skipped
-    // rather than trusted: the two are kept in step by the recorder,
-    // but both are public and a caller can edit one of them, and a
-    // resolver that panicked on that would be a worse answer than an
-    // attribute that goes quiet.
     let mut keep_from = 0;
-    for (index, time) in times.iter().enumerate() {
-        if node.sample(*time, name).is_some_and(|arg| !readable(arg)) {
+    for (index, (_, arg)) in calls.iter().enumerate() {
+        if !readable(arg) {
             keep_from = index + 1;
         }
     }
 
-    // The last definition is itself unreadable, so nothing survives it
-    // and the attribute is unset at every time.
-    if keep_from == times.len() {
-        return Sampled::Unset;
-    }
-
-    // The survivors, back in time order, which is what interpolation
-    // needs. Collected rather than sliced: the survivors are a suffix
-    // in call order and an arbitrary subset of the timeline, so no
-    // slice of `time_attrs` can name them. That costs one small
-    // allocation per node per query on the sampled paths -- the price
-    // of answering the renderer's order rather than the storage's.
-    let mut samples: Vec<(f64, &OwnedArg)> = times[keep_from..]
-        .iter()
-        .filter_map(|time| Some((*time, node.sample(*time, name)?)))
-        .collect();
-
-    // Empty only when the order named times the table does not hold,
-    // which the recorder never produces; `Unset` is then the honest
-    // answer, and it is the one that draws nothing rather than the one
-    // that draws something stale.
-    let Some((_, last_defined)) = samples.last().copied() else {
+    // The last call is itself unreadable, so nothing survives it and
+    // the attribute is unset at every time. Also the empty log a caller
+    // could put here by hand.
+    let Some((_, last_defined)) = calls[keep_from..].last() else {
         return Sampled::Unset;
     };
-    samples.sort_by(|(a, _), (b, _)| a.total_cmp(b));
 
     Sampled::Yes {
-        samples,
+        // The same-time rule is `latest_per_time`'s, run over the
+        // survivors rather than over every call: a re-set that
+        // superseded an unreadable sample stands alone, where one that
+        // superseded a good sample merely replaces it.
+        samples: crate::scene::latest_per_time(&calls[keep_from..]),
         last_defined,
     }
 }
@@ -920,14 +900,19 @@ impl Scene {
             return Ok(Vec::new());
         };
 
-        // `time_attrs` is kept in `total_cmp` order as it is recorded,
-        // and each time appears once, so this needs no sort or dedup.
+        // The times a value stands at, which is not one per call: a
+        // re-set at a time already recorded is another call and the
+        // same sample.
         Ok(node
-            .time_attrs
-            .iter()
-            .filter(|(_, attrs)| attrs.contains_key(name))
-            .map(|(time, _)| *time)
-            .collect())
+            .samples
+            .get(name)
+            .map(|calls| {
+                crate::scene::latest_per_time(calls)
+                    .into_iter()
+                    .map(|(time, _)| time)
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     /// The recorded samples of `name` on `handle`, ascending by time.
@@ -950,10 +935,10 @@ impl Scene {
         };
 
         Ok(node
-            .time_attrs
-            .iter()
-            .filter_map(|(time, attrs)| attrs.get(name).map(|arg| (*time, arg)))
-            .collect())
+            .samples
+            .get(name)
+            .map(|calls| crate::scene::latest_per_time(calls))
+            .unwrap_or_default())
     }
 
     /// The world transform at `time`, interpolating linearly between

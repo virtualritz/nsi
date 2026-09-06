@@ -38,7 +38,7 @@ replay reorders. `delete` uses `shift_remove`, not `swap_remove`.
 | --- | --- | --- |
 | `node_type` | `String` | the ɴsɪ node type |
 | `attrs` | `IndexMap<String, OwnedArg>` | static attributes |
-| `time_attrs` | `Vec<(f64, IndexMap<String, OwnedArg>)>` | motion samples, time-sorted |
+| `samples` | `IndexMap<String, Vec<(f64, OwnedArg)>>` | every `set_attribute_at_time` call, per attribute, in **call** order -- ɴsɪ's rules are stated over calls, and a table keyed by time cannot say which call was last |
 
 Motion samples are separate because transform composition is per-sample.
 

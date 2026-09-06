@@ -66,12 +66,19 @@ fn time_samples_are_kept_separately_and_sorted() {
     scene
         .set_attribute_at_time("xf", 0.0, vec![arg("t", 0.0)])
         .unwrap();
-    let times: Vec<f64> = scene.nodes["xf"]
-        .time_attrs
-        .iter()
-        .map(|(t, _)| *t)
-        .collect();
-    assert_eq!(times, vec![0.0, 1.0]);
+    assert_eq!(
+        scene.attribute_times("xf", "t").unwrap(),
+        vec![0.0, 1.0],
+        "recorded later-time-first and reported in time order",
+    );
+    assert_eq!(
+        scene.nodes["xf"].samples["t"]
+            .iter()
+            .map(|(time, _)| *time)
+            .collect::<Vec<_>>(),
+        vec![1.0, 0.0],
+        "while the log keeps the order they were set in",
+    );
     assert!(scene.nodes["xf"].attrs.is_empty());
 }
 
@@ -145,10 +152,8 @@ fn delete_attribute_removes_from_every_time_sample() {
 
     let node = &scene.nodes["xf"];
     assert!(!node.attrs.contains_key("t"), "static copy removed");
-    for (time, attrs) in &node.time_attrs {
-        assert!(!attrs.contains_key("t"), "sample at {time} still has it");
-    }
-    assert!(node.time_attrs[1].1.contains_key("keep"));
+    assert!(node.samples.get("t").is_none(), "every sample of it too");
+    assert!(node.samples.contains_key("keep"));
 }
 
 /// `disconnect` removes the edge it names and leaves the others.
@@ -197,11 +202,9 @@ fn a_static_set_clears_the_motion_samples_of_that_name() {
 
     let node = &scene.nodes["xf"];
     assert_eq!(node.attrs["t"].data, OwnedData::F32(vec![5.0]));
-    for (time, sample) in &node.time_attrs {
-        assert!(!sample.contains_key("t"), "sample at {time} survived");
-    }
+    assert!(node.samples.get("t").is_none(), "its samples went with it");
     assert!(
-        node.time_attrs.iter().any(|(_, s)| s.contains_key("keep")),
+        node.samples.contains_key("keep"),
         "an unrelated sampled attribute is untouched"
     );
 }
@@ -593,7 +596,7 @@ fn a_non_finite_sample_time_is_refused() {
             })
         );
     }
-    assert!(scene.node("xf").unwrap().time_attrs.is_empty());
+    assert!(scene.node("xf").unwrap().samples.is_empty());
 }
 
 /// `-0.0` and `0.0` are **one** sample. The renderer reads a `-0` time
@@ -611,10 +614,10 @@ fn negative_zero_is_the_same_sample_time_as_zero() {
         .set_attribute_at_time("xf", 0.0, vec![arg("t", 9.0)])
         .unwrap();
 
-    let samples = &scene.node("xf").unwrap().time_attrs;
-    assert_eq!(samples.len(), 1, "one key, as the renderer has");
+    let samples = scene.attribute_samples("xf", "t").unwrap();
+    assert_eq!(samples.len(), 1, "one sample, as the renderer has");
     assert!(!samples[0].0.is_sign_negative(), "normalised to +0");
-    assert_eq!(samples[0].1["t"].data, OwnedData::F32(vec![9.0]));
+    assert_eq!(samples[0].1.data, OwnedData::F32(vec![9.0]));
 }
 
 /// ɴsɪ's reserved handles exist already, and 3Delight answers a
@@ -665,11 +668,11 @@ fn effective_takes_the_last_call_not_the_greatest_time() {
     }
 }
 
-/// Re-setting a sample makes it the latest definition, so its time
-/// moves to the end of the call order rather than staying where it
-/// first appeared.
+/// Re-setting a time already recorded is another **call**: the log
+/// keeps both, the later one is the latest definition, and the two
+/// together are one sample.
 #[test]
-fn re_setting_a_sample_moves_it_to_the_end_of_the_call_order() {
+fn a_re_set_time_is_another_call_and_the_later_one_stands() {
     let mut scene = Scene::default();
     scene.create("a", "attributes").unwrap();
     for (time, value) in [(0.0, 1.0), (1.0, 2.0), (0.0, 3.0)] {
@@ -679,44 +682,51 @@ fn re_setting_a_sample_moves_it_to_the_end_of_the_call_order() {
     }
 
     let node = scene.node("a").expect("created");
-    assert_eq!(node.sample_order["visibility"], vec![1.0, 0.0]);
+    assert_eq!(node.samples["visibility"].len(), 3, "three calls");
     assert_eq!(
         node.effective("visibility").expect("set at a time").data,
         OwnedData::F32(vec![3.0]),
+        "the last of them",
+    );
+    assert_eq!(
+        scene.attribute_times("a", "visibility").unwrap(),
+        vec![0.0, 1.0],
+        "but two samples",
     );
 }
 
-/// Every field of a [`Node`] is public, so a caller can put the call
-/// order and the sample table out of step by hand. Reading such a node
-/// must not panic: a resolver that aborted a render over it would be a
-/// worse answer than an attribute that goes quiet.
+/// Every field of a [`Node`] is public, so a caller can build one no
+/// recorder would. Reading it must not panic: a resolver that aborted
+/// a render over a hand-built node would be a worse answer than an
+/// attribute that goes quiet.
+///
+/// There is one table now rather than three, so the states a caller
+/// can reach are far narrower than they were -- an empty call list is
+/// what is left of them.
 #[test]
-fn a_hand_edited_node_does_not_panic_the_readers() {
+fn a_hand_built_node_does_not_panic_the_readers() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene.create("q", "mesh").unwrap();
     scene.connect("xf", None, ".root", "objects").unwrap();
     scene.connect("q", None, "xf", "objects").unwrap();
     scene
-        .set_attribute_at_time(
-            "xf",
-            1.0,
-            vec![arg("transformationmatrix", 1.0)],
-        )
-        .unwrap();
-
-    // The order now names a sample the table does not hold.
-    scene
         .nodes
         .get_mut("xf")
         .expect("created")
-        .time_attrs
-        .clear();
+        .samples
+        .insert("transformationmatrix".to_string(), Vec::new());
 
     let node = scene.node("xf").expect("created");
     assert!(node.effective("transformationmatrix").is_none());
     assert!(scene.motion_times("q").unwrap().is_empty());
     assert!(scene.world_transform("q").is_ok());
+    assert!(
+        scene
+            .attribute_samples("xf", "transformationmatrix")
+            .unwrap()
+            .is_empty()
+    );
 
     let mut out = Vec::new();
     crate::write_stream(&scene, &mut out).expect("writes");
@@ -724,12 +734,11 @@ fn a_hand_edited_node_does_not_panic_the_readers() {
         !String::from_utf8(out)
             .unwrap()
             .contains("SetAttributeAtTime"),
-        "the sample it cannot find is not invented",
+        "a sample that is not there is not invented",
     );
 }
 
-/// A static call clears the call order with the samples, so the two
-/// tables and the order cannot fall out of step.
+/// A static call clears the log, as ɴsɪ says it should.
 #[test]
 fn a_static_call_clears_the_call_order() {
     let mut scene = Scene::default();
@@ -742,8 +751,7 @@ fn a_static_call_clears_the_call_order() {
         .unwrap();
 
     let node = scene.node("a").expect("created");
-    assert!(node.sample_order.get("visibility").is_none());
-    assert!(node.time_attrs.is_empty(), "the sample went with it");
+    assert!(node.samples.get("visibility").is_none());
     assert_eq!(
         node.effective("visibility").expect("static").data,
         OwnedData::F32(vec![2.0]),
@@ -752,7 +760,7 @@ fn a_static_call_clears_the_call_order() {
 
 /// And `delete_attribute` forgets it too.
 #[test]
-fn delete_attribute_clears_the_call_order() {
+fn delete_attribute_clears_the_log() {
     let mut scene = Scene::default();
     scene.create("a", "attributes").unwrap();
     scene
@@ -761,7 +769,7 @@ fn delete_attribute_clears_the_call_order() {
     scene.delete_attribute("a", "visibility");
 
     let node = scene.node("a").expect("created");
-    assert!(node.sample_order.get("visibility").is_none());
+    assert!(node.samples.get("visibility").is_none());
     assert!(node.effective("visibility").is_none());
 }
 

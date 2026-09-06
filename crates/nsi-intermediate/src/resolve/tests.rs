@@ -4445,20 +4445,20 @@ fn a_count_change_drops_only_itself_unlike_a_type_error() {
 /// the good sample at the same time re-set it alone. This crate reports
 /// a sweep from `t=0`.
 ///
-/// It is not the definition-order divergence: the stream is in time
-/// order. The information is destroyed at *record* time --
-/// `set_attribute_at_time` replaces the value in that time's slot, so
-/// nothing remembers that an unreadable sample was ever there.
+/// A re-set at a time already recorded is another **call**, so what it
+/// superseded is still part of the record -- and that is the
+/// difference between `good` replacing `good`, which sweeps, and
+/// `good` replacing an unreadable sample, which does not.
 ///
-/// Not fixed, deliberately. The available fix keys on a *type change*
-/// at the same time, but the recorder is type-agnostic: it does not
-/// know which types are readable for a given attribute, so it would be
-/// applying a proxy for a rule it cannot state. Recorded as an `Open`
-/// row, and asserted here as the divergence so that a commit which does
-/// record enough to fix it reddens this test rather than silently
-/// starting to agree.
+/// Rendered, in time order: good at `t=0`, a `float` at `t=1`, good at
+/// `t=1` draws a **static** object at the `t=1` matrix, because the
+/// `float` unset the attribute on arrival and the good sample re-set
+/// it alone. This crate reported a sweep from `t=0` for as long as
+/// `set_attribute_at_time` replaced the value in a slot keyed by time,
+/// which erased the `float` before any rule could see it. The last of
+/// the three divergences a call log closes.
 #[test]
-fn a_same_time_reset_after_an_unreadable_sample_diverges() {
+fn a_same_time_reset_after_an_unreadable_sample_stands_alone() {
     let mut scene = Scene::default();
     scene.create("xf", "transform").unwrap();
     scene.create("q", "mesh").unwrap();
@@ -4481,20 +4481,44 @@ fn a_same_time_reset_after_an_unreadable_sample_diverges() {
             }],
         )
         .unwrap();
-    // Same time, replacing the unreadable one.
+    // Same time, superseding the unreadable one.
     scene
         .set_attribute_at_time("xf", 1.0, vec![translate(-3.0, 0.0, 0.0)])
         .unwrap();
 
     assert_eq!(
         scene.motion_times("q").unwrap(),
-        vec![0.0, 1.0],
-        "the replaced unreadable sample left no trace, so both survive",
+        vec![1.0],
+        "the t=0 sample did not survive the float",
     );
     assert_eq!(
         scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        -3.0,
+        "static at the t=1 matrix, which is what 3Delight draws",
+    );
+
+    // And the other direction: a readable sample superseding a
+    // readable one merely replaces it, and the sweep survives.
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(-9.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(-3.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(scene.motion_times("q").unwrap(), vec![0.0, 1.0]);
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
         -2.25,
-        "this crate sweeps; 3Delight draws static at the t=1 matrix (-3.0)",
+        "halfway between -1.5 and the re-set -3.0",
     );
 }
 

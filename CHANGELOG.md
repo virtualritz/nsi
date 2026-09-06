@@ -113,10 +113,18 @@ trait -> ffi-wrap -> intermediate -> parse.
   discards what was defined *before* it rather than what sits earlier
   on the timeline -- and both emitters replay them in that order, so a
   round trip through the writer no longer hands back a scene that
-  resolves differently from the one it wrote. Three `Open` divergence
-  rows become two `Covered` ones; the third, a same-time re-set that
-  erases an unreadable sample, is the only one call order does not
-  close.
+  resolves differently from the one it wrote.
+- The record is a **call log** -- `Node::samples`, every
+  `set_attribute_at_time` call per attribute in the order it arrived --
+  rather than a table keyed by time. ɴsɪ's rules are stated over calls,
+  so a table keyed by time cannot express them: it cannot say which
+  call was last, how far back an unreadable sample reaches, or what a
+  re-set at a time already recorded displaced. That last one is the
+  difference between `good` replacing `good`, which sweeps, and `good`
+  replacing an unreadable sample, which draws static -- rendered, and
+  the crate now answers both. All three motion-sample divergences are
+  closed, and the three tables that had to agree are one field that
+  cannot disagree with itself.
 - `delete` honours `recursive`, with both of ɴsɪ's exceptions.
 - Node and connection identity follow ɴsɪ: a repeated `connect` updates
   rather than duplicates, re-`create` with a different type is an error,

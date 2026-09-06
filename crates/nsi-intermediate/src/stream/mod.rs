@@ -299,14 +299,8 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
         // scene than was recorded -- the renderer applies the last
         // call, so re-ordering the calls re-orders the answer. See
         // `Node::sample_order`.
-        for (name, times) in &node.sample_order {
-            // A time the table does not hold is skipped, as the
-            // resolver skips it; the pair is the recorder's to keep in
-            // step and both halves are public.
-            for time in times {
-                let Some(arg) = node.sample(*time, name) else {
-                    continue;
-                };
+        for calls in node.samples.values() {
+            for (time, arg) in calls {
                 writeln!(
                     out,
                     "SetAttributeAtTime {} {}",
