@@ -6,7 +6,7 @@
 //! resolves geometry to world space too. So the chain has to be
 //! composed here, once.
 
-use crate::{Edge, EdgeKind, OwnedArg, OwnedData, Scene};
+use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
 use std::collections::HashSet;
 
@@ -596,6 +596,27 @@ impl Scene {
         Ok(times)
     }
 
+    /// The node for `handle`, or `None` for a reserved handle nothing
+    /// has been set on yet.
+    ///
+    /// `.root` and `.global` exist whether or not they were created, so
+    /// they have no samples rather than being unknown. Without this the
+    /// answer flipped between `Err` and `Ok` depending on whether some
+    /// unrelated attribute had been set on `.root` first, and the error
+    /// text claimed no node was named `.root`.
+    fn existing_node(
+        &self,
+        handle: &str,
+    ) -> Result<Option<&Node>, ResolveError> {
+        match self.node(handle) {
+            Some(node) => Ok(Some(node)),
+            None if crate::is_reserved(handle) => Ok(None),
+            None => Err(ResolveError::UnknownHandle {
+                handle: handle.to_string(),
+            }),
+        }
+    }
+
     /// Every time at which `name` is sampled on `handle`, ascending.
     ///
     /// Empty when the attribute is static or absent, which is the check
@@ -618,11 +639,9 @@ impl Scene {
         handle: &str,
         name: &str,
     ) -> Result<Vec<f64>, ResolveError> {
-        let node =
-            self.node(handle)
-                .ok_or_else(|| ResolveError::UnknownHandle {
-                    handle: handle.to_string(),
-                })?;
+        let Some(node) = self.existing_node(handle)? else {
+            return Ok(Vec::new());
+        };
 
         // `time_attrs` is kept in `total_cmp` order as it is recorded,
         // and each time appears once, so this needs no sort or dedup.
@@ -649,11 +668,9 @@ impl Scene {
         handle: &str,
         name: &str,
     ) -> Result<Vec<(f64, &OwnedArg)>, ResolveError> {
-        let node =
-            self.node(handle)
-                .ok_or_else(|| ResolveError::UnknownHandle {
-                    handle: handle.to_string(),
-                })?;
+        let Some(node) = self.existing_node(handle)? else {
+            return Ok(Vec::new());
+        };
 
         Ok(node
             .time_attrs
@@ -970,9 +987,8 @@ impl Scene {
     /// # Scope
     ///
     /// ɴsɪ allows these on "geometric primitives, transform nodes or
-    /// **set nodes**". Only the first two lie on the walked chain, so an
-    /// attribute provided through set membership is not found. Tracked
-    /// as an `Open` row in `contracts/resolution.md`.
+    /// **set nodes**". All three are walked; see `gathered_containers`
+    /// for where a set ranks.
     ///
     /// # Errors
     ///
@@ -1050,22 +1066,27 @@ impl Scene {
     /// The same walk for any container class, nearest the geometry
     /// first.
     ///
-    /// # Sets rank between the geometry and its first transform
+    /// # Where a `set` ranks
     ///
     /// ɴsɪ describes gathering as running "from the geometric
     /// primitive, through all the transform nodes it is connected to,
     /// until the scene root is reached", and names `set` nodes only as
     /// a place a `shaderattributes` node may hang. 3Delight honours a
-    /// container on a set the geometry belongs to for **both** classes,
-    /// ranked below anything on the geometry itself and above every
-    /// transform. Rendered, each direction mirrored so the answer is not
-    /// an artefact of which value happened to be `0`:
+    /// container on a set for **both** classes, and the rule is per node
+    /// on that path rather than for the geometry alone: each node
+    /// contributes its own containers, then those on the sets it is
+    /// *directly* a member of. Rendered, each direction mirrored so no
+    /// answer is an artefact of which value happened to be `0`:
     ///
-    /// - a container on the geometry beats one on its set;
-    /// - one on the set beats one on the transform above it;
+    /// - a node's own container beats one on a set it belongs to;
+    /// - a set of the geometry beats a set of its transform;
+    /// - a set of a transform beats that transform's parent, and beats
+    ///   a container on `.root`;
     /// - with two memberships the first connection wins;
     /// - a set nested inside another set contributes **nothing** --
-    ///   only direct membership counts.
+    ///   only direct membership counts;
+    /// - a set holding two nodes of the chain is one source, at its
+    ///   nearest occurrence.
     ///
     /// `ATTR.priority` still outranks all of it, as everywhere else.
     fn gathered_containers(
@@ -1079,15 +1100,20 @@ impl Scene {
         // transforms above it. With no set memberships this is `chain`
         // and the walk is unchanged.
         let mut sources: Vec<&String> = Vec::with_capacity(chain.len() + 1);
-        if let Some(first) = chain.first() {
-            sources.push(first);
+        for node in &chain {
+            sources.push(node);
+            sources.extend(
+                self.edges_from(node.as_str())
+                    .filter(|edge| edge.kind == EdgeKind::SetMember)
+                    .map(|edge| &edge.to),
+            );
         }
-        sources.extend(
-            self.edges_from(geometry)
-                .filter(|edge| edge.kind == EdgeKind::SetMember)
-                .map(|edge| &edge.to),
-        );
-        sources.extend(chain.iter().skip(1));
+
+        // One set can hold several nodes on the chain. It is a single
+        // source at its nearest occurrence -- rendered, a set holding
+        // both the mesh and its transform ranks where the mesh does.
+        let mut seen = HashSet::new();
+        sources.retain(|handle| seen.insert(handle.as_str()));
 
         let mut gathered = sources
             .into_iter()

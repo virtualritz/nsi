@@ -232,3 +232,75 @@ The renderer is the oracle here. A backend that trusted the
 specification would place an override on the wrong node and get a
 silently different picture from 3Delight, which is worse than not
 supporting the argument at all.
+
+### D13: a `set` is an attribute source, at every level of the chain
+
+ɴsɪ describes gathering as running "from the geometric primitive,
+through all the transform nodes it is connected to, until the scene root
+is reached". §3.12.1 names only "geometric primitives or transform
+nodes" as places an `attributes` node may hang. Both omit `set` nodes,
+and 3Delight gathers them anyway -- for `geometryattributes` as well as
+`shaderattributes`.
+
+This entry inlines the decisive scenes because the probe renders live in
+a scratchpad that will be deleted, and because the rule is not in the
+specification at all: without the scenes there is nothing to re-derive
+it from. All share this preamble, with a camera framing the quad:
+
+```
+Create "xf" "transform"      Connect "xf" "" ".root" "objects"
+Create "mesh" "mesh"         Connect "mesh" "" "xf" "objects"
+```
+
+The control matters as much as the cases: with no `attributes` node at
+all the quad renders **alpha 1**, so "invisible" is never a failed
+render being read as a result.
+
+**A set of the geometry is gathered, and ranks below the geometry's own
+container.**
+
+```
+Connect "mesh" "" "s" "members"
+Connect "near" "" "mesh" "geometryattributes"   SetAttribute "near" "visibility" [0]
+Connect "sa"   "" "s"    "geometryattributes"   SetAttribute "sa"   "visibility" [1]
+```
+
+Alpha **0** -- `near` wins. Swapping the two values gives alpha 1, so
+the mesh's own container wins in both directions and not because `0`
+happens to win ties.
+
+**A set of a *transform on the chain* is gathered.** This is the case
+the first implementation missed, returning no binding at all:
+
+```
+Connect "xf" "" "s" "members"
+Connect "sa" "" "s" "geometryattributes"        SetAttribute "sa" "visibility" [0]
+```
+
+Alpha **0**. The same holds two levels up, and for `shaderattributes`
+read through OSL `getattribute`.
+
+**A set ranks between its own node and that node's parent.** A set of
+the geometry beats a set of the transform; a set of the transform beats
+the transform's parent and beats `.root`. So the order is per node:
+the node's own containers, then the containers on sets it is *directly*
+a member of, then its parent's.
+
+**A set holding two nodes of the chain is one source, at its nearest
+occurrence.** With `s` holding both `mesh` and `xf`, `s`'s container
+ranks where `mesh` does, and appears once.
+
+**Only direct membership counts.** With `mesh` in `s` and `s` in `s2`,
+a container on `s2` contributes nothing: alpha 1, the object visible.
+Walking sets transitively would apply attributes 3Delight does not.
+
+**`ATTR.priority` still outranks all of it**, from a set as anywhere
+else.
+
+One note on evidence quality. The first version of the "first
+membership wins" probe was confounded: the winning set was also the
+first-created, the first-connected and alphabetically first. Re-run
+with those separated -- the mesh joining the second set first, the
+container on the first set connected first, and set creation order
+reversed -- the *first membership* still wins. The claim survived; the
+evidence for it had not been earned.

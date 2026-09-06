@@ -2301,4 +2301,153 @@ fn attribute_samples_are_time_ordered() {
         scene.attribute_times("mesh", "P").unwrap(),
         vec![0.0, 1.0, 2.0],
     );
+    // This test was named for `attribute_samples` and never called it:
+    // reversing that function alone left it green.
+    let samples = scene.attribute_samples("mesh", "P").unwrap();
+    let times: Vec<f64> = samples.iter().map(|(time, _)| *time).collect();
+    assert_eq!(times, vec![0.0, 1.0, 2.0]);
+    assert_eq!(samples[0].1.data, OwnedData::F32(vec![0.0]));
+}
+
+/// A set whose member is a *transform* on the chain is a source too.
+///
+/// Rendered: `mesh -> xf -> .root` with `xf` a member of `s`, and an
+/// `attributes` node on `s` setting `visibility 0`, renders invisible.
+/// The first version of the set walk looked only at sets of the
+/// geometry and returned nothing here.
+#[test]
+fn a_set_on_a_transform_in_the_chain_is_gathered() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("s", "set").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene.connect("xf", None, "s", "members").unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("sa", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let binding = scene.geometry_binding("mesh").unwrap().expect("bound");
+    assert_eq!(binding.attributes, vec!["sa".to_string()]);
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    assert_eq!(value.expect("defined").node, "sa");
+}
+
+/// A set of the geometry outranks a set of its transform.
+#[test]
+fn a_set_of_the_geometry_outranks_a_set_of_its_transform() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("sm", "set").unwrap();
+    scene.create("sx", "set").unwrap();
+    scene.create("am", "attributes").unwrap();
+    scene.create("ax", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene.connect("mesh", None, "sm", "members").unwrap();
+    scene.connect("xf", None, "sx", "members").unwrap();
+    scene
+        .connect("am", None, "sm", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("ax", None, "sx", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("am", vec![integers("visibility", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("ax", vec![integers("visibility", vec![0])])
+        .unwrap();
+
+    let value = scene.attribute_value("mesh", "visibility").unwrap();
+    let value = value.expect("defined");
+    assert_eq!(value.node, "am");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+}
+
+/// A transform's own container outranks a set that transform belongs
+/// to, the same way the geometry's does.
+#[test]
+fn a_transforms_own_container_outranks_its_set() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("s", "set").unwrap();
+    scene.create("own", "attributes").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene.connect("xf", None, "s", "members").unwrap();
+    scene
+        .connect("own", None, "xf", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+
+    assert_eq!(
+        scene
+            .geometry_binding("mesh")
+            .unwrap()
+            .expect("bound")
+            .attributes,
+        vec!["own".to_string(), "sa".to_string()],
+    );
+}
+
+/// A set holding two nodes of the chain is one source, at its nearest
+/// occurrence -- not one per member, which would list it twice and skew
+/// every later rank.
+#[test]
+fn a_set_holding_two_chain_nodes_is_one_source() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    scene.create("s", "set").unwrap();
+    scene.create("sa", "attributes").unwrap();
+    scene.create("xa", "attributes").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene.connect("mesh", None, "s", "members").unwrap();
+    scene.connect("xf", None, "s", "members").unwrap();
+    scene
+        .connect("sa", None, "s", "geometryattributes")
+        .unwrap();
+    scene
+        .connect("xa", None, "xf", "geometryattributes")
+        .unwrap();
+
+    assert_eq!(
+        scene
+            .geometry_binding("mesh")
+            .unwrap()
+            .expect("bound")
+            .attributes,
+        // `sa` once, and ahead of the transform's own node because the
+        // set is reached at the mesh.
+        vec!["sa".to_string(), "xa".to_string()],
+    );
+}
+
+/// `.root` and `.global` exist whether or not they were created, so
+/// they have no samples rather than being unknown. The answer used to
+/// flip between `Err` and `Ok` depending on whether some unrelated
+/// attribute had been set on `.root` first.
+#[test]
+fn a_reserved_handle_has_no_samples_rather_than_being_unknown() {
+    let mut scene = Scene::default();
+    assert_eq!(scene.attribute_times(".root", "P").unwrap(), Vec::new());
+    assert!(scene.attribute_samples(".global", "P").unwrap().is_empty());
+
+    // Materialising `.root` must not change the answer's kind.
+    scene
+        .set_attribute(".root", vec![integers("unrelated", vec![1])])
+        .unwrap();
+    assert_eq!(scene.attribute_times(".root", "P").unwrap(), Vec::new());
 }

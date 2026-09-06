@@ -362,6 +362,22 @@ against this API now.
       than leave it open on "the specification does not say", the
       ranking was rendered: a set sits between the geometry and its
       first transform, direct membership only, first membership wins,
-      and `ATTR.priority` still outranks all of it. Each of those four
-      decisions is falsified by a separate mutation. Evidence: seven
-      tests in `resolve::tests`.
+      and `ATTR.priority` still outranks all of it. Evidence: eleven
+      tests in `resolve::tests`; see `research.md` D13.
+- [x] T9.13 A set whose member is a *transform on the chain* is gathered
+      too. T9.10 walked `SetMember` from the geometry alone, so a scene
+      putting the set on the transform -- the ordinary way to assign a
+      whole group -- resolved to nothing. The walk is per chain node,
+      deduplicated to the nearest occurrence, because one set may hold
+      several nodes of the chain. Evidence:
+      `resolve::tests::a_set_on_a_transform_in_the_chain_is_gathered`,
+      `a_set_holding_two_chain_nodes_is_one_source`.
+- [x] T9.14 `attribute_times` and `attribute_samples` answer `Ok([])`
+      for `.root` and `.global`. They are reserved and exist without
+      being created, so `UnknownHandle` was both wrong and unstable:
+      the answer flipped to `Ok` once any unrelated attribute was set on
+      `.root`. Evidence:
+      `resolve::tests::a_reserved_handle_has_no_samples_rather_than_being_unknown`.
+- [x] T9.15 `attribute_samples_are_time_ordered` never called
+      `attribute_samples`; reversing that function left it green. It now
+      asserts on both.
