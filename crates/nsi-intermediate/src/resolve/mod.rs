@@ -415,9 +415,12 @@ fn sampled_attr<'a>(
     }
 
     // Everything before `keep_from` is discarded; `keep_from - 1` is
-    // the last unreadable sample, when there is one. Handed back as a
-    // slice so a caller that only needs times or existence allocates
-    // nothing.
+    // the last unreadable sample, when there is one. The sample *at*
+    // `keep_from` is the first survivor and is readable whenever it
+    // names the attribute -- an earlier comment here claimed nothing at
+    // or before it could be readable, which was false of the boundary
+    // and of every discarded sample. Handed back as a slice so a caller
+    // that only needs times or existence allocates nothing.
     Sampled::Yes(&node.time_attrs[keep_from..])
 }
 

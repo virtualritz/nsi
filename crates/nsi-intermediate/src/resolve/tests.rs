@@ -3985,11 +3985,6 @@ fn an_unreadable_sample_discards_the_ones_before_it() {
         vec![2.0],
         "only the samples after the unreadable one survive",
     );
-    assert_eq!(
-        scene.world_transform_samples("q").unwrap().len(),
-        1,
-        "so there is no sweep to report",
-    );
     // One surviving sample is constant: the same matrix at every time.
     for time in [0.0, 1.0, 2.0, 9.0] {
         assert_eq!(
@@ -3998,6 +3993,24 @@ fn an_unreadable_sample_discards_the_ones_before_it() {
             "static at the t=2 matrix, at {time}",
         );
     }
+
+    // A fourth sample after the survivor, so this separates "keep the
+    // tail" from "keep only the last named" -- with a single survivor
+    // both give the same answer, and 16 unrelated tests were carrying
+    // that distinction.
+    scene
+        .set_attribute_at_time("xf", 3.0, vec![translate(-9.0, 0.0, 0.0)])
+        .unwrap();
+    assert_eq!(
+        scene.motion_times("q").unwrap(),
+        vec![2.0, 3.0],
+        "the whole surviving tail, not just the last sample",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 2.5).unwrap()[12],
+        -6.0,
+        "halfway between the two survivors",
+    );
 }
 
 /// Sixteen `double`s are not a `doublematrix`.
@@ -4114,4 +4127,66 @@ fn a_count_change_drops_only_itself_unlike_a_type_error() {
     let mid = build(true).instance_transforms_at("inst", 0.5).unwrap();
     assert_eq!(mid.len(), 3);
     assert_eq!(mid[0].transform[12], -1.25, "halfway between -1 and -1.5");
+}
+
+/// A good sample re-set at the **same time** as an unreadable one: this
+/// crate sweeps, 3Delight draws static.
+///
+/// In time order: a good matrix at `t=0`, a `float` at `t=1`, a good
+/// matrix at `t=1`. Rendered, 3Delight draws a **static** object at the
+/// `t=1` matrix -- the `float` unset the attribute when it arrived, and
+/// the good sample at the same time re-set it alone. This crate reports
+/// a sweep from `t=0`.
+///
+/// It is not the definition-order divergence: the stream is in time
+/// order. The information is destroyed at *record* time --
+/// `set_attribute_at_time` replaces the value in that time's slot, so
+/// nothing remembers that an unreadable sample was ever there.
+///
+/// Not fixed, deliberately. The available fix keys on a *type change*
+/// at the same time, but the recorder is type-agnostic: it does not
+/// know which types are readable for a given attribute, so it would be
+/// applying a proxy for a rule it cannot state. Recorded as an `Open`
+/// row, and asserted here as the divergence so that a commit which does
+/// record enough to fix it reddens this test rather than silently
+/// starting to agree.
+#[test]
+fn a_same_time_reset_after_an_unreadable_sample_diverges() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    // Same time, replacing the unreadable one.
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(-3.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.motion_times("q").unwrap(),
+        vec![0.0, 1.0],
+        "the replaced unreadable sample left no trace, so both survive",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        -2.25,
+        "this crate sweeps; 3Delight draws static at the t=1 matrix (-3.0)",
+    );
 }
