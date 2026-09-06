@@ -81,20 +81,41 @@ so supporting it means reverse-engineering the renderer's bytes. `003`
 R28 already records that decision for the writer; a reader that accepted
 what the writer cannot produce would be a strange asymmetry.
 
-## Open Questions
+## Answered Questions
 
-### Q1: `NSI_PATH_` replacement
+### Q1: `NSI_PATH_` replacement -- settled, and the parser's job is to
+do nothing
 
 `streampathreplacement` is documented: "replacement of path prefixes by
 references to environment variables which begin by `NSI_PATH_` in an nsi
 stream ... to ease creation of files which can be moved between
-systems". So a stream may contain such references, and a reader that
-does not expand them opens the wrong files.
+systems". An earlier probe failed to produce a replacement, so this
+stayed open on the assumption that the *parser* would have to expand.
 
-A probe writing a path under a set `NSI_PATH_SCRATCH` did **not**
-produce a replacement, so neither the trigger nor the reference syntax
-is established yet. Until it is, this is an `Open` row rather than a
-guess -- see `contracts/grammar.md`.
+Rendered, the assumption was backwards. The syntax is `${NAME}`, and
+3Delight expands it **at use time**, in whatever consumes the value:
+
+- `renderdl -cat` echoes `${NSI_PATH_TEST}/out.exr` back unexpanded, so
+  the stream reader is not where expansion happens.
+- A render whose `imagefilename` is `${NSI_PATH_TEST}/pathout.exr`, with
+  that variable set, writes to the expanded path and creates no literal
+  `${NSI_PATH_TEST}` directory.
+
+So carrying the string verbatim is correct, and expanding in the parser
+would corrupt a stream on re-emission -- baking one machine's paths into
+a file whose whole purpose is to move between machines.
+
+**The rule is wider than the name.** Any `${VAR}` expands, not only
+`NSI_PATH_`-prefixed ones: `${HOME}` and `${OTHER_VAR}` both resolved in
+the same probe. The `NSI_PATH_` prefix governs which variables 3Delight
+*writes* as references, a write-side convention under
+`streampathreplacement`. On read, nothing is special about the prefix.
+
+The obligation therefore lands on the **consumer**: a backend that takes
+a path value and opens it without expanding `${VAR}` opens the wrong
+file, and will do so only on the machines where the variable was meant
+to matter -- the failure appears when the scene is moved, which is
+exactly when it is hardest to diagnose.
 
 ## References
 

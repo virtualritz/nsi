@@ -73,6 +73,17 @@ pub enum OwnedData {
     /// which no amount of care at replay could undo.
     ///
     /// Use `String::from_utf8_lossy` where text is wanted.
+    ///
+    /// # A path value may need expanding
+    ///
+    /// ɴsɪ streams carry `${VAR}` references so a scene can move between
+    /// machines, and 3Delight expands them **when it uses the value**,
+    /// not when it reads the stream. A backend that opens a path from
+    /// here without expanding `${VAR}` opens the wrong file -- and only
+    /// on the machines where the variable mattered, which is when it is
+    /// hardest to diagnose. Any variable expands, not only the
+    /// `NSI_PATH_`-prefixed ones the specification names; that prefix is
+    /// a write-side convention. Measured; see `specs/004` research Q1.
     String(Vec<Vec<u8>>),
     /// Raw host pointers. ɴsɪ calls this `Reference` (`Pointer` in the C
     /// API); it is not an object link and is never forwarded to a
