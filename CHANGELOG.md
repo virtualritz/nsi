@@ -76,9 +76,11 @@ trait -> ffi-wrap -> intermediate -> parse.
   which `instance_transforms` refuses for sampled *matrices* rather than
   reporting an empty list, since an empty list reads as "nothing to
   draw" for something 3Delight renders. Sampled `modelindices` and
-  `disabledinstances` are not time-varying at all -- the last one
-  defined applies for the whole shutter, as an overwriting
-  `SetAttribute` would -- so those are read, not refused. Before this
+  `disabledinstances` are not time-varying at all -- 3Delight applies
+  the last one *defined* for the whole shutter, as an overwriting
+  `SetAttribute` would -- so those are read, not refused. This crate
+  applies the last by *time*, which agrees for any stream written in
+  time order and is recorded as an `Open` divergence otherwise. Before this
   they were ignored, reporting every instance enabled and drawn from
   model 0.
 - ɴsɪ's lightweight instancing resolves per path: `placements` and

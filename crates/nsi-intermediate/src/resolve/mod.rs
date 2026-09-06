@@ -666,6 +666,15 @@ impl Scene {
     /// makes to decide between [`Scene::world_transform`] and
     /// [`Scene::world_transform_samples`].
     ///
+    /// **Transforms only.** An `instances` node whose
+    /// `transformationmatrices` are sampled reports no motion times
+    /// here, while [`Scene::instance_transforms`] refuses it and says to
+    /// ask at a time -- leaving a backend that used this as its
+    /// static-or-sampled check with no time to ask at. Use
+    /// [`Scene::attribute_times`] with `"transformationmatrices"` for an
+    /// instancer, and [`Scene::attribute_times`] with `"P"` for
+    /// deforming geometry.
+    ///
     /// # Errors
     ///
     /// [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`].
@@ -1488,11 +1497,23 @@ impl Scene {
     /// which 3Delight itself never writes -- resolves to the other one.
     /// Recorded in `contracts/resolution.md`.
     fn instance_ints(&self, node: &Node, name: &str) -> Option<Vec<i32>> {
-        node.time_attrs.iter().rev().find_map(|(_, attrs)| {
-            match attrs.get(name)?.data {
-                OwnedData::I32(ref values) => Some(values.to_vec()),
-                _ => None,
-            }
+        // The last sample that *names* the attribute wins, whatever
+        // type it carries. Matching `I32` inside the lookup instead
+        // skipped a wrong-typed later sample and answered from the
+        // earlier one -- returning a value the renderer discarded, which
+        // is the failure this rule was corrected for. Rendered: a good
+        // `int` at `t=0` followed by an `int64` draws *both* instances,
+        // so a wrong-typed later definition clears rather than being
+        // ignored, exactly as the static reading already modelled.
+        let arg = node
+            .time_attrs
+            .iter()
+            .rev()
+            .find_map(|(_, attrs)| attrs.get(name))?;
+
+        Some(match &arg.data {
+            OwnedData::I32(values) => values.to_vec(),
+            _ => Vec::new(),
         })
     }
 
@@ -2069,6 +2090,13 @@ impl Scene {
         handle: &str,
         time: f64,
     ) -> Result<Option<[f64; 16]>, ResolveError> {
+        // `-0.0` names the sample at `0.0` here as well. This scan is a
+        // third statement of the exact-hit lookup -- it cannot use
+        // `locate_sample`, which clamps and interpolates where this must
+        // refuse -- so folding in one place left the two accessors
+        // disagreeing: `world_transform_interpolated_at` answered while
+        // `world_transform_at` named a sample the recorder had folded.
+        let time = time + 0.0;
         let Some(node) = self.node(handle) else {
             return Ok(None);
         };

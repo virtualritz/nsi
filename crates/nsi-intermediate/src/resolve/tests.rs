@@ -2535,9 +2535,12 @@ fn interpolating_outside_the_sampled_range_holds_the_end_sample() {
     );
 
     // `-0.0` is the sample at `0.0`, as it is to the recorder and the
-    // renderer, not a time before it. Held by the clamp above rather
-    // than by a normalising `+ 0.0`, which was redundant here and
-    // guarded nothing -- removing it left the suite green.
+    // renderer, not a time before it. Held by the leading clamp here,
+    // because this fixture starts at `0`. An *interior* `-0.0` needs
+    // the normalising fold, which
+    // `negative_zero_finds_an_interior_sample` covers -- a note here
+    // once claimed that fold "guarded nothing", on the strength of this
+    // fixture alone.
     assert_eq!(
         scene.world_transform_interpolated_at("mesh", -0.0).unwrap()[12],
         0.0,
@@ -3572,4 +3575,110 @@ fn negative_zero_finds_an_interior_sample() {
         scene.placements_at("q", -0.0).unwrap()[0].transform[12],
         5.0,
     );
+
+    // And the *non*-interpolating accessor, which has its own exact-hit
+    // scan and cannot share `locate_sample` -- it must refuse where that
+    // one clamps. Folding in only one place left these two disagreeing
+    // on this scene, one answering and one naming a sample the recorder
+    // had already folded.
+    assert_eq!(scene.world_transform_at("xf", -0.0).unwrap()[12], 5.0);
+}
+
+/// Sampled `modelindices` takes its last value too.
+///
+/// Nothing covered it: returning `None` for `modelindices` outright
+/// left the whole suite green, so the rule was carried only by its
+/// sibling. Rendered with three prototypes and `modelindices` `[0 1]`
+/// at `t=0`, `[1 2]` at `t=0.5` and `[2 0]` at `t=1`, 3Delight draws
+/// instance 0 from prototype **2** and instance 1 from prototype **0**
+/// -- the last value, at every time.
+#[test]
+fn sampled_model_indices_take_their_last_value() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    for (handle, index) in [("a", 0), ("b", 1), ("c", 2)] {
+        scene.create(handle, "mesh").unwrap();
+        scene
+            .connect_with_args(
+                handle,
+                None,
+                "inst",
+                "sourcemodels",
+                vec![integers("index", vec![index])],
+            )
+            .unwrap();
+    }
+    scene.connect("inst", None, ".root", "objects").unwrap();
+
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    scene
+        .set_attribute("inst", vec![doubles("transformationmatrices", two)])
+        .unwrap();
+    for (time, indices) in
+        [(0.0, vec![0, 1]), (0.5, vec![1, 2]), (1.0, vec![2, 0])]
+    {
+        scene
+            .set_attribute_at_time(
+                "inst",
+                time,
+                vec![integers("modelindices", indices)],
+            )
+            .unwrap();
+    }
+
+    for time in [0.0, 0.25, 1.0] {
+        let at = scene.instance_transforms_at("inst", time).unwrap();
+        assert_eq!(at.len(), 2);
+        // `source` is a position in `instance_sources`, and the
+        // prototypes sort by their `index`: a=0, b=1, c=2.
+        assert_eq!(at[0].source, 2, "the last value applies at {time}");
+        assert_eq!(at[1].source, 0);
+    }
+}
+
+/// A wrong-typed later sample clears the attribute rather than being
+/// skipped.
+///
+/// Rendered: `disabledinstances` as a good `int [1]` at `t=0` followed
+/// by an `int64` at `t=1` draws **both** instances -- 3Delight warns
+/// and treats the attribute as unset. Matching the type inside the
+/// lookup skipped the `int64` and answered `[1]` from `t=0`, which is
+/// the discarded sample.
+#[test]
+fn a_wrong_typed_later_sample_clears_the_attribute() {
+    let mut scene = Scene::default();
+    scene.create("inst", "instances").unwrap();
+    scene.create("proto", "mesh").unwrap();
+    scene.connect("inst", None, ".root", "objects").unwrap();
+    scene
+        .connect("proto", None, "inst", "sourcemodels")
+        .unwrap();
+
+    let two = [instance_matrix(-1.0), instance_matrix(1.0)].concat();
+    scene
+        .set_attribute("inst", vec![doubles("transformationmatrices", two)])
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            0.0,
+            vec![integers("disabledinstances", vec![1])],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time(
+            "inst",
+            1.0,
+            vec![OwnedArg {
+                name: "disabledinstances".to_string(),
+                type_tag: Type::I64,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::I64(vec![0]),
+            }],
+        )
+        .unwrap();
+
+    let at = scene.instance_transforms_at("inst", 0.5).unwrap();
+    assert_eq!(at.len(), 2, "the int64 clears it; nothing is disabled");
 }
