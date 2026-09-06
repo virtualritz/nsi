@@ -6,7 +6,7 @@
 
 use crate::{ALL, Edge, EdgeKind, OwnedArg, RecordError, classify};
 use core::cmp::Ordering;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
 
 /// One ɴsɪ node.
@@ -116,8 +116,60 @@ pub(crate) fn latest_per_time(
         .collect()
 }
 
-/// The recorded scene graph.
+/// What changed since the last [`Scene::take_changes`].
+///
+/// A **net** record, not a log of calls: a handle created and deleted
+/// in one interval nets to nothing, and re-setting one attribute forty
+/// times is one entry. A consumer synchronising a live renderer wants
+/// the set of things to look at again, and coalescing a call log into
+/// that set would be its work rather than ours.
+///
+/// It carries **no values**. The scene holds the current one --
+/// [`Node::effective`] answers it -- so an entry names an attribute
+/// rather than copying a vertex buffer per edit.
+///
+/// This is the raw record, and it is deliberately in ɴsɪ's domain: a
+/// `transform` and an `attributes` node have no counterpart in a
+/// renderer's scene, and one geometry under two parents is several
+/// objects there. Turning "this transform moved" into "these placements
+/// may have moved" is a walk *down* the graph, and it is the next thing
+/// to build here rather than in every backend.
 #[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
+pub struct Changes {
+    /// Handles created, and still present.
+    pub created: IndexSet<String>,
+    /// Handles deleted, with the node type they had.
+    ///
+    /// The type is kept because the handle is gone from the scene: a
+    /// consumer that has to undo whatever it built for a node cannot
+    /// ask what kind of node it was any more.
+    pub deleted: IndexMap<String, String>,
+    /// `(handle, attribute)` pairs set, re-set or deleted.
+    pub attributes: IndexSet<(String, String)>,
+    /// Connections made.
+    pub edges_added: Vec<Edge>,
+    /// Connections removed, **in full**.
+    ///
+    /// The endpoints and kind are kept because the graph no longer has
+    /// them: working out what a severed `objects` edge orphaned means
+    /// walking down from a node the edge no longer points at. A
+    /// `disconnect` naming `.all` is expanded here into the edges it
+    /// actually removed, since the pattern cannot be re-expanded once
+    /// they are gone.
+    pub edges_removed: Vec<Edge>,
+    /// Connections whose arguments a repeated `connect` replaced in
+    /// place.
+    ///
+    /// No edge appeared or disappeared, so a record keyed on additions
+    /// and removals misses this entirely -- and ɴsɪ's `"priority"`
+    /// rides on these arguments, which decides which of two shaders
+    /// wins. This is the quietest way for a scene to change meaning.
+    pub edges_rearmed: Vec<Edge>,
+}
+
+/// The recorded scene graph.
+#[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct Scene {
     /// Nodes by handle, in creation order.
@@ -150,9 +202,60 @@ pub struct Scene {
     /// child. Keying on the attribute too makes that lookup
     /// proportional to the matches rather than to the scene.
     by_to_attr: HashMap<(String, String), Vec<usize>>,
+    /// What has changed since the last [`Scene::take_changes`].
+    ///
+    /// Private, and not part of [`Scene`]'s equality: two scenes with
+    /// the same nodes and edges are the same scene whether or not one
+    /// of them has been synchronised since.
+    changes: Changes,
+}
+
+/// Two scenes are equal when they describe the same thing.
+///
+/// Written out rather than derived because of what it must *exclude*:
+/// the pending [`Changes`], which say what happened to a scene rather
+/// than what it is -- a scene that has just been synchronised would
+/// otherwise stop being equal to the identical scene that has not --
+/// and the three edge indexes, which are a function of the edges they
+/// index.
+impl PartialEq for Scene {
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes == other.nodes
+            && self.edges == other.edges
+            && self.evaluations == other.evaluations
+    }
 }
 
 impl Scene {
+    /// What has changed since this was last called, clearing the
+    /// record.
+    ///
+    /// ɴsɪ's `NSIRenderControl "synchronize"` is where a host asks a
+    /// renderer to catch up: the specification says "apply all the
+    /// **buffered** calls to scene's state", so the interval between
+    /// two synchronises is exactly one batch of edits. Observed on
+    /// 3Delight: edits made without synchronising change nothing and
+    /// report nothing; the synchronise then reports `Restarted`
+    /// followed by `Synchronized`, once, for the whole batch.
+    ///
+    /// Taking clears, because the alternative is a record that grows
+    /// for the life of an interactive session and a caller that must
+    /// remember where it read up to.
+    ///
+    /// What a caller does with it today is walk down from the named
+    /// handles itself, with [`Scene::edges_to_attr`] and the
+    /// resolution accessors. That walk belongs here and is the next
+    /// step; this is the record it needs, and the record is the half
+    /// that cannot be reconstructed after the fact.
+    pub fn take_changes(&mut self) -> Changes {
+        core::mem::take(&mut self.changes)
+    }
+
+    /// What has changed, without clearing it.
+    pub fn changes(&self) -> &Changes {
+        &self.changes
+    }
+
     /// The nodes, by handle, in creation order.
     pub fn nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
         self.nodes.iter()
@@ -320,6 +423,7 @@ impl Scene {
                         ..Node::default()
                     },
                 );
+                self.changes.created.insert(handle.to_string());
                 Ok(())
             }
         }
@@ -341,7 +445,21 @@ impl Scene {
                 handle: handle.to_string(),
             })
         } else {
-            self.nodes.shift_remove(handle);
+            // Recorded *before* the removal: afterwards the type is
+            // gone and the edges that named this handle cannot be
+            // found, and a consumer working out what the delete
+            // orphaned needs both.
+            if let Some(node) = self.nodes.shift_remove(handle) {
+                self.changes
+                    .deleted
+                    .insert(handle.to_string(), node.node_type);
+            }
+            self.changes.edges_removed.extend(
+                self.edges
+                    .iter()
+                    .filter(|e| e.from == handle || e.to == handle)
+                    .cloned(),
+            );
             self.edges.retain(|e| e.from != handle && e.to != handle);
             self.reindex();
             Ok(())
@@ -419,6 +537,22 @@ impl Scene {
             }
         }
 
+        for handle in &doomed {
+            if let Some(node) = self.nodes.get(handle) {
+                self.changes
+                    .deleted
+                    .insert(handle.clone(), node.node_type.clone());
+            }
+        }
+        self.changes.edges_removed.extend(
+            self.edges
+                .iter()
+                .filter(|edge| {
+                    doomed.contains(&edge.from) || doomed.contains(&edge.to)
+                })
+                .cloned(),
+        );
+
         self.nodes.retain(|handle, _| !doomed.contains(handle));
         self.edges.retain(|edge| {
             !doomed.contains(&edge.from) && !doomed.contains(&edge.to)
@@ -449,9 +583,14 @@ impl Scene {
         args: Vec<OwnedArg>,
     ) -> Result<(), RecordError> {
         let node = self.node_mut(handle)?;
+        let mut touched = Vec::with_capacity(args.len());
         for arg in args {
             node.samples.shift_remove(&arg.name);
+            touched.push(arg.name.clone());
             node.attrs.insert(arg.name.clone(), arg);
+        }
+        for name in touched {
+            self.changes.attributes.insert((handle.to_string(), name));
         }
         Ok(())
     }
@@ -498,10 +637,12 @@ impl Scene {
 
         let node = self.node_mut(handle)?;
 
+        let mut touched = Vec::with_capacity(args.len());
         for arg in args {
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
             node.attrs.shift_remove(&arg.name);
+            touched.push(arg.name.clone());
 
             // Appended, never merged: a re-set at a time already
             // recorded is another call, and what it superseded is part
@@ -512,12 +653,22 @@ impl Scene {
                 .push((time, arg));
         }
 
+        for name in touched {
+            self.changes.attributes.insert((handle.to_string(), name));
+        }
+
         Ok(())
     }
 
     /// Remove one attribute by name, from static and every time sample.
     /// Silent when absent, as ɴsɪ is.
     pub fn delete_attribute(&mut self, handle: &str, name: &str) {
+        // Recorded whether or not it was set: ɴsɪ is silent about
+        // deleting an absent attribute, and a consumer asking "what
+        // should I look at again" is not harmed by one extra name.
+        self.changes
+            .attributes
+            .insert((handle.to_string(), name.to_string()));
         if let Some(node) = self.nodes.get_mut(handle) {
             node.attrs.shift_remove(name);
             node.samples.shift_remove(name);
@@ -566,10 +717,18 @@ impl Scene {
             }
         }
 
+        let mut rearmed = None;
         match self.edges.iter_mut().find(|edge| {
             edge.from == from && edge.to == to && edge.kind == kind
         }) {
-            Some(existing) => existing.args = args,
+            Some(existing) => {
+                // No edge appears or disappears here, and ɴsɪ's
+                // `"priority"` rides on these arguments -- so a record
+                // keyed on additions and removals would miss a scene
+                // changing which shader wins.
+                existing.args = args;
+                rearmed = Some(existing.clone());
+            }
             None => {
                 self.by_from
                     .entry(from.to_string())
@@ -583,13 +742,19 @@ impl Scene {
                     .entry((to.to_string(), kind.to_attr().to_string()))
                     .or_default()
                     .push(self.edges.len());
-                self.edges.push(Edge {
+                let edge = Edge {
                     from: from.to_string(),
                     to: to.to_string(),
                     kind,
                     args,
-                });
+                };
+                self.changes.edges_added.push(edge.clone());
+                self.edges.push(edge);
             }
+        }
+
+        if let Some(edge) = rearmed {
+            self.changes.edges_rearmed.push(edge);
         }
 
         Ok(())
@@ -621,6 +786,7 @@ impl Scene {
         let from_port = from_attr.unwrap_or_default();
         let any_port = from_port == ALL;
 
+        let mut removed = Vec::new();
         self.edges.retain(|edge| {
             let port_matches = any_port
                 || match &edge.kind {
@@ -644,8 +810,15 @@ impl Scene {
                 && port_matches
                 && attr_matches;
 
+            if matches {
+                // Kept in full, because a `.all` pattern cannot be
+                // re-expanded once the edges it named are gone.
+                removed.push(edge.clone());
+            }
+
             !matches
         });
+        self.changes.edges_removed.extend(removed);
         self.reindex();
 
         Ok(())

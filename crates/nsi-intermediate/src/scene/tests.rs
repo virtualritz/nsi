@@ -773,6 +773,144 @@ fn delete_attribute_clears_the_log() {
     assert!(node.effective("visibility").is_none());
 }
 
+/// The record is **net**, not a log: forty sets of one attribute are
+/// one entry, and a handle created and deleted in one interval leaves
+/// no live node behind.
+#[test]
+fn the_record_is_net_not_a_log() {
+    let mut scene = Scene::default();
+    scene.create("a", "attributes").unwrap();
+    for value in 0..40u8 {
+        scene
+            .set_attribute("a", vec![arg("visibility", f32::from(value))])
+            .unwrap();
+    }
+    scene.create("gone", "mesh").unwrap();
+    scene.delete("gone").unwrap();
+
+    let changes = scene.take_changes();
+    assert_eq!(changes.attributes.len(), 1, "one name, forty calls");
+    assert!(
+        changes
+            .attributes
+            .contains(&("a".to_string(), "visibility".to_string()))
+    );
+    assert!(changes.created.contains("gone"), "it was created");
+    assert_eq!(
+        changes.deleted.get("gone").map(String::as_str),
+        Some("mesh"),
+        "and deleted, with the type the handle no longer has",
+    );
+
+    assert_eq!(
+        scene.take_changes(),
+        Changes::default(),
+        "taking clears, so the next synchronise starts empty",
+    );
+}
+
+/// A repeated `connect` that only changes `"priority"` adds and
+/// removes no edge, and changes which shader wins. A record keyed on
+/// additions and removals would miss it entirely.
+#[test]
+fn a_connect_rearmed_in_place_is_recorded() {
+    let mut scene = Scene::default();
+    scene.create("attr", "attributes").unwrap();
+    scene.create("shader", "shader").unwrap();
+    scene
+        .connect("shader", None, "attr", "surfaceshader")
+        .unwrap();
+    scene.take_changes();
+
+    scene
+        .connect_with_args(
+            "shader",
+            None,
+            "attr",
+            "surfaceshader",
+            vec![OwnedArg::new(
+                "priority",
+                Type::I32,
+                1,
+                0,
+                OwnedData::I32(vec![10]),
+            )],
+        )
+        .unwrap();
+
+    let changes = scene.take_changes();
+    assert!(changes.edges_added.is_empty(), "no edge appeared");
+    assert!(changes.edges_removed.is_empty(), "none disappeared");
+    assert_eq!(changes.edges_rearmed.len(), 1);
+    assert_eq!(changes.edges_rearmed[0].from, "shader");
+}
+
+/// A `disconnect` naming `.all` is expanded into the edges it removed:
+/// the pattern cannot be re-expanded once they are gone.
+#[test]
+fn a_wildcard_disconnect_records_what_it_removed() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    for handle in ["a", "b"] {
+        scene.create(handle, "mesh").unwrap();
+        scene.connect(handle, None, "xf", "objects").unwrap();
+    }
+    scene.take_changes();
+
+    scene.disconnect(crate::ALL, None, "xf", "objects").unwrap();
+
+    let changes = scene.take_changes();
+    let removed: Vec<&str> = changes
+        .edges_removed
+        .iter()
+        .map(|e| e.from.as_str())
+        .collect();
+    assert_eq!(removed, vec!["a", "b"], "both, by name, not the pattern");
+}
+
+/// A delete takes edges with it, and the record keeps them: working
+/// out what was orphaned means walking down from a node the edge no
+/// longer points at.
+#[test]
+fn a_delete_records_the_edges_it_took_with_it() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+    scene.take_changes();
+
+    scene.delete("xf").unwrap();
+
+    let changes = scene.take_changes();
+    assert_eq!(changes.deleted.len(), 1);
+    let pairs: Vec<(&str, &str)> = changes
+        .edges_removed
+        .iter()
+        .map(|e| (e.from.as_str(), e.to.as_str()))
+        .collect();
+    assert!(pairs.contains(&("q", "xf")), "the child's edge, {pairs:?}");
+    assert!(pairs.contains(&("xf", ".root")), "and its own");
+}
+
+/// Pending changes are not part of what a scene *is*: a synchronised
+/// scene still equals the identical unsynchronised one.
+#[test]
+fn changes_are_not_part_of_scene_equality() {
+    let build = || {
+        let mut scene = Scene::default();
+        scene.create("a", "attributes").unwrap();
+        scene
+            .set_attribute("a", vec![arg("visibility", 1.0)])
+            .unwrap();
+        scene
+    };
+    let mut synchronised = build();
+    synchronised.take_changes();
+
+    assert_eq!(synchronised, build());
+}
+
 /// `Node::effective` is what the resolver reads, so asking a node
 /// directly gives the resolver's answer.
 ///
