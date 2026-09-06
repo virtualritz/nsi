@@ -4275,3 +4275,58 @@ fn sampled_reads_the_attribute_it_was_asked_for() {
         "the transform, not whichever attribute happens to be first",
     );
 }
+
+/// The **truncation** path diverges too, not just the unset one.
+///
+/// A `float` at `t=0.5` defined *first*, then good matrices at `t=0`
+/// and `t=1`. Rendered, 3Delight sweeps between the two good samples --
+/// pixel-identical to the same scene without the `float` -- because
+/// both were defined after it and rebuilt the attribute. This crate
+/// sorts by time, sees the `float` in the middle, and cuts everything
+/// before it: a static object at the `t=1` matrix.
+///
+/// The earlier divergence test only reached the `Unset` arm, where the
+/// unreadable sample is last by time. This reaches the `keep_from`
+/// truncation, which the settling render validated only for a stream
+/// whose definition order matched its time order. Recording definition
+/// order closes both.
+#[test]
+fn the_truncation_path_diverges_when_definition_order_differs() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("q", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("q", None, "xf", "objects").unwrap();
+
+    scene
+        .set_attribute_at_time(
+            "xf",
+            0.5,
+            vec![OwnedArg {
+                name: "transformationmatrix".to_string(),
+                type_tag: Type::F32,
+                array_length: 1,
+                flags: 0,
+                data: OwnedData::F32(vec![0.5]),
+            }],
+        )
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(-1.5, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(-3.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.motion_times("q").unwrap(),
+        vec![1.0],
+        "this crate cuts at the float; 3Delight keeps both good samples \
+         and sweeps, because both were defined after it",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.0).unwrap()[12],
+        -3.0,
+        "static at the t=1 matrix here; 3Delight draws -1.5 at t=0",
+    );
+}

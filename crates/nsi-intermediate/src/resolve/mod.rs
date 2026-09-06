@@ -2261,21 +2261,19 @@ impl Scene {
             return Ok(self.local_transform(handle));
         }
 
+        match found
+            .samples(TRANSFORMATION_MATRIX)
+            .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
         {
-            match found
-                .samples(TRANSFORMATION_MATRIX)
-                .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
-            {
-                Some((_, arg)) => Ok(matrix_of(arg)),
-                None => Err(ResolveError::MissingSampleAtTime {
-                    handle: handle.to_string(),
-                    time,
-                    available: found
-                        .samples(TRANSFORMATION_MATRIX)
-                        .map(|(t, _)| t)
-                        .collect(),
-                }),
-            }
+            Some((_, arg)) => Ok(matrix_of(arg)),
+            None => Err(ResolveError::MissingSampleAtTime {
+                handle: handle.to_string(),
+                time,
+                available: found
+                    .samples(TRANSFORMATION_MATRIX)
+                    .map(|(t, _)| t)
+                    .collect(),
+            }),
         }
     }
 }
