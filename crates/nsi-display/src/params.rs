@@ -83,6 +83,34 @@ impl<'a> Params<'a> {
         Some(unsafe { *(param.value as *const i32) })
     }
 
+    /// Every string parameter, as `(name, value)`.
+    ///
+    /// `string`, `i32` and `f32` look a name up; this enumerates. A
+    /// driver needs it when the *names* are the data -- ɴsɪ's
+    /// `header.<name>` metadata passthrough, say, where `<name>` is
+    /// whatever the scene chose to write into the file.
+    ///
+    /// Parameters that are not strings, or whose name or value is not
+    /// readable, are skipped.
+    pub fn strings(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
+        self.raw.iter().filter_map(|p| {
+            if p.name.is_null() || p.value.is_null() || p.valueType as u8 != b's'
+            {
+                return None;
+            }
+            // SAFETY: ndspy names are NUL-terminated C strings.
+            let name = unsafe { CStr::from_ptr(p.name) }.to_str().ok()?;
+            // SAFETY: `value` addresses one `char*`, per the ndspy layout.
+            let ptr = unsafe { *(p.value as *const *const c_char) };
+            if ptr.is_null() {
+                return None;
+            }
+            // SAFETY: the renderer passes NUL-terminated strings.
+            let value = unsafe { CStr::from_ptr(ptr) }.to_str().ok()?;
+            Some((name, value))
+        })
+    }
+
     /// A float parameter.
     pub fn f32(&self, name: &str) -> Option<f32> {
         let param = self.find(name, b'f')?;

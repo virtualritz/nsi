@@ -13,9 +13,16 @@ readme = "README.md"
 documentation = "https://docs.rs/nsi-display/"
 repository = "https://github.com/virtualritz/nsi/"
 
+[features]
+# The `exr_driver` example only. Optional so the default build of this
+# crate -- which needs neither -- does not pull in OpenEXR or OIDN.
+exr-driver = ["dep:exr", "dep:oidn"]
+
 [dependencies]
 ndspy-sys = "0.2"
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
+exr = { version = "1.7", optional = true }
+oidn = { version = "2.3", optional = true }
 
 [dev-dependencies]
 nsi = { version = "0.9", path = "../..", features = ["output"] }
@@ -24,6 +31,11 @@ png = "0.18"
 [[example]]
 name = "png_driver"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "exr_driver"
+crate-type = ["cdylib"]
+required-features = ["exr-driver"]
 
 [package.metadata.docs.rs]
 all-features = true
