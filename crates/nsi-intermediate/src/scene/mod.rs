@@ -62,6 +62,14 @@ impl Scene {
         self.nodes.get(handle)
     }
 
+    /// A node together with the scene's own copy of its handle.
+    ///
+    /// Resolution returns borrowed handles that outlive the `&str` a
+    /// caller passed in, so it needs the stored key, not the argument.
+    pub(crate) fn node_entry(&self, handle: &str) -> Option<(&String, &Node)> {
+        self.nodes.get_key_value(handle)
+    }
+
     /// The classified connections, in connection order.
     pub fn edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.iter()

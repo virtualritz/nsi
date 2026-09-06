@@ -336,7 +336,24 @@ against this API now.
       `geometryattributes` rule would have invented them. The two
       containers are gathered by their own `EdgeKind` and proven not to
       cross. Evidence: five tests in `resolve::tests`, each falsified.
-- [ ] T9.10 A `shaderattributes` node connected to a `set`. ɴsɪ allows
-      "geometric primitives, transform nodes or set nodes"; only the
-      first two are on the walked chain. Gate: the `Open` row in
-      `contracts/resolution.md`.
+- [x] T9.11 The primitive's own attributes are the top-ranked source of
+      a shader attribute. ɴsɪ gives "the highest priority ... to
+      attributes set directly on the geometric primitive", and T9.9
+      dropped that clause from its own `Open` row while marking the row
+      `Covered` -- so the crate answered with a container's value where
+      3Delight answers with the mesh's. Rendered in both directions, and
+      against a `tint.priority`. Evidence:
+      `resolve::tests::the_geometrys_own_shader_attribute_outranks_every_container`.
+- [x] T9.12 Three shader-attribute orderings were unpinned -- a reversed
+      source list, a reversed within-level order, and dropping `.root`
+      edges each left the suite green. Evidence:
+      `resolve::tests::shader_attribute_sources_are_in_precedence_order`,
+      `the_first_connected_shader_attribute_wins_at_one_level`.
+- [ ] T9.10 Attributes provided through a `set`, for **both**
+      containers. 3Delight honours `geometryattributes` on a set as well
+      as `shaderattributes`, so `geometry_binding` and `attribute_value`
+      share the blind spot and it was untracked. The ranking is now
+      observed -- primitive, then its `shaderattributes`, then the set,
+      then the transform -- so what remains is walking `SetMember` as a
+      second source and deciding how multiple or nested memberships
+      order. Gate: the `Open` row in `contracts/resolution.md`.

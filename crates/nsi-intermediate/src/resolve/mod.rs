@@ -277,14 +277,19 @@ pub const RAY_TYPES: [&str; 8] = [
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct AttributeValue<'a> {
-    /// The `attributes` node the winning definition sits on.
+    /// The node the winning definition sits on.
+    ///
+    /// Usually an `attributes` node. For a shader attribute it can be
+    /// the geometry itself, which ɴsɪ ranks above every container.
     pub node: &'a str,
     /// The definition itself.
     ///
     /// [`OwnedArg::name`] is the attribute that actually won, which is
-    /// not always the one asked for: a `visibility.<ray>` query falls
-    /// back to the less specific `visibility`, and this is how a backend
-    /// tells the two apart.
+    /// not always the one asked for: in [`Scene::attribute_value`] a
+    /// `visibility.<ray>` query falls back to the less specific
+    /// `visibility`, and this is how a backend tells the two apart.
+    /// [`Scene::shader_attribute_value`] performs no such fallback, so
+    /// there the name always matches the query.
     pub arg: &'a OwnedArg,
     /// The `ATTR.priority` that selected it; `0` when none is set.
     pub priority: i32,
@@ -826,14 +831,24 @@ impl Scene {
         Ok(candidates.into_iter().next().map(|(_, _, _, value)| value))
     }
 
-    /// The `attributes` nodes providing *shader* attributes for a
-    /// geometry, nearest it first.
+    /// The sources of *shader* attributes for a geometry, in ɴsɪ's
+    /// precedence order.
     ///
-    /// ɴsɪ's second attribute container. The same `attributes` node type
-    /// reaches it, through the `shaderattributes` connection rather than
-    /// `geometryattributes`, and it is gathered "along the path starting
-    /// from the geometric primitive, through all the transform nodes it
-    /// is connected to, until the scene root is reached".
+    /// **The first entry is the geometry itself**, which is a source in
+    /// its own right and outranks every container: ɴsɪ gives "the
+    /// highest priority ... to attributes set directly on the geometric
+    /// primitive". It is listed unconditionally, so a caller walking
+    /// this in order and taking the first handle that defines what it
+    /// wants gets the same answer as
+    /// [`Scene::shader_attribute_value`]. Every later entry is an
+    /// `attributes` node.
+    ///
+    /// After it come ɴsɪ's second attribute container, nearest the
+    /// geometry first. The same `attributes` node type reaches it,
+    /// through the `shaderattributes` connection rather than
+    /// `geometryattributes`, gathered "along the path starting from the
+    /// geometric primitive, through all the transform nodes it is
+    /// connected to, until the scene root is reached".
     ///
     /// # Errors
     ///
@@ -842,11 +857,16 @@ impl Scene {
         &self,
         geometry: &str,
     ) -> Result<Vec<String>, ResolveError> {
-        Ok(self
-            .gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
-            .into_iter()
-            .map(|(_, _, edge)| edge.from.clone())
-            .collect())
+        let mut sources = Vec::new();
+        if let Some((handle, _)) = self.node_entry(geometry) {
+            sources.push(handle.clone());
+        }
+        sources.extend(
+            self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
+                .into_iter()
+                .map(|(_, _, edge)| edge.from.clone()),
+        );
+        Ok(sources)
     }
 
     /// The value of one shader attribute, gathered along a geometry's
@@ -884,6 +904,22 @@ impl Scene {
         geometry: &str,
         name: &str,
     ) -> Result<Option<AttributeValue<'_>>, ResolveError> {
+        // ɴsɪ ranks the primitive's own attributes above every
+        // container: "with the highest priority given to attributes set
+        // directly on the geometric primitive". Rendered, a `tint` on
+        // the mesh beats one on an `attributes` node attached to that
+        // same mesh, in both directions, and beats one carrying a
+        // `tint.priority` too.
+        if let Some((handle, node)) = self.node_entry(geometry)
+            && let Some(arg) = node.attrs.get(name)
+        {
+            return Ok(Some(AttributeValue {
+                node: handle,
+                arg,
+                priority: 0,
+            }));
+        }
+
         for (_, _, edge) in
             self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
         {

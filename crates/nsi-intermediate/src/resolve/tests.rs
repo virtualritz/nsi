@@ -1858,7 +1858,9 @@ fn the_two_attribute_containers_do_not_cross() {
     );
     assert_eq!(
         scene.shader_attributes("mesh").unwrap(),
-        vec!["shade".to_string()],
+        // The geometry leads the list: it is a source in its own right,
+        // and the `geometryattributes` node is not in this one at all.
+        vec!["mesh".to_string(), "shade".to_string()],
     );
 }
 
@@ -1871,5 +1873,138 @@ fn an_undefined_shader_attribute_resolves_to_none() {
             .shader_attribute_value("mesh", "tint")
             .unwrap()
             .is_none()
+    );
+}
+
+/// ɴsɪ: "with the highest priority given to attributes set directly on
+/// the geometric primitive."
+///
+/// Rendered, `tint` on the mesh beats `tint` on an `attributes` node
+/// attached to that same mesh -- in both directions, so the mesh is not
+/// winning for having the larger value -- and beats one carrying a
+/// `tint.priority` too. This crate returned the container's value, a
+/// wrong answer rather than a missing one, until round 12.
+#[test]
+fn the_geometrys_own_shader_attribute_outranks_every_container() {
+    let mut scene = scene_with_shader_attributes();
+    scene
+        .set_attribute("mesh", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute(
+            "near",
+            vec![
+                integers("tint", vec![2]),
+                integers("tint.priority", vec![10]),
+            ],
+        )
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    let value = value.expect("set on the primitive");
+    assert_eq!(value.node, "mesh");
+    assert_eq!(value.arg.data, OwnedData::I32(vec![1]));
+}
+
+/// The primitive is a source with no container present at all.
+#[test]
+fn a_shader_attribute_on_the_primitive_needs_no_container() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .set_attribute("mesh", vec![integers("tint", vec![7])])
+        .unwrap();
+
+    let value = scene.shader_attribute_value("mesh", "tint").unwrap();
+    assert_eq!(value.expect("set on the primitive").node, "mesh");
+}
+
+/// `shader_attributes` is a precedence-ordered walk: the geometry
+/// first, then nearest, then the connection order within one level, and
+/// a node on `.root` is included. Each of those was unpinned -- a
+/// reversed list, a reversed within-level order and dropping `.root`
+/// all left the suite green.
+#[test]
+fn shader_attribute_sources_are_in_precedence_order() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("xf", "transform").unwrap();
+    for handle in ["near", "near2", "mid", "root_attrs"] {
+        scene.create(handle, "attributes").unwrap();
+    }
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    // Two on the geometry, in connection order.
+    scene
+        .connect("near", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("near2", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("mid", None, "xf", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("root_attrs", None, ".root", "shaderattributes")
+        .unwrap();
+
+    assert_eq!(
+        scene.shader_attributes("mesh").unwrap(),
+        vec![
+            "mesh".to_string(),
+            "near".to_string(),
+            "near2".to_string(),
+            "mid".to_string(),
+            "root_attrs".to_string(),
+        ],
+    );
+}
+
+/// Within one level the first connection wins, and a `.root` node is
+/// reachable when nothing nearer defines the attribute.
+#[test]
+fn the_first_connected_shader_attribute_wins_at_one_level() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("first", "attributes").unwrap();
+    scene.create("second", "attributes").unwrap();
+    scene.create("root_attrs", "attributes").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .connect("first", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("second", None, "mesh", "shaderattributes")
+        .unwrap();
+    scene
+        .connect("root_attrs", None, ".root", "shaderattributes")
+        .unwrap();
+    scene
+        .set_attribute("first", vec![integers("tint", vec![1])])
+        .unwrap();
+    scene
+        .set_attribute("second", vec![integers("tint", vec![2])])
+        .unwrap();
+    scene
+        .set_attribute("root_attrs", vec![integers("other", vec![9])])
+        .unwrap();
+
+    assert_eq!(
+        scene
+            .shader_attribute_value("mesh", "tint")
+            .unwrap()
+            .unwrap()
+            .node,
+        "first",
+    );
+    assert_eq!(
+        scene
+            .shader_attribute_value("mesh", "other")
+            .unwrap()
+            .unwrap()
+            .node,
+        "root_attrs",
+        "a node on `.root` is still a source",
     );
 }
