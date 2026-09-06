@@ -27,8 +27,8 @@ pub enum RenderState {
 /// [`nsi_ffi_wrap::Context`] carries a `'a` bounding the borrowed data
 /// handed to it through `Reference`, `ReferenceSlice` and `Callback`.
 /// The recorder does not, and the difference is real rather than an
-/// oversight: `Context` stores no pointers — its `'a` is a `PhantomData`
-/// marker and the renderer holds the data — whereas the recorder
+/// oversight: `Context` stores no pointers -- its `'a` is a `PhantomData`
+/// marker and the renderer holds the data -- whereas the recorder
 /// *retains* those addresses so they survive to replay.
 ///
 /// Retaining them while also being `Send + Sync`, which [`Nsi`]

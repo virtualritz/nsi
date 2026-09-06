@@ -68,7 +68,7 @@ pub mod argument;
 pub use argument::*;
 
 // The canonical NSI trait, the Attribute<T> typed-name machinery, type
-// aliases (Point3F32 / Color3F32 / Matrix4F64 / …) and standard node-type
+// aliases (Point3F32/Color3F32/Matrix4F64/…) and standard node-type
 // constants all live in `nsi-trait`. Re-export everything at this crate's
 // root so users can write `nsi_ffi_wrap::Nsi`, `nsi_ffi_wrap::Point3F32`,
 // `nsi_ffi_wrap::P`, etc. without depending on `nsi-trait` directly.

@@ -4,6 +4,7 @@
 //! inline `#[cfg(test)]` modules.
 
 use crate::{OwnedArg, OwnedData, ResolveError, Sampled, Scene};
+use core::mem;
 use nsi_trait::Type;
 
 /// A 4x4 row-major translation, the shape ɴsɪ stores in
@@ -4135,8 +4136,8 @@ fn the_two_interpolating_accessors_refuse_alike() {
         .world_transform_interpolated_at("proto", 0.0)
         .unwrap_err();
     assert_eq!(
-        core::mem::discriminant(&sampled),
-        core::mem::discriminant(&single),
+        mem::discriminant(&sampled),
+        mem::discriminant(&single),
         "one said {sampled:?}, the other {single:?}",
     );
 }

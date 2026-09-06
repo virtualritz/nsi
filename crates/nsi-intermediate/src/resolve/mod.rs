@@ -2118,8 +2118,8 @@ impl Scene {
 
     /// Resolve ɴsɪ's output chain into what a renderer actually needs.
     ///
-    /// ɴsɪ spreads this over four nodes and three connection classes —
-    /// `outputdriver -> outputlayer -> screen -> camera` — where both
+    /// ɴsɪ spreads this over four nodes and three connection classes  --
+    /// `outputdriver -> outputlayer -> screen -> camera` -- where both
     /// targets want it collapsed: Mitsuba into a `Sensor` with a `Film`,
     /// MoonRay into `RenderOutput`s. The walk is the same either way.
     ///

@@ -30,11 +30,12 @@
 //! each record identically, and both replay as three statements here.
 //!
 //! So a stream diff against 3Delight compares scene state, not call
-//! history. That is the right invariant for a backend — the renderer
-//! only ever sees final values — but it means a comparison fixture has
+//! history. That is the right invariant for a backend -- the renderer
+//! only ever sees final values -- but it means a comparison fixture has
 //! to be built one attribute per call for the two to align literally.
 
 use crate::{EdgeKind, OwnedArg, OwnedData, Scene};
+use core::fmt;
 use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
 use nsi_trait::Type;
 use std::io::{self, Write};
@@ -93,7 +94,7 @@ fn quoted_str(value: &str) -> String {
 /// Rust's `Display` writes the shortest representation that round-trips;
 /// C's `%g` writes a fixed number of significant digits and switches to
 /// exponent form outside a range. They agree on `0.5` and disagree on
-/// `0.1`, `1.0 / 3.0`, `1e-7` and `1e20`, so the difference is not
+/// `0.1`, `1.0/3.0`, `1e-7` and `1e20`, so the difference is not
 /// cosmetic and the stream gate only passed because the fixture used
 /// values from the agreeing set.
 fn format_f64(value: f64) -> String {
@@ -398,14 +399,11 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
     writeln!(out)
 }
 
-fn write_scalars<W: Write, T: std::fmt::Display>(
+fn write_scalars<W: Write, T: fmt::Display>(
     out: &mut W,
     values: &[T],
 ) -> io::Result<()> {
-    let joined: Vec<String> = values
-        .iter()
-        .map(std::string::ToString::to_string)
-        .collect();
+    let joined: Vec<String> = values.iter().map(ToString::to_string).collect();
     write!(out, "{}", joined.join(" "))
 }
 

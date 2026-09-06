@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::{EdgeKind, OwnedData};
+use core::ffi::c_void;
 use nsi_ffi_wrap as nsi;
 use nsi_trait::{Action, Nsi};
 
@@ -235,11 +236,11 @@ fn a_callback_records_its_address_and_leaks_its_payload() {
     struct Payload(u64);
 
     impl nsi::CallbackPtr for Payload {
-        fn to_ptr(self) -> *const std::ffi::c_void {
+        fn to_ptr(self) -> *const c_void {
             Box::into_raw(Box::new(self)).cast()
         }
 
-        unsafe fn drop_ptr(ptr: *const std::ffi::c_void) {
+        unsafe fn drop_ptr(ptr: *const c_void) {
             let payload = unsafe { Box::from_raw(ptr as *mut Payload) };
             RECLAIMED.fetch_add(payload.0 as usize, Ordering::SeqCst);
         }

@@ -4,7 +4,7 @@
 // outer Box makes it thin so it fits through `void*`. Clippy doesn't
 // recognise the FFI shape and flags it as `redundant_allocation`. Same for
 // the `new` constructor that returns a `*mut`-shaped state for ndspy to
-// keep — it's not idiomatic Rust but it IS the C-API contract.
+// keep -- it's not idiomatic Rust but it IS the C-API contract.
 #![allow(clippy::redundant_allocation)]
 #![allow(clippy::new_ret_no_self)]
 //! Output driver callbacks.
@@ -30,9 +30,9 @@
 //! Use the corresponding typed driver constant:
 //!
 //! * [`FERRIS_F32`] -- 32-bit float pixels.
-//! * [`FERRIS_U32`] / [`FERRIS_I32`] -- 32-bit integer pixels.
-//! * [`FERRIS_U16`] / [`FERRIS_I16`] -- 16-bit integer pixels.
-//! * [`FERRIS_U8`] / [`FERRIS_I8`] -- 8-bit integer pixels.
+//! * [`FERRIS_U32`]/[`FERRIS_I32`] -- 32-bit integer pixels.
+//! * [`FERRIS_U16`]/[`FERRIS_I16`] -- 16-bit integer pixels.
+//! * [`FERRIS_U8`]/[`FERRIS_I8`] -- 8-bit integer pixels.
 //!
 //! ## Example: Streaming buckets
 //!

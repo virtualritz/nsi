@@ -1,6 +1,11 @@
 //! Core ɴsɪ trait, parameter abstraction, and FFI-compatible types.
 
 use bitflags::bitflags;
+use core::{
+    ffi::{c_char, c_int, c_void},
+    fmt,
+};
+use std::error::Error;
 
 // ─── Type Enum ──────────────────────────────────────────────────────────────
 
@@ -45,12 +50,12 @@ bitflags! {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct FfiParam {
-    pub name: *const core::ffi::c_char,
-    pub data: *const core::ffi::c_void,
-    pub type_: core::ffi::c_int,
-    pub arraylength: core::ffi::c_int,
+    pub name: *const c_char,
+    pub data: *const c_void,
+    pub type_: c_int,
+    pub arraylength: c_int,
     pub count: usize,
-    pub flags: core::ffi::c_int,
+    pub flags: c_int,
 }
 
 // SAFETY: FfiParam is a POD struct with raw pointers that are only
@@ -162,8 +167,8 @@ impl Action {
     }
 }
 
-impl std::fmt::Display for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -218,7 +223,7 @@ pub trait Nsi: Send + Sync {
     type Arg<'call>: ParamValue;
 
     /// Error type for fallible operations.
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: Error + Send + Sync + 'static;
 
     /// Create a new node in the scene graph.
     fn create(
@@ -340,9 +345,9 @@ mod tests {
 
     #[test]
     fn ffi_param_layout() {
-        // Verify field count / size is reasonable for a 6-field repr(C) struct.
+        // Verify field count/size is reasonable for a 6-field repr(C) struct.
         // Exact size depends on platform, but must be at least 6 * pointer-size
         // on 64-bit or a mix of i32 + pointer on 32-bit.
-        assert!(std::mem::size_of::<FfiParam>() >= 6 * 4);
+        assert!(size_of::<FfiParam>() >= 6 * 4);
     }
 }

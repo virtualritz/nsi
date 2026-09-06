@@ -2,7 +2,7 @@
 //! Interface.
 //!
 //! ɴsɪ is the front end and a renderer is the back end; this is what
-//! sits between them. It does the jobs an IR does — capture the
+//! sits between them. It does the jobs an IR does -- capture the
 //! incoming calls, classify and canonicalise them, lower ɴsɪ's graph
 //! semantics into flat facts a renderer can consume, and serialise the
 //! result for inspection.

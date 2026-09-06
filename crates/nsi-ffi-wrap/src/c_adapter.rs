@@ -6,7 +6,7 @@
 //! methods of the right instance. `NSIEnd` removes the instance from the
 //! map; its `Drop` then releases any renderer-side state.
 //!
-//! There is **no** separate FFI-shape backend trait — the canonical
+//! There is **no** separate FFI-shape backend trait -- the canonical
 //! [`Nsi`] (`self` _is_ the context) is the only NSI trait, and the handle
 //! mapping needed by the C API lives entirely inside this adapter.
 
@@ -87,7 +87,7 @@ where
     /// `NSIBegin` -- construct a new `T` and return its integer ID.
     /// Returns 0 (`NSI_BAD_CONTEXT`) if the context map lock is poisoned.
     pub fn begin(&self, _args: Option<&ArgSlice>) -> c_int {
-        // The canonical Nsi trait has no begin() — `self` is the context, so
+        // The canonical Nsi trait has no begin() -- `self` is the context, so
         // construction happens here via the factory. Begin args from C are
         // ignored (3Delight does the same on its end).
         let nsi = (self.factory)();
@@ -183,7 +183,7 @@ where
         }
     }
 
-    /// `NSIEvaluate` -- evaluate a procedural / Lua block.
+    /// `NSIEvaluate` -- evaluate a procedural/Lua block.
     pub fn evaluate(&self, ctx: c_int, args: Option<&ArgSlice>) {
         if let Some(nsi) = self.lookup(ctx) {
             // canonical Nsi::evaluate takes &[Self::Arg] not Option;

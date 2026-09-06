@@ -71,7 +71,7 @@ impl<'a, 'b> ParamValue for Arg<'a, 'b> {
             data: self.data.as_c_ptr(),
             type_: self.data.type_() as core::ffi::c_int,
             arraylength: self.array_length.get() as core::ffi::c_int,
-            // `count` is `data.len() / array_length`, exactly as
+            // `count` is `data.len()/array_length`, exactly as
             // `to_c_param_vec` computes it. These two must stay
             // identical or the FFI fast path disagrees with the slow
             // one. `array_length` is `NonZeroUsize`, so this cannot
@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(arg.as_c_param().unwrap().count, 2);
     }
 
-    /// `count` is `data.len() / array_length`; `array_len(2)` over two
+    /// `count` is `data.len()/array_length`; `array_len(2)` over two
     /// i32s is one element of length two, not two elements.
     #[test]
     fn array_len_divides_the_c_count() {

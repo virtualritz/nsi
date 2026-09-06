@@ -1,20 +1,20 @@
-//! Typed attribute / parameter names — compile-time witnesses for ɴsɪ
+//! Typed attribute/parameter names -- compile-time witnesses for ɴsɪ
 //! `NSIParam_t` identifiers.
 //!
 //! On the C side, ɴsɪ uses a single `NSIParam_t` struct everywhere. On the
 //! Rust side that single C concept splits into two semantic roles, both of
 //! which boil down to the *same* underlying type:
 //!
-//! - [`Attribute<T>`] — properties **set on a node** (govern how the scene
+//! - [`Attribute<T>`] -- properties **set on a node** (govern how the scene
 //!   looks): `P`, `Pw`, `fov`, `transformationmatrix`, `uknot`, …
-//! - [`Parameter<T>`] — optional arguments **to a function** (govern how
+//! - [`Parameter<T>`] -- optional arguments **to a function** (govern how
 //!   the call behaves): `streamformat`, `errorhandler`, `stoppedcallback`, …
 //!
-//! `Parameter<T>` is just a type alias for `Attribute<T>` — the conceptual
+//! `Parameter<T>` is just a type alias for `Attribute<T>` -- the conceptual
 //! split exists so the constants and docs read more naturally, but the
 //! machinery is identical.
 //!
-//! End-users normally don't write these types out — they just reference the
+//! End-users normally don't write these types out -- they just reference the
 //! exported `const`s through the parameter macros:
 //!
 //! ```text
@@ -23,13 +23,17 @@
 //! ```
 //!
 //! Renderer- or app-specific entries are added in downstream crates without
-//! touching this one — `Attribute::new` is `const`:
+//! touching this one -- `Attribute::new` is `const`:
 //!
 //! ```ignore
 //! pub const MY_RENDERER_THING: Attribute<f32> = Attribute::new("custom_thing");
 //! ```
 
-use core::marker::PhantomData;
+use core::{
+    fmt,
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 // ─── Geometric type aliases ─────────────────────────────────────────────────
 //
@@ -38,11 +42,11 @@ use core::marker::PhantomData;
 // arrays so that slice length is a multiple of the component count at the
 // type level.
 
-/// 2D point with `f32` components — typically a parametric (u, v) coordinate.
+/// 2D point with `f32` components -- typically a parametric (u, v) coordinate.
 pub type Point2F32 = [f32; 2];
-/// 3D point with `f32` components — Cartesian position.
+/// 3D point with `f32` components -- Cartesian position.
 pub type Point3F32 = [f32; 3];
-/// 4D point with `f32` components — rational/weighted homogeneous (xyzw).
+/// 4D point with `f32` components -- rational/weighted homogeneous (xyzw).
 pub type Point4F32 = [f32; 4];
 
 /// 2D vector with `f32` components.
@@ -76,7 +80,7 @@ pub struct Attribute<T: ?Sized> {
     _t: PhantomData<fn() -> T>,
 }
 
-// Manual derives so generic bounds don't require T: Clone/Copy/Debug — T is
+// Manual derives so generic bounds don't require T: Clone/Copy/Debug -- T is
 // only ever used in PhantomData<fn() -> T> which is already Copy/Send/Sync.
 impl<T: ?Sized> Clone for Attribute<T> {
     fn clone(&self) -> Self {
@@ -84,11 +88,28 @@ impl<T: ?Sized> Clone for Attribute<T> {
     }
 }
 impl<T: ?Sized> Copy for Attribute<T> {}
-impl<T: ?Sized> core::fmt::Debug for Attribute<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl<T: ?Sized> fmt::Debug for Attribute<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Attribute")
             .field("name", &self.name)
             .finish()
+    }
+}
+// Two attributes are the same attribute when they name the same one.
+// `T` is a witness of the data shape, not part of the identity, and it
+// appears only in `PhantomData`, so none of these need a bound on it.
+// Without them an `Attribute` could not go in a `HashSet`, be compared
+// in an `assert_eq!`, or key a map -- all of which a consumer building
+// a table of attributes it has already set will want.
+impl<T: ?Sized> PartialEq for Attribute<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl<T: ?Sized> Eq for Attribute<T> {}
+impl<T: ?Sized> Hash for Attribute<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 
@@ -132,20 +153,20 @@ impl<T: ?Sized> Attribute<T> {
     }
 }
 
-// SAFETY: Attribute<T> contains only a `&'static str` and PhantomData.
-// PhantomData<fn() -> T> is variant-correct (covariant in T) and Send + Sync
-// regardless of T, so the auto-derive would also be Send + Sync — but we make
-// it explicit so users don't worry about T's bounds.
-unsafe impl<T: ?Sized> Send for Attribute<T> {}
-unsafe impl<T: ?Sized> Sync for Attribute<T> {}
+// `Attribute<T>` is `Send + Sync` automatically: it holds a
+// `&'static str` and a `PhantomData<fn() -> T>`, and a function
+// pointer type is `Send + Sync` whatever `T` is. Two `unsafe impl`s
+// used to say so explicitly, with a SAFETY comment that admitted the
+// auto-impl already held -- `unsafe` that buys nothing is `unsafe` a
+// reader still has to check. The test below asserts it instead.
 
-/// Typed name of an ɴsɪ function-parameter — alias of [`Attribute<T>`].
+/// Typed name of an ɴsɪ function-parameter -- alias of [`Attribute<T>`].
 ///
 /// Used for the optional arguments passed to ɴsɪ calls (`NSIBegin`,
 /// `NSIRenderControl`, `NSIEvaluate`, …) that govern *how the call behaves*,
 /// as opposed to [`Attribute<T>`] which is set on nodes to govern *how the
 /// scene looks*. The C side uses a single `NSIParam_t` struct for both, so
-/// `Parameter<T>` and `Attribute<T>` are the same Rust type — the alias
+/// `Parameter<T>` and `Attribute<T>` are the same Rust type -- the alias
 /// exists so consumers and docs can name the role precisely.
 pub type Parameter<T> = Attribute<T>;
 
@@ -169,86 +190,86 @@ pub type Parameter<T> = Attribute<T>;
 
 // Camera --------------------------------------------------------------------
 
-/// `field-of-view` (currently `fov`) — perspective camera FOV in degrees.
+/// `field-of-view` (currently `fov`) -- perspective camera FOV in degrees.
 pub const FIELD_OF_VIEW: Attribute<f32> = Attribute::new("fov");
 
 // Screen --------------------------------------------------------------------
 
-/// `resolution` — pixel resolution of a `screen` node, `[width, height]`.
+/// `resolution` -- pixel resolution of a `screen` node, `[width, height]`.
 pub const RESOLUTION: Attribute<[i32]> = Attribute::new("resolution");
-/// `oversampling` — pixel oversampling rate.
+/// `oversampling` -- pixel oversampling rate.
 pub const OVERSAMPLING: Attribute<i32> = Attribute::new("oversampling");
 
-// Transform / shading -------------------------------------------------------
+// Transform/shading -------------------------------------------------------
 
-/// `matrix` (currently `transformationmatrix`) — 4×4 row-major matrix (`f64`).
+/// `matrix` (currently `transformationmatrix`) -- 4×4 row-major matrix (`f64`).
 pub const MATRIX: Attribute<Matrix4F64> =
     Attribute::new("transformationmatrix");
-/// `filename` (currently `shaderfilename`) — OSL shader filename.
+/// `filename` (currently `shaderfilename`) -- OSL shader filename.
 pub const FILENAME: Attribute<&'static str> = Attribute::new("shaderfilename");
 
 // Common geometry attrs -----------------------------------------------------
 
-/// `position` (currently `P`) — Cartesian control points / vertices.
+/// `position` (currently `P`) -- Cartesian control points/vertices.
 ///
 /// Slice of 3-component f32 points; total component count is divisible by 3
 /// at the type level.
 pub const POSITION: Attribute<[Point3F32]> = Attribute::new("P");
-/// `weighted-position` (currently `Pw`) — rational (weighted homogeneous)
+/// `weighted-position` (currently `Pw`) -- rational (weighted homogeneous)
 /// control points: xyzw.
 pub const WEIGHTED_POSITION: Attribute<[Point4F32]> = Attribute::new("Pw");
 
 // NURBS surface intrinsics --------------------------------------------------
 
-/// `u.count` (currently `nu`) — control-point count along *u*.
+/// `u.count` (currently `nu`) -- control-point count along *u*.
 pub const U_COUNT: Attribute<i32> = Attribute::new("nu");
-/// `v.count` (currently `nv`) — control-point count along *v*.
+/// `v.count` (currently `nv`) -- control-point count along *v*.
 pub const V_COUNT: Attribute<i32> = Attribute::new("nv");
-/// `u.order` (currently `uorder`) — order along *u* (degree + 1, ≥ 2).
+/// `u.order` (currently `uorder`) -- order along *u* (degree + 1, ≥ 2).
 pub const U_ORDER: Attribute<i32> = Attribute::new("uorder");
-/// `v.order` (currently `vorder`) — order along *v* (degree + 1, ≥ 2).
+/// `v.order` (currently `vorder`) -- order along *v* (degree + 1, ≥ 2).
 pub const V_ORDER: Attribute<i32> = Attribute::new("vorder");
-/// `u.knot` (currently `uknot`) — knot vector along *u*; length = `nu + uorder`.
+/// `u.knot` (currently `uknot`) -- knot vector along *u*; length = `nu + uorder`.
 pub const U_KNOT: Attribute<[f32]> = Attribute::new("uknot");
-/// `v.knot` (currently `vknot`) — knot vector along *v*; length = `nv + vorder`.
+/// `v.knot` (currently `vknot`) -- knot vector along *v*; length = `nv + vorder`.
 pub const V_KNOT: Attribute<[f32]> = Attribute::new("vknot");
 
 // NURBS trim curves ---------------------------------------------------------
 
-/// `trim-curves.loop-count` (currently `trimcurves.nloops`) — number of
+/// `trim-curves.loop-count` (currently `trimcurves.nloops`) -- number of
 /// trim loops on a NURBS surface.
 pub const TRIM_CURVES_LOOP_COUNT: Attribute<i32> =
     Attribute::new("trimcurves.nloops");
-/// `trim-curves.curve-count` (currently `trimcurves.ncurves`) — curves per loop.
+/// `trim-curves.curve-count` (currently `trimcurves.ncurves`) -- curves per loop.
 pub const TRIM_CURVES_CURVE_COUNT: Attribute<[i32]> =
     Attribute::new("trimcurves.ncurves");
-/// `trim-curves.cv-count` (currently `trimcurves.n`) — control-point count
+/// `trim-curves.cv-count` (currently `trimcurves.n`) -- control-point count
 /// per trim curve.
 pub const TRIM_CURVES_CV_COUNT: Attribute<[i32]> =
     Attribute::new("trimcurves.n");
-/// `trim-curves.order` — order per trim curve (degree + 1).
+/// `trim-curves.order` -- order per trim curve (degree + 1).
 pub const TRIM_CURVES_ORDER: Attribute<[i32]> =
     Attribute::new("trimcurves.order");
-/// `trim-curves.knot` — concatenated knots; total length = Σ(`n[i] + order[i]`).
+/// `trim-curves.knot` -- concatenated knots; total length = Σ(`n[i] + order[i]`).
 pub const TRIM_CURVES_KNOT: Attribute<[f32]> =
     Attribute::new("trimcurves.knot");
-/// `trim-curves.min` — parametric start per trim curve.
+/// `trim-curves.min` -- parametric start per trim curve.
 pub const TRIM_CURVES_MIN: Attribute<[f32]> = Attribute::new("trimcurves.min");
-/// `trim-curves.max` — parametric end per trim curve.
+/// `trim-curves.max` -- parametric end per trim curve.
 pub const TRIM_CURVES_MAX: Attribute<[f32]> = Attribute::new("trimcurves.max");
-/// `trim-curves.u` — concatenated *u* control values; length = Σ`n[i]`.
+/// `trim-curves.u` -- concatenated *u* control values; length = Σ`n[i]`.
 pub const TRIM_CURVES_U: Attribute<[f32]> = Attribute::new("trimcurves.u");
-/// `trim-curves.v` — concatenated *v* control values; length = Σ`n[i]`.
+/// `trim-curves.v` -- concatenated *v* control values; length = Σ`n[i]`.
 pub const TRIM_CURVES_V: Attribute<[f32]> = Attribute::new("trimcurves.v");
-/// `trim-curves.w` — concatenated weights; length = Σ`n[i]`.
+/// `trim-curves.w` -- concatenated weights; length = Σ`n[i]`.
 pub const TRIM_CURVES_W: Attribute<[f32]> = Attribute::new("trimcurves.w");
-/// `trim-curves.sense` — one per loop. `0` = keep inside, `1` = keep outside (hole).
+/// `trim-curves.sense` -- one per loop. `0` = keep inside, `1` = keep outside (hole).
 pub const TRIM_CURVES_SENSE: Attribute<[i32]> =
     Attribute::new("trimcurves.sense");
 
-// Globals / render-control --------------------------------------------------
+// Globals/render-control --------------------------------------------------
 
-/// `bucket-order` (currently `bucketorder`) — bucket traversal pattern
+/// `bucket-order` (currently `bucketorder`) -- bucket traversal pattern
 /// (`"horizontal"`, `"spiral"`, …).
 pub const BUCKET_ORDER: Attribute<&'static str> = Attribute::new("bucketorder");
 
@@ -258,29 +279,57 @@ pub const BUCKET_ORDER: Attribute<&'static str> = Attribute::new("bucketorder");
 // underlying type is the same -- `Parameter<T>` is just an alias for
 // `Attribute<T>` -- the split is purely for readability at call sites.
 
-/// `stream.format` (currently `streamformat`) — output stream format for
+/// `stream.format` (currently `streamformat`) -- output stream format for
 /// `NSIBegin` (`"nsi"`, `"binarynsi"`, `"autonsi"`).
 pub const STREAM_FORMAT: Parameter<&'static str> =
     Parameter::new("streamformat");
-/// `stream.filename` (currently `streamfilename`) — output file path when
+/// `stream.filename` (currently `streamfilename`) -- output file path when
 /// `NSIBegin` is invoked in stream-to-file mode.
 pub const STREAM_FILENAME: Parameter<&'static str> =
     Parameter::new("streamfilename");
-/// `stream.path-replacement` (currently `streampathreplace`) — substitution
+/// `stream.path-replacement` (currently `streampathreplace`) -- substitution
 /// pairs applied to paths in the output stream.
 pub const STREAM_PATH_REPLACEMENT: Parameter<&'static str> =
     Parameter::new("streampathreplace");
-/// `callback.error` (currently `errorhandler`) — error-handler callback
+/// `callback.error` (currently `errorhandler`) -- error-handler callback
 /// registered through `NSIBegin`.
 pub const CALLBACK_ERROR: Parameter<&'static str> =
     Parameter::new("errorhandler");
-/// `callback.stop` (currently `stoppedcallback`) — callback fired when an
+/// `callback.stop` (currently `stoppedcallback`) -- callback fired when an
 /// interactive render stops.
 pub const CALLBACK_STOP: Parameter<&'static str> =
     Parameter::new("stoppedcallback");
 
 #[cfg(test)]
 mod tests {
+    /// `Send`, `Sync`, `Eq` and `Hash` hold for a `T` that is none of
+    /// them, because `T` is only a witness: it appears in a
+    /// `PhantomData<fn() -> T>` and never in a value. This is what the
+    /// two `unsafe impl`s used to assert by hand.
+    #[test]
+    fn the_witness_type_constrains_nothing() {
+        use std::collections::HashSet;
+
+        // A raw pointer is neither `Send` nor `Sync` nor `Eq`, so it
+        // is the witness this needs without inventing a type whose
+        // fields nothing reads.
+        type Awkward = *const u8;
+
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<super::Attribute<Awkward>>();
+
+        let one = super::Attribute::<Awkward>::new("visibility");
+        let same = super::Attribute::<Awkward>::new("visibility");
+        let other = super::Attribute::<Awkward>::new("fov");
+        assert_eq!(one, same);
+        assert_ne!(one, other);
+
+        let mut set = HashSet::new();
+        assert!(set.insert(one));
+        assert!(!set.insert(same), "the same attribute, hashed alike");
+        assert!(set.insert(other));
+    }
+
     use super::*;
 
     #[test]

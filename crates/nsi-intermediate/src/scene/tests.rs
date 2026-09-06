@@ -795,11 +795,15 @@ fn the_record_is_net_not_a_log() {
             .attributes
             .contains(&("a".to_string(), "visibility".to_string()))
     );
-    assert!(changes.created.contains("gone"), "it was created");
+    assert!(
+        !changes.created.contains("gone"),
+        "created and deleted in one interval: the create is undone, and \
+         a consumer that never saw the node has nothing to undo",
+    );
     assert_eq!(
         changes.deleted.get("gone").map(String::as_str),
         Some("mesh"),
-        "and deleted, with the type the handle no longer has",
+        "only the delete stands, with the type the handle no longer has",
     );
 
     assert_eq!(
@@ -843,6 +847,46 @@ fn a_connect_rearmed_in_place_is_recorded() {
     assert!(changes.edges_removed.is_empty(), "none disappeared");
     assert_eq!(changes.edges_rearmed.len(), 1);
     assert_eq!(changes.edges_rearmed[0].from, "shader");
+}
+
+/// The edge lists are net too: a host that re-`connect`s the same edge
+/// every frame must not grow the record by a full `Edge`, arguments
+/// included, on every one of them.
+#[test]
+fn re_arming_one_edge_repeatedly_is_one_entry() {
+    let mut scene = Scene::default();
+    scene.create("attr", "attributes").unwrap();
+    scene.create("shader", "shader").unwrap();
+    scene
+        .connect("shader", None, "attr", "surfaceshader")
+        .unwrap();
+    scene.take_changes();
+
+    for priority in 0..40 {
+        scene
+            .connect_with_args(
+                "shader",
+                None,
+                "attr",
+                "surfaceshader",
+                vec![OwnedArg::new(
+                    "priority",
+                    Type::I32,
+                    1,
+                    0,
+                    OwnedData::I32(vec![priority]),
+                )],
+            )
+            .unwrap();
+    }
+
+    let changes = scene.take_changes();
+    assert_eq!(changes.edges_rearmed.len(), 1, "forty calls, one edge");
+    assert_eq!(
+        changes.edges_rearmed[0].args[0].as_i32(),
+        Some(39),
+        "and it carries the arguments of the last call",
+    );
 }
 
 /// A `disconnect` naming `.all` is expanded into the edges it removed:

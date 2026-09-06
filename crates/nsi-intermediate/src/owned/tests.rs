@@ -6,6 +6,7 @@
 use super::*;
 use nsi_ffi_wrap as nsi;
 use nsi_trait::Type;
+use std::num::NonZeroUsize;
 
 #[test]
 fn owns_a_single_f32() {
@@ -31,11 +32,11 @@ fn owns_a_point_slice_with_all_floats() {
 }
 
 /// An `array_len`-ed argument must keep every scalar. The C `count`
-/// is `len / array_length`, so deriving the scalar count from it
+/// is `len/array_length`, so deriving the scalar count from it
 /// would silently truncate.
 #[test]
 fn owns_every_scalar_of_an_array_len_argument() {
-    use std::num::NonZeroUsize;
+    use NonZeroUsize;
     let resolution = [1280i32, 720];
     let arg = nsi::i32_slice!("resolution", &resolution)
         .array_len(const { NonZeroUsize::new(2).unwrap() });
@@ -85,13 +86,13 @@ fn owns_a_string() {
     );
 }
 
-/// The C boundary hands the renderer `count = len / array_length`
+/// The C boundary hands the renderer `count = len/array_length`
 /// elements, so a run that does not divide is dropped *there*. Keeping
 /// it here made the recorder disagree with what 3Delight saw, and made
 /// this crate's own stream fail the count a reader checks.
 #[test]
 fn an_array_len_run_is_rounded_down_as_the_c_call_does() {
-    use std::num::NonZeroUsize;
+    use NonZeroUsize;
 
     let arg = nsi::f32_slice!("x", &[1.0f32, 2.0, 3.0])
         .array_len(const { NonZeroUsize::new(2).unwrap() });
@@ -107,7 +108,7 @@ fn an_array_len_run_is_rounded_down_as_the_c_call_does() {
 /// The same for a tuple type, where each element is three floats.
 #[test]
 fn a_tuple_array_len_run_is_rounded_down_too() {
-    use std::num::NonZeroUsize;
+    use NonZeroUsize;
 
     let points = [[0.0f32, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
     let arg = nsi::point_slice!("P", &points)

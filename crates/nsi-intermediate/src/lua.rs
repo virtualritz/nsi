@@ -41,7 +41,7 @@
 //! statement boundaries and could not be compared against one another.
 
 use crate::{OwnedArg, OwnedData, Scene};
-use core::fmt;
+use core::{error::Error, fmt};
 use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
 use nsi_trait::Type;
 use std::io::{self, Write};
@@ -134,8 +134,8 @@ impl fmt::Display for LuaError {
     }
 }
 
-impl core::error::Error for LuaError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+impl Error for LuaError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
             Self::Inexpressible { .. }

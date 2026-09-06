@@ -69,7 +69,7 @@ impl<'a, 'b> Arg<'a, 'b> {
     /// Sets the length of the argument for each element.
     ///
     /// The length is a [`NonZeroUsize`] because the number of elements
-    /// the renderer is handed is `data.len() / length` -- a zero length
+    /// the renderer is handed is `data.len()/length` -- a zero length
     /// has no meaning and would divide by zero.
     #[inline]
     pub fn array_len(mut self, length: NonZeroUsize) -> Self {
@@ -167,7 +167,7 @@ pub enum ArgData<'a, 'b> {
     /// A flat [`prim@f64`] slice of matrices (`len % 16 == 0`).
     MatrixF64Slice(MatrixF64Slice<'a>),
     /// A slice of 4-component f32 points (xyzw).
-    /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats — the
+    /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats -- the
     /// renderer groups them by attribute semantics. Use the
     /// [`point4_f32_slice!`][crate::point4_f32_slice] macro to keep
     /// `&[[f32; 4]]` ergonomics in Rust while the FFI sees the flat
@@ -603,10 +603,10 @@ nsi_tuple_data_array_def!(f32, MatrixF32Slice, DataType::MatrixF32, 16);
 nsi_tuple_data_array_def!(f64, MatrixF64Slice, DataType::MatrixF64, 16);
 
 /// Slice of weighted (rational) homogeneous 4-component f32 control points
-/// — backing for [`point4_f32_slice!`][crate::point4_f32_slice] (NURBS
+/// -- backing for [`point4_f32_slice!`][crate::point4_f32_slice] (NURBS
 /// rational positions `Pw`, RGBA-style colour-with-alpha attributes, etc.).
 ///
-/// On the wire this is a flat `NSITypeFloat` slice — the renderer infers
+/// On the wire this is a flat `NSITypeFloat` slice -- the renderer infers
 /// the 4-component grouping from the attribute name (`Pw`). The wrapper
 /// exists so callers can keep the natural `&[[f32; 4]]` shape in Rust
 /// while the FFI sees `4 * N` flat floats.
@@ -773,7 +773,7 @@ impl DataType {
 /// Create a [`F32`] argument.
 ///
 /// Name accepts a string literal (escape hatch) or a typed
-/// [`Attribute<f32>`](crate::Attribute) / [`Parameter<f32>`](crate::Parameter)
+/// [`Attribute<f32>`](crate::Attribute)/[`Parameter<f32>`](crate::Parameter)
 /// constant (compile-time type-checked).
 #[macro_export]
 macro_rules! f32 {
@@ -972,12 +972,12 @@ macro_rules! point {
 /// Create a [`PointSlice`] array argument.
 ///
 /// First argument may be either:
-/// * a string literal (escape hatch — no static check), or
+/// * a string literal (escape hatch -- no static check), or
 /// * a typed name constant of type [`Attribute<[Point3F32]>`](crate::Attribute) /
 ///   [`Parameter<[Point3F32]>`](crate::Parameter) (compile-time type-checked).
 #[macro_export]
 macro_rules! point_slice {
-    // String-literal name -- legacy / escape hatch (no type check).
+    // String-literal name -- legacy/escape hatch (no type check).
     ($name: literal, $value: expr) => {
         nsi::Arg::new($name, nsi::ArgData::from(nsi::PointSlice::new($value)))
     };
@@ -996,25 +996,25 @@ macro_rules! point_slice {
 /// Wraps a `&[[f32; 4]]` (e.g. weighted homogeneous control points
 /// `Pw` for NURBS, RGBA colour-with-alpha attributes, or any other
 /// 4-float-per-element vertex datum) and sends it as a **flat**
-/// `NSITypeFloat` slice — the renderer groups the floats into
+/// `NSITypeFloat` slice -- the renderer groups the floats into
 /// 4-tuples by attribute name, analogous to how `uknot`/`vknot` are
 /// flat float slices.
 ///
 /// Name accepts:
-/// * a string literal (escape hatch — no static check), or
+/// * a string literal (escape hatch -- no static check), or
 /// * a typed name constant of type
-///   [`Attribute<[Point4F32]>`](crate::Attribute) / [`Parameter<[Point4F32]>`](crate::Parameter)
+///   [`Attribute<[Point4F32]>`](crate::Attribute)/[`Parameter<[Point4F32]>`](crate::Parameter)
 ///   (compile-time type-checked, e.g. [`WEIGHTED_POSITION`](crate::WEIGHTED_POSITION)).
 #[macro_export]
 macro_rules! point4_f32_slice {
-    // String-literal name — legacy / escape hatch (no type check).
+    // String-literal name -- legacy/escape hatch (no type check).
     ($name: literal, $value: expr) => {
         nsi::Arg::new(
             $name,
             nsi::ArgData::from(nsi::Point4F32Slice::new($value)),
         )
     };
-    // Typed Attribute<[Point4F32]> path — compile-time type-checked.
+    // Typed Attribute<[Point4F32]> path -- compile-time type-checked.
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Point4F32]> = $name;
         nsi::Arg::new(
@@ -1304,7 +1304,7 @@ macro_rules! callback {
 mod tests {
     use super::*;
 
-    /// `count` is `data.len() / array_length`. The divisor is a
+    /// `count` is `data.len()/array_length`. The divisor is a
     /// [`NonZeroUsize`], so this can never divide by zero -- an
     /// `array_len(0)` is not expressible.
     #[test]

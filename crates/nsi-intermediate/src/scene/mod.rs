@@ -5,7 +5,7 @@
 //! meaningless.
 
 use crate::{ALL, Edge, EdgeKind, OwnedArg, RecordError, classify};
-use core::cmp::Ordering;
+use core::{cmp::Ordering, mem};
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
 
@@ -118,11 +118,14 @@ pub(crate) fn latest_per_time(
 
 /// What changed since the last [`Scene::take_changes`].
 ///
-/// A **net** record, not a log of calls: a handle created and deleted
-/// in one interval nets to nothing, and re-setting one attribute forty
-/// times is one entry. A consumer synchronising a live renderer wants
-/// the set of things to look at again, and coalescing a call log into
-/// that set would be its work rather than ours.
+/// A **net** record, not a log of calls: re-setting one attribute
+/// forty times is one entry, connecting and reconnecting one edge is
+/// one entry, and a handle created and then deleted in the same
+/// interval appears only in [`Changes::deleted`] -- the create is
+/// undone by the delete, and a consumer that never saw the node has
+/// nothing to undo. A consumer synchronising a live renderer wants the
+/// set of things to look at again, and coalescing a call log into that
+/// set would be its work rather than ours.
 ///
 /// It carries **no values**. The scene holds the current one --
 /// [`Node::effective`] answers it -- so an entry names an attribute
@@ -131,13 +134,13 @@ pub(crate) fn latest_per_time(
 /// This is the raw record, and it is deliberately in ɴsɪ's domain: a
 /// `transform` and an `attributes` node have no counterpart in a
 /// renderer's scene, and one geometry under two parents is several
-/// objects there. Turning "this transform moved" into "these placements
-/// may have moved" is a walk *down* the graph, and it is the next thing
-/// to build here rather than in every backend.
+/// objects there. [`Scene::affected`] turns "this transform moved"
+/// into "these nodes may have moved", which is the question a backend
+/// actually asks.
 #[derive(Debug, Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct Changes {
-    /// Handles created, and still present.
+    /// Handles created during this interval and not since deleted.
     pub created: IndexSet<String>,
     /// Handles deleted, with the node type they had.
     ///
@@ -204,6 +207,24 @@ pub struct Affected {
     /// When this is set, `nodes` is not filled: the answer is
     /// everything, and listing it would be a copy of the scene.
     pub everything: bool,
+}
+
+/// Record an edge in one of [`Changes`]'s lists, at most once.
+///
+/// Keyed on `(from, to, kind)`, which is an edge's identity to ɴsɪ --
+/// `args` carry the priority and are what a re-arm replaces. Without
+/// this the lists were logs: a host that re-`connect`s the same edge
+/// every frame grew the record by a full `Edge`, arguments included,
+/// on every one of them, and the record is supposed to be net.
+fn record_edge(list: &mut Vec<Edge>, edge: Edge) {
+    match list.iter_mut().find(|recorded| {
+        recorded.from == edge.from
+            && recorded.to == edge.to
+            && recorded.kind == edge.kind
+    }) {
+        Some(recorded) => *recorded = edge,
+        None => list.push(edge),
+    }
 }
 
 /// The recorded scene graph.
@@ -280,13 +301,12 @@ impl Scene {
     /// for the life of an interactive session and a caller that must
     /// remember where it read up to.
     ///
-    /// What a caller does with it today is walk down from the named
-    /// handles itself, with [`Scene::edges_to_attr`] and the
-    /// resolution accessors. That walk belongs here and is the next
-    /// step; this is the record it needs, and the record is the half
-    /// that cannot be reconstructed after the fact.
+    /// Pass it to [`Scene::affected`] for the nodes to re-resolve.
+    /// This is the half that cannot be reconstructed after the fact --
+    /// a delete takes its edges with it, and a re-armed connection
+    /// leaves the graph looking exactly as it did.
     pub fn take_changes(&mut self) -> Changes {
-        core::mem::take(&mut self.changes)
+        mem::take(&mut self.changes)
     }
 
     /// What has changed, without clearing it.
@@ -727,16 +747,18 @@ impl Scene {
             // found, and a consumer working out what the delete
             // orphaned needs both.
             if let Some(node) = self.nodes.shift_remove(handle) {
+                self.changes.created.shift_remove(handle);
                 self.changes
                     .deleted
                     .insert(handle.to_string(), node.node_type);
             }
-            self.changes.edges_removed.extend(
-                self.edges
-                    .iter()
-                    .filter(|e| e.from == handle || e.to == handle)
-                    .cloned(),
-            );
+            for edge in self
+                .edges
+                .iter()
+                .filter(|e| e.from == handle || e.to == handle)
+            {
+                record_edge(&mut self.changes.edges_removed, edge.clone());
+            }
             self.edges.retain(|e| e.from != handle && e.to != handle);
             self.reindex();
             Ok(())
@@ -816,19 +838,17 @@ impl Scene {
 
         for handle in &doomed {
             if let Some(node) = self.nodes.get(handle) {
+                self.changes.created.shift_remove(handle);
                 self.changes
                     .deleted
                     .insert(handle.clone(), node.node_type.clone());
             }
         }
-        self.changes.edges_removed.extend(
-            self.edges
-                .iter()
-                .filter(|edge| {
-                    doomed.contains(&edge.from) || doomed.contains(&edge.to)
-                })
-                .cloned(),
-        );
+        for edge in self.edges.iter().filter(|edge| {
+            doomed.contains(&edge.from) || doomed.contains(&edge.to)
+        }) {
+            record_edge(&mut self.changes.edges_removed, edge.clone());
+        }
 
         self.nodes.retain(|handle, _| !doomed.contains(handle));
         self.edges.retain(|edge| {
@@ -1036,13 +1056,13 @@ impl Scene {
                     kind,
                     args,
                 };
-                self.changes.edges_added.push(edge.clone());
+                record_edge(&mut self.changes.edges_added, edge.clone());
                 self.edges.push(edge);
             }
         }
 
         if let Some(edge) = rearmed {
-            self.changes.edges_rearmed.push(edge);
+            record_edge(&mut self.changes.edges_rearmed, edge);
         }
 
         Ok(())
@@ -1106,7 +1126,9 @@ impl Scene {
 
             !matches
         });
-        self.changes.edges_removed.extend(removed);
+        for edge in removed {
+            record_edge(&mut self.changes.edges_removed, edge);
+        }
         self.reindex();
 
         Ok(())

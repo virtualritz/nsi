@@ -13,6 +13,16 @@ readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-ffi-wrap/"
 repository = "https://github.com/virtualritz/nsi/"
+# Whitelist, as the other crates do. Without it 0.10.0 shipped 46
+# files: 23 under `tests/` and 12 golden PNGs, every one of which
+# needs a renderer to run, so `cargo test` on the published crate
+# failed for anyone without 3Delight installed.
+include = [
+    "src/**/*",
+    "build.rs",
+    "/Cargo.toml",
+    "/README.md",
+]
 
 [features]
 default = ["dlopen2"]

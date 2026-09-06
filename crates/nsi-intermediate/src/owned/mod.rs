@@ -6,14 +6,17 @@
 //! This mirrors the ɴsɪ C API's own contract: every argument except a
 //! `NSIType` pointer is copied during the call, so a caller may free its
 //! data the moment the call returns. Copying here is therefore not an
-//! extra cost the recorder introduces — it is what a live renderer would
+//! extra cost the recorder introduces -- it is what a live renderer would
 //! have done anyway.
 //!
 //! [`OwnedData::Reference`] is the exception, and holds a raw pointer
 //! rather than a copy, because that is what ɴsɪ passes through.
 
-use core::ffi::{CStr, c_char, c_void};
-use nsi_ffi_wrap::Arg;
+use core::{
+    ffi::{CStr, c_char, c_void},
+    slice,
+};
+use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
 use nsi_trait::{ParamValue, Type};
 
 /// A raw host address recorded from an ɴsɪ `Reference` argument.
@@ -124,7 +127,7 @@ pub struct OwnedArg {
     /// The ɴsɪ type, which is what tells one [`OwnedData`] layout from
     /// another sharing the same storage.
     pub type_tag: Type,
-    /// ɴsɪ's `array_len`. The C `count` field is `len / array_length`.
+    /// ɴsɪ's `array_len`. The C `count` field is `len/array_length`.
     pub array_length: usize,
     /// ɴsɪ's argument flags: `per_vertex`, `per_face` and the like.
     /// Replayed as the letter prefix 3Delight writes -- `"v point"`,
@@ -262,7 +265,7 @@ impl OwnedArg {
     /// Whether ɴsɪ's `NSIParamIsArray` is set, which makes the
     /// argument's type `T[n]` rather than `T`.
     pub fn is_array(&self) -> bool {
-        self.flags & nsi_ffi_wrap::nsi_sys::NSIParamFlags::IsArray.bits() != 0
+        self.flags & NSIParamFlags::IsArray.bits() != 0
     }
 
     /// Copy a borrowed parameter into owned storage.
@@ -288,7 +291,7 @@ impl OwnedArg {
     pub(crate) fn from_param(param: &Arg<'_, '_>) -> Self {
         let type_tag = param.type_tag();
 
-        // The C call hands the renderer `count = len / array_length`
+        // The C call hands the renderer `count = len/array_length`
         // elements, so a run that does not divide is *dropped there*.
         // Copying `len` outright kept data 3Delight never saw -- and
         // made this crate's own stream fail the count `nsi-parse`
@@ -315,23 +318,23 @@ impl OwnedArg {
                 | Type::Vector
                 | Type::Normal
                 | Type::MatrixF32 => OwnedData::F32(
-                    core::slice::from_raw_parts(c.data as *const f32, scalars)
+                    slice::from_raw_parts(c.data as *const f32, scalars)
                         .to_vec(),
                 ),
                 Type::F64 | Type::MatrixF64 => OwnedData::F64(
-                    core::slice::from_raw_parts(c.data as *const f64, scalars)
+                    slice::from_raw_parts(c.data as *const f64, scalars)
                         .to_vec(),
                 ),
                 Type::I32 => OwnedData::I32(
-                    core::slice::from_raw_parts(c.data as *const i32, scalars)
+                    slice::from_raw_parts(c.data as *const i32, scalars)
                         .to_vec(),
                 ),
                 Type::I64 => OwnedData::I64(
-                    core::slice::from_raw_parts(c.data as *const i64, scalars)
+                    slice::from_raw_parts(c.data as *const i64, scalars)
                         .to_vec(),
                 ),
                 Type::String => {
-                    let ptrs = core::slice::from_raw_parts(
+                    let ptrs = slice::from_raw_parts(
                         c.data as *const *const c_char,
                         scalars,
                     );
@@ -342,7 +345,7 @@ impl OwnedArg {
                     )
                 }
                 Type::Reference => OwnedData::Reference(
-                    core::slice::from_raw_parts(
+                    slice::from_raw_parts(
                         c.data as *const *const c_void,
                         scalars,
                     )
