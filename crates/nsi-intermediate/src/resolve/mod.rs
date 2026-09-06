@@ -679,6 +679,55 @@ impl Scene {
             .collect())
     }
 
+    /// The world transform at `time`, interpolating linearly between
+    /// the samples that bracket it.
+    ///
+    /// [`Scene::world_transform_at`] answers only at a recorded sample,
+    /// which is right for asking "what did the caller say". A backend
+    /// rendering motion blur needs a transform at an arbitrary shutter
+    /// time instead, and this is that.
+    ///
+    /// # Why component-wise is not a guess
+    ///
+    /// Blur moves *points*. Linearly interpolating a transformed point
+    /// gives `(1-a)·M₀p + a·M₁p`, which is `((1-a)·M₀ + a·M₁)·p` -- so
+    /// interpolating the matrix element by element is identical to
+    /// interpolating the moving point, for every point. It is not an
+    /// approximation of some better decomposition; it is what a
+    /// renderer blurring geometry already does. Long rotations look
+    /// wrong under it because they look wrong under blur, not because
+    /// this differs from the renderer.
+    ///
+    /// Each node on the chain is interpolated from **its own** samples
+    /// and the results composed, because each node is animated
+    /// separately. That is not the same as interpolating the composed
+    /// world matrices, and it is the accurate model of a hierarchy in
+    /// motion.
+    ///
+    /// # Errors
+    ///
+    /// [`ResolveError::MissingSampleAtTime`] when `time` falls outside a
+    /// node's sampled range, or is not a number. Such a time brackets
+    /// nothing, and clamping to the nearest sample would answer for a
+    /// moment the caller never described.
+    ///
+    /// Also [`ResolveError::MultipleParents`] or [`ResolveError::Cycle`]
+    /// from walking the chain.
+    pub fn world_transform_interpolated_at(
+        &self,
+        handle: &str,
+        time: f64,
+    ) -> Result<[f64; 16], ResolveError> {
+        let chain = self.transform_chain(handle)?;
+
+        chain.iter().try_fold(IDENTITY, |matrix, node| {
+            Ok(match self.local_transform_interpolated_at(node, time)? {
+                Some(local) => mul(matrix, local),
+                None => matrix,
+            })
+        })
+    }
+
     /// Compose the transform chain applying to `handle` at `time`.
     ///
     /// A node with no motion samples is constant, so its static matrix
@@ -1425,6 +1474,63 @@ impl Scene {
     /// A node with no transform samples is constant: its static matrix
     /// applies at every time. A sampled node must have a sample at
     /// exactly `time`; this crate does not interpolate.
+    /// The same, interpolating linearly between the bracketing
+    /// samples.
+    fn local_transform_interpolated_at(
+        &self,
+        handle: &str,
+        time: f64,
+    ) -> Result<Option<[f64; 16]>, ResolveError> {
+        let Some(node) = self.node(handle) else {
+            return Ok(None);
+        };
+
+        let sampled: Vec<(f64, [f64; 16])> = node
+            .time_attrs
+            .iter()
+            .filter_map(|(t, attrs)| {
+                attrs
+                    .get(TRANSFORMATION_MATRIX)
+                    .and_then(matrix_of)
+                    .map(|matrix| (*t, matrix))
+            })
+            .collect();
+
+        if sampled.is_empty() {
+            return Ok(self.local_transform(handle));
+        }
+
+        if let Some((_, matrix)) = sampled
+            .iter()
+            .find(|(t, _)| t.total_cmp(&time) == Ordering::Equal)
+        {
+            return Ok(Some(*matrix));
+        }
+
+        // The bracketing pair. A time outside the sampled range, or a
+        // NaN, brackets nothing and is refused rather than clamped:
+        // clamping would answer for a moment the caller never described.
+        let pair = sampled.windows(2).find(|w| w[0].0 < time && time < w[1].0);
+
+        match pair {
+            Some(window) => {
+                let (t0, m0) = window[0];
+                let (t1, m1) = window[1];
+                let a = (time - t0) / (t1 - t0);
+                let mut out = [0.0f64; 16];
+                for (index, slot) in out.iter_mut().enumerate() {
+                    *slot = m0[index] * (1.0 - a) + m1[index] * a;
+                }
+                Ok(Some(out))
+            }
+            None => Err(ResolveError::MissingSampleAtTime {
+                handle: handle.to_string(),
+                time,
+                available: sampled.iter().map(|(t, _)| *t).collect(),
+            }),
+        }
+    }
+
     fn local_transform_at(
         &self,
         handle: &str,

@@ -2451,3 +2451,112 @@ fn a_reserved_handle_has_no_samples_rather_than_being_unknown() {
         .unwrap();
     assert_eq!(scene.attribute_times(".root", "P").unwrap(), Vec::new());
 }
+
+// ---------------------------------------------------------------------
+// Interpolating a transform between motion samples.
+// ---------------------------------------------------------------------
+
+/// Halfway between two translations is the midpoint.
+#[test]
+fn a_transform_interpolates_between_its_samples() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(10.0, 0.0, 0.0)])
+        .unwrap();
+
+    let half = scene.world_transform_interpolated_at("mesh", 0.5).unwrap();
+    assert_eq!(half[12], 5.0);
+
+    let quarter = scene.world_transform_interpolated_at("mesh", 0.25).unwrap();
+    assert_eq!(quarter[12], 2.5);
+}
+
+/// An exact sample is that sample, not a recomputation of it.
+#[test]
+fn interpolating_at_a_sample_returns_the_sample() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(10.0, 0.0, 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        scene.world_transform_interpolated_at("mesh", 1.0).unwrap(),
+        scene.world_transform_at("mesh", 1.0).unwrap(),
+    );
+}
+
+/// Outside the sampled range is refused, not clamped: clamping would
+/// answer for a moment the caller never described.
+#[test]
+fn interpolating_outside_the_sampled_range_is_refused() {
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    scene
+        .set_attribute_at_time("xf", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("xf", 1.0, vec![translate(10.0, 0.0, 0.0)])
+        .unwrap();
+
+    for time in [-0.5, 1.5, f64::NAN] {
+        assert!(
+            matches!(
+                scene.world_transform_interpolated_at("mesh", time),
+                Err(ResolveError::MissingSampleAtTime { .. })
+            ),
+            "time {time} brackets no pair",
+        );
+    }
+}
+
+/// Each node is interpolated from its **own** samples and the results
+/// composed. That is not the same as interpolating the composed world
+/// matrices, and it is the accurate model: the two transforms here are
+/// animated independently.
+#[test]
+fn each_node_interpolates_from_its_own_samples() {
+    let mut scene = Scene::default();
+    scene.create("outer", "transform").unwrap();
+    scene.create("inner", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("outer", None, ".root", "objects").unwrap();
+    scene.connect("inner", None, "outer", "objects").unwrap();
+    scene.connect("mesh", None, "inner", "objects").unwrap();
+
+    // `outer` scales 1 -> 3; `inner` translates 0 -> 4 along x.
+    scene
+        .set_attribute_at_time("outer", 0.0, vec![scale(1.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("outer", 1.0, vec![scale(3.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 0.0, vec![translate(0.0, 0.0, 0.0)])
+        .unwrap();
+    scene
+        .set_attribute_at_time("inner", 1.0, vec![translate(4.0, 0.0, 0.0)])
+        .unwrap();
+
+    // At t=0.5: scale 2, translate 2 -> the composed x offset is 4.
+    // Interpolating the *composed* matrices instead would give
+    // (0 + 3*4)/2 = 6, so this discriminates the two models.
+    let half = scene.world_transform_interpolated_at("mesh", 0.5).unwrap();
+    assert_eq!(half[12], 4.0);
+}
