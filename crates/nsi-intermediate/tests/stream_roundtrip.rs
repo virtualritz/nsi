@@ -65,7 +65,7 @@ where
     ctx.set_attribute("xf", &[nsi::matrix_f32!("othermatrix", &m32)])?;
 
     // After the static attributes, deliberately: `write_stream` emits a
-    // node's `attrs` before its `time_attrs`, so a fixture that
+    // node's `attrs` before its sample log, so a fixture that
     // interleaved them would diverge on ordering alone. See the
     // "What this is not" note in `nsi_intermediate::stream`.
     ctx.set_attribute_at_time("xf", 0.5, &[nsi::f64!("t", 1.0)])?;

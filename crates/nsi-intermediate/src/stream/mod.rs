@@ -294,11 +294,12 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             write_arg(out, arg)?;
         }
 
-        // In call order, per attribute: `time_attrs` is sorted by time,
-        // and replaying in that order hands the reader a different
-        // scene than was recorded -- the renderer applies the last
-        // call, so re-ordering the calls re-orders the answer. See
-        // `Node::sample_order`.
+        // Every call, in the order it arrived. Replaying the
+        // timeline instead hands the reader a different scene than was
+        // recorded -- the renderer applies the last call, so
+        // re-ordering the calls re-orders the answer, and dropping a
+        // call a same-time re-set superseded loses what unset the
+        // attribute. See `Node::samples`.
         for calls in node.samples.values() {
             for (time, arg) in calls {
                 writeln!(

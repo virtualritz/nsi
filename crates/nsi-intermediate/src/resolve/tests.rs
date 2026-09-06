@@ -4003,8 +4003,8 @@ fn survivors_are_ordered_by_time_however_they_were_set() {
 /// The last **defined** sample wins, not the last by time.
 ///
 /// A stream that sets `t=1` before `t=0` separates the two, and
-/// `time_attrs` is sorted by time, so `Node::sample_order` is what
-/// carries the difference.
+/// A table keyed by time cannot say which call was last, so
+/// `Node::samples` is a call log.
 ///
 /// Rendered: `disabledinstances [0]` at `t=1` defined first, then `[1]`
 /// at `t=0`, draws instance **0** -- the `t=0` value, because it was
@@ -4537,7 +4537,7 @@ fn a_same_time_reset_after_an_unreadable_sample_stands_alone() {
 /// `t=0` comes after and rebuilds the attribute. 3Delight draws static
 /// at the `t=0` matrix. Reading the rule over time-sorted samples made
 /// the `float` the last sample and unset the attribute, which is why
-/// `Node::sample_order` exists.
+/// `Node::samples` is a call log.
 #[test]
 fn a_later_definition_supersedes_an_unreadable_sample() {
     let mut scene = Scene::default();
@@ -4612,8 +4612,8 @@ fn sampled_reads_the_attribute_it_was_asked_for() {
 ///
 /// One `float` and two good matrices, and where the `float` falls in
 /// the *call* order decides what survives it. All four build
-/// byte-identical `time_attrs`, since that is sorted by time -- so
-/// nothing but `Node::sample_order` can tell them apart, and this crate
+/// byte-identical tables once keyed by time -- so nothing but the
+/// call order can tell them apart, and this crate
 /// gave all four the same answer until it recorded one.
 ///
 /// Rendered, each explained by "an unreadable call unsets the attribute

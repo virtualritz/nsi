@@ -84,17 +84,28 @@ impl Node {
 pub(crate) fn latest_per_time(
     calls: &[(f64, OwnedArg)],
 ) -> Vec<(f64, &OwnedArg)> {
-    let mut standing: Vec<(f64, &OwnedArg)> = Vec::with_capacity(calls.len());
-    for (time, arg) in calls {
-        match standing
-            .iter_mut()
-            .find(|(at, _)| at.total_cmp(time) == Ordering::Equal)
-        {
-            Some(slot) => slot.1 = arg,
-            None => standing.push((*time, arg)),
-        }
-    }
+    // Sorted by time, and by call order within one time -- a **stable**
+    // sort on the time alone gives the second for free, which is what
+    // makes "the last call at a time stands" a `dedup` rather than a
+    // search. Scanning the standing values for each call instead was
+    // quadratic in the distinct times, and a thousand-sample animation
+    // baked one `SetAttributeAtTime` per frame is not a strange scene:
+    // measured, `world_transform_samples` over five such nodes took
+    // seconds.
+    let mut standing: Vec<(f64, &OwnedArg)> =
+        calls.iter().map(|(time, arg)| (*time, arg)).collect();
     standing.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+    standing.dedup_by(|later, earlier| {
+        // `dedup_by` keeps the *earlier* of a matching pair, and the
+        // later call is the one that stands, so its value moves down
+        // before the earlier one is dropped.
+        if later.0.total_cmp(&earlier.0) == Ordering::Equal {
+            earlier.1 = later.1;
+            true
+        } else {
+            false
+        }
+    });
     standing
 }
 

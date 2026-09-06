@@ -214,7 +214,7 @@ fn the_round_trip_is_idempotent() {
 /// Call order survives the round trip.
 ///
 /// A scene's samples resolve by the order they were *set* in, and
-/// `Node::time_attrs` is sorted by time -- so a writer that walked it
+/// A timeline cannot say which call was last -- so a writer walking one
 /// would hand the reader a scene that resolves differently from the one
 /// it wrote, silently. The `t=1` call comes first here and the `t=0`
 /// call last, which is the order 3Delight answers by and the opposite
@@ -252,5 +252,72 @@ fn the_order_the_samples_were_set_in_survives_the_round_trip() {
             .as_i32(),
         Some(1),
         "which is the value 3Delight renders",
+    );
+}
+
+/// A call that a same-time re-set superseded is replayed too.
+///
+/// The three-call scene is the one that separates the rules: rendered,
+/// `good@0, float@1, good@1` draws **static** at the `t=1` matrix,
+/// because the `float` unset the attribute on arrival and the good
+/// sample re-set it alone -- while `good, good, good` at the same
+/// times sweeps. An emitter that dropped the superseded call would
+/// write the second scene while claiming to have written the first,
+/// and both existing order tests use two distinct times, where the
+/// difference cannot show.
+#[test]
+fn a_superseded_same_time_call_survives_the_stream_round_trip() {
+    let good = |x: f64| {
+        [
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, x, 0.0,
+            0.0, 1.0,
+        ]
+    };
+
+    let original = Recorder::new();
+    original.create("xf", "transform", None).unwrap();
+    original.create("q", "mesh", None).unwrap();
+    original
+        .connect("xf", None, ".root", "objects", None)
+        .unwrap();
+    original.connect("q", None, "xf", "objects", None).unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            0.0,
+            &[nsi::matrix_f64!("transformationmatrix", &good(-1.5))],
+        )
+        .unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            &[nsi::f32!("transformationmatrix", 0.5)],
+        )
+        .unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            &[nsi::matrix_f64!("transformationmatrix", &good(-3.0))],
+        )
+        .unwrap();
+
+    let written = stream_of(&original.into_scene());
+
+    let rebuilt = Recorder::new();
+    parse_stream(written.as_bytes(), &rebuilt).expect("parse");
+    let scene = rebuilt.into_scene();
+
+    assert_eq!(
+        scene.node("xf").expect("node").samples["transformationmatrix"].len(),
+        3,
+        "the superseded call is part of the record",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        -3.0,
+        "static at the t=1 matrix, as 3Delight draws it -- a sweep here \
+         means the float was dropped on the way out",
     );
 }

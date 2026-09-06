@@ -643,7 +643,7 @@ fn the_reserved_handles_cannot_be_created() {
 /// `t=1 -> 0` then `t=0 -> 1` leaves the object **visible**, and
 /// `t=1 -> 1` then `t=0 -> 0` hides it. The same two times, opposite
 /// answers, and reading the greatest time gets both backwards -- which
-/// is what this did until `Node::sample_order` recorded the order.
+/// is what this did until `Node::samples` became a call log.
 #[test]
 fn effective_takes_the_last_call_not_the_greatest_time() {
     for (first, second, expected) in

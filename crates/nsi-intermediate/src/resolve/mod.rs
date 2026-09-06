@@ -1223,12 +1223,19 @@ impl Scene {
     /// visible and `float 0` is hidden, so a float is read and
     /// non-zero is true; `int64 0` hides; `int 2 [ 0 0 ]` hides, where
     /// the same shape as a *priority* is ignored outright; and a
-    /// `string` is refused, leaving the attribute at its default. A
-    /// backend that reaches for `as_i32` here gets `None` for the
-    /// first three and will draw an object the renderer hides. This
-    /// crate hands back the argument rather than a decoded flag
-    /// precisely because that rule is the renderer's, and it is not
-    /// the rule beside it.
+    /// `string` reads as **true**.
+    ///
+    /// A wrong-typed value is still a *definition*: rendered, a
+    /// `string` on the nearest node beats a `visibility 0` two levels
+    /// up and the object is visible, so it wins its ranking rather
+    /// than falling through to the next candidate. The trap therefore
+    /// has two jaws. A backend that reaches for [`OwnedArg::as_i32`]
+    /// here gets `None` for the numeric three and draws an object the
+    /// renderer hides; one that reads that `None` as "not defined" and
+    /// looks further along the chain draws hidden where the renderer
+    /// draws visible. This crate hands back the argument rather than a
+    /// decoded flag precisely because the rule is the renderer's, and
+    /// it is not the rule beside it.
     ///
     /// Such a winner comes back with [`AttributeValue::arg`] `None`:
     /// this crate names the attribute and leaves ɴsɪ's default for it to
@@ -1692,8 +1699,9 @@ impl Scene {
     ///
     /// The last **defined**, which is not the last by time for a
     /// stream that sets `t=1` before `t=0`. That was a divergence for
-    /// as long as nothing recorded the order; [`Node::sample_order`]
-    /// does, and this reads it.
+    /// as long as the record was a table keyed by time;
+    /// [`Node::samples`] is a call log, and this reads the last of
+    /// them.
     fn instance_ints(&self, node: &Node, name: &str) -> Option<Vec<i32>> {
         // The shared typing rule, not a sixth hand-rolled copy of it:
         // the last sample that *names* the attribute wins, and a type

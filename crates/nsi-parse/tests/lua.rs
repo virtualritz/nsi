@@ -330,3 +330,74 @@ fn the_order_the_samples_were_set_in_survives_the_lua_round_trip() {
         "which is the value 3Delight renders",
     );
 }
+
+/// A call that a same-time re-set superseded is replayed too.
+///
+/// The three-call scene is the one that separates the rules: rendered,
+/// `good@0, float@1, good@1` draws **static** at the `t=1` matrix,
+/// because the `float` unset the attribute on arrival and the good
+/// sample re-set it alone -- while `good, good, good` at the same
+/// times sweeps. An emitter that dropped the superseded call would
+/// write the second scene while claiming to have written the first,
+/// and both existing order tests use two distinct times, where the
+/// difference cannot show.
+#[test]
+fn a_superseded_same_time_call_survives_the_lua_round_trip() {
+    let good = |x: f64| {
+        [
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, x, 0.0,
+            0.0, 1.0,
+        ]
+    };
+
+    let original = Recorder::new();
+    original.create("xf", "transform", None).unwrap();
+    original.create("q", "mesh", None).unwrap();
+    original
+        .connect("xf", None, ".root", "objects", None)
+        .unwrap();
+    original.connect("q", None, "xf", "objects", None).unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            0.0,
+            &[nsi::matrix_f64!("transformationmatrix", &good(-1.5))],
+        )
+        .unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            &[nsi::f32!("transformationmatrix", 0.5)],
+        )
+        .unwrap();
+    original
+        .set_attribute_at_time(
+            "xf",
+            1.0,
+            &[nsi::matrix_f64!("transformationmatrix", &good(-3.0))],
+        )
+        .unwrap();
+
+    let written = {
+        let mut script = Vec::new();
+        write_lua(&original.into_scene(), &mut script).expect("write_lua");
+        script
+    };
+
+    let rebuilt = Recorder::new();
+    run_lua(&written, &rebuilt).expect("run");
+    let scene = rebuilt.into_scene();
+
+    assert_eq!(
+        scene.node("xf").expect("node").samples["transformationmatrix"].len(),
+        3,
+        "the superseded call is part of the record",
+    );
+    assert_eq!(
+        scene.world_transform_interpolated_at("q", 0.5).unwrap()[12],
+        -3.0,
+        "static at the t=1 matrix, as 3Delight draws it -- a sweep here \
+         means the float was dropped on the way out",
+    );
+}
