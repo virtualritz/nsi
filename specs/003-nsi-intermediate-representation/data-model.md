@@ -21,12 +21,22 @@ because `Nsi` takes `&self` throughout. `Send + Sync`.
 | --- | --- | --- |
 | `nodes` | `IndexMap<String, Node>` | owned, private |
 | `edges` | `Vec<Edge>` | owned, private |
+| `evaluations` | `Vec<Vec<OwnedArg>>` | owned, private; recorded `Evaluate` calls |
 | `by_from`, `by_to`, `by_to_attr` | `HashMap<_, Vec<usize>>` | derived indexes |
+| `changes` | `Changes` | owned, private; see `specs/005-scene-changes` |
 
 The fields are private and `Scene` is `#[non_exhaustive]`: the indexes
 are an implementation detail, and exposing the tables would have frozen
 them before the index existed. Read through `nodes()`, `node()`,
-`edges()`, `edges_from()`, `edges_to()` and `edges_to_attr()`.
+`edges()`, `edges_from()`, `edges_to()`, `edges_to_attr()`,
+`evaluations()`, and -- for what changed since the last synchronise --
+`changes()`, `take_changes()`, `affected()` and `descendants()`.
+
+`PartialEq` is written out rather than derived, and compares `nodes`,
+`edges` and `evaluations` only. The indexes are a function of the edges
+they index, and the pending `changes` say what happened to a scene
+rather than what it is: a scene that has just been synchronised is
+still the same scene as the identical one that has not.
 
 `IndexMap` and `Vec` are load-bearing: insertion order is replay order,
 and the stream comparison in `contracts/stream.md` is meaningless if

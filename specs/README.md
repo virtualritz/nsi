@@ -29,6 +29,8 @@ Directory numbers reflect creation order, not coverage order.
 | `001-gpu-pixel-streaming` | Pixel streaming/output contract | active |
 | `002-shading-profile` | Shading profile for network translation | -- |
 | `003-nsi-intermediate-representation` | The `nsi-intermediate` crate: the renderer-agnostic IR between ɴsɪ and any back end | implemented; `Partial` and `Open` rows remain |
+| `004-nsi-parse` | The `nsi-parse` crate: reading ɴsɪ streams and Lua scenes into any `Nsi` sink | implemented |
+| `005-scene-changes` | What changed since the last `synchronize`, and which nodes to re-resolve | active; implemented, unproven by a backend |
 
 `003` arrived with the crate, which was extracted from `nsi-mitsuba`
 once a second backend made its renderer-agnosticism structural rather
@@ -59,4 +61,9 @@ Docs, checkboxes, and TODOs are not evidence by themselves.
 ## Active Spec
 
 Current active feature:
-`specs/001-gpu-pixel-streaming/spec.md`.
+`specs/005-scene-changes/spec.md`, as `.specify/feature.json` says.
+
+It exists because `nsi-moonray` needs an interactive path and a scene
+format cannot express an edit; `003` records a scene and answers
+questions about the whole of it, which is right for a batch flush and
+useless for a viewport.
