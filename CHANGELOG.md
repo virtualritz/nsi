@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### `nsi-toolbelt` 0.10.1 -> 0.11.0
+
+- New `scene` module: `Handle<K>` carries a node's kind in the type
+  system, so a connection ɴsɪ does not allow is a compile error rather
+  than a render-time report. ɴsɪ addresses everything by string handle
+  and connects through string slots, so nothing previously stopped
+  `ctx.connect("camera", None, "screen", "outputlayers", None)` --
+  backwards, into a slot that takes no camera.
+- Every rule is quoted from `nsi.pdf`, not inferred: `objects` on
+  `.root` and `transform` takes *"geometry nodes, other transform nodes
+  and camera nodes"*; `geometryattributes` and `shaderattributes` take
+  attributes nodes; `surfaceshader`, `displacementshader` and
+  `volumeshader` take shader nodes; `screens` takes screens,
+  `outputlayers` output layers, `outputdrivers` output drivers.
+- Verified against an `apistream` context -- the emitted `Create` and
+  `Connect` lines are read back and compared, so the tests check what
+  the renderer would be told rather than what the wrapper believes it
+  said. Two `compile_fail` doctests pin the refusals with error codes,
+  `E0308` for the wrong argument type and `E0599` for a slot the node
+  does not have, because a `compile_fail` test otherwise passes for any
+  error at all, including a typo in itself.
+- The untyped free functions are unchanged and still exported. This is
+  additive.
+
 ### `nsi-toolbelt` 0.10.0 -> 0.10.1
 
 - **0.10.0 does not compile in release.** `generate_or_use_handle` had

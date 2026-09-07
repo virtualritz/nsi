@@ -5,6 +5,7 @@
 //!
 //! Where ergonomically advised, creation methods names carry postfixes
 //! that specify the type of node being created, such as `shader`.
+pub mod scene;
 pub mod transform;
 pub use transform::{
     Matrix, look_at_matrix, rotation_matrix, scaling_matrix,
