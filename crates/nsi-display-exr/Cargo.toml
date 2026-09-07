@@ -26,4 +26,4 @@ exr = "1"
 oidn = "2.3"
 
 [dev-dependencies]
-nsi = { version = "0.9", path = "../..", features = ["output"] }
+nsi = { version = "0.10", path = "../..", features = ["output"] }

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### `nsi` 0.9.0 -> 0.10.0
+
+- **Pointer parameters reach the renderer again.** `NSIParam::data`
+  addresses the *array of values*, so for a `Pointer` parameter it has
+  to be the address of the pointer -- `p.data = &m_v` in ɴsɪ's own
+  `PointerArg`. `Reference::as_c_ptr` and `Callback::as_c_ptr` returned
+  the pointer itself, one indirection short, so the renderer read the
+  first eight bytes of the payload as the pointer: an output driver's
+  `version` field, and a jump to `0x1`. Fixed in `nsi-ffi-wrap` 0.10.0,
+  which `nsi` 0.9.0 cannot pick up -- it depends on
+  `nsi-ffi-wrap = "0.9"` and cargo treats 0.9 -> 0.10 as incompatible --
+  so a consumer of this façade crate still had the bug. Code that
+  worked around it by boxing the pointer a second time can drop that
+  layer. `ReferenceSlice` was always right.
+- Depends on `nsi-ffi-wrap` 0.10 and `nsi-trait` 0.4, both of which
+  changed their public API; hence the version bump.
+
 ### `nsi-trait` 0.4.0 -> 0.4.1
 
 - `Attribute<T>` implements `PartialEq`, `Eq` and `Hash`. It had
