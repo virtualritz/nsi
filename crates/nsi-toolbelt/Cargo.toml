@@ -13,6 +13,10 @@ readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-toolbelt/"
 repository = "https://github.com/virtualritz/nsi/"
+# The tests need a renderer and two unpublished path dependencies, so
+# they cannot run from the published crate. Shipping them made
+# `cargo test` fail for anyone who downloaded `nsi-ffi-wrap` 0.10.0.
+include = ["src/**/*", "/Cargo.toml", "/README.md"]
 
 [dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
@@ -22,6 +26,13 @@ ultraviolet = { version = "0.10", features = ["f64"] }
 [dev-dependencies]
 # The render test drives real output callbacks.
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
+# `connection_rules` holds this crate's typed connection API against
+# `nsi-intermediate`'s classifier, which is the same specification
+# written twice. Path-only and unversioned on purpose: both crates are
+# unpublished, and a dev-dependency with no version is stripped when
+# this one is packaged.
+nsi-intermediate = { path = "../nsi-intermediate" }
+nsi-parse = { path = "../nsi-parse" }
 
 [package.metadata.docs.rs]
 all-features = true

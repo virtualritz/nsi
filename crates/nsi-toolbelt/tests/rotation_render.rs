@@ -34,9 +34,7 @@ struct Centroid {
 /// than one transform in the chain -- conflating them silently bypassed
 /// the inner transform, which is how the first version of this test
 /// "found" a half turn that did not move anything.
-fn render(
-    place: impl FnOnce(&nsi::Context) -> (String, String),
-) -> Centroid {
+fn render(place: impl FnOnce(&nsi::Context) -> (String, String)) -> Centroid {
     let depth = Arc::new(Mutex::new(vec![f32::MAX; RESOLUTION * RESOLUTION]));
 
     {

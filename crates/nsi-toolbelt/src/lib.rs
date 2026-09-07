@@ -8,8 +8,7 @@
 pub mod scene;
 pub mod transform;
 pub use transform::{
-    Matrix, look_at_matrix, rotation_matrix, scaling_matrix,
-    translation_matrix,
+    Matrix, look_at_matrix, rotation_matrix, scaling_matrix, translation_matrix,
 };
 
 use nsi_ffi_wrap as nsi;
@@ -179,7 +178,10 @@ pub fn scaling(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!("transformationmatrix", &transform::scaling_matrix(scale))],
+        &[nsi::matrix_f64!(
+            "transformationmatrix",
+            &transform::scaling_matrix(scale)
+        )],
     );
 
     handle
@@ -200,7 +202,10 @@ pub fn translation(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!("transformationmatrix", &transform::translation_matrix(translate))],
+        &[nsi::matrix_f64!(
+            "transformationmatrix",
+            &transform::translation_matrix(translate)
+        )],
     );
 
     handle
