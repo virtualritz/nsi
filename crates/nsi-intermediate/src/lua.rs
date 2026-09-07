@@ -44,10 +44,8 @@ use crate::{OwnedArgument, OwnedData, Scene};
 use core::{error::Error, fmt};
 use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
 use nsi_trait::{Action, Nsi, Type};
-use std::{
-    io::{self, Write},
-    sync::Mutex,
-};
+use parking_lot::Mutex;
+use std::io::{self, Write};
 
 /// Why a scene could not be written as a Lua script.
 #[derive(Debug)]
@@ -394,6 +392,8 @@ fn quoted_str(value: &str) -> String {
     // multi-byte sequence is copied through contiguously and unchanged.
     // Falling back to a lossy conversion here would quietly rewrite an
     // identifier, which is the one thing this crate refuses to do.
+    // SAFETY: `quoted` only ever inserts ASCII escapes and copies
+    // every other byte through unchanged, so a UTF-8 input stays UTF-8.
     String::from_utf8(quoted(value.as_bytes()))
         .expect("escaping only ASCII preserves UTF-8")
 }
@@ -432,7 +432,7 @@ const fn lua_type_name(type_tag: Type) -> Option<&'static str> {
 /// let writer = LuaWriter::new(Vec::new());
 /// writer.create("cam", "perspectivecamera", None).unwrap();
 /// assert_eq!(
-///     String::from_utf8(writer.into_inner().unwrap()).unwrap(),
+///     String::from_utf8(writer.into_inner()).unwrap(),
 ///     "nsi.Create(\"cam\", \"perspectivecamera\")\n",
 /// );
 /// ```
@@ -450,13 +450,8 @@ impl<W: Write> LuaWriter<W> {
     }
 
     /// The `out` this was built with.
-    ///
-    /// # Errors
-    ///
-    /// [`LuaError::Io`] when the lock is poisoned, which means a
-    /// previous write panicked.
-    pub fn into_inner(self) -> Result<W, LuaError> {
-        self.out.into_inner().map_err(|_| poisoned())
+    pub fn into_inner(self) -> W {
+        self.out.into_inner()
     }
 
     /// `nsi.Name(head, {arg}, {arg}, ...)`.
@@ -467,7 +462,7 @@ impl<W: Write> LuaWriter<W> {
         handle: &str,
         args: &[Arg<'_, '_>],
     ) -> Result<(), LuaError> {
-        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        let mut out = self.out.lock();
         write!(out, "nsi.{call}({head}")?;
         for arg in args {
             write!(out, ", ")?;
@@ -476,11 +471,6 @@ impl<W: Write> LuaWriter<W> {
         writeln!(out, ")")?;
         Ok(())
     }
-}
-
-/// The one error a writer can raise on its own.
-fn poisoned() -> LuaError {
-    LuaError::Io(io::Error::other("the writer's lock is poisoned"))
 }
 
 impl<W: Write + Send> Nsi for LuaWriter<W> {
@@ -605,7 +595,7 @@ impl<W: Write + Send> Nsi for LuaWriter<W> {
     }
 
     fn evaluate(&self, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
-        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        let mut out = self.out.lock();
         write!(out, "nsi.Evaluate(")?;
         for (index, arg) in args.iter().enumerate() {
             if index > 0 {
@@ -625,7 +615,7 @@ impl<W: Write + Send> Nsi for LuaWriter<W> {
         action: Action,
         args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        let mut out = self.out.lock();
         write!(out, "nsi.RenderControl(")?;
         write_arg(
             &mut *out,

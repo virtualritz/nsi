@@ -236,6 +236,8 @@ impl OwnedArgument {
         match self.as_matrices()? {
             [] => None,
             values if values.len() == 16 => {
+                // SAFETY: the match arm above tested the length, so the
+                // slice is exactly the sixteen the array wants.
                 Some(values[..16].try_into().expect("length checked"))
             }
             _ => None,
@@ -304,6 +306,9 @@ impl OwnedArgument {
         // Unreachable while this is `pub(crate)`: the only implementor
         // reaching here is `nsi_ffi_wrap::Arg`, whose `as_c_param`
         // returns `Some` unconditionally.
+        // SAFETY: unreachable while this is `pub(crate)` -- the only
+        // implementor that reaches here is `nsi_ffi_wrap::Arg`, whose
+        // `as_c_param` returns `Some` unconditionally.
         let c = param
             .as_c_param()
             .expect("nsi-ffi-wrap Arg always yields a C view");

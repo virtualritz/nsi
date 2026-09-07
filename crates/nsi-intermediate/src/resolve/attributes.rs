@@ -2,6 +2,7 @@
 //! its path, and ɴsɪ's precedence between them.
 
 use super::*;
+use core::iter;
 
 /// Read an `ATTR.priority`.
 ///
@@ -340,16 +341,20 @@ impl Scene {
         &self,
         geometry: &str,
     ) -> Result<Vec<String>, ResolveError> {
-        let mut sources = Vec::new();
-        if let Some((handle, _)) = self.node_entry(geometry) {
-            sources.push(handle.to_string());
-        }
-        sources.extend(
-            self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
+        let own = self
+            .node_entry(geometry)
+            .map(|(handle, _)| handle.to_string());
+        Ok(own
+            .into_iter()
+            .chain(
+                self.gathered_containers(
+                    geometry,
+                    &EdgeKind::ShaderAttributes,
+                )?
                 .into_iter()
                 .map(|(_, _, edge)| edge.from().to_string()),
-        );
-        Ok(sources)
+            )
+            .collect())
     }
 
     /// The value of one shader attribute, gathered along a geometry's
@@ -476,21 +481,23 @@ impl Scene {
         // The geometry, then the sets it belongs to directly, then the
         // transforms above it. With no set memberships this is `chain`
         // and the walk is unchanged.
-        let mut sources: Vec<&str> = Vec::with_capacity(chain.len() + 1);
-        for node in chain {
-            sources.push(node.as_str());
-            sources.extend(
-                self.edges_from(node.as_str())
-                    .filter(|edge| edge.kind == EdgeKind::SetMember)
-                    .map(|edge| edge.to()),
-            );
-        }
-
         // One set can hold several nodes on the chain. It is a single
         // source at its nearest occurrence -- rendered, a set holding
-        // both the mesh and its transform ranks where the mesh does.
+        // both the mesh and its transform ranks where the mesh does --
+        // so the `filter` keeps the first sighting and drops the rest,
+        // in the same pass that gathers them.
         let mut seen = HashSet::new();
-        sources.retain(|handle| seen.insert(*handle));
+        let sources: Vec<&str> = chain
+            .iter()
+            .flat_map(|node| {
+                iter::once(node.as_str()).chain(
+                    self.edges_from(node.as_str())
+                        .filter(|edge| edge.kind == EdgeKind::SetMember)
+                        .map(|edge| edge.to()),
+                )
+            })
+            .filter(|handle| seen.insert(*handle))
+            .collect();
 
         let mut gathered: Vec<(usize, usize, &Edge)> = sources
             .into_iter()

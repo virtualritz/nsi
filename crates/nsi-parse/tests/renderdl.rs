@@ -212,7 +212,7 @@ fn a_filtered_stream_is_one_3delight_reads_back() {
 
     let writer = nsi_intermediate::StreamWriter::new(Vec::new());
     parse_stream(&written, &writer).expect("filter 3Delight's own stream");
-    let filtered = writer.into_inner().expect("into_inner");
+    let filtered = writer.into_inner();
 
     // Every value the renderer wrote, still there and in order.
     assert_eq!(

@@ -32,3 +32,6 @@ ustr = ["dep:ustr"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[dev-dependencies]
+ahash = "0.8"

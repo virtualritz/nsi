@@ -9,6 +9,13 @@ use std::{ffi::c_char, os::raw::c_int};
 // Re-export dependencies needed by the macro
 #[cfg(not(feature = "link_lib3delight"))]
 #[doc(hidden)]
+/// The crate's hash map, hashed by `ahash`.
+///
+/// `std`'s `SipHash` resists collision attacks on adversarial input.
+/// The keys here are callback and context identifiers the host itself
+/// supplied, so the trade buys nothing and costs hashing speed.
+pub(crate) type HashMap<K, V> = ahash::AHashMap<K, V>;
+
 pub use dlopen2;
 #[doc(hidden)]
 pub extern crate lazy_static;

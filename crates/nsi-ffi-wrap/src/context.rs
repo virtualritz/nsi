@@ -2,15 +2,15 @@
 
 // Needed for the example dode to build.
 extern crate self as nsi;
-use crate::*;
 #[allow(unused_imports)]
+use crate::HashMap;
+use crate::*;
+use parking_lot::Mutex;
 use std::{
-    collections::HashMap,
-    ffi::{CStr, CString, c_char},
+    ffi::{CStr, c_char},
     marker::PhantomData,
     ops::Drop,
     os::raw::{c_int, c_void},
-    sync::Mutex,
 };
 use triomphe::Arc;
 use ustr::{Ustr, ustr};
@@ -89,7 +89,7 @@ impl<'a> InnerContext<'a> {
         let Some(args) = args else { return };
 
         let handle = ustr(handle);
-        let mut owned = self.callbacks.lock().unwrap();
+        let mut owned = self.callbacks.lock();
 
         args.iter()
             .filter_map(|arg| match &arg.data {
@@ -104,7 +104,7 @@ impl<'a> InnerContext<'a> {
                         drop_fn: callback.drop_fn,
                     },
                 ) {
-                    self.retired.lock().unwrap().push(displaced);
+                    self.retired.lock().push(displaced);
                 }
             });
     }
@@ -114,7 +114,7 @@ impl<'a> InnerContext<'a> {
     /// Only call this where no render can be using them -- after `Stop` or
     /// `Wait` returns, or once `NSIEnd` has.
     fn reclaim_retired(&self) {
-        self.retired.lock().unwrap().clear();
+        self.retired.lock().clear();
     }
 }
 
@@ -128,8 +128,8 @@ impl<'a> Drop for InnerContext<'a> {
         // Order matters: the renderer may still reach a callback until
         // `NSIEnd` returns, so free nothing before it does.
         NSI_API.NSIEnd(self.context);
-        self.callbacks.lock().unwrap().clear();
-        self.retired.lock().unwrap().clear();
+        self.callbacks.lock().clear();
+        self.retired.lock().clear();
     }
 }
 

@@ -50,7 +50,9 @@ zstd = ["dep:zstd"]
 ustr_handles = ["dep:ustr"]
 
 [dependencies]
+ahash = "0.8"
 indexmap = "2"
+parking_lot = "0.12"
 ustr = { version = "1", optional = true }
 flate2 = { version = "1", optional = true }
 zstd = { version = "0.13", optional = true }

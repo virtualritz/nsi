@@ -160,6 +160,28 @@ git stash pop
 
 - **NO INLINE PATHS**: Always import types at the top of the file using `use` statements. Never use inline paths like `crate::foo::Bar` in function bodies. Instead, add `use crate::foo::Bar;` at the top. The only exception is macros, which must use `$crate::` prefix for hygiene.
 
+- **HASH MAPS ARE `ahash`**: every crate that needs one defines
+  `pub(crate) type HashMap<K, V> = ahash::AHashMap<K, V>` (and the
+  `HashSet` twin) and uses that alias. Never `std::collections::HashMap`
+  or `HashSet`. `std`'s `SipHash` is chosen to resist collision attacks
+  on adversarial input; a recorded scene, a handle table and a callback
+  registry are not adversarial input, so the trade buys nothing and
+  costs hashing speed on the hottest keys in the workspace.
+
+- **LOCKS ARE `parking_lot`**: `Mutex`, `RwLock` and `Condvar` come from
+  `parking_lot`, never from `std::sync`. They are smaller and faster,
+  and -- the reason that matters here -- they do not poison, so `lock()`
+  returns the guard rather than a `Result` and no caller has to invent
+  an error for "a previous holder panicked". `Arc`, `OnceLock` and
+  `LazyLock` stay `std`; they are not lock primitives in this sense and
+  `parking_lot` has no equivalent.
+
+- **EVERY `unwrap`/`expect` CARRIES A `// SAFETY:` COMMENT** naming the
+  invariant that makes it unreachable, immediately above the call. A
+  message inside `expect` is not enough: it is what the panic prints,
+  not what a reader checks. Prefer `?`, `ok_or_else` or a typed error
+  where the case is actually reachable. Test code is exempt.
+
 - **NO REDUNDANT TYPE WRAPPERS**: Never create wrapper enums/structs that duplicate types from dependencies. If an imported type does everything needed, re-export it with `pub use` instead of creating a new type. Only wrap when adding functionality or adapting interfaces.
 
 ### Naming Conventions

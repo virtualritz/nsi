@@ -404,6 +404,8 @@ impl Scene {
                 continue;
             };
 
+            // SAFETY: the loop read `stack.last()` above and has not
+            // popped since, so there is a last element.
             stack.last_mut().expect("just read").1 += 1;
 
             if !on_path.insert(parent.clone()) {

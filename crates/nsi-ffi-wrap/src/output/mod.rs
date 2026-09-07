@@ -141,10 +141,12 @@
 //! See the `output` example on how to do this with a simple, display-referred
 //! `sRGB` curve.
 use crate::argument::CallbackPtr;
+use parking_lot::Mutex;
 use std::{
     ffi::CStr,
-    mem::size_of,
+    mem::{size_of, take},
     os::raw::{c_char, c_int, c_void},
+    sync::Arc,
 };
 
 pub mod pixel_format;
@@ -953,9 +955,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
     where
         F: FnMut(String, usize, usize, PixelFormat, Vec<T>) -> Error + 'a,
     {
-        use std::sync::{Arc, Mutex};
-
-        // Shared state between write and finish callbacks
+        // Shared state between write and finish callbacks.
         struct AccumState<T: PixelType> {
             buffer: Vec<T>,
             width: usize,
@@ -985,7 +985,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
                   y_max_plus_one: usize,
                   format: &PixelFormat,
                   bucket_data: &[T]| {
-                let mut state = write_state.lock().unwrap();
+                let mut state = write_state.lock();
 
                 // Initialize on first bucket
                 if !state.initialized {
@@ -1021,9 +1021,10 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
                   width: usize,
                   height: usize,
                   format: PixelFormat| {
-                let mut state = finish_state.lock().unwrap();
-                let buffer = std::mem::take(&mut state.buffer);
-                drop(state); // Release lock before calling user callback
+                let mut state = finish_state.lock();
+                let buffer = take(&mut state.buffer);
+                // Release the lock before calling the user's callback.
+                drop(state);
 
                 on_finish(name, width, height, format, buffer)
             },

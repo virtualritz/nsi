@@ -304,3 +304,42 @@ with those separated -- the mesh joining the second set first, the
 container on the first set connected first, and set creation order
 reversed -- the *first membership* still wins. The claim survived; the
 evidence for it had not been earned.
+
+### D14: storage stays keyed by handle; a slab is deferred to a measurement
+
+`Scene` keys its nodes with `IndexMap<Handle, Node>` and its three edge
+indexes with `HashMap<Handle, _>`. The alternative considered is
+`id-slab` -- `Vec<Option<T>>` indexed by a caller-assigned integer id,
+which this workspace maintains, and which reportedly bought a large
+speed-up in Salmon and Akatela.
+
+**Its preconditions mostly fit.** The crate's README asks for a small
+`Copy` key, a mostly dense index, ids assigned by the caller rather
+than the collection, and iteration in ascending id order. A `NodeId`
+handed out on `create` is dense and ascending, and *ascending id order
+is exactly this crate's replay-order invariant* -- the one gated
+against 3Delight's own stream. So the constraint that usually rules a
+slab out is the one it satisfies here.
+
+**What it cannot remove is the hashing.** ɴsɪ is handle-addressed:
+every `create`, `set_attribute` and `connect` names a node by string.
+A `handle -> NodeId` map therefore survives whatever the storage is.
+The gain is not "no hash" but "hash once per API call instead of once
+per graph hop": `Edge` would carry two 4-byte ids instead of two
+handles, the three indexes would become `Vec<Vec<u32>>` addressed
+directly, and a resolution walk would stop hashing entirely.
+
+**The cost is `delete`.** ɴsɪ has it and an interactive host uses it,
+so slots need tombstones plus a compaction pass, and compaction either
+renumbers ids -- breaking every index and the replay order with them --
+or leaves holes that grow across a session.
+
+**Deferred, pending a measurement, not rejected.** What would settle
+it: a profile of a Moana-shaped scene through `world_transforms`,
+`geometry_binding` and `affected`, reporting the fraction of time in
+hashing against walking and allocation. The one data point on hand
+argues for caution -- interning handles with `ustr`, which makes a hash
+a pointer compare, made a synthetic 20 000-edit frame *slower* in a
+debug build, so allocation and traversal dominate that path. Changing
+the key type of every edge in the crate on a guess is the wrong order
+of operations.

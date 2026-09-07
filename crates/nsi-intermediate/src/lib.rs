@@ -227,6 +227,17 @@ mod resolve;
 mod scene;
 mod stream;
 
+/// The crate's hash map, hashed by `ahash`.
+///
+/// `std`'s `SipHash` is chosen to resist collision attacks on
+/// adversarial input. A recorded scene is not adversarial input, and
+/// the keys here are handles hashed on every edge walk, so the trade
+/// is the wrong way round.
+pub(crate) type HashMap<K, V> = ahash::AHashMap<K, V>;
+
+/// The crate's hash set, hashed by `ahash`. See [`HashMap`].
+pub(crate) type HashSet<T> = ahash::AHashSet<T>;
+
 pub use edge::{Edge, EdgeKind, classify};
 pub use error::RecordError;
 #[cfg(feature = "lua")]

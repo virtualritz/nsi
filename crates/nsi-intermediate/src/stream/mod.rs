@@ -38,10 +38,8 @@ use crate::{EdgeKind, OwnedArgument, OwnedData, Scene};
 use core::fmt;
 use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
 use nsi_trait::{Action, Nsi, Type};
-use std::{
-    io::{self, Write},
-    sync::Mutex,
-};
+use parking_lot::Mutex;
+use std::io::{self, Write};
 
 /// One ɴsɪ stream string literal, escaped.
 ///
@@ -88,6 +86,8 @@ fn quoted_str(value: &str) -> String {
     // multi-byte sequence is copied through contiguously and unchanged.
     // Falling back to a lossy conversion here would quietly rewrite an
     // identifier, which is the one thing this crate refuses to do.
+    // SAFETY: `quoted` only ever inserts ASCII escapes and copies
+    // every other byte through unchanged, so a UTF-8 input stays UTF-8.
     String::from_utf8(quoted(value.as_bytes()))
         .expect("escaping only ASCII preserves UTF-8")
 }
@@ -120,6 +120,8 @@ fn format_f64(value: f64) -> String {
         }
     } else {
         let scientific = format!("{:.*e}", (SIGNIFICANT - 1) as usize, value);
+        // SAFETY: `{:e}` always writes exactly one `e`, and what
+        // follows it is always a decimal integer with an optional sign.
         let (mantissa, exponent) =
             scientific.split_once('e').expect("Rust always writes one");
         let exponent: i32 = exponent.parse().expect("an integer exponent");
@@ -515,7 +517,7 @@ mod tests;
 /// let writer = StreamWriter::new(Vec::new());
 /// writer.create("cam", "perspectivecamera", None).unwrap();
 /// assert_eq!(
-///     String::from_utf8(writer.into_inner().unwrap()).unwrap(),
+///     String::from_utf8(writer.into_inner()).unwrap(),
 ///     "Create \"cam\" \"perspectivecamera\"\n",
 /// );
 /// ```
@@ -541,13 +543,8 @@ impl<W: Write> StreamWriter<W> {
     }
 
     /// The `out` this was built with.
-    ///
-    /// # Errors
-    ///
-    /// [`io::Error`] of kind [`io::ErrorKind::Other`] when the lock is
-    /// poisoned, which means a previous write panicked.
-    pub fn into_inner(self) -> io::Result<W> {
-        self.out.into_inner().map_err(|_| poisoned())
+    pub fn into_inner(self) -> W {
+        self.out.into_inner()
     }
 
     /// Write one statement, then its parameter lines.
@@ -557,7 +554,7 @@ impl<W: Write> StreamWriter<W> {
         args: &[Arg<'_, '_>],
         skip: Option<&str>,
     ) -> io::Result<()> {
-        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        let mut out = self.out.lock();
         writeln!(out, "{head}")?;
         for arg in args {
             let owned = OwnedArgument::from_param(arg);
@@ -568,11 +565,6 @@ impl<W: Write> StreamWriter<W> {
         }
         Ok(())
     }
-}
-
-/// The one error a writer can raise on its own.
-fn poisoned() -> io::Error {
-    io::Error::other("the writer's lock is poisoned")
 }
 
 impl<W: Write + Send> Nsi for StreamWriter<W> {
@@ -719,7 +711,7 @@ impl<W: Write + Send> Nsi for StreamWriter<W> {
             args.unwrap_or_default(),
             Some("action"),
         )?;
-        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        let mut out = self.out.lock();
         writeln!(
             out,
             "  {} {} 1 {}",

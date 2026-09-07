@@ -1,11 +1,13 @@
 //! The ɴsɪ recorder.
 //!
-//! `Nsi` takes `&self` everywhere, so the scene lives behind a `Mutex`.
+//! `Nsi` takes `&self` everywhere, so the scene lives behind a
+//! `parking_lot::Mutex` -- which has no poisoning, so reading the scene
+//! back after a panic in one of these methods is not a `Result`.
 
 use crate::{OwnedArgument, OwnedData, RecordError, Scene};
 use nsi_ffi_wrap::Arg;
 use nsi_trait::{Action, Nsi};
-use std::sync::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard};
 
 /// Where the render is in its lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -62,7 +64,7 @@ impl Recorder {
     /// calling thread. Drop the guard, or scope it, before recording
     /// again.
     pub fn scene(&self) -> MutexGuard<'_, Scene> {
-        self.scene.lock().expect("scene mutex poisoned")
+        self.scene.lock()
     }
 
     /// Take the recorded scene, consuming the recorder.
@@ -75,12 +77,12 @@ impl Recorder {
     ///
     /// If the scene mutex was poisoned by a panic while recording.
     pub fn into_scene(self) -> Scene {
-        self.scene.into_inner().expect("scene mutex poisoned")
+        self.scene.into_inner()
     }
 
     /// The current render state.
     pub fn render_state(&self) -> RenderState {
-        *self.state.lock().expect("state mutex poisoned")
+        *self.state.lock()
     }
 
     fn own(args: &[Arg<'_, 'static>]) -> Vec<OwnedArgument> {
@@ -205,7 +207,7 @@ impl Nsi for Recorder {
         action: Action,
         _args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        let mut state = self.state.lock().expect("state mutex poisoned");
+        let mut state = self.state.lock();
         *state = match (action, *state) {
             (Action::Start, _) => RenderState::Running,
             (Action::Suspend, RenderState::Running) => RenderState::Suspended,

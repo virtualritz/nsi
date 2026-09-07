@@ -43,7 +43,7 @@ pub(crate) fn handle(name: &str) -> Handle {
 /// hash as its own text.
 #[cfg(feature = "ustr_handles")]
 pub(crate) fn get<'a, V>(
-    map: &'a std::collections::HashMap<Handle, V>,
+    map: &'a crate::HashMap<Handle, V>,
     name: &str,
 ) -> Option<&'a V> {
     map.get(&ustr::ustr(name))
@@ -52,7 +52,7 @@ pub(crate) fn get<'a, V>(
 /// Look one up in a map keyed by [`Handle`], from a `&str`.
 #[cfg(not(feature = "ustr_handles"))]
 pub(crate) fn get<'a, V>(
-    map: &'a std::collections::HashMap<Handle, V>,
+    map: &'a crate::HashMap<Handle, V>,
     name: &str,
 ) -> Option<&'a V> {
     map.get(name)
@@ -61,7 +61,7 @@ pub(crate) fn get<'a, V>(
 /// The same, for a map keyed by a handle and an attribute name.
 #[cfg(feature = "ustr_handles")]
 pub(crate) fn get_pair<'a, V>(
-    map: &'a std::collections::HashMap<(Handle, Handle), V>,
+    map: &'a crate::HashMap<(Handle, Handle), V>,
     name: &str,
     attribute: &str,
 ) -> Option<&'a V> {
@@ -71,7 +71,7 @@ pub(crate) fn get_pair<'a, V>(
 /// The same, for a map keyed by a handle and an attribute name.
 #[cfg(not(feature = "ustr_handles"))]
 pub(crate) fn get_pair<'a, V>(
-    map: &'a std::collections::HashMap<(Handle, Handle), V>,
+    map: &'a crate::HashMap<(Handle, Handle), V>,
     name: &str,
     attribute: &str,
 ) -> Option<&'a V> {

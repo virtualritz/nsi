@@ -6,9 +6,8 @@
 //! resolves geometry to world space too. So the chain has to be
 //! composed here, once.
 
-use crate::{Edge, EdgeKind, Node, OwnedArgument, OwnedData, Scene};
+use crate::{Edge, EdgeKind, HashSet, Node, OwnedArgument, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
-use std::collections::HashSet;
 
 mod attributes;
 mod chain;

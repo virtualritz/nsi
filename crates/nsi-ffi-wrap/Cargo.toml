@@ -46,6 +46,7 @@ cstring_tokens = []
 reqwest = { version = "0.13", features = ["blocking"], optional = true }
 
 [dependencies]
+ahash = "0.8"
 dlopen2 = { version = "0.8", optional = true }
 enum_dispatch = "0.3"
 lazy_static = "1"

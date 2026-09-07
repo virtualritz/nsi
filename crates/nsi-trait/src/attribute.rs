@@ -308,7 +308,7 @@ mod tests {
     /// two `unsafe impl`s used to assert by hand.
     #[test]
     fn the_witness_type_constrains_nothing() {
-        use std::collections::HashSet;
+        use ahash::AHashSet as HashSet;
 
         // A raw pointer is neither `Send` nor `Sync` nor `Eq`, so it
         // is the witness this needs without inventing a type whose

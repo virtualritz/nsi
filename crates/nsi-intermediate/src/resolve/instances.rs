@@ -5,7 +5,7 @@ use super::{
     motion::{Located, locate_sample, matrices_of, sampled_attr},
     *,
 };
-use std::collections::{HashMap, HashSet};
+use crate::{HashMap, HashSet};
 
 impl Scene {
     /// The effective value of an integer instancer attribute that was

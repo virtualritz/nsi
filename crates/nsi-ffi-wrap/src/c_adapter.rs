@@ -10,13 +10,13 @@
 //! [`Nsi`] (`self` _is_ the context) is the only NSI trait, and the handle
 //! mapping needed by the C API lives entirely inside this adapter.
 
-use crate::{Arg, ArgSlice};
+use crate::{Arg, ArgSlice, HashMap};
 use ::nsi_trait::{Action, NodeType, Nsi};
+use parking_lot::Mutex;
 use std::{
-    collections::HashMap,
     ffi::c_int,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicI32, Ordering},
     },
 };
@@ -79,32 +79,25 @@ where
     /// Look up a live `T` by its C API context ID, releasing the map lock.
     #[inline]
     fn lookup(&self, ctx: c_int) -> Option<Arc<T>> {
-        self.contexts.lock().ok()?.get(&ctx).cloned()
+        self.contexts.lock().get(&ctx).cloned()
     }
 
     // ─── C API equivalents ───────────────────────────────────────────────
 
     /// `NSIBegin` -- construct a new `T` and return its integer ID.
-    /// Returns 0 (`NSI_BAD_CONTEXT`) if the context map lock is poisoned.
     pub fn begin(&self, _args: Option<&ArgSlice>) -> c_int {
         // The canonical Nsi trait has no begin() -- `self` is the context, so
         // construction happens here via the factory. Begin args from C are
         // ignored (3Delight does the same on its end).
         let nsi = (self.factory)();
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        if let Ok(mut contexts) = self.contexts.lock() {
-            contexts.insert(id, Arc::new(nsi));
-            id
-        } else {
-            0
-        }
+        self.contexts.lock().insert(id, Arc::new(nsi));
+        id
     }
 
     /// `NSIEnd` -- remove the `T` from the map. Drop runs on last Arc release.
     pub fn end(&self, ctx: c_int) {
-        if let Ok(mut contexts) = self.contexts.lock() {
-            contexts.remove(&ctx);
-        }
+        self.contexts.lock().remove(&ctx);
     }
 
     /// `NSICreate` -- create a node in the addressed context.

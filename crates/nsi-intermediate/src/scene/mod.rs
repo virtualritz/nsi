@@ -5,15 +5,13 @@
 //! meaningless.
 
 use crate::{
-    ALL, Edge, EdgeKind, OwnedArgument, RecordError, classify,
+    ALL, Edge, EdgeKind, HashMap, HashSet, OwnedArgument, RecordError,
+    classify,
     handle::{self, Handle},
 };
 use core::{cmp::Ordering, mem};
 use indexmap::{IndexMap, IndexSet};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::LazyLock,
-};
+use std::sync::LazyLock;
 
 /// One node's static attributes, by name.
 pub(crate) type AttributeTable = IndexMap<Handle, OwnedArgument>;
@@ -1080,6 +1078,9 @@ impl Scene {
         // the journal are borrowed at once. Through `node_mut` they
         // are not, and carrying the names out of the loop in a `Vec`
         // to record them afterwards cost a clone of every one.
+        // SAFETY: `node_mut` above returned `Ok`, which means it
+        // either found this handle or created it, and nothing since
+        // could have removed it.
         let node = self
             .nodes
             .get_mut(&node_handle)
@@ -1145,6 +1146,9 @@ impl Scene {
         let node_handle = handle::handle(handle);
         // See `set_attribute` for why the node is reached for by
         // field rather than through `node_mut`.
+        // SAFETY: `node_mut` above returned `Ok`, which means it
+        // either found this handle or created it, and nothing since
+        // could have removed it.
         let node = self
             .nodes
             .get_mut(&node_handle)

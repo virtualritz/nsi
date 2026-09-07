@@ -46,7 +46,7 @@ fn scene_of(stream: &[u8]) -> Scene {
 fn fixture() -> Vec<u8> {
     let writer = StreamWriter::new(Vec::new());
     build(&writer).expect("build");
-    writer.into_inner().expect("into_inner")
+    writer.into_inner()
 }
 
 /// The mechanism: a stream in, the same stream's meaning out.
@@ -57,7 +57,7 @@ fn an_identity_filter_changes_nothing() {
     let filtered = {
         let filter = Identity(StreamWriter::new(Vec::new()));
         parse_stream(&source, &filter).expect("filter");
-        filter.0.into_inner().expect("into_inner")
+        filter.0.into_inner()
     };
 
     assert_eq!(
@@ -112,7 +112,7 @@ fn a_swallowed_call_is_absent_from_the_output() {
 
     let filter = NoConnections(StreamWriter::new(Vec::new()));
     parse_stream(&source, &filter).expect("filter");
-    let filtered = filter.0.into_inner().expect("into_inner");
+    let filtered = filter.0.into_inner();
     let text = String::from_utf8(filtered.clone()).unwrap();
 
     assert!(!text.contains("Connect"), "the swallowed statement is gone");
@@ -130,7 +130,7 @@ fn a_render_control_round_trips_its_action() {
     writer
         .render_control(Action::Synchronize, None)
         .expect("render_control");
-    let text = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+    let text = String::from_utf8(writer.into_inner()).unwrap();
 
     assert_eq!(text.matches("\"action\"").count(), 1, "written once");
 
@@ -147,7 +147,7 @@ fn a_redundant_action_parameter_is_not_written_twice() {
     writer
         .render_control(Action::Start, Some(&[nsi::string!("action", "stop")]))
         .expect("render_control");
-    let text = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+    let text = String::from_utf8(writer.into_inner()).unwrap();
 
     assert_eq!(text.matches("\"action\"").count(), 1);
     assert!(text.contains("\"start\""), "the typed action wins");
@@ -160,7 +160,7 @@ fn a_redundant_action_parameter_is_not_written_twice() {
 fn the_lua_writer_agrees_with_the_stream_writer() {
     let lua_writer = LuaWriter::new(Vec::new());
     build(&lua_writer).expect("build");
-    let script = lua_writer.into_inner().expect("into_inner");
+    let script = lua_writer.into_inner();
 
     let recorder = Recorder::new();
     nsi_parse::run_lua(&script, &recorder).expect("run_lua");
@@ -177,7 +177,7 @@ fn a_create_carries_its_parameters() {
     writer
         .create("p", "procedural", Some(&[nsi::string!("type", "lua")]))
         .expect("create");
-    let text = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+    let text = String::from_utf8(writer.into_inner()).unwrap();
 
     assert!(text.starts_with("Create \"p\" \"procedural\"\n"));
     assert!(text.contains("\"type\" \"string\" 1 \"lua\""));
