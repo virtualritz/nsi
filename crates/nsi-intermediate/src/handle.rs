@@ -151,3 +151,49 @@ pub(crate) fn map_entry<'a, V>(
     map.get_key_value(name)
         .map(|(key, value)| (key.as_str(), value))
 }
+
+/// Whether an `IndexSet` of handles holds one, from a `&str`.
+#[cfg(feature = "ustr_handles")]
+pub(crate) fn set_contains(
+    set: &indexmap::IndexSet<Handle>,
+    name: &str,
+) -> bool {
+    set.contains(&ustr::ustr(name))
+}
+
+/// Whether an `IndexSet` of handles holds one, from a `&str`.
+#[cfg(not(feature = "ustr_handles"))]
+pub(crate) fn set_contains(
+    set: &indexmap::IndexSet<Handle>,
+    name: &str,
+) -> bool {
+    set.contains(name)
+}
+
+/// Remove one from an `IndexSet` of handles, from a `&str`.
+#[cfg(feature = "ustr_handles")]
+pub(crate) fn set_remove(set: &mut indexmap::IndexSet<Handle>, name: &str) {
+    set.shift_remove(&ustr::ustr(name));
+}
+
+/// Remove one from an `IndexSet` of handles, from a `&str`.
+#[cfg(not(feature = "ustr_handles"))]
+pub(crate) fn set_remove(set: &mut indexmap::IndexSet<Handle>, name: &str) {
+    set.shift_remove(name);
+}
+
+/// Copy a handle.
+///
+/// `Ustr` is `Copy` and `String` is not, so a bare `clone` is right in
+/// one configuration and a clippy error in the other. The choice lives
+/// here once.
+#[cfg(feature = "ustr_handles")]
+pub(crate) fn copy(handle: &Handle) -> Handle {
+    *handle
+}
+
+/// Copy a handle.
+#[cfg(not(feature = "ustr_handles"))]
+pub(crate) fn copy(handle: &Handle) -> Handle {
+    handle.clone()
+}

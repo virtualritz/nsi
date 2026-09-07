@@ -240,15 +240,22 @@ pub(crate) fn latest_per_time(
 #[non_exhaustive]
 pub struct Changes {
     /// Handles created during this interval and not since deleted.
-    pub created: IndexSet<String>,
+    ///
+    /// Read it with [`Changes::created`]. Stored as handles so that
+    /// `ustr_handles` interns them: a frame that touches ten thousand
+    /// nodes copied ten thousand strings out of the scene otherwise,
+    /// on the one path an interactive host walks every frame.
+    pub(crate) created: IndexSet<Handle>,
     /// Handles deleted, with the node type they had.
     ///
     /// The type is kept because the handle is gone from the scene: a
     /// consumer that has to undo whatever it built for a node cannot
-    /// ask what kind of node it was any more.
-    pub deleted: IndexMap<String, String>,
-    /// `(handle, attribute)` pairs set, re-set or deleted.
-    pub attributes: IndexSet<(String, String)>,
+    /// ask what kind of node it was any more. Read it with
+    /// [`Changes::deleted`].
+    pub(crate) deleted: IndexMap<Handle, Handle>,
+    /// `(handle, attribute)` pairs set, re-set or deleted. Read it
+    /// with [`Changes::attributes`].
+    pub(crate) attributes: IndexSet<(Handle, Handle)>,
     /// Connections made.
     pub edges_added: Vec<Edge>,
     /// Connections removed, **in full**.
@@ -268,6 +275,48 @@ pub struct Changes {
     /// rides on these arguments, which decides which of two shaders
     /// wins. This is the quietest way for a scene to change meaning.
     pub edges_rearmed: Vec<Edge>,
+}
+
+impl Changes {
+    /// The handles created and not since deleted.
+    pub fn created(&self) -> impl Iterator<Item = &str> {
+        self.created.iter().map(|handle| handle.as_str())
+    }
+
+    /// Whether one handle was created in this interval.
+    pub fn was_created(&self, handle: &str) -> bool {
+        handle::set_contains(&self.created, handle)
+    }
+
+    /// The handles deleted, each with the node type it had.
+    pub fn deleted(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.deleted
+            .iter()
+            .map(|(handle, node_type)| (handle.as_str(), node_type.as_str()))
+    }
+
+    /// The node type a deleted handle had, if it was deleted here.
+    pub fn deleted_type(&self, handle: &str) -> Option<&str> {
+        handle::map_get(&self.deleted, handle)
+            .map(|node_type| node_type.as_str())
+    }
+
+    /// The `(handle, attribute)` pairs set, re-set or deleted.
+    pub fn attributes(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.attributes
+            .iter()
+            .map(|(handle, name)| (handle.as_str(), name.as_str()))
+    }
+
+    /// Nothing changed since the last [`Scene::take_changes`].
+    pub fn is_empty(&self) -> bool {
+        self.created.is_empty()
+            && self.deleted.is_empty()
+            && self.attributes.is_empty()
+            && self.edges_added.is_empty()
+            && self.edges_removed.is_empty()
+            && self.edges_rearmed.is_empty()
+    }
 }
 
 /// What a [`Changes`] batch may have moved.
@@ -863,7 +912,7 @@ impl Scene {
                         ..Node::default()
                     },
                 );
-                self.changes.created.insert(handle.to_string());
+                self.changes.created.insert(handle::handle(handle));
                 Ok(())
             }
         }
@@ -890,10 +939,10 @@ impl Scene {
             // found, and a consumer working out what the delete
             // orphaned needs both.
             if let Some(node) = handle::map_remove(&mut self.nodes, handle) {
-                self.changes.created.shift_remove(handle);
+                handle::set_remove(&mut self.changes.created, handle);
                 self.changes
                     .deleted
-                    .insert(handle.to_string(), node.node_type.to_string());
+                    .insert(handle::handle(handle), node.node_type);
             }
             for edge in self
                 .edges
@@ -981,10 +1030,11 @@ impl Scene {
 
         for handle in &doomed {
             if let Some(node) = handle::map_get(&self.nodes, handle) {
-                self.changes.created.shift_remove(handle);
+                let node_type = handle::copy(&node.node_type);
+                handle::set_remove(&mut self.changes.created, handle);
                 self.changes
                     .deleted
-                    .insert(handle.clone(), node.node_type().to_string());
+                    .insert(handle::handle(handle), node_type);
             }
         }
         for edge in self.edges.iter().filter(|edge| {
@@ -1023,21 +1073,29 @@ impl Scene {
         handle: &str,
         args: Vec<OwnedArgument>,
     ) -> Result<(), RecordError> {
-        let node = self.node_mut(handle)?;
-        let mut touched = Vec::with_capacity(args.len());
+        // Existence first, so a rejected call records nothing.
+        self.node_mut(handle)?;
+        let node_handle = handle::handle(handle);
+        // `nodes` and `changes` are separate fields, so the node and
+        // the journal are borrowed at once. Through `node_mut` they
+        // are not, and carrying the names out of the loop in a `Vec`
+        // to record them afterwards cost a clone of every one.
+        let node = self
+            .nodes
+            .get_mut(&node_handle)
+            .expect("node_mut found or created it");
         for arg in args {
+            let name = handle::handle(&arg.name);
             // Only when the node has samples: reaching for the table
             // through `sample_table_mut` would allocate one for every
             // node that has an attribute, which is most of a scene.
             if let Some(table) = node.samples.as_mut() {
-                table.shift_remove(&handle::handle(&arg.name));
+                table.shift_remove(&name);
             }
-            touched.push(arg.name.clone());
-            node.attribute_table_mut()
-                .insert(handle::handle(&arg.name), arg);
-        }
-        for name in touched {
-            self.changes.attributes.insert((handle.to_string(), name));
+            self.changes
+                .attributes
+                .insert((handle::copy(&node_handle), handle::copy(&name)));
+            node.attribute_table_mut().insert(name, arg);
         }
         Ok(())
     }
@@ -1082,28 +1140,33 @@ impl Scene {
         // segment.
         let time = time + 0.0;
 
-        let node = self.node_mut(handle)?;
-
-        let mut touched = Vec::with_capacity(args.len());
+        // Existence first, so a rejected call records nothing.
+        self.node_mut(handle)?;
+        let node_handle = handle::handle(handle);
+        // See `set_attribute` for why the node is reached for by
+        // field rather than through `node_mut`.
+        let node = self
+            .nodes
+            .get_mut(&node_handle)
+            .expect("node_mut found or created it");
         for arg in args {
+            let name = handle::handle(&arg.name);
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
             if let Some(table) = node.attributes.as_mut() {
-                table.shift_remove(&handle::handle(&arg.name));
+                table.shift_remove(&name);
             }
-            touched.push(arg.name.clone());
+            self.changes
+                .attributes
+                .insert((handle::copy(&node_handle), handle::copy(&name)));
 
             // Appended, never merged: a re-set at a time already
             // recorded is another call, and what it superseded is part
             // of the record. `Node::samples` says why.
             node.sample_table_mut()
-                .entry(handle::handle(&arg.name))
+                .entry(name)
                 .or_default()
                 .push((time, arg));
-        }
-
-        for name in touched {
-            self.changes.attributes.insert((handle.to_string(), name));
         }
 
         Ok(())
@@ -1117,7 +1180,7 @@ impl Scene {
         // should I look at again" is not harmed by one extra name.
         self.changes
             .attributes
-            .insert((handle.to_string(), name.to_string()));
+            .insert((handle::handle(handle), handle::handle(name)));
         if let Some(node) = handle::map_get_mut(&mut self.nodes, handle) {
             if let Some(table) = node.attributes.as_mut() {
                 table.shift_remove(&handle::handle(name));

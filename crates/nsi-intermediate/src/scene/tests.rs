@@ -809,19 +809,15 @@ fn the_record_is_net_not_a_log() {
     scene.delete("gone").unwrap();
 
     let changes = scene.take_changes();
-    assert_eq!(changes.attributes.len(), 1, "one name, forty calls");
+    assert_eq!(changes.attributes().count(), 1, "one name, forty calls");
+    assert!(changes.attributes().any(|pair| pair == ("a", "visibility")));
     assert!(
-        changes
-            .attributes
-            .contains(&("a".to_string(), "visibility".to_string()))
-    );
-    assert!(
-        !changes.created.contains("gone"),
+        !changes.was_created("gone"),
         "created and deleted in one interval: the create is undone, and \
          a consumer that never saw the node has nothing to undo",
     );
     assert_eq!(
-        changes.deleted.get("gone").map(String::as_str),
+        changes.deleted_type("gone"),
         Some("mesh"),
         "only the delete stands, with the type the handle no longer has",
     );
@@ -947,7 +943,7 @@ fn a_delete_records_the_edges_it_took_with_it() {
     scene.delete("xf").unwrap();
 
     let changes = scene.take_changes();
-    assert_eq!(changes.deleted.len(), 1);
+    assert_eq!(changes.deleted().count(), 1);
     let pairs: Vec<(&str, &str)> = changes
         .edges_removed
         .iter()
