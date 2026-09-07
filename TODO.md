@@ -37,3 +37,15 @@ row, since they move.
   `HashSet` anywhere, no `std::sync` lock primitives in library code,
   and no genuine inline-path violations (the ones a naive grep reports
   are module-level `use` inside `mod` blocks, which is correct).
+
+## Archived Histories
+
+`refs/archive/nsi-record/master` and `.../crate-only` hold the ten
+commits of `nsi-record`, the standalone crate `nsi-intermediate` grew
+out of -- the split, the connection classifier, the node tables, the
+`Recorder`, the stream emitter and the resolver. It lived in
+`~/code/crates/nsi-record` with no remote, so the history existed in
+one directory; the directory is gone and the refs are the record. They
+are local refs: `git push origin refs/archive/nsi-record/master` if
+this repo should carry them upstream too. A `git bundle` copy is at
+`~/.local/share/nsi-archive/nsi-record-2026-09-07.bundle`.

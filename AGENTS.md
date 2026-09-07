@@ -235,6 +235,22 @@ These instructions apply to any communication (e.g. feedback you print to the us
 
 ## Guidelines
 
+- **Suspect identifiers that lie about their scope.** Three defects in
+  one week had the same shape -- a name that reads as one thing and is
+  another -- and none of them looked wrong in review:
+  `std::process::id()` used to make a per-test temporary file unique,
+  when it is constant for every test in one binary, so four tests
+  shared a path; a `#[cfg(not(debug_assertions))]` branch that reads as
+  "the normal case" and only ever compiled under `--release`, where
+  nothing ran it; and `Reference` occupying `ArgData`'s *second*
+  lifetime, whose name does not say that it is pegged to the `Context`,
+  so a soundness hole was reported and agreed to that the borrow
+  checker had always rejected. When a name implies a scope -- unique,
+  normal, transient, per-call -- check what it actually ranges over
+  before trusting it, and prefer a test that would fail if the
+  implication were wrong. Settling one of these took a doctest written
+  to compile and watched to fail.
+
 - **Test Naming Convention**: Test functions should NOT be prefixed with `test_`. The `#[test]` attribute already indicates it's a test. Use descriptive names without the prefix.
 
 - **CRITICAL: ALWAYS run `cargo test` and ensure the code compiles and tests pass WITHOUT ANY WARNINGS BEFORE committing!** Never commit code that doesn't build, has failing tests, or produces warnings.
