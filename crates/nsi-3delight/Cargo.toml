@@ -1,6 +1,6 @@
 [package]
 name = "nsi-3delight"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
@@ -16,7 +16,7 @@ repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
-nsi-toolbelt = { version = "0.9", path = "../nsi-toolbelt" }
+nsi-toolbelt = { version = "0.10", path = "../nsi-toolbelt" }
 
 [package.metadata.docs.rs]
 all-features = true
