@@ -12,3 +12,6 @@ Cargo.lock
 # .claude/audit/commands.log once reached `cargo package -p nsi-ffi-wrap`.
 # The root .claude/ is tracked deliberately; these are not.
 crates/**/.claude/
+
+# Machine-specific cargo config (e.g. OIDN_DIR); see nsi-display-exr.
+.cargo/config.toml

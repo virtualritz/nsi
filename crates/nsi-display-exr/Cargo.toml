@@ -17,13 +17,27 @@ repository = "https://github.com/virtualritz/nsi/"
 # rlib so integration tests and other crates can link the driver itself.
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# OIDN denoising. Off by default because `oidn`'s build script needs
+# OpenImageDenoise present -- via OIDN_DIR or pkg-config -- and panics
+# when it is not. docs.rs has neither, and no network for oidn's
+# `bundled` route either, so a default-on feature would mean this crate
+# publishes with no documentation at all. Writing EXRs is the core;
+# denoising is the extra that needs a system library.
+denoise = ["dep:oidn"]
+
 [dependencies]
 ndspy-sys = "0.2"
 nsi-display = { version = "0.1", path = "../nsi-display" }
 # Default features on purpose: `rayon` is one of them, and it is what
 # compresses pixel blocks on several threads.
-exr = "1"
-oidn = "2.3"
+# 1.74.2, not "1": that is the release that added the `dwa` module, and
+# so the first that can *write* dwaa/dwab. Earlier 1.x accepts the enum
+# variants and then fails at write time with "yet unimplemented
+# compression method", which would make two of this driver's advertised
+# compressions fail only once a render had finished.
+exr = "1.74.2"
+oidn = { version = "2.3", optional = true }
 
 [dev-dependencies]
 nsi = { version = "0.10", path = "../..", features = ["output"] }

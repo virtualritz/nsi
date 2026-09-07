@@ -8,23 +8,30 @@
 //! Build it and give the artefact the name the renderer looks for:
 //!
 //! ```text
-//! RUSTFLAGS="-C link-arg=-Wl,-rpath,$DELIGHT/lib/oidn/lib" \
-//!   OIDN_DIR=$DELIGHT/lib/oidn \
-//!   cargo build -p nsi-display-exr
+//! cargo build -p nsi-display-exr --features denoise
 //! cp target/debug/libnsi_display_exr.so rust_exr.dpy
 //! ```
 //!
-//! The rpath matters: the renderer `dlopen`s this driver, so OIDN has
-//! to be findable without cargo's environment. Do not use
-//! `LD_LIBRARY_PATH` for it -- 3Delight's OIDN directory also holds its
-//! own TBB, and `mold` loads TBB itself, so the linker picks up the
-//! wrong one and fails.
+//! # Denoising is optional
 //!
-//! Then render with `nsi::string!("drivername", "rust_exr")`. See the
-//! `png_driver` example for the full writeup of how 3Delight resolves
-//! `drivername` to a `.dpy` on disk -- and why the name here is
-//! `rust_exr` rather than `exr`, which would silently resolve to
-//! 3Delight's own built-in driver.
+//! `denoise` is off by default, because `oidn`'s build script needs
+//! OpenImageDenoise present -- through `OIDN_DIR` or `pkg-config` --
+//! and *panics* when it is not. docs.rs has neither, and no network for
+//! `oidn`'s `bundled` route either, so a default-on feature would mean
+//! this crate publishes with no documentation at all. Writing EXRs is
+//! the core; denoising is the extra that needs a system library.
+//!
+//! With the feature off the `denoise` attribute is still accepted, and
+//! reported on `stderr` rather than ignored -- a scene that asked for a
+//! denoised render should not quietly receive an undenoised one.
+//!
+//! With it on, set `OIDN_DIR` to an OpenImageDenoise install; this
+//! crate's `build.rs` turns that into an rpath, so the `.dpy` finds
+//! OIDN when the *renderer* loads it, without cargo's environment. Do
+//! not reach for `LD_LIBRARY_PATH` instead: an OIDN directory may also
+//! hold its own TBB, and `mold` loads TBB itself, so putting one on
+//! `LD_LIBRARY_PATH` makes the linker pick up the wrong TBB and die on
+//! an undefined symbol.
 //!
 //! # Why denoise here at all
 //!
@@ -51,7 +58,14 @@
 //! - `compression` -- `none`, `rle`, `zips`, `zip`, `piz`, `pxr24`,
 //!   `b44`, `b44a`, `dwaa` or `dwab`. Default `zips`. All ten are
 //!   verified to reach the written file's header, not merely to return
-//!   `Ok`; see `tests/exr_render.rs`.
+//!   `Ok`; see `tests/render.rs`.
+//!
+//!   `dwaa` and `dwab` need **`exr` 1.74.2 or newer** -- that is the
+//!   release which added the `dwa` module, and so the first that can
+//!   write them. Earlier 1.x accepts the enum variants and then fails
+//!   at write time with "yet unimplemented compression method", which
+//!   would surface only once a render had finished. The manifest
+//!   requires that minimum rather than `"1"` for exactly this reason.
 //! - `line-order` -- `increasing`, `decreasing`, `any`. Default
 //!   `increasing`.
 //! - `header.<name>` -- any string attribute, written into the EXR
@@ -130,9 +144,13 @@ struct Exr {
     /// The `colorprofile` the scene set on its output layer, if any.
     colour_profile: Option<String>,
     denoise: bool,
+    #[cfg(feature = "denoise")]
     denoise_quality: oidn::Quality,
-    /// The layer names to take OIDN's auxiliary inputs from.
+    /// The layer names to take OIDN's auxiliary inputs from. Read only
+    /// by `run_denoise`, so they exist only with that feature.
+    #[cfg(feature = "denoise")]
     denoise_albedo: String,
+    #[cfg(feature = "denoise")]
     denoise_normal: String,
     /// The whole frame, `width * height * channels` scalars.
     pixels: Vec<f32>,
@@ -198,6 +216,9 @@ fn layer_names(params: Params<'_>) -> Vec<String> {
     names
 }
 
+/// Helpers only the denoiser needs: finding the auxiliary layers and
+/// packing them into the tightly packed RGB buffers OIDN accepts.
+#[cfg(feature = "denoise")]
 impl Exr {
     /// Finds a layer by name, returning its span.
     fn layer(&self, name: &str) -> Option<&LayerSpan> {
@@ -322,6 +343,7 @@ impl DisplayDriver for Exr {
             .collect();
 
         let denoise = params.i32("denoise").unwrap_or(0) != 0;
+        #[cfg(feature = "denoise")]
         let denoise_quality =
             match params.string("denoise.quality").unwrap_or("default") {
                 "default" => oidn::Quality::Default,
@@ -407,8 +429,11 @@ impl DisplayDriver for Exr {
             header,
             colour_profile,
             denoise,
+            #[cfg(feature = "denoise")]
             denoise_quality,
+            #[cfg(feature = "denoise")]
             denoise_albedo,
+            #[cfg(feature = "denoise")]
             denoise_normal,
             pixels: vec![0.0f32; width * height * channels],
         })
@@ -429,9 +454,24 @@ impl DisplayDriver for Exr {
         Ok(())
     }
 
+    // `mut` is needed only to denoise in place; without that feature
+    // nothing here mutates.
+    #[cfg_attr(not(feature = "denoise"), allow(unused_mut))]
     fn close(mut self) -> Result<()> {
+        #[cfg(feature = "denoise")]
         if self.denoise {
             self.run_denoise();
+        }
+        // Without the `denoise` feature the attribute is accepted and
+        // reported rather than silently ignored: a scene asking for a
+        // denoised render should not quietly get an undenoised one.
+        #[cfg(not(feature = "denoise"))]
+        if self.denoise {
+            eprintln!(
+                "rust_exr: denoise was requested but this driver was \
+                 built without the `denoise` feature -- writing the raw \
+                 beauty"
+            );
         }
 
         // One EXR channel per ɴsɪ channel, named `<layer>.<role>` --
@@ -506,6 +546,7 @@ impl DisplayDriver for Exr {
 impl Exr {
     /// Denoises the beauty layer in place, through OIDN's ray-tracing
     /// filter, using whichever of albedo and normal were connected.
+    #[cfg(feature = "denoise")]
     fn run_denoise(&mut self) {
         let Some(beauty) = self.layer("Ci") else {
             eprintln!("rust_exr: denoise is on but there is no beauty layer");

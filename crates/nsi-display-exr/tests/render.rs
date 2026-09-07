@@ -118,7 +118,13 @@ fn render_scene(out: &Path) {
 #[test]
 fn the_exr_driver_writes_every_connected_layer() {
     let status = Command::new(env!("CARGO"))
-        .args(["build", "-p", "nsi-display-exr"])
+        // Pass the feature through, or the staged driver is built
+        // without denoising while the test runs with it.
+        .args(if cfg!(feature = "denoise") {
+            &["build", "-p", "nsi-display-exr", "--features", "denoise"][..]
+        } else {
+            &["build", "-p", "nsi-display-exr"][..]
+        })
         .status()
         .expect("cargo build");
     assert!(status.success());
