@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### `nsi-toolbelt` 0.10.2 -> 0.10.3
+
+- **0.10.2 shipped its `tests/` directory.** Without an `include` list
+  `cargo package` takes everything, so the published crate carried
+  `tests/rotation_render.rs` -- which *renders* -- and `tests/scene.rs`,
+  and its `cargo test` failed for anyone without a licensed 3Delight.
+  The same mistake `nsi-ffi-wrap` 0.10.0 made. Fixed with an `include`
+  list; nothing else changed.
+- New `tests/connection_rules.rs` holds the typed connections against
+  `nsi_intermediate::classify`. The `<connection>` rules are now written
+  twice -- once as the traits in `scene`, once as the classifier's
+  `EdgeKind` -- and two transcriptions of one specification drift. The
+  test drives all eleven typed connections into an `apistream` context,
+  parses the stream back and asserts the `EdgeKind` for each, with a
+  second test failing if any typed slot classifies as `Other`.
+
 ### `nsi-toolbelt` 0.10.1 -> 0.10.2
 
 - New `scene` module: `Handle<K>` carries a node's kind in the type

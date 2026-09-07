@@ -1,6 +1,6 @@
 [package]
 name = "nsi-toolbelt"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
