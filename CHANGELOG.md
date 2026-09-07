@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### `nsi-3delight` 0.10.0 -> 0.10.1
+
+- `progresscallback`, a 3Delight extension (`3Delight/Progress.h`, not
+  `nsi.h`) that reports render progress. Attached to
+  `render_control` -- measured, over one scene: the `Context::new`
+  argument and a `.global` attribute both yield zero calls, and
+  `render_control` yields 306. The same shape `nsi.h` gives
+  `stoppedcallback`.
+- `cpp_object`, the Itanium-ABI object synthesis it needs, generic over
+  vtable slot count so `OceanBake.h`'s two-virtual `DlOceanEvaluator`
+  can reuse it. The trap it exists to make unrepresentable: an object's
+  vptr addresses the first *function* slot, two words past the start of
+  the vtable, and pointing it at the start jumps through
+  `offset-to-top` -- zero -- into address 0.
+- `ProgressCallback::update` takes `&self` and the trait requires
+  `Sync`. 3Delight 2.9.208 was observed to serialise the calls, but the
+  header does not promise it.
+- **`Progress::seconds_rendering` does not mean what the header
+  says.** During the render it carries the render's start timestamp, a
+  Unix epoch value; only on the final call, at `progress == 1.0`, is it
+  an elapsed duration. Compute elapsed from your own clock.
+- Additive only; nothing existing changed.
+
 ### `nsi` 0.9.0 -> 0.10.0
 
 - **Pointer parameters reach the renderer again.** `NSIParam::data`
