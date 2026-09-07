@@ -60,6 +60,19 @@
   before, and every bug above had shipped. Seven tests; two of them
   fail against the old code.
 
+### `nsi-3delight` 0.10.2 -> 0.10.3
+
+- `ProgressReporter::start` returns a `RenderGuard`: one call instead of
+  two, and the wait happens in `Drop`, so it cannot be forgotten. The
+  guard is `#[must_use]`, since discarding it would wait immediately.
+- It is a convenience, **not** a soundness fix. A downstream user
+  reported that dropping the reporter mid-render compiled, and I agreed
+  before checking. It does not: `Reference` occupies `ArgData`'s second
+  lifetime, the one pegged to the `Context`, so a reporter borrowed by
+  an argument stays borrowed for as long as the context lives rather
+  than for the `render_control` call alone. Two `compile_fail` doctests
+  pin that, with `E0505` named, for both entry points.
+
 ### `nsi-3delight` 0.10.1 -> 0.10.2
 
 - `nsi-toolbelt` is optional, behind a `toolbelt` feature that is on by

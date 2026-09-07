@@ -30,14 +30,32 @@
 //! let reporter = ProgressReporter::new(Bar);
 //! # let ctx = nsi::Context::new(None).unwrap();
 //!
-//! ctx.render_control(nsi::Action::Start, Some(&[reporter.arg()]));
-//! ctx.render_control(nsi::Action::Wait, None);
+//! let render = reporter.start(&ctx, None);
+//! render.wait();
 //! ```
 //!
-//! The reporter must outlive the render. Dropping it while the renderer
-//! still holds the pointer would leave it calling into freed memory,
-//! so keep it alive until after [`Action::Wait`](nsi_ffi_wrap::Action)
-//! returns.
+//! [`ProgressReporter::start`] borrows the reporter for the whole
+//! render, so dropping it mid-render does not compile:
+//!
+//! ```compile_fail,E0505
+//! # use nsi_ffi_wrap as nsi;
+//! # use nsi_3delight::progress::{Progress, ProgressCallback, ProgressReporter};
+//! # struct Bar;
+//! # impl ProgressCallback for Bar { fn update(&self, _: &Progress) {} }
+//! let reporter = ProgressReporter::new(Bar);
+//! # let ctx = nsi::Context::new(None).unwrap();
+//! let render = reporter.start(&ctx, None);
+//! drop(reporter);
+//! render.wait();
+//! ```
+//!
+//! The reporter must outlive the render -- the renderer holds the
+//! pointer until the render stops -- and the compiler already enforces
+//! it. `Reference` occupies `ArgData`'s second lifetime, the one pegged
+//! to the `Context`, so a reporter borrowed by an argument is borrowed
+//! for as long as the context lives, not merely for the
+//! `render_control` call. Dropping it mid-render does not compile,
+//! whichever of the two entry points you use.
 //!
 //! # `seconds_rendering` is not elapsed time
 //!
@@ -171,12 +189,61 @@ impl<C: ProgressCallback> ProgressReporter<C> {
         }
     }
 
+    /// Starts a render with this reporter attached, and returns a guard
+    /// that must be held until the render is done.
+    ///
+    /// Prefer this to [`arg`](Self::arg) for the ergonomics; both are
+    /// sound. Dropping the reporter mid-render is already rejected,
+    /// because `Reference` occupies `ArgData`'s second lifetime, the
+    /// one pegged to the `Context` -- so the borrow lasts as long as
+    /// the context does, not just the `render_control` call:
+    ///
+    /// ```compile_fail,E0505
+    /// # use nsi_ffi_wrap as nsi;
+    /// # use nsi_3delight::progress::{Progress, ProgressCallback, ProgressReporter};
+    /// # struct Bar;
+    /// # impl ProgressCallback for Bar { fn update(&self, _: &Progress) {} }
+    /// # let reporter = ProgressReporter::new(Bar);
+    /// # let ctx = nsi::Context::new(None).unwrap();
+    /// ctx.render_control(nsi::Action::Start, Some(&[reporter.arg()]));
+    /// drop(reporter);                                  // <-- nothing stops this
+    /// ctx.render_control(nsi::Action::Wait, None);      // renderer calls freed memory
+    /// ```
+    ///
+    /// [`RenderGuard`] is therefore a convenience, not a soundness fix:
+    /// one call instead of two, a wait that cannot be forgotten because
+    /// `Drop` performs it, and `#[must_use]` so the guard cannot be
+    /// discarded by accident.
+    ///
+    /// ```no_run
+    /// # use nsi_ffi_wrap as nsi;
+    /// # use nsi_3delight::progress::{Progress, ProgressCallback, ProgressReporter};
+    /// # struct Bar;
+    /// # impl ProgressCallback for Bar { fn update(&self, _: &Progress) {} }
+    /// # let reporter = ProgressReporter::new(Bar);
+    /// # let ctx = nsi::Context::new(None).unwrap();
+    /// let render = reporter.start(&ctx, None);
+    /// render.wait();
+    /// ```
+    pub fn start<'g, 'a>(
+        &'a self,
+        ctx: &'g nsi::Context<'a>,
+        args: Option<&nsi::ArgSlice<'_, 'a>>,
+    ) -> RenderGuard<'g, 'a> {
+        let mut all = args.map(<[_]>::to_vec).unwrap_or_default();
+        all.push(self.arg());
+        ctx.render_control(nsi::Action::Start, Some(&all));
+        RenderGuard { ctx }
+    }
+
     /// The `progresscallback` argument to pass to
     /// [`render_control`](nsi_ffi_wrap::Context::render_control).
     ///
-    /// The borrow is what keeps this sound: the argument cannot outlive
-    /// the reporter, so the renderer cannot be handed a pointer to an
-    /// object that has already been dropped.
+    /// The borrow stops the argument outliving the reporter, but it
+    /// ends when `render_control` returns, while the renderer holds the
+    /// pointer until the render stops. Use [`start`](Self::start)
+    /// unless you are assembling the argument list yourself, and then
+    /// keep the reporter alive past the wait by hand.
     pub fn arg(&self) -> nsi::Arg<'_, '_> {
         nsi::Arg::new(
             "progresscallback",
@@ -187,5 +254,42 @@ impl<C: ProgressCallback> ProgressReporter<C> {
     /// The callback, for reading whatever it accumulated.
     pub fn callback(&self) -> &C {
         &self.callback
+    }
+}
+
+/// A render in progress, with a [`ProgressReporter`] attached.
+///
+/// The reporter is borrowed for `'a`, the lifetime `Context` pegs its
+/// references to, so it must outlive the context -- which is exactly
+/// the requirement the renderer imposes, now checked. The guard's own
+/// borrow of the context is separate and shorter, so the context can
+/// still be dropped at the end of its scope.
+///
+/// Dropping it waits, so a guard that goes out of scope cannot leave
+/// the renderer holding a pointer to a reporter that is about to be
+/// freed. Call [`wait`](Self::wait) to be explicit, or
+/// [`stop`](Self::stop) to end the render early.
+#[must_use = "dropping the guard waits for the render; bind it to keep \
+              rendering, or call wait() to be explicit"]
+pub struct RenderGuard<'r, 'a> {
+    ctx: &'r nsi::Context<'a>,
+}
+
+impl RenderGuard<'_, '_> {
+    /// Blocks until the render finishes.
+    pub fn wait(self) {
+        // `Drop` does the work, so there is exactly one path.
+    }
+
+    /// Stops the render, then waits for it to come to rest.
+    pub fn stop(self) {
+        self.ctx.render_control(nsi::Action::Stop, None);
+        // The `Wait` still happens in `Drop`.
+    }
+}
+
+impl Drop for RenderGuard<'_, '_> {
+    fn drop(&mut self) {
+        self.ctx.render_control(nsi::Action::Wait, None);
     }
 }
