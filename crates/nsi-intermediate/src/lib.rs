@@ -230,7 +230,7 @@ mod stream;
 pub use edge::{Edge, EdgeKind, classify};
 pub use error::RecordError;
 #[cfg(feature = "lua")]
-pub use lua::{LuaError, write_lua};
+pub use lua::{LuaError, LuaWriter, write_lua};
 pub use owned::{HostPointer, OwnedArgument, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
@@ -239,4 +239,4 @@ pub use resolve::{
     WorldTransforms,
 };
 pub use scene::{Affected, Changes, Node, Scene};
-pub use stream::{Compression, write_stream, write_stream_with};
+pub use stream::{Compression, StreamWriter, write_stream, write_stream_with};

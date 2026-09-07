@@ -31,6 +31,7 @@ Directory numbers reflect creation order, not coverage order.
 | `003-nsi-intermediate-representation` | The `nsi-intermediate` crate: the renderer-agnostic IR between ɴsɪ and any back end | implemented; `Partial` and `Open` rows remain |
 | `004-nsi-parse` | The `nsi-parse` crate: reading ɴsɪ streams and Lua scenes into any `Nsi` sink | implemented |
 | `005-scene-changes` | What changed since the last `synchronize`, and which nodes to re-resolve | active; implemented, unproven by a backend |
+| `006-stream-filter` | Filtering an ɴsɪ stream: reading with `nsi-parse`, writing with `nsi-intermediate`, and anything in between | active; implemented |
 
 `003` arrived with the crate, which was extracted from `nsi-mitsuba`
 once a second backend made its renderer-agnosticism structural rather

@@ -171,3 +171,75 @@ fn statement_values(statements: &[String]) -> Vec<String> {
     }
     out
 }
+
+/// The filter gate: 3Delight writes a stream, a filter passes it
+/// through, and 3Delight reads what the filter wrote.
+///
+/// The round-trip in `filter.rs` compares this crate against itself.
+/// This compares it against the renderer, on the renderer's own output
+/// -- grouped attributes, wrapped lines, 3Delight's float spellings --
+/// and then hands the result back to `renderdl` to prove it is a
+/// stream the renderer accepts, not merely one we can re-read.
+#[test]
+fn a_filtered_stream_is_one_3delight_reads_back() {
+    let source = std::env::temp_dir().join("nsi-parse-filter-source.nsi");
+    let filtered_path =
+        std::env::temp_dir().join("nsi-parse-filter-filtered.nsi");
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&filtered_path);
+
+    {
+        let ctx = nsi::Context::new(Some(&[
+            nsi::string!("type", "apistream"),
+            nsi::string!("streamfilename", source.to_str().unwrap()),
+            nsi::string!("streamformat", "nsi"),
+        ]))
+        .expect("could not create an apistream ɴsɪ context");
+
+        ctx.create("cam", "perspectivecamera", None);
+        ctx.set_attribute(
+            "cam",
+            &[nsi::f32!("fov", 45.0), nsi::string!("name", "hero")],
+        );
+        ctx.create("m", "mesh", None);
+        let points: Vec<[f32; 3]> =
+            (0..40).map(|i| [i as f32, 0.5, -1.25]).collect();
+        ctx.set_attribute("m", &[nsi::point_slice!("P", &points)]);
+        ctx.connect("m", None, ".root", "objects", None);
+    }
+
+    let written = std::fs::read(&source).expect("stream written");
+
+    let writer = nsi_intermediate::StreamWriter::new(Vec::new());
+    parse_stream(&written, &writer).expect("filter 3Delight's own stream");
+    let filtered = writer.into_inner().expect("into_inner");
+
+    // Every value the renderer wrote, still there and in order.
+    assert_eq!(
+        statement_values(&canonicalise(&String::from_utf8_lossy(&written))),
+        statement_values(&canonicalise(&String::from_utf8_lossy(&filtered))),
+    );
+
+    // And the renderer reads it back.
+    std::fs::write(&filtered_path, &filtered).expect("write filtered");
+    let renderdl = std::path::Path::new(
+        &std::env::var("DELIGHT").expect("$DELIGHT for the oracle"),
+    )
+    .join("bin")
+    .join("renderdl");
+    let echoed = std::process::Command::new(renderdl)
+        .arg("-cat")
+        .arg(&filtered_path)
+        .output()
+        .expect("run renderdl -cat");
+    assert!(
+        echoed.status.success(),
+        "renderdl rejected the filtered stream"
+    );
+    assert_eq!(
+        statement_values(&canonicalise(&String::from_utf8_lossy(&filtered))),
+        statement_values(&canonicalise(&String::from_utf8_lossy(
+            &echoed.stdout
+        ))),
+    );
+}

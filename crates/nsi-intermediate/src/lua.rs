@@ -42,9 +42,12 @@
 
 use crate::{OwnedArgument, OwnedData, Scene};
 use core::{error::Error, fmt};
-use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
-use nsi_trait::Type;
-use std::io::{self, Write};
+use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
+use nsi_trait::{Action, Nsi, Type};
+use std::{
+    io::{self, Write},
+    sync::Mutex,
+};
 
 /// Why a scene could not be written as a Lua script.
 #[derive(Debug)]
@@ -97,12 +100,29 @@ pub enum LuaError {
         /// The attribute name.
         attribute: String,
     },
+    /// A `Create` carrying parameters.
+    ///
+    /// ɴsɪ's Lua `nsi.Create` takes a handle and a node type and
+    /// nothing else, while `NSICreate` and the stream both take
+    /// optional parameters and 3Delight writes them. Emitting the
+    /// create without them would drop whatever they said.
+    CreateArguments {
+        /// The node being created.
+        handle: String,
+        /// The type it was created with.
+        node_type: String,
+    },
 }
 
 impl fmt::Display for LuaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => error.fmt(f),
+            Self::CreateArguments { handle, node_type } => write!(
+                f,
+                "`nsi.Create` takes no parameters, so creating {handle:?} \
+                 as {node_type:?} with them cannot be written as Lua",
+            ),
             Self::Inexpressible {
                 handle,
                 attribute,
@@ -140,7 +160,8 @@ impl Error for LuaError {
             Self::Io(error) => Some(error),
             Self::Inexpressible { .. }
             | Self::InexpressibleFlags { .. }
-            | Self::EmptyStringArray { .. } => None,
+            | Self::EmptyStringArray { .. }
+            | Self::CreateArguments { .. } => None,
         }
     }
 }
@@ -394,5 +415,238 @@ const fn lua_type_name(type_tag: Type) -> Option<&'static str> {
         Type::MatrixF32 => Some("TypeMatrix"),
         Type::MatrixF64 => Some("TypeDoubleMatrix"),
         Type::F64 | Type::I64 | Type::Reference | Type::Invalid => None,
+    }
+}
+
+/// An [`Nsi`] sink that writes each call straight to a Lua script.
+///
+/// The Lua twin of [`crate::StreamWriter`], and the writing half of a
+/// filter whose output is a script rather than a stream. Every
+/// restriction [`write_lua`] documents applies here and for the same
+/// reason: the binding is narrower than the C API, so a call it cannot
+/// say is refused rather than emitted as something else.
+///
+/// ```
+/// # use nsi_intermediate::LuaWriter;
+/// # use nsi_trait::Nsi;
+/// let writer = LuaWriter::new(Vec::new());
+/// writer.create("cam", "perspectivecamera", None).unwrap();
+/// assert_eq!(
+///     String::from_utf8(writer.into_inner().unwrap()).unwrap(),
+///     "nsi.Create(\"cam\", \"perspectivecamera\")\n",
+/// );
+/// ```
+#[derive(Debug)]
+pub struct LuaWriter<W: Write> {
+    out: Mutex<W>,
+}
+
+impl<W: Write> LuaWriter<W> {
+    /// A writer emitting into `out`.
+    pub fn new(out: W) -> Self {
+        Self {
+            out: Mutex::new(out),
+        }
+    }
+
+    /// The `out` this was built with.
+    ///
+    /// # Errors
+    ///
+    /// [`LuaError::Io`] when the lock is poisoned, which means a
+    /// previous write panicked.
+    pub fn into_inner(self) -> Result<W, LuaError> {
+        self.out.into_inner().map_err(|_| poisoned())
+    }
+
+    /// `nsi.Name(head, {arg}, {arg}, ...)`.
+    fn statement(
+        &self,
+        call: &str,
+        head: &str,
+        handle: &str,
+        args: &[Arg<'_, '_>],
+    ) -> Result<(), LuaError> {
+        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        write!(out, "nsi.{call}({head}")?;
+        for arg in args {
+            write!(out, ", ")?;
+            write_arg(&mut *out, handle, &OwnedArgument::from_param(arg))?;
+        }
+        writeln!(out, ")")?;
+        Ok(())
+    }
+}
+
+/// The one error a writer can raise on its own.
+fn poisoned() -> LuaError {
+    LuaError::Io(io::Error::other("the writer's lock is poisoned"))
+}
+
+impl<W: Write + Send> Nsi for LuaWriter<W> {
+    type Arg<'call> = Arg<'call, 'static>;
+    type Error = LuaError;
+
+    /// # Errors
+    ///
+    /// [`LuaError::CreateArguments`] when the create carries
+    /// parameters: `nsi.Create` has nowhere to put them.
+    fn create(
+        &self,
+        handle: &str,
+        node_type: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        if !args.unwrap_or_default().is_empty() {
+            return Err(LuaError::CreateArguments {
+                handle: handle.to_string(),
+                node_type: node_type.to_string(),
+            });
+        }
+        self.statement(
+            "Create",
+            &format!("{}, {}", quoted_str(handle), quoted_str(node_type)),
+            handle,
+            &[],
+        )
+    }
+
+    fn delete(
+        &self,
+        handle: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "Delete",
+            &quoted_str(handle),
+            handle,
+            args.unwrap_or_default(),
+        )
+    }
+
+    fn set_attribute(
+        &self,
+        handle: &str,
+        args: &[Self::Arg<'_>],
+    ) -> Result<(), Self::Error> {
+        self.statement("SetAttribute", &quoted_str(handle), handle, args)
+    }
+
+    fn set_attribute_at_time(
+        &self,
+        handle: &str,
+        time: f64,
+        args: &[Self::Arg<'_>],
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "SetAttributeAtTime",
+            &format!("{}, {}", quoted_str(handle), lua_number(time)),
+            handle,
+            args,
+        )
+    }
+
+    fn delete_attribute(
+        &self,
+        handle: &str,
+        name: &str,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "DeleteAttribute",
+            &format!("{}, {}", quoted_str(handle), quoted_str(name)),
+            handle,
+            &[],
+        )
+    }
+
+    fn connect(
+        &self,
+        from: &str,
+        from_attribute: Option<&str>,
+        to: &str,
+        to_attribute: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "Connect",
+            &format!(
+                "{}, {}, {}, {}",
+                quoted_str(from),
+                // An unnamed source port is the empty string, as in a
+                // stream.
+                quoted_str(from_attribute.unwrap_or_default()),
+                quoted_str(to),
+                quoted_str(to_attribute)
+            ),
+            from,
+            args.unwrap_or_default(),
+        )
+    }
+
+    fn disconnect(
+        &self,
+        from: &str,
+        from_attribute: Option<&str>,
+        to: &str,
+        to_attribute: &str,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "Disconnect",
+            &format!(
+                "{}, {}, {}, {}",
+                quoted_str(from),
+                quoted_str(from_attribute.unwrap_or_default()),
+                quoted_str(to),
+                quoted_str(to_attribute)
+            ),
+            from,
+            &[],
+        )
+    }
+
+    fn evaluate(&self, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
+        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        write!(out, "nsi.Evaluate(")?;
+        for (index, arg) in args.iter().enumerate() {
+            if index > 0 {
+                write!(out, ", ")?;
+            }
+            write_arg(&mut *out, "Evaluate", &OwnedArgument::from_param(arg))?;
+        }
+        writeln!(out, ")")?;
+        Ok(())
+    }
+
+    /// The action is written as the `"action"` parameter ɴsɪ's Lua
+    /// binding reads, and one that arrived in `args` is dropped --
+    /// [`crate::StreamWriter::render_control`] says why.
+    fn render_control(
+        &self,
+        action: Action,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        write!(out, "nsi.RenderControl(")?;
+        write_arg(
+            &mut *out,
+            "RenderControl",
+            &OwnedArgument::new(
+                "action",
+                Type::String,
+                1,
+                0,
+                OwnedData::String(vec![action.as_str().as_bytes().to_vec()]),
+            ),
+        )?;
+        for arg in args.unwrap_or_default() {
+            let owned = OwnedArgument::from_param(arg);
+            if owned.name == "action" {
+                continue;
+            }
+            write!(out, ", ")?;
+            write_arg(&mut *out, "RenderControl", &owned)?;
+        }
+        writeln!(out, ")")?;
+        Ok(())
     }
 }

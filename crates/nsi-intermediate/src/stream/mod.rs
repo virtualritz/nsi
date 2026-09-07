@@ -36,9 +36,12 @@
 
 use crate::{EdgeKind, OwnedArgument, OwnedData, Scene};
 use core::fmt;
-use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
-use nsi_trait::Type;
-use std::io::{self, Write};
+use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
+use nsi_trait::{Action, Nsi, Type};
+use std::{
+    io::{self, Write},
+    sync::Mutex,
+};
 
 /// One ɴsɪ stream string literal, escaped.
 ///
@@ -497,3 +500,232 @@ const fn base_type_name(type_tag: Type) -> &'static str {
 
 #[cfg(test)]
 mod tests;
+
+/// An [`Nsi`] sink that writes each call straight to a `.nsi` stream.
+///
+/// This is the writing half of a **filter**: `nsi-parse` reads a stream
+/// into any [`Nsi`] sink, and this writes one back out. A consumer that
+/// puts its own [`Nsi`] implementation between the two sees every call
+/// as it goes past and decides what to forward -- 3Delight's
+/// `nsicallbacks.h` in Rust, with a `Result` where it has a `bool`.
+///
+/// ```
+/// # use nsi_intermediate::StreamWriter;
+/// # use nsi_trait::Nsi;
+/// let writer = StreamWriter::new(Vec::new());
+/// writer.create("cam", "perspectivecamera", None).unwrap();
+/// assert_eq!(
+///     String::from_utf8(writer.into_inner().unwrap()).unwrap(),
+///     "Create \"cam\" \"perspectivecamera\"\n",
+/// );
+/// ```
+///
+/// # Not [`write_stream`]
+///
+/// [`write_stream`] replays a [`Scene`], which is state: it emits each
+/// attribute once, in node order, whatever calls produced it. This
+/// emits the calls, in the order they arrive, holding nothing -- so a
+/// re-set attribute appears twice, a stream keeps its shape, and the
+/// memory cost is one statement rather than one scene.
+#[derive(Debug)]
+pub struct StreamWriter<W: Write> {
+    out: Mutex<W>,
+}
+
+impl<W: Write> StreamWriter<W> {
+    /// A writer emitting into `out`.
+    pub fn new(out: W) -> Self {
+        Self {
+            out: Mutex::new(out),
+        }
+    }
+
+    /// The `out` this was built with.
+    ///
+    /// # Errors
+    ///
+    /// [`io::Error`] of kind [`io::ErrorKind::Other`] when the lock is
+    /// poisoned, which means a previous write panicked.
+    pub fn into_inner(self) -> io::Result<W> {
+        self.out.into_inner().map_err(|_| poisoned())
+    }
+
+    /// Write one statement, then its parameter lines.
+    fn statement(
+        &self,
+        head: &str,
+        args: &[Arg<'_, '_>],
+        skip: Option<&str>,
+    ) -> io::Result<()> {
+        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        writeln!(out, "{head}")?;
+        for arg in args {
+            let owned = OwnedArgument::from_param(arg);
+            if skip == Some(owned.name.as_str()) {
+                continue;
+            }
+            write_arg(&mut *out, &owned)?;
+        }
+        Ok(())
+    }
+}
+
+/// The one error a writer can raise on its own.
+fn poisoned() -> io::Error {
+    io::Error::other("the writer's lock is poisoned")
+}
+
+impl<W: Write + Send> Nsi for StreamWriter<W> {
+    /// The `Arg` every sink in this workspace speaks, so a filter can
+    /// forward what it was handed without rebuilding it.
+    type Arg<'call> = Arg<'call, 'static>;
+    type Error = io::Error;
+
+    fn create(
+        &self,
+        handle: &str,
+        node_type: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        // ɴsɪ's `NSICreate` takes optional parameters and 3Delight
+        // writes them, so a filter that dropped them would lose data
+        // on the way through.
+        self.statement(
+            &format!("Create {} {}", quoted_str(handle), quoted_str(node_type)),
+            args.unwrap_or_default(),
+            None,
+        )
+    }
+
+    fn delete(
+        &self,
+        handle: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!("Delete {}", quoted_str(handle)),
+            args.unwrap_or_default(),
+            None,
+        )
+    }
+
+    fn set_attribute(
+        &self,
+        handle: &str,
+        args: &[Self::Arg<'_>],
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!("SetAttribute {}", quoted_str(handle)),
+            args,
+            None,
+        )
+    }
+
+    fn set_attribute_at_time(
+        &self,
+        handle: &str,
+        time: f64,
+        args: &[Self::Arg<'_>],
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!(
+                "SetAttributeAtTime {} {}",
+                quoted_str(handle),
+                format_f64(time)
+            ),
+            args,
+            None,
+        )
+    }
+
+    fn delete_attribute(
+        &self,
+        handle: &str,
+        name: &str,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!(
+                "DeleteAttribute {} {}",
+                quoted_str(handle),
+                quoted_str(name)
+            ),
+            &[],
+            None,
+        )
+    }
+
+    fn connect(
+        &self,
+        from: &str,
+        from_attribute: Option<&str>,
+        to: &str,
+        to_attribute: &str,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!(
+                "Connect {} {} {} {}",
+                quoted_str(from),
+                // ɴsɪ writes an unnamed source port as the empty
+                // string, and reads that back as none.
+                quoted_str(from_attribute.unwrap_or_default()),
+                quoted_str(to),
+                quoted_str(to_attribute)
+            ),
+            args.unwrap_or_default(),
+            None,
+        )
+    }
+
+    fn disconnect(
+        &self,
+        from: &str,
+        from_attribute: Option<&str>,
+        to: &str,
+        to_attribute: &str,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            &format!(
+                "Disconnect {} {} {} {}",
+                quoted_str(from),
+                quoted_str(from_attribute.unwrap_or_default()),
+                quoted_str(to),
+                quoted_str(to_attribute)
+            ),
+            &[],
+            None,
+        )
+    }
+
+    fn evaluate(&self, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {
+        self.statement("Evaluate", args, None)
+    }
+
+    /// The action is written from the typed [`Action`], and an
+    /// `"action"` parameter that arrived in `args` is dropped.
+    ///
+    /// The stream carries the action as a parameter and the trait as an
+    /// enum. `nsi-parse` strips the parameter and passes the enum, and
+    /// `nsi-ffi-wrap`'s `Context` appends it again on the way out, so
+    /// writing both would put two `"action"`s in one statement -- and
+    /// writing neither leaves a `RenderControl` 3Delight rejects.
+    fn render_control(
+        &self,
+        action: Action,
+        args: Option<&[Self::Arg<'_>]>,
+    ) -> Result<(), Self::Error> {
+        self.statement(
+            "RenderControl",
+            args.unwrap_or_default(),
+            Some("action"),
+        )?;
+        let mut out = self.out.lock().map_err(|_| poisoned())?;
+        writeln!(
+            out,
+            "  {} {} 1 {}",
+            quoted_str("action"),
+            quoted_str("string"),
+            quoted_str(action.as_str())
+        )
+    }
+}
