@@ -169,7 +169,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
             )?;
         }
 
-        for arg in node.attributes.values() {
+        for arg in node.attribute_table().values() {
             write!(out, "nsi.SetAttribute({}, ", quoted_str(handle))?;
             write_arg(out, handle, arg)?;
             writeln!(out, ")")?;

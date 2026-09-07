@@ -15,12 +15,15 @@ use std::{
     sync::LazyLock,
 };
 
+/// One node's static attributes, by name.
+pub(crate) type AttributeTable = IndexMap<Handle, OwnedArgument>;
+
 /// Every `set_attribute_at_time` call for one node, per attribute, in
 /// call order.
 pub(crate) type SampleTable = IndexMap<Handle, Vec<(f64, OwnedArgument)>>;
 
 /// One ɴsɪ node.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct Node {
     /// The ɴsɪ node type this handle was created with. Read it with
@@ -30,7 +33,13 @@ pub struct Node {
     /// production scene says `"mesh"` a million times.
     pub(crate) node_type: Handle,
     /// Attributes set with `set_attribute`, keyed by name.
-    pub(crate) attributes: IndexMap<Handle, OwnedArgument>,
+    ///
+    /// Boxed and absent until one is set, for the same reason
+    /// [`Node::samples`] is: a scene is mostly nodes that hold
+    /// connections rather than values -- sets, groups, the transforms
+    /// above an asset -- and an inline `IndexMap` cost every one of
+    /// them a header it never filled.
+    pub(crate) attributes: Option<Box<AttributeTable>>,
     /// Every `set_attribute_at_time` call, per attribute, **in call
     /// order**.
     ///
@@ -64,13 +73,28 @@ pub struct Node {
     pub(crate) samples: Option<Box<SampleTable>>,
 }
 
+/// An empty table, for a node that has no attributes.
+static NO_ATTRIBUTES: LazyLock<AttributeTable> = LazyLock::new(IndexMap::new);
+
 /// An empty table, for a node that has no samples.
 static NO_SAMPLES: LazyLock<SampleTable> = LazyLock::new(IndexMap::new);
+
+/// Two nodes are equal when they say the same thing, which an absent
+/// table and an emptied one both do -- `delete_attribute` leaves the
+/// second, and a scene compared against a replay of itself must not
+/// hinge on which one it holds.
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.node_type == other.node_type
+            && self.attribute_table() == other.attribute_table()
+            && self.sample_table() == other.sample_table()
+    }
+}
 
 impl Node {
     /// This node's static attributes, by name.
     pub fn attributes(&self) -> impl Iterator<Item = (&str, &OwnedArgument)> {
-        self.attributes
+        self.attribute_table()
             .iter()
             .map(|(name, arg)| (name.as_str(), arg))
     }
@@ -81,7 +105,15 @@ impl Node {
     /// specifically**: an attribute set with `SetAttributeAtTime` is
     /// not here, and the renderer honours it.
     pub fn attribute(&self, name: &str) -> Option<&OwnedArgument> {
-        handle::map_get(&self.attributes, name)
+        handle::map_get(self.attribute_table(), name)
+    }
+
+    pub(crate) fn attribute_table(&self) -> &AttributeTable {
+        self.attributes.as_deref().unwrap_or(&NO_ATTRIBUTES)
+    }
+
+    pub(crate) fn attribute_table_mut(&mut self) -> &mut AttributeTable {
+        self.attributes.get_or_insert_with(Box::default)
     }
 
     /// This node's sampled attributes, by name, each in call order.
@@ -133,7 +165,7 @@ impl Node {
     /// This is what the resolver reads, so a backend asking a node
     /// directly gets the same answer the resolver would.
     pub fn effective(&self, name: &str) -> Option<&OwnedArgument> {
-        if let Some(arg) = handle::map_get(&self.attributes, name) {
+        if let Some(arg) = handle::map_get(self.attribute_table(), name) {
             return Some(arg);
         }
         handle::map_get(self.sample_table(), name)?
@@ -994,10 +1026,15 @@ impl Scene {
         let node = self.node_mut(handle)?;
         let mut touched = Vec::with_capacity(args.len());
         for arg in args {
-            node.sample_table_mut()
-                .shift_remove(&handle::handle(&arg.name));
+            // Only when the node has samples: reaching for the table
+            // through `sample_table_mut` would allocate one for every
+            // node that has an attribute, which is most of a scene.
+            if let Some(table) = node.samples.as_mut() {
+                table.shift_remove(&handle::handle(&arg.name));
+            }
             touched.push(arg.name.clone());
-            node.attributes.insert(handle::handle(&arg.name), arg);
+            node.attribute_table_mut()
+                .insert(handle::handle(&arg.name), arg);
         }
         for name in touched {
             self.changes.attributes.insert((handle.to_string(), name));
@@ -1051,7 +1088,9 @@ impl Scene {
         for arg in args {
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
-            node.attributes.shift_remove(&handle::handle(&arg.name));
+            if let Some(table) = node.attributes.as_mut() {
+                table.shift_remove(&handle::handle(&arg.name));
+            }
             touched.push(arg.name.clone());
 
             // Appended, never merged: a re-set at a time already
@@ -1080,8 +1119,12 @@ impl Scene {
             .attributes
             .insert((handle.to_string(), name.to_string()));
         if let Some(node) = handle::map_get_mut(&mut self.nodes, handle) {
-            node.attributes.shift_remove(&handle::handle(name));
-            node.sample_table_mut().shift_remove(&handle::handle(name));
+            if let Some(table) = node.attributes.as_mut() {
+                table.shift_remove(&handle::handle(name));
+            }
+            if let Some(table) = node.samples.as_mut() {
+                table.shift_remove(&handle::handle(name));
+            }
         }
     }
 

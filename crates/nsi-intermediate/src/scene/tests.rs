@@ -49,7 +49,7 @@ fn set_attribute_overwrites_by_name() {
     scene.create("cam", "perspectivecamera").unwrap();
     scene.set_attribute("cam", vec![arg("fov", 45.0)]).unwrap();
     scene.set_attribute("cam", vec![arg("fov", 60.0)]).unwrap();
-    assert_eq!(scene.node("cam").unwrap().attributes.len(), 1);
+    assert_eq!(scene.node("cam").unwrap().attributes().count(), 1);
     assert_eq!(
         scene.node("cam").unwrap().attribute("fov").unwrap().data,
         OwnedData::F32(vec![60.0])
@@ -83,7 +83,7 @@ fn time_samples_are_kept_separately_and_sorted() {
         vec![1.0, 0.0],
         "while the log keeps the order they were set in",
     );
-    assert!(scene.node("xf").unwrap().attributes.is_empty());
+    assert_eq!(scene.node("xf").unwrap().attributes().count(), 0);
 }
 
 #[test]
@@ -591,7 +591,7 @@ fn recreating_with_the_same_type_is_a_no_op() {
     scene.create("x", "mesh").unwrap();
 
     assert_eq!(
-        scene.node("x").unwrap().attributes.len(),
+        scene.node("x").unwrap().attributes().count(),
         1,
         "attributes survive"
     );
@@ -1570,5 +1570,52 @@ fn effective_reads_a_sampled_attribute() {
     assert!(
         node.effective("visibility").is_some(),
         "but it is the node's effective value",
+    );
+}
+
+/// A node whose only attribute was deleted holds an emptied table
+/// where a node that never had one holds none at all. They say the
+/// same thing, so they compare equal -- a derived `PartialEq` on the
+/// `Option` would call a scene different from a replay of itself.
+#[test]
+fn an_emptied_attribute_table_equals_an_absent_one() {
+    let mut set_then_deleted = Scene::default();
+    set_then_deleted.create("a", "attributes").unwrap();
+    set_then_deleted
+        .set_attribute("a", vec![arg("visibility", 0.0)])
+        .unwrap();
+    set_then_deleted.delete_attribute("a", "visibility");
+
+    let mut never_set = Scene::default();
+    never_set.create("a", "attributes").unwrap();
+
+    assert_eq!(
+        set_then_deleted.node("a").expect("created"),
+        never_set.node("a").expect("created"),
+    );
+}
+
+/// The same, for the sample table: `set_attribute` clears the samples
+/// for that name and leaves the table behind.
+#[test]
+fn an_emptied_sample_table_equals_an_absent_one() {
+    let mut sampled_then_static = Scene::default();
+    sampled_then_static.create("a", "attributes").unwrap();
+    sampled_then_static
+        .set_attribute_at_time("a", 0.0, vec![arg("visibility", 0.0)])
+        .unwrap();
+    sampled_then_static
+        .set_attribute("a", vec![arg("visibility", 0.0)])
+        .unwrap();
+
+    let mut static_only = Scene::default();
+    static_only.create("a", "attributes").unwrap();
+    static_only
+        .set_attribute("a", vec![arg("visibility", 0.0)])
+        .unwrap();
+
+    assert_eq!(
+        sampled_then_static.node("a").expect("created"),
+        static_only.node("a").expect("created"),
     );
 }

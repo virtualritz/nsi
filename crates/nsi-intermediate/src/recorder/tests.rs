@@ -320,7 +320,7 @@ fn create_arguments_are_inert_but_the_type_is_not() {
     let scene = recorder.into_scene();
     assert_eq!(scene.node("n").unwrap().node_type(), "attributes");
     assert!(
-        scene.node("n").unwrap().attributes.is_empty(),
+        scene.node("n").unwrap().attributes().next().is_none(),
         "a create argument is not an attribute",
     );
 }

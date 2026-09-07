@@ -46,11 +46,25 @@ replay reorders. `delete` uses `shift_remove`, not `swap_remove`.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `node_type` | `String` | the ɴsɪ node type |
-| `attributes` | `IndexMap<String, OwnedArgument>` | static attributes |
-| `samples` | `IndexMap<String, Vec<(f64, OwnedArgument)>>` | every `set_attribute_at_time` call, per attribute, in **call** order -- ɴsɪ's rules are stated over calls, and a table keyed by time cannot say which call was last |
+| `node_type` | `Handle` | the ɴsɪ node type |
+| `attributes` | `Option<Box<AttributeTable>>` | static attributes, keyed by name |
+| `samples` | `Option<Box<SampleTable>>` | every `set_attribute_at_time` call, per attribute, in **call** order -- ɴsɪ's rules are stated over calls, and a table keyed by time cannot say which call was last |
 
 Motion samples are separate because transform composition is per-sample.
+
+Both tables are boxed and absent until something is set: a scene is
+mostly nodes that carry connections rather than values, and an inline
+`IndexMap` cost every one of them a 72-byte header it never filled.
+`Handle` is `String`, or an interned `ustr::Ustr` under the
+`ustr_handles` feature. Together that is a `Node` of 24 bytes with the
+feature and 40 without, from 152 before either. The fields are private
+behind `attributes()`, `attribute()`, `samples()` and `sample_calls()`,
+which hand out `&str` and slices either way.
+
+`PartialEq` is hand-written rather than derived: `delete_attribute`
+leaves an emptied table where a node that never held one has `None`,
+and the two say the same thing. A derived comparison called a scene
+different from a replay of itself.
 
 ### `OwnedArgument` / `OwnedData`
 

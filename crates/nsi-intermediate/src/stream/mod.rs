@@ -290,7 +290,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             )?;
         }
 
-        for arg in node.attributes.values() {
+        for arg in node.attribute_table().values() {
             writeln!(out, "SetAttribute {}", quoted_str(handle))?;
             write_arg(out, arg)?;
         }
