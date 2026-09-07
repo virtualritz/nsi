@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### `nsi-trait` 0.4.0 -> 0.4.1
+
+- `Attribute<T>` implements `PartialEq`, `Eq` and `Hash`. It had
+  `Clone`, `Copy` and `Debug` only, so it could not go in a `HashSet`
+  or key a map -- which is what a consumer tracking the attributes it
+  has already set wants. `T` is a witness in `PhantomData` and is not
+  part of an attribute's identity, so none of them bound it.
+- The two `unsafe impl`s of `Send`/`Sync` are gone. Their own SAFETY
+  comment admitted the auto-impl already held; `unsafe` that buys
+  nothing is `unsafe` a reader still has to check. A test asserts the
+  property for a `T` that is neither `Send` nor `Sync`.
+
+### `nsi-ffi-wrap` 0.10.0 -> 0.10.1
+
+- `include` in the manifest. 0.10.0 shipped 46 files -- 23 under
+  `tests/` and 12 golden PNGs, every one needing a renderer -- so
+  `cargo test` on the published crate failed for anyone without
+  3Delight installed. Now 23 files and none of them a test.
+- `dlopen2` and `link_lib3delight` are mutually exclusive, and saying
+  so is a `compile_error!` naming both features and the working
+  invocation. Enabling both -- which `--all-features` does, since
+  `dlopen2` is a default -- used to fail with eleven `cannot find
+  function NSIBegin` errors that named neither.
+- The `output`-dependent test targets are gated on that feature, so a
+  configuration without it skips them instead of failing to build.
+
+
 ### `nsi-trait` 0.3.0 -> 0.4.0 (breaking)
 
 - The `where Self: 'call` bound is dropped from the `Nsi::Arg` GAT. An
