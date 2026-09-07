@@ -245,9 +245,9 @@ pub use lua::{LuaError, LuaWriter, write_lua};
 pub use owned::{HostPointer, OwnedArgument, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
-    AttributeValue, Binding, IDENTITY, Instance, InstanceRef, Instances,
-    OutputLayer, Placement, RAY_TYPES, RenderOutput, ResolveError, Sampled,
-    WorldTransforms,
+    AttributeValue, Binding, Face, Faces, IDENTITY, Instance, InstanceRef,
+    Instances, OutputLayer, Placement, RAY_TYPES, RenderOutput, ResolveError,
+    Sampled, WorldTransforms,
 };
 pub use scene::{Affected, Changes, Node, Scene};
 pub use stream::{Compression, StreamWriter, write_stream, write_stream_with};

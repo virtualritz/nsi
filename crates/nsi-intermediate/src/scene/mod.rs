@@ -136,6 +136,61 @@ impl Node {
         self.samples.get_or_insert_with(Box::default)
     }
 
+    /// One attribute as a single `f32`.
+    ///
+    /// Reads the **effective** value -- static or the last call at a
+    /// time -- and yields `None` when the attribute is absent or is not
+    /// exactly one `f32`. A backend pulling one number out of a node
+    /// wrote `node.effective(name).and_then(OwnedArgument::as_f32)`
+    /// before this existed; twenty such sites in one backend's flush
+    /// path is what asked for these.
+    pub fn f32(&self, name: &str) -> Option<f32> {
+        self.effective(name)?.as_f32()
+    }
+
+    /// One attribute as a single `f64`, on the same terms.
+    pub fn f64(&self, name: &str) -> Option<f64> {
+        match self.effective(name)?.as_f64s()? {
+            [value] => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// One attribute as a single `i32`, on the same terms.
+    pub fn i32(&self, name: &str) -> Option<i32> {
+        self.effective(name)?.as_i32()
+    }
+
+    /// One attribute as an ɴsɪ integer flag.
+    ///
+    /// ɴsɪ writes booleans as `int` with `0` and `1` -- `withalpha`,
+    /// `dithering`, `clockwisewinding` -- so this is the shape those
+    /// are read in. Anything other than a single integer is `None`,
+    /// which a caller replaces with the attribute's documented
+    /// default rather than with `false`.
+    pub fn flag(&self, name: &str) -> Option<bool> {
+        Some(self.i32(name)? != 0)
+    }
+
+    /// One attribute as a single string.
+    ///
+    /// **`None` for a value that is not UTF-8**, which is not the same
+    /// as absent: an ɴsɪ string is bytes, and a file name on Linux need
+    /// not be UTF-8. Use [`Node::bytes`] where the value may be a path;
+    /// this is for the enumerants -- `"shader"`, `"uint8"`, `"color"`
+    /// -- where UTF-8 is the whole vocabulary.
+    pub fn string(&self, name: &str) -> Option<&str> {
+        core::str::from_utf8(self.bytes(name)?).ok()
+    }
+
+    /// One attribute as a single string's raw bytes.
+    pub fn bytes(&self, name: &str) -> Option<&[u8]> {
+        match self.effective(name)?.as_strings()? {
+            [value] => Some(value),
+            _ => None,
+        }
+    }
+
     /// The ɴsɪ node type this handle was created with.
     pub fn node_type(&self) -> &str {
         &self.node_type

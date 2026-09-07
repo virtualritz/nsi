@@ -12,6 +12,7 @@ use core::{cmp::Ordering, fmt};
 mod attributes;
 mod chain;
 mod instances;
+mod mesh;
 mod motion;
 mod outputs;
 
@@ -22,6 +23,7 @@ mod outputs;
 // so none of them has to reach sideways.
 pub use chain::WorldTransforms;
 pub use instances::Instances;
+pub use mesh::{Face, Faces};
 pub use motion::Sampled;
 
 /// A 4x4 identity, row-major.
@@ -41,6 +43,25 @@ const MATRICES: &str = "transformationmatrices";
 
 /// Which prototype each instance draws.
 const MODEL_INDICES: &str = "modelindices";
+
+/// `mesh` topology, which only means something as a pair.
+const FACE_VERTEX_COUNTS: &str = "nvertices";
+const HOLE_COUNTS: &str = "nholes";
+
+// `outputlayer` attribute names, spelled once. The defaults they fall
+// back to live with `Scene::output_layer`, next to the specification
+// section that states them.
+const VARIABLE_NAME: &str = "variablename";
+const VARIABLE_SOURCE: &str = "variablesource";
+const LAYER_NAME: &str = "layername";
+const LAYER_TYPE: &str = "layertype";
+const SCALAR_FORMAT: &str = "scalarformat";
+const WITH_ALPHA: &str = "withalpha";
+const DITHERING: &str = "dithering";
+const FILTER: &str = "filter";
+const FILTER_WIDTH: &str = "filterwidth";
+const COLOR_PROFILE: &str = "colorprofile";
+const SORT_KEY: &str = "sortkey";
 
 /// The instances an `instances` node skips.
 const DISABLED: &str = "disabledinstances";
@@ -191,6 +212,27 @@ pub enum ResolveError {
         /// The times that node does have, ascending.
         available: Vec<f64>,
     },
+    /// A `mesh` has no `nvertices`, which ɴsɪ requires.
+    MissingFaceCounts {
+        /// The mesh.
+        handle: String,
+    },
+    /// `nholes` and `nvertices` disagree.
+    ///
+    /// ɴsɪ: with `nholes` set, the face count is the number of `nholes`
+    /// values, and each face takes `nholes + 1` values from
+    /// `nvertices` -- the outer perimeter and then one per hole. A
+    /// count that does not add up leaves the faces undefined, and a
+    /// backend that reads `nvertices` as one-count-per-face draws a
+    /// different mesh without reporting anything.
+    MalformedFaceCounts {
+        /// The mesh.
+        handle: String,
+        /// How many `nvertices` values the holes ask for.
+        expected: usize,
+        /// How many there are.
+        found: usize,
+    },
 }
 
 impl fmt::Display for ResolveError {
@@ -262,6 +304,21 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ node {handle:?} has no transform sample at time \
                  {time}; it has {available:?}, and this crate does not \
                  interpolate between them"
+            ),
+            Self::MissingFaceCounts { handle } => write!(
+                f,
+                "ɴsɪ mesh {handle:?} sets no \"nvertices\", which ɴsɪ \
+                 requires; its faces are undefined"
+            ),
+            Self::MalformedFaceCounts {
+                handle,
+                expected,
+                found,
+            } => write!(
+                f,
+                "ɴsɪ mesh {handle:?} has \"nholes\" asking for {expected} \
+                 \"nvertices\" values and carries {found}; with holes, each \
+                 face takes its outer perimeter plus one count per hole"
             ),
         }
     }
@@ -393,7 +450,10 @@ pub struct AttributeValue<'a> {
 
 /// One renderable output: a camera paired with a screen, and the AOVs
 /// written from it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// `Eq` and `Hash` are absent for the reason `OwnedArgument`'s are
+/// (research D7): a layer carries `filter_width`, and a float has no
+/// total equality to derive one from.
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct RenderOutput {
     /// The camera the screen is connected to.
@@ -443,14 +503,59 @@ pub struct Instance {
     pub transform: [f64; 16],
 }
 
-/// One AOV and the drivers it is written to.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// One AOV, resolved: what to output, how to encode it, and where it
+/// goes.
+///
+/// Every field but `handle` and `drivers` is an `outputlayer`
+/// attribute, **with the specification's default already applied** --
+/// `variablesource` "shader", `layertype` "color", `scalarformat`
+/// "uint8", `filter` "blackman-harris", `filterwidth` 3.0,
+/// `withalpha` and `dithering` off. A backend that re-derives these
+/// gets them subtly wrong: the defaults are stated once in the
+/// specification and nowhere in the scene, so a layer that sets none
+/// of them still means "a uint8 colour from a shader closure".
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct OutputLayer {
     /// The `outputlayer` node's handle.
     pub handle: String,
+    /// The variable to output. `None` when the layer does not name one,
+    /// which is a scene error rather than a default.
+    pub variable_name: Option<String>,
+    /// Where the variable is read from: `"shader"`, `"attribute"` or
+    /// `"builtin"`. Defaults to `"shader"`.
+    pub variable_source: String,
+    /// The layer's name as the driver writes it -- the layer name
+    /// inside an EXR, say. `None` when unset; ɴsɪ gives no default, so
+    /// a driver picks its own.
+    pub layer_name: Option<String>,
+    /// `"scalar"`, `"color"`, `"vector"` or `"quad"`. Defaults to
+    /// `"color"`.
+    pub layer_type: String,
+    /// The quantisation: `"uint8"` through `"float"`. Defaults to
+    /// `"uint8"`, which surprises a backend expecting float AOVs.
+    pub scalar_format: String,
+    /// Whether an alpha channel is included. Defaults to `false`.
+    pub with_alpha: bool,
+    /// Whether integer scalars are dithered. Defaults to `false`.
+    pub dithering: bool,
+    /// The reconstruction filter. Defaults to `"blackman-harris"`.
+    pub filter: String,
+    /// The filter's diameter in pixels. Defaults to `3.0`, and ɴsɪ says
+    /// it is not applied for `"box"` or `"zmin"`.
+    pub filter_width: f64,
+    /// An ᴏᴄɪᴏ colour profile to apply before quantisation, if set.
+    pub color_profile: Option<String>,
+    /// The ordering key among layers on one driver, if set.
+    ///
+    /// See `drivers`: this crate applies it rather than leaving it to
+    /// the backend.
+    pub sort_key: Option<i32>,
     /// A layer may fan out to several drivers -- a file and a display,
-    /// say -- so this is a list, in connection order.
+    /// say.
+    ///
+    /// In connection order. ɴsɪ orders *layers* on a driver by
+    /// `sortkey`, not drivers on a layer, so this stays as connected.
     pub drivers: Vec<String>,
 }
 

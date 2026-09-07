@@ -5285,3 +5285,214 @@ fn motion_times_are_available_along_a_placement_path() {
         "the static path",
     );
 }
+
+/// A layer that sets nothing still means something: ɴsɪ states a
+/// default for every one of these, and a backend that re-derives them
+/// gets `scalarformat` wrong -- `uint8`, not float.
+#[test]
+fn an_output_layer_carries_the_specifications_defaults() {
+    let scene = scene_with_output();
+    let outputs = scene.render_outputs();
+    let layer = &outputs[0].layers[0];
+
+    assert_eq!(layer.variable_source, "shader");
+    assert_eq!(layer.layer_type, "color");
+    assert_eq!(layer.scalar_format, "uint8");
+    assert_eq!(layer.filter, "blackman-harris");
+    assert_eq!(layer.filter_width, 3.0);
+    assert!(!layer.with_alpha);
+    assert!(!layer.dithering);
+    assert_eq!(layer.variable_name, None, "no default; the scene owes it");
+    assert_eq!(layer.layer_name, None);
+    assert_eq!(layer.color_profile, None);
+    assert_eq!(layer.sort_key, None);
+}
+
+/// And a layer that sets them is read, not defaulted over.
+#[test]
+fn an_output_layer_reads_what_it_sets() {
+    let mut scene = scene_with_output();
+    scene
+        .set_attribute(
+            "beauty",
+            vec![
+                string_attribute("variablename", "Ci"),
+                string_attribute("variablesource", "builtin"),
+                string_attribute("layername", "rgba"),
+                string_attribute("layertype", "quad"),
+                string_attribute("scalarformat", "half"),
+                string_attribute("filter", "box"),
+                string_attribute("colorprofile", "acescg"),
+                OwnedArgument::new(
+                    "filterwidth",
+                    Type::F64,
+                    1,
+                    0,
+                    OwnedData::F64(vec![1.0]),
+                ),
+                OwnedArgument::new(
+                    "withalpha",
+                    Type::I32,
+                    1,
+                    0,
+                    OwnedData::I32(vec![1]),
+                ),
+            ],
+        )
+        .unwrap();
+
+    let outputs = scene.render_outputs();
+    let layer = &outputs[0].layers[0];
+
+    assert_eq!(layer.variable_name.as_deref(), Some("Ci"));
+    assert_eq!(layer.variable_source, "builtin");
+    assert_eq!(layer.layer_name.as_deref(), Some("rgba"));
+    assert_eq!(layer.layer_type, "quad");
+    assert_eq!(layer.scalar_format, "half");
+    assert_eq!(layer.filter, "box");
+    assert_eq!(layer.filter_width, 1.0);
+    assert_eq!(layer.color_profile.as_deref(), Some("acescg"));
+    assert!(layer.with_alpha);
+}
+
+/// ɴsɪ: "Layers with the lowest sortkey attribute appear first."
+/// Connection order decides among the layers that set none.
+#[test]
+fn layers_order_by_sort_key_then_by_connection() {
+    let mut scene = Scene::default();
+    scene.create("cam", "perspectivecamera").unwrap();
+    scene.create("scr", "screen").unwrap();
+    scene.connect("scr", None, "cam", "screens").unwrap();
+
+    for (handle, key) in
+        [("last", Some(9)), ("unkeyed", None), ("first", Some(-1))]
+    {
+        scene.create(handle, "outputlayer").unwrap();
+        scene.connect(handle, None, "scr", "outputlayers").unwrap();
+        if let Some(key) = key {
+            scene
+                .set_attribute(
+                    handle,
+                    vec![OwnedArgument::new(
+                        "sortkey",
+                        Type::I32,
+                        1,
+                        0,
+                        OwnedData::I32(vec![key]),
+                    )],
+                )
+                .unwrap();
+        }
+    }
+
+    let outputs = scene.render_outputs();
+    let order: Vec<&str> = outputs[0]
+        .layers
+        .iter()
+        .map(|l| l.handle.as_str())
+        .collect();
+
+    assert_eq!(order, vec!["unkeyed", "first", "last"]);
+}
+
+/// A string attribute, spelled once for the tests above.
+fn string_attribute(name: &str, value: &str) -> OwnedArgument {
+    OwnedArgument::new(
+        name,
+        Type::String,
+        1,
+        0,
+        OwnedData::String(vec![value.as_bytes().to_vec()]),
+    )
+}
+
+/// Listing 3.1 of the specification: three square faces, the first
+/// with one triangular hole, the second with two square holes, the
+/// third with none. Read as one-count-per-face this is six faces of
+/// the wrong shape, with nothing to say so.
+#[test]
+fn nholes_regroups_nvertices_into_faces() {
+    let mut scene = Scene::default();
+    scene.create("holey", "mesh").unwrap();
+    scene
+        .set_attribute(
+            "holey",
+            vec![
+                int_attribute("nholes", &[1, 2, 0]),
+                int_attribute("nvertices", &[4, 3, 4, 4, 4, 4]),
+            ],
+        )
+        .unwrap();
+
+    let faces: Vec<_> = scene.faces("holey").expect("faces").collect();
+
+    assert_eq!(faces.len(), 3, "three faces, not six counts");
+    assert_eq!(faces[0].outer, 4);
+    assert_eq!(faces[0].holes, [3]);
+    assert_eq!(faces[0].vertices(), 7);
+    assert_eq!(faces[1].outer, 4);
+    assert_eq!(faces[1].holes, [4, 4]);
+    assert_eq!(faces[1].vertices(), 12);
+    assert_eq!(faces[2].outer, 4);
+    assert_eq!(faces[2].holes, [] as [i32; 0]);
+    assert_eq!(faces[2].vertices(), 4);
+}
+
+/// Without `nholes`, every `nvertices` value is a face.
+#[test]
+fn without_nholes_every_count_is_a_face() {
+    let mut scene = Scene::default();
+    scene.create("quad", "mesh").unwrap();
+    scene
+        .set_attribute("quad", vec![int_attribute("nvertices", &[4, 3])])
+        .unwrap();
+
+    let faces: Vec<_> = scene.faces("quad").expect("faces").collect();
+
+    assert_eq!(faces.len(), 2);
+    assert_eq!((faces[0].outer, faces[0].vertices()), (4, 4));
+    assert_eq!((faces[1].outer, faces[1].vertices()), (3, 3));
+}
+
+/// Counts that do not add up are refused, not guessed at. This is the
+/// case that renders as a different mesh without a word.
+#[test]
+fn face_counts_that_disagree_are_an_error() {
+    let mut scene = Scene::default();
+    scene.create("bad", "mesh").unwrap();
+    scene
+        .set_attribute(
+            "bad",
+            vec![
+                // Two holes on one face wants three counts; there are two.
+                int_attribute("nholes", &[2]),
+                int_attribute("nvertices", &[4, 3]),
+            ],
+        )
+        .unwrap();
+
+    assert!(matches!(
+        scene.faces("bad"),
+        Err(ResolveError::MalformedFaceCounts {
+            expected: 3,
+            found: 2,
+            ..
+        })
+    ));
+}
+
+/// ɴsɪ requires `nvertices`; a mesh without it has no faces to report.
+#[test]
+fn a_mesh_without_nvertices_is_an_error() {
+    let mut scene = Scene::default();
+    scene.create("bare", "mesh").unwrap();
+    assert!(matches!(
+        scene.faces("bare"),
+        Err(ResolveError::MissingFaceCounts { .. })
+    ));
+}
+
+/// An `int` attribute, spelled once for the mesh tests.
+fn int_attribute(name: &str, values: &[i32]) -> OwnedArgument {
+    OwnedArgument::new(name, Type::I32, 1, 0, OwnedData::I32(values.to_vec()))
+}
