@@ -1,6 +1,9 @@
 //! Helpers for using ɴsɪ with 3Delight.
 //!
 //! Shortcuts for instancing common nodes.
+pub mod cpp_object;
+pub mod progress;
+
 use nsi_ffi_wrap as nsi;
 use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 

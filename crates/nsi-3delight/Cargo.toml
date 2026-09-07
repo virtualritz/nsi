@@ -18,5 +18,8 @@ repository = "https://github.com/virtualritz/nsi/"
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 nsi-toolbelt = { version = "0.10", path = "../nsi-toolbelt" }
 
+[dev-dependencies]
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
+
 [package.metadata.docs.rs]
 all-features = true
