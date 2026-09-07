@@ -68,8 +68,8 @@
 //! without guessing at the renderer's clock.
 
 use crate::cpp_object::{CppObject, VTable};
-use nsi_ffi_wrap as nsi;
 use core::{ffi::c_void, panic::AssertUnwindSafe};
+use nsi_ffi_wrap as nsi;
 
 /// A progress report, as `NSI::ProgressCallback::Value`.
 #[repr(C)]
@@ -156,9 +156,9 @@ impl<C: ProgressCallback> ProgressReporter<C> {
         let callback = Box::new(callback);
         // `NSI::ProgressCallback` declares one pure virtual, `Update`,
         // so the vtable has exactly one slot.
-        let vtable = Box::new(VTable::new([
-            update_trampoline::<C> as extern "C" fn(_, _, _) as *const c_void,
-        ]));
+        let vtable = Box::new(VTable::new([update_trampoline::<C>
+            as extern "C" fn(_, _, _)
+            as *const c_void]));
         let object = Box::new(CppObject::new(
             vtable.as_ptr(),
             CURRENT_VERSION,

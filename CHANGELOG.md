@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### `nsi-toolbelt` 0.10.1 -> 0.11.0
+### `nsi-toolbelt` 0.10.1 -> 0.10.2
 
 - New `scene` module: `Handle<K>` carries a node's kind in the type
   system, so a connection ɴsɪ does not allow is a compile error rather
@@ -23,8 +23,10 @@
   `E0308` for the wrong argument type and `E0599` for a slot the node
   does not have, because a `compile_fail` test otherwise passes for any
   error at all, including a typo in itself.
-- The untyped free functions are unchanged and still exported. This is
-  additive.
+- The untyped free functions are unchanged and still exported. Purely
+  additive, hence a patch: in 0.x cargo reads 0.11 as breaking, which
+  would have forced `nsi-3delight` and the `nsi` facade to bump for a
+  change that breaks nothing.
 
 ### `nsi-toolbelt` 0.10.0 -> 0.10.1
 

@@ -1,6 +1,6 @@
 [package]
 name = "nsi-toolbelt"
-version = "0.11.0"
+version = "0.10.2"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
@@ -18,6 +18,10 @@ repository = "https://github.com/virtualritz/nsi/"
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 petname = { version = "3", default-features = false, features = ["default-rng", "default-words"] }
 ultraviolet = { version = "0.10", features = ["f64"] }
+
+[dev-dependencies]
+# The render test drives real output callbacks.
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
 
 [package.metadata.docs.rs]
 all-features = true

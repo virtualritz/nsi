@@ -24,7 +24,7 @@ toolbelt = ["dep:nsi-toolbelt"]
 
 [dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
-nsi-toolbelt = { version = "0.10.1", path = "../nsi-toolbelt", optional = true }
+nsi-toolbelt = { version = "0.10.2", path = "../nsi-toolbelt", optional = true }
 
 [dev-dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
