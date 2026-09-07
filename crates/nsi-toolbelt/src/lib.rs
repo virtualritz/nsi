@@ -7,6 +7,8 @@
 //! that specify the type of node being created, such as `shader`.
 pub mod scene;
 pub mod transform;
+
+use core::sync::atomic::{AtomicU64, Ordering};
 pub use transform::{
     Matrix, look_at_matrix, rotation_matrix, scaling_matrix, translation_matrix,
 };
@@ -30,8 +32,16 @@ pub fn generate_or_use_handle(
     match handle {
         Some(handle) => handle.to_string(),
         None => {
-            let name = petname::petname(3, "_")
-                .expect("petname default dictionary missing");
+            // `petname` yields `None` only when its word lists are
+            // empty, which the `default-words` feature this crate
+            // enables rules out. "Cannot happen" is still not a reason
+            // for a library to abort someone's render, so fall back to
+            // a counter rather than panic. Unique within the process,
+            // which is the same guarantee the petname path offers.
+            let name = petname::petname(3, "_").unwrap_or_else(|| {
+                static COUNTER: AtomicU64 = AtomicU64::new(0);
+                format!("node_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+            });
             match prefix {
                 Some(prefix) => format!("{prefix}_{name}"),
                 None => name,
