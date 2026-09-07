@@ -227,6 +227,29 @@ impl OwnedArgument {
         }
     }
 
+    /// How many *elements* this argument carries.
+    ///
+    /// Scalars count themselves; a `point` counts triples; an
+    /// `array_len(n)` argument counts runs of `n`. This is ɴsɪ's `count`
+    /// field, and it is what says whether a primitive variable is one
+    /// value per face, per vertex or per face-vertex.
+    pub fn element_count(&self) -> usize {
+        let per = match self.type_tag {
+            Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
+            Type::MatrixF32 | Type::MatrixF64 => 16,
+            _ => 1,
+        };
+        let scalars = match &self.data {
+            OwnedData::F32(values) => values.len(),
+            OwnedData::F64(values) => values.len(),
+            OwnedData::I32(values) => values.len(),
+            OwnedData::I64(values) => values.len(),
+            OwnedData::String(values) => values.len(),
+            OwnedData::Reference(values) => values.len(),
+        };
+        scalars / per / self.array_length.max(1)
+    }
+
     /// A 4x4 `doublematrix`, row-major.
     ///
     /// `None` unless the declared type is [`nsi_trait::Type::MatrixF64`]

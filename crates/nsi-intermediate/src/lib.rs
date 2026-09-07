@@ -246,8 +246,8 @@ pub use owned::{HostPointer, OwnedArgument, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
     AttributeValue, Binding, Face, Faces, IDENTITY, Instance, InstanceRef,
-    Instances, OutputLayer, Placement, RAY_TYPES, RenderOutput, ResolveError,
-    Sampled, WorldTransforms,
+    Instances, Interpolation, OutputLayer, Placement, PrimitiveVariable,
+    RAY_TYPES, RenderOutput, ResolveError, Sampled, WorldTransforms,
 };
 pub use scene::{Affected, Changes, Node, Scene};
 pub use stream::{Compression, StreamWriter, write_stream, write_stream_with};

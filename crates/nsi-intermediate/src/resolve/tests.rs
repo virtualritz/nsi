@@ -3,8 +3,11 @@
 //! Separate file per the workspace rule: source files do not grow
 //! inline `#[cfg(test)]` modules.
 
-use crate::{OwnedArgument, OwnedData, ResolveError, Sampled, Scene};
+use crate::{
+    Interpolation, OwnedArgument, OwnedData, ResolveError, Sampled, Scene,
+};
 use core::mem;
+use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
 use nsi_trait::Type;
 
 /// A 4x4 row-major translation, the shape ɴsɪ stores in
@@ -5495,4 +5498,275 @@ fn a_mesh_without_nvertices_is_an_error() {
 /// An `int` attribute, spelled once for the mesh tests.
 fn int_attribute(name: &str, values: &[i32]) -> OwnedArgument {
     OwnedArgument::new(name, Type::I32, 1, 0, OwnedData::I32(values.to_vec()))
+}
+
+/// Two quads sharing an edge: 6 vertices, 2 faces, 8 face-vertices.
+fn indexed_quads() -> Scene {
+    let mut scene = Scene::default();
+    scene.create("m", "mesh").unwrap();
+    scene
+        .set_attribute(
+            "m",
+            vec![
+                int_attribute("nvertices", &[4, 4]),
+                OwnedArgument::new(
+                    "P",
+                    Type::Point,
+                    1,
+                    0,
+                    OwnedData::F32(vec![0.0; 6 * 3]),
+                ),
+                int_attribute("P.indices", &[0, 1, 4, 3, 1, 2, 5, 4]),
+            ],
+        )
+        .unwrap();
+    scene
+}
+
+/// Face-varying: one value per face-vertex, already in order.
+#[test]
+fn a_face_varying_variable_reads_in_order() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute("m", vec![float_attribute("width", &[0.0; 8])])
+        .unwrap();
+
+    let variable = scene.primitive_variable("m", "width").unwrap().unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::FaceVarying);
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(indices, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+}
+
+/// Per-vertex: indexed the way `P` is, so a face-vertex reads through
+/// `P.indices`. This is the one a backend gets wrong by reading the
+/// values in order, which shades plausibly and wrongly.
+#[test]
+fn a_per_vertex_variable_reads_through_the_position_indices() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute("m", vec![float_attribute("temperature", &[0.0; 6])])
+        .unwrap();
+
+    let variable = scene
+        .primitive_variable("m", "temperature")
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::Vertex);
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(indices, vec![0, 1, 4, 3, 1, 2, 5, 4], "P.indices order");
+}
+
+/// Uniform: one value per face, repeated across that face's corners.
+#[test]
+fn a_uniform_variable_repeats_across_its_face() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute("m", vec![float_attribute("shell", &[0.0; 2])])
+        .unwrap();
+
+    let variable = scene.primitive_variable("m", "shell").unwrap().unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::Uniform);
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(indices, vec![0, 0, 0, 0, 1, 1, 1, 1]);
+}
+
+/// Constant: one value, everywhere.
+#[test]
+fn a_constant_variable_is_one_value_everywhere() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute("m", vec![float_attribute("scale", &[1.0])])
+        .unwrap();
+
+    let variable = scene.primitive_variable("m", "scale").unwrap().unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::Constant);
+    assert!(variable.face_varying_indices().all(|index| index == 0));
+    assert_eq!(variable.face_varying_indices().count(), 8);
+}
+
+/// A variable's own `.indices` overrides everything: ɴsɪ says they say
+/// "which values of the other parameter to use", whatever the count.
+#[test]
+fn an_indexed_variable_reads_through_its_own_indices() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute(
+            "m",
+            vec![
+                float_attribute("st", &[0.0; 3]),
+                int_attribute("st.indices", &[2, 1, 0, 1, 2, 2, 1, 0]),
+            ],
+        )
+        .unwrap();
+
+    let variable = scene.primitive_variable("m", "st").unwrap().unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::FaceVarying);
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(indices, vec![2, 1, 0, 1, 2, 2, 1, 0]);
+}
+
+/// The tetrahedron the documentation names: four vertices and four
+/// faces, so the count decides nothing and the flag must.
+#[test]
+fn the_per_face_flag_breaks_the_tetrahedron_tie() {
+    let mut scene = Scene::default();
+    scene.create("tet", "mesh").unwrap();
+    scene
+        .set_attribute(
+            "tet",
+            vec![
+                int_attribute("nvertices", &[3, 3, 3, 3]),
+                OwnedArgument::new(
+                    "P",
+                    Type::Point,
+                    1,
+                    0,
+                    OwnedData::F32(vec![0.0; 4 * 3]),
+                ),
+                int_attribute(
+                    "P.indices",
+                    &[0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2],
+                ),
+                OwnedArgument::new(
+                    "id",
+                    Type::F32,
+                    1,
+                    NSIParamFlags::PerFace.bits(),
+                    OwnedData::F32(vec![0.0; 4]),
+                ),
+            ],
+        )
+        .unwrap();
+
+    let variable = scene.primitive_variable("tet", "id").unwrap().unwrap();
+
+    assert_eq!(
+        variable.interpolation(),
+        Interpolation::Uniform,
+        "four values, four faces and four vertices: only the flag decides",
+    );
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(indices, vec![0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]);
+}
+
+/// The same tetrahedron, flagged the other way, means the other thing.
+#[test]
+fn the_per_vertex_flag_breaks_it_the_other_way() {
+    let mut scene = tetrahedron(NSIParamFlags::PerVertex.bits());
+    let variable = scene.primitive_variable("tet", "id").unwrap().unwrap();
+
+    assert_eq!(variable.interpolation(), Interpolation::Vertex);
+    let indices: Vec<usize> = variable.face_varying_indices().collect();
+    assert_eq!(
+        indices,
+        vec![0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2],
+        "the position indices",
+    );
+    let _ = &mut scene;
+}
+
+/// And with neither flag it means neither, so it is refused rather
+/// than guessed -- the count cannot decide, which is why ɴsɪ has the
+/// flags at all.
+#[test]
+fn an_unflagged_tetrahedron_variable_is_ambiguous() {
+    let scene = tetrahedron(0);
+    assert!(matches!(
+        scene.primitive_variable("tet", "id"),
+        Err(ResolveError::AmbiguousInterpolation {
+            values: 4,
+            faces: 4,
+            vertices: 4,
+            ..
+        })
+    ));
+}
+
+/// Four vertices, four faces, twelve face-vertices, and one `id` per
+/// something -- which the caller says with `flags`.
+fn tetrahedron(flags: i32) -> Scene {
+    let mut scene = Scene::default();
+    scene.create("tet", "mesh").unwrap();
+    scene
+        .set_attribute(
+            "tet",
+            vec![
+                int_attribute("nvertices", &[3, 3, 3, 3]),
+                OwnedArgument::new(
+                    "P",
+                    Type::Point,
+                    1,
+                    0,
+                    OwnedData::F32(vec![0.0; 4 * 3]),
+                ),
+                int_attribute(
+                    "P.indices",
+                    &[0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2],
+                ),
+                OwnedArgument::new(
+                    "id",
+                    Type::F32,
+                    1,
+                    flags,
+                    OwnedData::F32(vec![0.0; 4]),
+                ),
+            ],
+        )
+        .unwrap();
+    scene
+}
+
+/// A count that means none of the four is refused, not guessed.
+#[test]
+fn a_count_matching_no_interpolation_is_an_error() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute("m", vec![float_attribute("odd", &[0.0; 5])])
+        .unwrap();
+
+    assert!(matches!(
+        scene.primitive_variable("m", "odd"),
+        Err(ResolveError::AmbiguousInterpolation { values: 5, .. })
+    ));
+}
+
+/// Indices that do not cover the face-vertices are refused too.
+#[test]
+fn indices_that_do_not_match_the_face_vertices_are_an_error() {
+    let mut scene = indexed_quads();
+    scene
+        .set_attribute(
+            "m",
+            vec![
+                float_attribute("st", &[0.0; 3]),
+                int_attribute("st.indices", &[0, 1]),
+            ],
+        )
+        .unwrap();
+
+    assert!(matches!(
+        scene.primitive_variable("m", "st"),
+        Err(ResolveError::MalformedIndices {
+            indices: 2,
+            face_vertices: 8,
+            ..
+        })
+    ));
+}
+
+/// An attribute the node does not set is absent, not an error.
+#[test]
+fn an_absent_variable_is_none() {
+    let scene = indexed_quads();
+    assert!(scene.primitive_variable("m", "st").unwrap().is_none());
+}
+
+/// A `float` attribute, spelled once for the primitive-variable tests.
+fn float_attribute(name: &str, values: &[f32]) -> OwnedArgument {
+    OwnedArgument::new(name, Type::F32, 1, 0, OwnedData::F32(values.to_vec()))
 }

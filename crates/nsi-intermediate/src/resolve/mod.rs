@@ -15,6 +15,7 @@ mod instances;
 mod mesh;
 mod motion;
 mod outputs;
+mod primvar;
 
 // The types are here; the walks are in the five modules above. Split
 // at 2530 lines against a stated 300-500, along the seams the code
@@ -25,6 +26,7 @@ pub use chain::WorldTransforms;
 pub use instances::Instances;
 pub use mesh::{Face, Faces};
 pub use motion::Sampled;
+pub use primvar::{Interpolation, PrimitiveVariable};
 
 /// A 4x4 identity, row-major.
 #[rustfmt::skip]
@@ -47,6 +49,10 @@ const MODEL_INDICES: &str = "modelindices";
 /// `mesh` topology, which only means something as a pair.
 const FACE_VERTEX_COUNTS: &str = "nvertices";
 const HOLE_COUNTS: &str = "nholes";
+
+/// Positions, and ɴsɪ's indirect-lookup suffix.
+const POSITIONS: &str = "P";
+const INDICES: &str = ".indices";
 
 // `outputlayer` attribute names, spelled once. The defaults they fall
 // back to live with `Scene::output_layer`, next to the specification
@@ -217,6 +223,46 @@ pub enum ResolveError {
         /// The mesh.
         handle: String,
     },
+    /// A `<name>.indices` is not one entry per face-vertex, or points
+    /// outside the values it indexes.
+    ///
+    /// ɴsɪ says the indices say "which values of the other parameter to
+    /// use" and nothing about how many values there are, so the
+    /// indices are what must match the primitive.
+    MalformedIndices {
+        /// The primitive.
+        handle: String,
+        /// The attribute the indices belong to.
+        attribute: String,
+        /// How many indices there are.
+        indices: usize,
+        /// How many the primitive's face-vertices need.
+        face_vertices: usize,
+        /// How many values there are to index.
+        values: usize,
+    },
+    /// A primitive variable's value count matches none of the four
+    /// interpolations.
+    ///
+    /// Constant is one value, uniform is one per face, vertex is one
+    /// per vertex and face-varying is one per face-vertex. A count
+    /// that is none of those has no meaning ɴsɪ defines, and guessing
+    /// one renders -- plausibly, and wrongly, which is how a wrong
+    /// normal survives review.
+    AmbiguousInterpolation {
+        /// The primitive.
+        handle: String,
+        /// The attribute.
+        attribute: String,
+        /// How many values it carries.
+        values: usize,
+        /// How many faces the primitive has.
+        faces: usize,
+        /// How many vertices.
+        vertices: usize,
+        /// How many face-vertices.
+        face_vertices: usize,
+    },
     /// `nholes` and `nvertices` disagree.
     ///
     /// ɴsɪ: with `nholes` set, the face count is the number of `nholes`
@@ -304,6 +350,31 @@ impl fmt::Display for ResolveError {
                 "ɴsɪ node {handle:?} has no transform sample at time \
                  {time}; it has {available:?}, and this crate does not \
                  interpolate between them"
+            ),
+            Self::MalformedIndices {
+                handle,
+                attribute,
+                indices,
+                face_vertices,
+                values,
+            } => write!(
+                f,
+                "ɴsɪ primitive {handle:?} has {indices} {attribute:?} \
+                 indices for {face_vertices} face-vertices into {values} \
+                 values; indices are read per face-vertex"
+            ),
+            Self::AmbiguousInterpolation {
+                handle,
+                attribute,
+                values,
+                faces,
+                vertices,
+                face_vertices,
+            } => write!(
+                f,
+                "ɴsɪ primitive {handle:?} has {values} {attribute:?} values, \
+                 which is neither constant (1), per face ({faces}), per \
+                 vertex ({vertices}) nor per face-vertex ({face_vertices})"
             ),
             Self::MissingFaceCounts { handle } => write!(
                 f,
