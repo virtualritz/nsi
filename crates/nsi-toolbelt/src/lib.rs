@@ -5,14 +5,24 @@
 //!
 //! Where ergonomically advised, creation methods names carry postfixes
 //! that specify the type of node being created, such as `shader`.
+pub mod transform;
+pub use transform::{
+    Matrix, look_at_matrix, rotation_matrix, scaling_matrix,
+    translation_matrix,
+};
+
 use nsi_ffi_wrap as nsi;
 use ultraviolet as uv;
-//use uv::{DVec3, DMat4};
 
-/// Generates a random handle if `handle` is `None` or falls through,
-/// otherwise.
+/// Generates a random handle if `handle` is [`None`], otherwise falls
+/// through.
+///
+/// One implementation for every build. It used to be two -- petnames
+/// under `debug_assertions`, random alphanumerics otherwise -- so the
+/// handles in a scene depended on how the program had been compiled,
+/// which is a poor surprise for anyone diffing an `apistream` dump
+/// between a debug and a release run.
 #[doc(hidden)]
-#[cfg(debug_assertions)]
 pub fn generate_or_use_handle(
     handle: Option<&str>,
     prefix: Option<&str>,
@@ -22,32 +32,10 @@ pub fn generate_or_use_handle(
         None => {
             let name = petname::petname(3, "_")
                 .expect("petname default dictionary missing");
-            if let Some(prefix) = prefix {
-                String::from(prefix) + "_" + &name
-            } else {
-                name
+            match prefix {
+                Some(prefix) => format!("{prefix}_{name}"),
+                None => name,
             }
-        }
-    }
-}
-
-#[doc(hidden)]
-#[cfg(not(debug_assertions))]
-pub fn generate_or_use_handle(
-    handle: Option<&str>,
-    _prefix: Option<&str>,
-) -> String {
-    match handle {
-        Some(handle) => handle.to_string(),
-        None => {
-            use rand::{Rng, distr::Alphanumeric};
-            use std::iter;
-            let mut rng = rand::rng();
-
-            iter::repeat(())
-                .map(|()| rng.sample(Alphanumeric) as char)
-                .take(20)
-                .collect()
         }
     }
 }
@@ -188,13 +176,9 @@ pub fn scaling(
 ) -> String {
     let handle = generate_or_use_handle(handle, Some("scaling"));
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
-
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
-            "transformationmatrix",
-            uv::DMat4::from_nonuniform_scale(uv::DVec3::from(scale)).as_array()
-        )],
+        &[nsi::matrix_f64!("transformationmatrix", &transform::scaling_matrix(scale))],
     );
 
     handle
@@ -213,13 +197,9 @@ pub fn translation(
 ) -> String {
     let handle = generate_or_use_handle(handle, Some("translation"));
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
-
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
-            "transformationmatrix",
-            uv::DMat4::from_translation(uv::DVec3::from(translate)).as_array()
-        )],
+        &[nsi::matrix_f64!("transformationmatrix", &transform::translation_matrix(translate))],
     );
 
     handle
@@ -240,25 +220,26 @@ pub fn rotation(
 ) -> String {
     let handle = generate_or_use_handle(handle, Some("rotation"));
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
-
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::matrix_f64!(
             "transformationmatrix",
-            uv::DMat4::from_angle_plane(
-                (angle * core::f64::consts::TAU / 90.0) as _,
-                uv::DBivec3::from_normalized_axis(
-                    uv::DVec3::from(axis).normalized()
-                )
-            )
-            .transposed()
-            .as_array()
+            &transform::rotation_matrix(angle, axis)
         )],
     );
 
     handle
 }
 
+/// Create a transform node placing a camera at `eye`, looking at `to`.
+///
+/// If `handle` is [`None`] a random handle is generated.
+///
+/// Returns `handle`, which is what you connect the camera to. It used
+/// to return nothing: called with `handle: None` it generated a handle,
+/// created a node under it and dropped it on the floor, leaving a node
+/// nothing could ever reference.
+///
 /// **Convenience method; not part of the official ɴsɪ API.**
 pub fn look_at_camera(
     ctx: &nsi::Context,
@@ -266,23 +247,18 @@ pub fn look_at_camera(
     eye: &[f64; 3],
     to: &[f64; 3],
     up: &[f64; 3],
-) {
+) -> String {
     let handle = generate_or_use_handle(handle, Some("look_at"));
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
-
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::matrix_f64!(
             "transformationmatrix",
-            uv::DMat4::look_at(
-                uv::DVec3::from(eye),
-                uv::DVec3::from(to),
-                uv::DVec3::from(up),
-            )
-            .inversed()
-            .as_array()
+            &transform::look_at_matrix(eye, to, up)
         )],
     );
+
+    handle
 }
 
 /// Creates a transformation matrix that can be used to position
@@ -347,21 +323,18 @@ pub fn look_at_bounding_box_perspective_camera(
     //println!("{}", distance);
 
     let handle = generate_or_use_handle(handle, Some("look_at"));
-
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
-
     ctx.set_attribute(
         handle.as_str(),
         &[nsi::matrix_f64!(
             "transformationmatrix",
-            uv::DMat4::look_at(
-                bounding_box_center
-                    - distance * uv::DVec3::from(direction).normalized(),
-                bounding_box_center,
-                uv::DVec3::from(up)
+            &transform::look_at_matrix(
+                (bounding_box_center
+                    - distance * uv::DVec3::from(direction).normalized())
+                .as_array(),
+                bounding_box_center.as_array(),
+                up
             )
-            .inversed()
-            .as_array()
         )],
     );
 

@@ -1,6 +1,6 @@
 [package]
 name = "nsi-3delight"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
@@ -14,9 +14,17 @@ homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-3delight/"
 repository = "https://github.com/virtualritz/nsi/"
 
+[features]
+# The environment helpers, which are the only thing here that needs
+# nsi-toolbelt. On by default so this stays a patch release; turn it off
+# with `default-features = false` if you only want `progress`, and the
+# dependency disappears entirely.
+default = ["toolbelt"]
+toolbelt = ["dep:nsi-toolbelt"]
+
 [dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
-nsi-toolbelt = { version = "0.10", path = "../nsi-toolbelt" }
+nsi-toolbelt = { version = "0.10.1", path = "../nsi-toolbelt", optional = true }
 
 [dev-dependencies]
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }

@@ -4,7 +4,9 @@
 pub mod cpp_object;
 pub mod progress;
 
+#[cfg(feature = "toolbelt")]
 use nsi_ffi_wrap as nsi;
+#[cfg(feature = "toolbelt")]
 use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 
 /// Creates a typical environment node.
@@ -25,6 +27,7 @@ use nsi_toolbelt::{append, generate_or_use_handle, node, rotation};
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
+#[cfg(feature = "toolbelt")]
 pub fn environment(
     ctx: &nsi::Context,
     handle: Option<&str>,
@@ -104,6 +107,7 @@ pub fn environment(
 /// Note that the `shader` node is empty. It is up to the user
 /// to set the resp. attributes on the node or hook up an OSL
 /// network below it.
+#[cfg(feature = "toolbelt")]
 pub fn environment_texture<'a, 'b>(
     ctx: &nsi::Context<'a>,
     handle: Option<&str>,
@@ -153,6 +157,7 @@ where
 ///
 /// Note that this instances a `dlSky` shader. Using the returned  `shader`
 /// handle you can set more attributes on this node.
+#[cfg(feature = "toolbelt")]
 pub fn environment_sky<'a, 'b>(
     ctx: &nsi::Context<'a>,
     handle: Option<&str>,

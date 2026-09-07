@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### `nsi-toolbelt` 0.10.0 -> 0.10.1
+
+- **0.10.0 does not compile in release.** `generate_or_use_handle` had
+  two bodies, `#[cfg(debug_assertions)]` and `#[cfg(not(...))]`, and
+  only the release one called `rng.sample`, which `rand` 0.10.1 moved
+  from `Rng` onto a new `RngExt` trait. So `cargo build` passed and
+  `cargo build --release` failed -- the profile split was the reason,
+  not anything in `rand`'s own cfgs. There is now one body for every
+  build, which also stops scene handles depending on how the program
+  was compiled, and `rand` is no longer a dependency at all.
+- **`rotation` was four times its requested angle.** The conversion read
+  `angle * TAU / 90.0` where degrees to radians is `TAU / 360.0`. A
+  requested 90 degrees emitted a full 360 degree turn -- so the most
+  natural angle to test with was exactly the one that silently did
+  nothing. `nsi-3delight`'s three `environment*` helpers pass their
+  `angle` straight through, so their rotation was wrong by the same
+  factor.
+- **`rotation` also transposed, alone among these helpers.** A
+  rotation's transpose is its inverse, so it turned the wrong way.
+  `nsi.pdf` draws `Tx Ty Tz 1` as the matrix's last row, which is what
+  `ultraviolet`'s column-major array already produces for a
+  translation, so nothing here needs transposing.
+- **`look_at_camera` returned nothing.** Called with `handle: None` it
+  generated a handle, created a node under it and dropped it, leaving a
+  node nothing could reference. It returns the handle now, like every
+  other creator here.
+- New `transform` module: `scaling_matrix`, `translation_matrix`,
+  `rotation_matrix`, `look_at_matrix`. The arithmetic is separated from
+  the context so it can be tested without a renderer -- it could not be
+  before, and every bug above had shipped. Seven tests; two of them
+  fail against the old code.
+
+### `nsi-3delight` 0.10.1 -> 0.10.2
+
+- `nsi-toolbelt` is optional, behind a `toolbelt` feature that is on by
+  default. Only the `environment*` helpers need it; `progress` does
+  not, so `default-features = false` gets the progress callback with no
+  scene-helper dependency at all.
+- Requires `nsi-toolbelt` 0.10.1, so the release-build failure above
+  cannot be resolved to a broken version.
+
 ### `nsi-3delight` 0.10.0 -> 0.10.1
 
 - `progresscallback`, a 3Delight extension (`3Delight/Progress.h`, not
