@@ -121,9 +121,7 @@ impl<'a> Params<'a> {
                         return None;
                     }
                     // SAFETY: NUL-terminated, per the ndspy contract.
-                    Value::String(
-                        unsafe { CStr::from_ptr(ptr) }.to_str().ok()?,
-                    )
+                    Value::String(unsafe { CStr::from_ptr(ptr) }.to_str().ok()?)
                 }
                 // SAFETY: `value` addresses at least one `int`/`float`.
                 b'i' => Value::Int(unsafe { *(p.value as *const i32) }),
@@ -145,7 +143,9 @@ impl<'a> Params<'a> {
     /// readable, are skipped.
     pub fn strings(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
         self.raw.iter().filter_map(|p| {
-            if p.name.is_null() || p.value.is_null() || p.valueType as u8 != b's'
+            if p.name.is_null()
+                || p.value.is_null()
+                || p.valueType as u8 != b's'
             {
                 return None;
             }

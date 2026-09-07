@@ -161,7 +161,6 @@ fn channel_suffixes(name: &str, channels: usize) -> Vec<&'static str> {
     }
 }
 
-
 /// The output layers the renderer described, in order.
 ///
 /// ndspy has no nesting, so 3Delight describes several output layers
@@ -180,19 +179,17 @@ fn layer_names(params: Params<'_>) -> Vec<String> {
 
     // A layer's parameters follow its `layer` index, so each new index
     // closes the previous block.
-    let mut flush =
-        |variable: &mut Option<String>, explicit: &mut Option<String>| {
-            if let Some(name) = explicit.take().or_else(|| variable.take()) {
-                names.push(name);
-            }
-        };
+    let mut flush = |variable: &mut Option<String>,
+                     explicit: &mut Option<String>| {
+        if let Some(name) = explicit.take().or_else(|| variable.take()) {
+            names.push(name);
+        }
+    };
 
     for (name, value) in params.iter() {
         match (name, value) {
             ("layer", Value::Int(_)) => flush(&mut variable, &mut explicit),
-            ("variablename", Value::String(v)) => {
-                variable = Some(v.to_owned())
-            }
+            ("variablename", Value::String(v)) => variable = Some(v.to_owned()),
             ("layername", Value::String(v)) => explicit = Some(v.to_owned()),
             _ => {}
         }
@@ -282,8 +279,9 @@ impl DisplayDriver for Exr {
         // attribute for it, so it is written as a named header entry
         // rather than silently applied to the pixels: this driver does
         // not transform what the renderer gave it.
-        let colour_profile =
-            params.string("colorprofile").map(|profile| profile.to_owned());
+        let colour_profile = params
+            .string("colorprofile")
+            .map(|profile| profile.to_owned());
 
         let header = params
             .strings()
@@ -343,8 +341,10 @@ impl DisplayDriver for Exr {
         // Defaulted to the names 3Delight itself uses: `albedo` is the
         // AOV its shaders emit (`outputconstant("albedo")`, in 14 of
         // them), and `N` is the built-in normal.
-        let denoise_albedo =
-            params.string("denoise.albedo").unwrap_or("albedo").to_owned();
+        let denoise_albedo = params
+            .string("denoise.albedo")
+            .unwrap_or("albedo")
+            .to_owned();
         let denoise_normal =
             params.string("denoise.normal").unwrap_or("N").to_owned();
         // Only ever warned about, never fed to the filter, so it stays
@@ -513,10 +513,8 @@ impl Exr {
         };
         let (offset, span_channels) = (beauty.offset, beauty.channels);
         let color = self.rgb_of(beauty);
-        let albedo =
-            self.layer(&self.denoise_albedo).map(|l| self.rgb_of(l));
-        let normal =
-            self.layer(&self.denoise_normal).map(|l| self.rgb_of(l));
+        let albedo = self.layer(&self.denoise_albedo).map(|l| self.rgb_of(l));
+        let normal = self.layer(&self.denoise_normal).map(|l| self.rgb_of(l));
 
         // OIDN reports both of these fallibly -- no device (no
         // supported hardware, no driver) is the common one. A failure
@@ -525,14 +523,18 @@ impl Exr {
         let device = match oidn::Device::new() {
             Ok(device) => device,
             Err(error) => {
-                eprintln!("rust_exr: no OIDN device, writing the raw beauty: {error}");
+                eprintln!(
+                    "rust_exr: no OIDN device, writing the raw beauty: {error}"
+                );
                 return;
             }
         };
         let mut filter = match oidn::RayTracing::try_new(&device) {
             Ok(filter) => filter,
             Err(error) => {
-                eprintln!("rust_exr: no OIDN filter, writing the raw beauty: {error}");
+                eprintln!(
+                    "rust_exr: no OIDN filter, writing the raw beauty: {error}"
+                );
                 return;
             }
         };

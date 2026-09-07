@@ -193,7 +193,7 @@ fn the_exr_driver_writes_every_connected_layer() {
         "A", "B", "G", "R", // Ci
         "albedo.R", "albedo.G", "albedo.B", // albedo AOV
         "N.X", "N.Y", "N.Z", // normal AOV
-        "Z",  // depth
+        "Z",   // depth
     ] {
         assert!(
             names.iter().any(|n| n == expected),
