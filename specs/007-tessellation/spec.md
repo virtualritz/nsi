@@ -41,6 +41,32 @@ never the other way round: nothing here pushes at a renderer.
    `Scene::affected` names the roots, and `subdiv-kernels` has sparse
    re-evaluation (`affected_outputs`, `evaluate_sparse`) to match.
 
+## Watertightness
+
+A consumer that tessellates two adjacent patches independently gets a
+crack between them, because each approximates the shared edge from its
+own side and the two approximations differ. Under displacement the gap
+opens further. **More triangles do not close it** -- the fix is
+knowing that the two boundaries are the same 3D edge, so the shared
+arc is evaluated once and used from both sides.
+
+ɴsɪ's draft already defines that identity: a scene-global
+edge-identifier space, exposed as `stitch.edge-id` on `nurbs` (one per
+parametric border) and `stitch.index`/`stitch.edge-id` on the draft
+`t-nurcc` node, where "boundaries anywhere in the scene that carry the
+same non-negative value trace the same model edge in 3D, and the
+renderer welds them".
+
+This crate **consumes** those identifiers where a scene supplies them
+and welds accordingly; it never guesses that two boundaries are the
+same edge from proximity, because a wrong weld is a fused model rather
+than a visible crack. Where a scene carries no identity, the output is
+honest about being unwelded.
+
+See `research.md` D6 for the evidence, including a ᴄᴀᴅ consumer that
+holds the identity at emit time and has nowhere in ɴsɪ 2.9 to put it,
+and R3 for whether identity should reach `mesh` boundaries too.
+
 ## Acceptance Criteria
 
 - A `mesh` with `subdivision.scheme = "catmull-clark"` tessellates
@@ -57,6 +83,10 @@ never the other way round: nothing here pushes at a renderer.
 - A polygon `mesh` with no `subdivision.scheme` passes through
   unchanged -- tessellating it would be a lie about what the scene
   said.
+- Two boundaries carrying the same `stitch.edge-id` come back welded:
+  one shared arc, evaluated once, with vertices shared rather than
+  merely coincident. Two boundaries carrying `-1`, or none at all, come
+  back unwelded and say so.
 
 ## Non-Goals
 
