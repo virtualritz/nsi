@@ -23,7 +23,7 @@ fn records_a_node_and_its_attribute() {
     r.set_attribute("cam", &[nsi::f32!("fov", 45.0)]).unwrap();
 
     let scene = r.scene();
-    assert_eq!(scene.node("cam").unwrap().node_type, "perspectivecamera");
+    assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
     assert_eq!(scene.node("cam").unwrap().attrs["fov"].name, "fov");
 }
 
@@ -302,7 +302,7 @@ fn create_arguments_are_inert_but_the_type_is_not() {
     );
 
     let scene = recorder.into_scene();
-    assert_eq!(scene.node("n").unwrap().node_type, "attributes");
+    assert_eq!(scene.node("n").unwrap().node_type(), "attributes");
     assert!(
         scene.node("n").unwrap().attrs.is_empty(),
         "a create argument is not an attribute",

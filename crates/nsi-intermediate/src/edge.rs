@@ -109,9 +109,14 @@ pub enum EdgeKind {
 #[non_exhaustive]
 pub struct Edge {
     /// The handle the connection is made from.
-    pub from: String,
-    /// The handle the connection is made to.
-    pub to: String,
+    ///
+    /// Stored rather than public, so `ustr_handles` can intern it
+    /// without that showing in any signature: read it with
+    /// [`Edge::from`].
+    pub(crate) from: crate::handle::Handle,
+    /// The handle the connection is made to. Read it with
+    /// [`Edge::to`].
+    pub(crate) to: crate::handle::Handle,
     /// What the connection means.
     pub kind: EdgeKind,
     /// The arguments of the ɴsɪ `connect` call that made this edge, in
@@ -241,5 +246,17 @@ pub fn classify(from_attr: Option<&str>, to_attr: &str) -> EdgeKind {
         other => EdgeKind::Other {
             to_attr: other.to_string(),
         },
+    }
+}
+
+impl Edge {
+    /// The handle the connection is made from.
+    pub fn from(&self) -> &str {
+        &self.from
+    }
+
+    /// The handle the connection is made to.
+    pub fn to(&self) -> &str {
+        &self.to
     }
 }

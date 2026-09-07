@@ -27,21 +27,21 @@ impl Scene {
                     .edges_to_attr(screen, EdgeKind::OutputLayer.to_attr())
                     .filter(|edge| edge.kind == EdgeKind::OutputLayer)
                     .map(|layer_edge| OutputLayer {
-                        handle: layer_edge.from.clone(),
+                        handle: layer_edge.from().to_string(),
                         drivers: self
                             .edges_to_attr(
                                 &layer_edge.from,
                                 EdgeKind::OutputDriver.to_attr(),
                             )
                             .filter(|edge| edge.kind == EdgeKind::OutputDriver)
-                            .map(|edge| edge.from.clone())
+                            .map(|edge| edge.from().to_string())
                             .collect(),
                     })
                     .collect();
 
                 RenderOutput {
-                    camera: screen_edge.to.clone(),
-                    screen: screen.clone(),
+                    camera: screen_edge.to().to_string(),
+                    screen: screen.to_string(),
                     layers,
                 }
             })

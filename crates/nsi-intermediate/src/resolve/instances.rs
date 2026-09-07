@@ -468,7 +468,7 @@ impl Scene {
             .edges_to_attr(instances, EdgeKind::InstanceSource.to_attr())
             .filter(|edge| edge.kind == EdgeKind::InstanceSource)
             .enumerate()
-            .map(|(order, edge)| (edge.index(), order, edge.from.clone()))
+            .map(|(order, edge)| (edge.index(), order, edge.from().to_string()))
             .collect::<Vec<_>>();
         sources.sort_by_key(|(index, order, _)| (*index, *order));
         sources

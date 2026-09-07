@@ -61,8 +61,8 @@
 //!
 //! let meshes: Vec<String> = scene
 //!     .nodes()
-//!     .filter(|(_, node)| node.node_type == "mesh")
-//!     .map(|(handle, _)| handle.clone())
+//!     .filter(|(_, node)| node.node_type() == "mesh")
+//!     .map(|(handle, _)| handle.to_string())
 //!     .collect();
 //!
 //! for handle in &meshes {
@@ -218,6 +218,7 @@ pub const ALL: &str = ".all";
 
 mod edge;
 mod error;
+mod handle;
 #[cfg(feature = "lua")]
 mod lua;
 mod owned;

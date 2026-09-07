@@ -36,9 +36,22 @@ lua = []
 # a dependency, so each is its own flag.
 gzip = ["dep:flate2"]
 zstd = ["dep:zstd"]
+# Intern node handles with `ustr` instead of storing a `String` per
+# occurrence. A handle is stored many times -- as the node key, on both
+# ends of every edge, and in three edge indexes -- so interning trades
+# a global table that is never freed for eight bytes a copy.
+#
+# **Additive, unlike the flag of the same name in `nsi-ffi-wrap`.**
+# This one switches *storage*: every public signature still takes and
+# returns `&str`, so two crates in one build that disagree about it
+# still compile. `nsi-ffi-wrap`'s version switches the public `Handle`
+# type, which is why enabling it there changes types for every other
+# crate in the build.
+ustr_handles = ["dep:ustr"]
 
 [dependencies]
 indexmap = "2"
+ustr = { version = "1", optional = true }
 flate2 = { version = "1", optional = true }
 zstd = { version = "0.13", optional = true }
 # `nsi-ffi-wrap` is here for its `Arg` type only -- it is the shared

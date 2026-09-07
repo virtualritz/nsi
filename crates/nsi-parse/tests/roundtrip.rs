@@ -107,7 +107,7 @@ fn a_scene_on_one_line_parses() {
     let scene = recorder.into_scene();
 
     assert_eq!(scene.len(), 2);
-    assert_eq!(scene.node("b").unwrap().node_type, "mesh");
+    assert_eq!(scene.node("b").unwrap().node_type(), "mesh");
     assert_eq!(scene.edges().count(), 1);
 }
 

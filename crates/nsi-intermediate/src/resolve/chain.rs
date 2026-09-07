@@ -99,7 +99,7 @@ impl Scene {
                         let parents = [edge, second]
                             .into_iter()
                             .chain(scene_parents)
-                            .map(|edge| edge.to.clone())
+                            .map(|edge| edge.to().to_string())
                             .collect();
                         return Err(ResolveError::MultipleParents {
                             handle: current,
@@ -123,7 +123,7 @@ impl Scene {
                         // An `instances` node holds one matrix per
                         // instance, not one for the prototype.
                         return Err(ResolveError::Instanced {
-                            instancer: instancer.to.clone(),
+                            instancer: instancer.to().to_string(),
                         });
                     }
 
@@ -131,7 +131,7 @@ impl Scene {
                         let parents = [instancer, second]
                             .into_iter()
                             .chain(instancers)
-                            .map(|edge| edge.to.clone())
+                            .map(|edge| edge.to().to_string())
                             .collect();
                         return Err(ResolveError::MultipleParents {
                             handle: current,
@@ -143,7 +143,7 @@ impl Scene {
                 }
             };
 
-            let parent = first.to.clone();
+            let parent = first.to().to_string();
             chain.push(ChainLink {
                 handle: current,
                 via_instancer: first.kind == EdgeKind::InstanceSource,
@@ -312,7 +312,7 @@ impl Scene {
                         volume_shader: shader(&EdgeKind::VolumeShader),
                         attributes: gathered
                             .iter()
-                            .map(|(_, _, edge)| edge.from.clone())
+                            .map(|(_, _, edge)| edge.from().to_string())
                             .collect(),
                     })
                 };
@@ -396,7 +396,7 @@ impl Scene {
                 .edges_from(&current)
                 .filter(|edge| edge.kind == EdgeKind::SceneMember)
                 .nth(taken)
-                .map(|edge| edge.to.clone());
+                .map(|edge| edge.to().to_string());
 
             let Some(parent) = parent else {
                 stack.pop();
@@ -464,7 +464,7 @@ impl<'a> Iterator for WorldTransforms<'a> {
 
             self.stack.push(Step::Leave(handle));
             for edge in self.scene.edges_to_attr(handle, "objects") {
-                self.stack.push(Step::Enter(&edge.from, here));
+                self.stack.push(Step::Enter(edge.from(), here));
             }
 
             return Some((handle, here));
@@ -501,7 +501,7 @@ impl Scene {
     pub fn world_transforms(&self) -> WorldTransforms<'_> {
         let mut stack = Vec::new();
         for edge in self.edges_to_attr(crate::ROOT, "objects") {
-            stack.push(Step::Enter(&edge.from, IDENTITY));
+            stack.push(Step::Enter(edge.from(), IDENTITY));
         }
         WorldTransforms {
             scene: self,

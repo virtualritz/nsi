@@ -82,7 +82,7 @@ impl Scene {
                 volume_shader: shader(&EdgeKind::VolumeShader),
                 attributes: gathered
                     .iter()
-                    .map(|(_, _, edge)| edge.from.clone())
+                    .map(|(_, _, edge)| edge.from().to_string())
                     .collect(),
             }))
         }
@@ -235,12 +235,12 @@ impl Scene {
         for (_, _, edge) in
             self.gathered_along(path, &EdgeKind::ShaderAttributes)
         {
-            let Some(node) = self.node(&edge.from) else {
+            let Some(node) = self.node(edge.from()) else {
                 continue;
             };
             if let Some(arg) = node.effective(name) {
                 return Some(AttributeValue {
-                    node: &edge.from,
+                    node: edge.from(),
                     name: &arg.name,
                     arg: Some(arg),
                     priority: 0,
@@ -264,7 +264,7 @@ impl Scene {
 
         let mut candidates = Vec::new();
         for (rank, (_, _, edge)) in gathered.iter().enumerate() {
-            let Some(node) = self.node(&edge.from) else {
+            let Some(node) = self.node(edge.from()) else {
                 continue;
             };
 
@@ -296,7 +296,7 @@ impl Scene {
                     specificity,
                     rank,
                     AttributeValue {
-                        node: &edge.from,
+                        node: edge.from(),
                         name: attribute,
                         arg,
                         priority,
@@ -342,12 +342,12 @@ impl Scene {
     ) -> Result<Vec<String>, ResolveError> {
         let mut sources = Vec::new();
         if let Some((handle, _)) = self.node_entry(geometry) {
-            sources.push(handle.clone());
+            sources.push(handle.to_string());
         }
         sources.extend(
             self.gathered_containers(geometry, &EdgeKind::ShaderAttributes)?
                 .into_iter()
-                .map(|(_, _, edge)| edge.from.clone()),
+                .map(|(_, _, edge)| edge.from().to_string()),
         );
         Ok(sources)
     }
@@ -476,13 +476,13 @@ impl Scene {
         // The geometry, then the sets it belongs to directly, then the
         // transforms above it. With no set memberships this is `chain`
         // and the walk is unchanged.
-        let mut sources: Vec<&String> = Vec::with_capacity(chain.len() + 1);
+        let mut sources: Vec<&str> = Vec::with_capacity(chain.len() + 1);
         for node in chain {
-            sources.push(node);
+            sources.push(node.as_str());
             sources.extend(
                 self.edges_from(node.as_str())
                     .filter(|edge| edge.kind == EdgeKind::SetMember)
-                    .map(|edge| &edge.to),
+                    .map(|edge| edge.to()),
             );
         }
 
@@ -490,13 +490,13 @@ impl Scene {
         // source at its nearest occurrence -- rendered, a set holding
         // both the mesh and its transform ranks where the mesh does.
         let mut seen = HashSet::new();
-        sources.retain(|handle| seen.insert(handle.as_str()));
+        sources.retain(|handle| seen.insert(*handle));
 
         let mut gathered: Vec<(usize, usize, &Edge)> = sources
             .into_iter()
             .enumerate()
             .flat_map(|(depth, node)| {
-                self.edges_to_attr(node.as_str(), kind.to_attr())
+                self.edges_to_attr(node, kind.to_attr())
                     // A shader-network edge's `to_attr` is its *port*
                     // name, so it shares this bucket with the named
                     // class. Without the filter a port called
@@ -531,12 +531,12 @@ impl Scene {
             .iter()
             .enumerate()
             .flat_map(|(rank, (_, _, edge))| {
-                self.edges_to_attr(&edge.from, kind.to_attr())
+                self.edges_to_attr(edge.from(), kind.to_attr())
                     .filter(move |shader| shader.kind == *kind)
                     .map(move |shader| (shader.priority(), rank, shader))
             })
             // Highest priority, then earliest in the gathered order.
             .min_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)))
-            .map(|(_, _, shader)| shader.from.clone())
+            .map(|(_, _, shader)| shader.from().to_string())
     }
 }

@@ -40,7 +40,7 @@ fn arg(name: &str, value: f32) -> OwnedArg {
 fn creates_and_finds_a_node() {
     let mut scene = Scene::default();
     scene.create("cam", "perspectivecamera").unwrap();
-    assert_eq!(scene.nodes["cam"].node_type, "perspectivecamera");
+    assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
 }
 
 #[test]
@@ -49,9 +49,9 @@ fn set_attribute_overwrites_by_name() {
     scene.create("cam", "perspectivecamera").unwrap();
     scene.set_attribute("cam", vec![arg("fov", 45.0)]).unwrap();
     scene.set_attribute("cam", vec![arg("fov", 60.0)]).unwrap();
-    assert_eq!(scene.nodes["cam"].attrs.len(), 1);
+    assert_eq!(scene.node("cam").unwrap().attrs.len(), 1);
     assert_eq!(
-        scene.nodes["cam"].attrs["fov"].data,
+        scene.node("cam").unwrap().attrs["fov"].data,
         OwnedData::F32(vec![60.0])
     );
 }
@@ -72,14 +72,14 @@ fn time_samples_are_kept_separately_and_sorted() {
         "recorded later-time-first and reported in time order",
     );
     assert_eq!(
-        scene.nodes["xf"].samples["t"]
+        scene.node("xf").unwrap().samples["t"]
             .iter()
             .map(|(time, _)| *time)
             .collect::<Vec<_>>(),
         vec![1.0, 0.0],
         "while the log keeps the order they were set in",
     );
-    assert!(scene.nodes["xf"].attrs.is_empty());
+    assert!(scene.node("xf").unwrap().attrs.is_empty());
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn delete_removes_the_node_and_its_edges() {
         .connect("mesh", None, "xf", "objects")
         .expect("known attribute");
     scene.delete("xf").unwrap();
-    assert!(!scene.nodes.contains_key("xf"));
+    assert!(scene.node("xf").is_none());
     assert!(scene.edges.is_empty());
 }
 
@@ -103,8 +103,8 @@ fn delete_attribute_removes_one_key() {
         .set_attribute("cam", vec![arg("fov", 45.0), arg("fs", 1.0)])
         .unwrap();
     scene.delete_attribute("cam", "fov");
-    assert!(!scene.nodes["cam"].attrs.contains_key("fov"));
-    assert!(scene.nodes["cam"].attrs.contains_key("fs"));
+    assert!(!scene.node("cam").unwrap().attrs.contains_key("fov"));
+    assert!(scene.node("cam").unwrap().attrs.contains_key("fs"));
 }
 
 /// Node order is insertion order. The `.nsi` stream diff against
@@ -115,7 +115,7 @@ fn node_order_is_insertion_order() {
     for handle in ["z", "a", "m"] {
         scene.create(handle, "transform").unwrap();
     }
-    let order: Vec<&str> = scene.nodes.keys().map(String::as_str).collect();
+    let order: Vec<&str> = scene.nodes().map(|(handle, _)| handle).collect();
     assert_eq!(order, vec!["z", "a", "m"]);
 }
 
@@ -150,7 +150,7 @@ fn delete_attribute_removes_from_every_time_sample() {
 
     scene.delete_attribute("xf", "t");
 
-    let node = &scene.nodes["xf"];
+    let node = &scene.node("xf").unwrap();
     assert!(!node.attrs.contains_key("t"), "static copy removed");
     assert!(node.samples.get("t").is_none(), "every sample of it too");
     assert!(node.samples.contains_key("keep"));
@@ -200,7 +200,7 @@ fn a_static_set_clears_the_motion_samples_of_that_name() {
 
     scene.set_attribute("xf", vec![arg("t", 5.0)]).unwrap();
 
-    let node = &scene.nodes["xf"];
+    let node = &scene.node("xf").unwrap();
     assert_eq!(node.attrs["t"].data, OwnedData::F32(vec![5.0]));
     assert!(node.samples.get("t").is_none(), "its samples went with it");
     assert!(
@@ -223,7 +223,7 @@ fn a_sampled_set_clears_the_static_value_of_that_name() {
         .set_attribute_at_time("xf", 0.0, vec![arg("t", 0.0)])
         .unwrap();
 
-    let node = &scene.nodes["xf"];
+    let node = &scene.node("xf").unwrap();
     assert!(!node.attrs.contains_key("t"), "static value replaced");
     assert!(node.attrs.contains_key("keep"), "others untouched");
 }
@@ -563,7 +563,11 @@ fn recreating_with_a_different_type_is_an_error() {
             requested: "transform".to_string(),
         })
     );
-    assert_eq!(scene.nodes["x"].node_type, "mesh", "type unchanged");
+    assert_eq!(
+        scene.node("x").unwrap().node_type(),
+        "mesh",
+        "type unchanged"
+    );
 }
 
 /// Re-creating with the same type is the no-op ɴsɪ describes, and
@@ -576,7 +580,11 @@ fn recreating_with_the_same_type_is_a_no_op() {
 
     scene.create("x", "mesh").unwrap();
 
-    assert_eq!(scene.nodes["x"].attrs.len(), 1, "attributes survive");
+    assert_eq!(
+        scene.node("x").unwrap().attrs.len(),
+        1,
+        "attributes survive"
+    );
 }
 
 /// 3Delight answers a non-finite sample time with `E6026 invalid time`.
@@ -710,9 +718,7 @@ fn a_hand_built_node_does_not_panic_the_readers() {
     scene.create("q", "mesh").unwrap();
     scene.connect("xf", None, ".root", "objects").unwrap();
     scene.connect("q", None, "xf", "objects").unwrap();
-    scene
-        .nodes
-        .get_mut("xf")
+    crate::handle::map_get_mut(&mut scene.nodes, "xf")
         .expect("created")
         .samples
         .insert("transformationmatrix".to_string(), Vec::new());

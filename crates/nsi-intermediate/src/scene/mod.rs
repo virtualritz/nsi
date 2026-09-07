@@ -4,7 +4,10 @@
 //! was recorded would make the `.nsi` stream diff against 3Delight
 //! meaningless.
 
-use crate::{ALL, Edge, EdgeKind, OwnedArg, RecordError, classify};
+use crate::{
+    ALL, Edge, EdgeKind, OwnedArg, RecordError, classify,
+    handle::{self, Handle},
+};
 use core::{cmp::Ordering, mem};
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
@@ -13,8 +16,12 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct Node {
-    /// The ɴsɪ node type this handle was created with.
-    pub node_type: String,
+    /// The ɴsɪ node type this handle was created with. Read it with
+    /// [`Node::node_type`].
+    ///
+    /// Stored rather than public so `ustr_handles` can intern it: a
+    /// production scene says `"mesh"` a million times.
+    pub(crate) node_type: Handle,
     /// Attributes set with `set_attribute`, keyed by name.
     pub attrs: IndexMap<String, OwnedArg>,
     /// Every `set_attribute_at_time` call, per attribute, **in call
@@ -47,6 +54,11 @@ pub struct Node {
 }
 
 impl Node {
+    /// The ɴsɪ node type this handle was created with.
+    pub fn node_type(&self) -> &str {
+        &self.node_type
+    }
+
     /// This node's effective value for an attribute.
     ///
     /// **Use this, not `attrs`.** `SetAttributeAtTime` on an attribute
@@ -257,7 +269,7 @@ fn record_edge(list: &mut Vec<Edge>, edge: Edge) {
 #[non_exhaustive]
 pub struct Scene {
     /// Nodes by handle, in creation order.
-    nodes: IndexMap<String, Node>,
+    nodes: IndexMap<Handle, Node>,
     /// Classified connections, in connection order.
     edges: Vec<Edge>,
     /// `Evaluate` calls, in call order, each with the node count at the
@@ -276,8 +288,8 @@ pub struct Scene {
     /// hop of every walk scanned every edge -- quadratic in the scene,
     /// which a production asset feels immediately. Rebuilt on removal
     /// (rare) and appended to on `connect` (common).
-    by_from: HashMap<String, Vec<usize>>,
-    by_to: HashMap<String, Vec<usize>>,
+    by_from: HashMap<Handle, Vec<usize>>,
+    by_to: HashMap<Handle, Vec<usize>>,
     /// Edge positions keyed by destination *and* destination attribute.
     ///
     /// `by_to` alone is not enough: a transform with twenty thousand
@@ -285,7 +297,7 @@ pub struct Scene {
     /// gathering attributes there would scan all of them once per
     /// child. Keying on the attribute too makes that lookup
     /// proportional to the matches rather than to the scene.
-    by_to_attr: HashMap<(String, String), Vec<usize>>,
+    by_to_attr: HashMap<(Handle, Handle), Vec<usize>>,
     /// What has changed since the last [`Scene::take_changes`].
     ///
     /// Private, and not part of [`Scene`]'s equality: two scenes with
@@ -372,7 +384,7 @@ impl Scene {
                 affected.everything = true;
                 continue;
             }
-            match self.nodes.get(handle) {
+            match handle::map_get(&self.nodes, handle) {
                 Some(node) if node.node_type == "shader" => {
                     affected.shaders.insert(handle.as_str());
                 }
@@ -575,27 +587,28 @@ impl Scene {
     /// is not that, and neither is a camera reached through a lens
     /// shader.
     fn is_shader_node(&self, handle: &str) -> bool {
-        self.nodes
-            .get(handle)
-            .is_some_and(|node| node.node_type == "shader")
+        handle::map_get(&self.nodes, handle)
+            .is_some_and(|node| node.node_type() == "shader")
     }
 
     /// Whether this handle is part of the camera/screen/layer/driver
     /// chain, whose answers come from [`Scene::render_outputs`] rather
     /// than from a geometry walk.
     fn is_output_node(&self, handle: &str) -> bool {
-        self.nodes.get(handle).is_some_and(|node| {
-            node.node_type.ends_with("camera")
+        handle::map_get(&self.nodes, handle).is_some_and(|node| {
+            node.node_type().ends_with("camera")
                 || matches!(
-                    node.node_type.as_str(),
+                    node.node_type(),
                     "screen" | "outputlayer" | "outputdriver"
                 )
         })
     }
 
     /// The nodes, by handle, in creation order.
-    pub fn nodes(&self) -> impl Iterator<Item = (&String, &Node)> {
-        self.nodes.iter()
+    pub fn nodes(&self) -> impl Iterator<Item = (&str, &Node)> {
+        self.nodes
+            .iter()
+            .map(|(handle, node)| (handle.as_str(), node))
     }
 
     /// The recorded `Evaluate` calls, in call order.
@@ -619,15 +632,15 @@ impl Scene {
 
     /// One node by handle.
     pub fn node(&self, handle: &str) -> Option<&Node> {
-        self.nodes.get(handle)
+        handle::map_get(&self.nodes, handle)
     }
 
     /// A node together with the scene's own copy of its handle.
     ///
     /// Resolution returns borrowed handles that outlive the `&str` a
     /// caller passed in, so it needs the stored key, not the argument.
-    pub(crate) fn node_entry(&self, handle: &str) -> Option<(&String, &Node)> {
-        self.nodes.get_key_value(handle)
+    pub(crate) fn node_entry(&self, handle: &str) -> Option<(&str, &Node)> {
+        handle::map_entry(&self.nodes, handle)
     }
 
     /// The classified connections, in connection order.
@@ -675,10 +688,11 @@ impl Scene {
         handle: &str,
         to_attr: &str,
     ) -> impl Iterator<Item = &'a Edge> + use<'a> {
-        // `HashMap<(String, String), _>` cannot be probed with a pair of
-        // `&str` without allocating, and this is the hot path's key.
-        self.by_to_attr
-            .get(&(handle.to_string(), to_attr.to_string()))
+        // Without `ustr_handles` this allocates two `String`s to probe
+        // the map, on what is the hot path's key: a `HashMap<(String,
+        // String), _>` cannot be probed with a pair of `&str`.
+        // Interned, the probe allocates nothing.
+        handle::get_pair(&self.by_to_attr, handle, to_attr)
             .into_iter()
             .flatten()
             .map(|position| &self.edges[*position])
@@ -686,11 +700,10 @@ impl Scene {
 
     fn indexed<'a>(
         &'a self,
-        index: &'a HashMap<String, Vec<usize>>,
+        index: &'a HashMap<Handle, Vec<usize>>,
         handle: &str,
     ) -> impl Iterator<Item = &'a Edge> + use<'a> {
-        index
-            .get(handle)
+        crate::handle::get(index, handle)
             .into_iter()
             .flatten()
             .map(|position| &self.edges[*position])
@@ -705,15 +718,18 @@ impl Scene {
         self.by_to_attr.clear();
         for (position, edge) in self.edges.iter().enumerate() {
             self.by_from
-                .entry(edge.from.clone())
+                .entry(handle::handle(&edge.from))
                 .or_default()
                 .push(position);
             self.by_to
-                .entry(edge.to.clone())
+                .entry(handle::handle(&edge.to))
                 .or_default()
                 .push(position);
             self.by_to_attr
-                .entry((edge.to.clone(), edge.kind.to_attr().to_string()))
+                .entry((
+                    handle::handle(&edge.to),
+                    handle::handle(edge.kind.to_attr()),
+                ))
                 .or_default()
                 .push(position);
         }
@@ -743,20 +759,20 @@ impl Scene {
             });
         }
 
-        match self.nodes.get(handle) {
-            Some(existing) if existing.node_type != node_type => {
+        match handle::map_get(&self.nodes, handle) {
+            Some(existing) if existing.node_type() != node_type => {
                 Err(RecordError::TypeMismatch {
                     handle: handle.to_string(),
-                    existing: existing.node_type.clone(),
+                    existing: existing.node_type().to_string(),
                     requested: node_type.to_string(),
                 })
             }
             Some(_) => Ok(()),
             None => {
                 self.nodes.insert(
-                    handle.to_string(),
+                    crate::handle::handle(handle),
                     Node {
-                        node_type: node_type.to_string(),
+                        node_type: crate::handle::handle(node_type),
                         ..Node::default()
                     },
                 );
@@ -786,11 +802,11 @@ impl Scene {
             // gone and the edges that named this handle cannot be
             // found, and a consumer working out what the delete
             // orphaned needs both.
-            if let Some(node) = self.nodes.shift_remove(handle) {
+            if let Some(node) = handle::map_remove(&mut self.nodes, handle) {
                 self.changes.created.shift_remove(handle);
                 self.changes
                     .deleted
-                    .insert(handle.to_string(), node.node_type);
+                    .insert(handle.to_string(), node.node_type.to_string());
             }
             for edge in self
                 .edges
@@ -812,7 +828,7 @@ impl Scene {
     fn is_known(&self, handle: &str) -> bool {
         handle == crate::ROOT
             || handle == crate::GLOBAL
-            || self.nodes.contains_key(handle)
+            || handle::map_get(&self.nodes, handle).is_some()
     }
 
     /// Delete a node and, recursively, the nodes that only fed it.
@@ -848,22 +864,22 @@ impl Scene {
                 .iter()
                 .flat_map(|node| self.edges_to(node))
                 .filter(|edge| edge.strength() <= 0)
-                .map(|edge| edge.from.clone())
-                .filter(|from| !doomed.contains(from))
+                .map(|edge| edge.from().to_string())
+                .filter(|from| !doomed.contains(from.as_str()))
                 .collect::<Vec<_>>();
 
             let mut grew = false;
             for candidate in candidates {
                 let leads_elsewhere = self
                     .edges_from(&candidate)
-                    .any(|edge| !doomed.contains(&edge.to));
+                    .any(|edge| !doomed.contains(edge.to()));
 
                 // The strength rule is about *this* node's connection to
                 // anything being deleted, not only about how it was
                 // first reached. Checking it at discovery alone let a
                 // node be swept in through a second, weak path.
                 let held = self.edges_from(&candidate).any(|edge| {
-                    doomed.contains(&edge.to) && edge.strength() > 0
+                    doomed.contains(edge.to()) && edge.strength() > 0
                 });
 
                 if !leads_elsewhere && !held && doomed.insert(candidate) {
@@ -877,22 +893,23 @@ impl Scene {
         }
 
         for handle in &doomed {
-            if let Some(node) = self.nodes.get(handle) {
+            if let Some(node) = handle::map_get(&self.nodes, handle) {
                 self.changes.created.shift_remove(handle);
                 self.changes
                     .deleted
-                    .insert(handle.clone(), node.node_type.clone());
+                    .insert(handle.clone(), node.node_type().to_string());
             }
         }
         for edge in self.edges.iter().filter(|edge| {
-            doomed.contains(&edge.from) || doomed.contains(&edge.to)
+            doomed.contains(edge.from()) || doomed.contains(edge.to())
         }) {
             record_edge(&mut self.changes.edges_removed, edge.clone());
         }
 
-        self.nodes.retain(|handle, _| !doomed.contains(handle));
+        self.nodes
+            .retain(|handle, _| !doomed.contains(handle.as_str()));
         self.edges.retain(|edge| {
-            !doomed.contains(&edge.from) && !doomed.contains(&edge.to)
+            !doomed.contains(edge.from()) && !doomed.contains(edge.to())
         });
         self.reindex();
 
@@ -938,9 +955,9 @@ impl Scene {
     /// be created using NSICreate", but they do carry attributes.
     fn node_mut(&mut self, handle: &str) -> Result<&mut Node, RecordError> {
         if crate::is_reserved(handle) {
-            Ok(self.nodes.entry(handle.to_string()).or_default())
+            Ok(self.nodes.entry(crate::handle::handle(handle)).or_default())
         } else {
-            self.nodes.get_mut(handle).ok_or_else(|| {
+            handle::map_get_mut(&mut self.nodes, handle).ok_or_else(|| {
                 RecordError::UnknownHandle {
                     handle: handle.to_string(),
                 }
@@ -1006,7 +1023,7 @@ impl Scene {
         self.changes
             .attributes
             .insert((handle.to_string(), name.to_string()));
-        if let Some(node) = self.nodes.get_mut(handle) {
+        if let Some(node) = handle::map_get_mut(&mut self.nodes, handle) {
             node.attrs.shift_remove(name);
             node.samples.shift_remove(name);
         }
@@ -1060,7 +1077,7 @@ impl Scene {
         // measured, one transform with 1000 children took 67 ms to
         // build, 4000 took 749 ms and 16 000 took 17 s. An interactive
         // host connects per edit, so it paid that on every one.
-        let existing = self.by_from.get(from).and_then(|positions| {
+        let existing = handle::get(&self.by_from, from).and_then(|positions| {
             positions.iter().copied().find(|&at| {
                 let edge = &self.edges[at];
                 edge.to == to && edge.kind == kind
@@ -1079,20 +1096,20 @@ impl Scene {
             }
             None => {
                 self.by_from
-                    .entry(from.to_string())
+                    .entry(handle::handle(from))
                     .or_default()
                     .push(self.edges.len());
                 self.by_to
-                    .entry(to.to_string())
+                    .entry(handle::handle(to))
                     .or_default()
                     .push(self.edges.len());
                 self.by_to_attr
-                    .entry((to.to_string(), kind.to_attr().to_string()))
+                    .entry((handle::handle(to), handle::handle(kind.to_attr())))
                     .or_default()
                     .push(self.edges.len());
                 let edge = Edge {
-                    from: from.to_string(),
-                    to: to.to_string(),
+                    from: handle::handle(from),
+                    to: handle::handle(to),
                     kind,
                     args,
                 };
