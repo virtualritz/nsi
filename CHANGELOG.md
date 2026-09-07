@@ -19,6 +19,20 @@
 - Depends on `nsi-ffi-wrap` 0.10 and `nsi-trait` 0.4, both of which
   changed their public API; hence the version bump.
 
+### `nsi-toolbelt`, `nsi-jupyter`, `nsi-3delight` 0.9.0 -> 0.10.0
+
+- They go with `nsi`, and they have to. Their published 0.9.0 depends
+  on `nsi-ffi-wrap = "0.9"`, so `nsi` 0.10 with the `toolbelt`,
+  `jupyter` or `delight` feature would have resolved `nsi-ffi-wrap`
+  0.9 **and** 0.10 into one graph -- two incompatible copies of the FFI
+  layer, one of them still carrying the `Reference::as_c_ptr` defect
+  the release exists to fix. The default feature set was never exposed
+  to this: `nsi` 0.10 alone pulls only `nsi-ffi-wrap` 0.10.
+- Their sources had already been moved to `nsi-ffi-wrap` 0.10 in-tree
+  under an unchanged version number, so they were unpublishable as they
+  stood.
+- No API change in any of the three; the bump is the dependency bump.
+
 ### `nsi-trait` 0.4.0 -> 0.4.1
 
 - `Attribute<T>` implements `PartialEq`, `Eq` and `Hash`. It had
