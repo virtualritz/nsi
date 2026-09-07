@@ -14,14 +14,14 @@ use super::*;
 /// priority.
 ///
 /// The **count** is as strict as the type: exactly one, which is what
-/// [`OwnedArg::as_i32`] means. Rendered: the same scene with the
+/// [`OwnedArgument::as_i32`] means. Rendered: the same scene with the
 /// priority written `"int" 2 [ 10 10 ]` -- or `"int[2]" 1 [ 10 10 ]`,
 /// which is the same argument spelled the other way -- leaves the
 /// geometry hidden, so 3Delight ranked nothing on it, while the
 /// one-value control shows it. Taking the first of several would rank
 /// a node the renderer does not, which is the same mistake as reading
 /// the `int64`.
-pub(super) fn priority_value(arg: &OwnedArg) -> Option<i32> {
+pub(super) fn priority_value(arg: &OwnedArgument) -> Option<i32> {
     arg.as_i32()
 }
 
@@ -152,7 +152,7 @@ impl Scene {
     /// at all is not a definition, and neither is one whose priority is
     /// an `int64`, which 3Delight cannot read.
     ///
-    /// # Reading the value is not [`OwnedArg::as_i32`]
+    /// # Reading the value is not [`OwnedArgument::as_i32`]
     ///
     /// 3Delight is far looser about an attribute's **value** than
     /// about its priority. Rendered, on `visibility`: `float 0.4` is
@@ -165,7 +165,7 @@ impl Scene {
     /// `string` on the nearest node beats a `visibility 0` two levels
     /// up and the object is visible, so it wins its ranking rather
     /// than falling through to the next candidate. The trap therefore
-    /// has two jaws. A backend that reaches for [`OwnedArg::as_i32`]
+    /// has two jaws. A backend that reaches for [`OwnedArgument::as_i32`]
     /// here gets `None` for the numeric three and draws an object the
     /// renderer hides; one that reads that `None` as "not defined" and
     /// looks further along the chain draws hidden where the renderer
@@ -496,8 +496,8 @@ impl Scene {
             .into_iter()
             .enumerate()
             .flat_map(|(depth, node)| {
-                self.edges_to_attr(node, kind.to_attr())
-                    // A shader-network edge's `to_attr` is its *port*
+                self.edges_to_attribute(node, kind.to_attribute())
+                    // A shader-network edge's `to_attribute` is its *port*
                     // name, so it shares this bucket with the named
                     // class. Without the filter a port called
                     // `geometryattributes` resolved as a binding.
@@ -531,7 +531,7 @@ impl Scene {
             .iter()
             .enumerate()
             .flat_map(|(rank, (_, _, edge))| {
-                self.edges_to_attr(edge.from(), kind.to_attr())
+                self.edges_to_attribute(edge.from(), kind.to_attribute())
                     .filter(move |shader| shader.kind == *kind)
                     .map(move |shader| (shader.priority(), rank, shader))
             })

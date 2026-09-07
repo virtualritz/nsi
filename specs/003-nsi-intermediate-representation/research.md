@@ -40,7 +40,7 @@ parameter could only ever be `'static`.
 This matches `nsi-ffi-wrap`, where `Reference`, `Callback` and
 `ReferenceSlice` are `Send`/`Sync` at `'static` and nowhere else.
 
-### D4: The `Send`/`Sync` assertion sits on `HostPtr`, not `Recorder`
+### D4: The `Send`/`Sync` assertion sits on `HostPointer`, not `Recorder`
 
 A blanket `unsafe impl Send for Recorder` would silently keep covering
 any non-`Send` field added later. The newtype scopes the assertion to
@@ -68,10 +68,10 @@ Both need the same walks, so they happen once.
 contents: visibility flags are encoded differently by each renderer, and
 a common shape for them here would be guesswork.
 
-### D7: `OwnedArg` is `PartialEq` but not `Eq` or `Hash`
+### D7: `OwnedArgument` is `PartialEq` but not `Eq` or `Hash`
 
 `AGENTS.md` asks for `Debug`, `Clone`, `Hash`, `PartialEq` and `Eq` on
-public types. `OwnedArg` and `OwnedData` carry `f32`/`f64` payloads, and
+public types. `OwnedArgument` and `OwnedData` carry `f32`/`f64` payloads, and
 ɴsɪ hands them through unchanged: a `NaN` in a point buffer is data, not
 an error. `Eq` would be a lie about reflexivity and `Hash` would be
 inconsistent with a `PartialEq` that says `NaN != NaN`.

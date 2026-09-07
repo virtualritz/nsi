@@ -3,13 +3,13 @@
 //! Separate file per the workspace rule: source files do not grow
 //! inline `#[cfg(test)]` modules.
 
-use crate::{OwnedArg, OwnedData, ResolveError, Sampled, Scene};
+use crate::{OwnedArgument, OwnedData, ResolveError, Sampled, Scene};
 use core::mem;
 use nsi_trait::Type;
 
 /// A 4x4 row-major translation, the shape ɴsɪ stores in
 /// `transformationmatrix`.
-fn translate(x: f64, y: f64, z: f64) -> OwnedArg {
+fn translate(x: f64, y: f64, z: f64) -> OwnedArgument {
     #[rustfmt::skip]
     let m = vec![
         1.0, 0.0, 0.0, 0.0,
@@ -17,7 +17,7 @@ fn translate(x: f64, y: f64, z: f64) -> OwnedArg {
         0.0, 0.0, 1.0, 0.0,
           x,   y,   z, 1.0,
     ];
-    OwnedArg {
+    OwnedArgument {
         name: "transformationmatrix".to_string(),
         type_tag: Type::MatrixF64,
         array_length: 1,
@@ -26,7 +26,7 @@ fn translate(x: f64, y: f64, z: f64) -> OwnedArg {
     }
 }
 
-fn scale(s: f64) -> OwnedArg {
+fn scale(s: f64) -> OwnedArgument {
     #[rustfmt::skip]
     let m = vec![
           s, 0.0, 0.0, 0.0,
@@ -34,7 +34,7 @@ fn scale(s: f64) -> OwnedArg {
         0.0, 0.0,   s, 0.0,
         0.0, 0.0, 0.0, 1.0,
     ];
-    OwnedArg {
+    OwnedArgument {
         name: "transformationmatrix".to_string(),
         type_tag: Type::MatrixF64,
         array_length: 1,
@@ -239,7 +239,7 @@ fn motion_samples_of_other_attributes_do_not_block_resolution() {
         .set_attribute_at_time(
             "xf",
             0.5,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "unrelated".to_string(),
                 type_tag: Type::F64,
                 array_length: 1,
@@ -339,7 +339,7 @@ fn a_static_chain_has_no_motion_times() {
         .set_attribute_at_time(
             "xf",
             0.5,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "unrelated".to_string(),
                 type_tag: Type::F64,
                 array_length: 1,
@@ -476,7 +476,7 @@ fn a_non_f64_matrix_is_skipped_not_reinterpreted() {
     scene
         .set_attribute(
             "xf",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::MatrixF32,
                 array_length: 1,
@@ -490,16 +490,16 @@ fn a_non_f64_matrix_is_skipped_not_reinterpreted() {
 }
 
 /// An ɴsɪ `"index"` connection argument.
-fn index_arg(value: i32) -> OwnedArg {
-    OwnedArg {
+fn index_arg(value: i32) -> OwnedArgument {
+    OwnedArgument {
         name: "index".to_string(),
         ..priority(value)
     }
 }
 
 /// An ɴsɪ `"priority"` connection argument.
-fn priority(value: i32) -> OwnedArg {
-    OwnedArg {
+fn priority(value: i32) -> OwnedArgument {
+    OwnedArgument {
         name: "priority".to_string(),
         type_tag: Type::I32,
         array_length: 1,
@@ -709,7 +709,7 @@ fn a_geometryattributes_connection_priority_does_not_reorder() {
     scene.connect("mesh", None, "grp", "objects").unwrap();
     scene.connect("grp", None, ".root", "objects").unwrap();
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "outer",
             None,
             "grp",
@@ -752,7 +752,7 @@ fn a_surfaceshader_connection_priority_wins() {
         .connect("near_shader", None, "own", "surfaceshader")
         .unwrap();
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "far_shader",
             None,
             "outer",
@@ -873,7 +873,7 @@ fn instance_sources_are_ordered_by_their_index_attribute() {
     for (handle, index) in [("third", 2), ("first", 0), ("second", 1)] {
         scene.create(handle, "mesh").unwrap();
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 handle,
                 None,
                 "inst",
@@ -1164,8 +1164,8 @@ fn multiple_screens_yield_one_output_each() {
     assert_eq!(outputs[1].layers[0].handle, "beauty_b");
 }
 
-fn doubles(name: &str, values: Vec<f64>) -> OwnedArg {
-    OwnedArg {
+fn doubles(name: &str, values: Vec<f64>) -> OwnedArgument {
+    OwnedArgument {
         name: name.to_string(),
         type_tag: Type::MatrixF64,
         array_length: 1,
@@ -1174,8 +1174,8 @@ fn doubles(name: &str, values: Vec<f64>) -> OwnedArg {
     }
 }
 
-fn integers(name: &str, values: Vec<i32>) -> OwnedArg {
-    OwnedArg {
+fn integers(name: &str, values: Vec<i32>) -> OwnedArgument {
+    OwnedArgument {
         name: name.to_string(),
         type_tag: Type::I32,
         array_length: 1,
@@ -1206,7 +1206,7 @@ fn instances_pair_their_matrix_with_their_prototype() {
     for (handle, index) in [("five", 5), ("nine", 9)] {
         scene.create(handle, "mesh").unwrap();
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 handle,
                 None,
                 "inst",
@@ -1248,7 +1248,7 @@ fn a_negative_model_index_is_not_rendered() {
     scene.create("inst", "instances").unwrap();
     scene.create("hidden", "mesh").unwrap();
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "hidden",
             None,
             "inst",
@@ -1371,7 +1371,7 @@ fn a_model_index_matching_no_prototype_is_an_error() {
     ));
 }
 
-/// A shader-network edge's `to_attr` is its *port* name, so it lands in
+/// A shader-network edge's `to_attribute` is its *port* name, so it lands in
 /// the same index bucket as a class of that name. Without the kind
 /// filter, a port called `surfaceshader` resolved as the material.
 #[test]
@@ -1423,7 +1423,7 @@ fn duplicate_model_indices_are_refused() {
     for handle in ["a", "b"] {
         scene.create(handle, "mesh").unwrap();
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 handle,
                 None,
                 "inst",
@@ -1658,7 +1658,7 @@ fn a_non_integer_priority_is_ignored() {
             "far",
             vec![
                 integers("visibility", vec![1]),
-                OwnedArg {
+                OwnedArgument {
                     name: "visibility.priority".to_string(),
                     type_tag: Type::F32,
                     array_length: 1,
@@ -1743,7 +1743,7 @@ fn an_int64_priority_is_ignored() {
             "far",
             vec![
                 integers("visibility", vec![1]),
-                OwnedArg {
+                OwnedArgument {
                     name: "visibility.priority".to_string(),
                     type_tag: Type::I64,
                     array_length: 1,
@@ -1902,7 +1902,7 @@ fn an_unreadable_priority_alone_is_not_a_definition() {
     scene
         .set_attribute(
             "near",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "visibility.priority".to_string(),
                 type_tag: Type::I64,
                 array_length: 1,
@@ -2453,8 +2453,8 @@ fn a_set_provides_shader_attributes_below_the_geometry() {
 // Deforming geometry: sample times of an arbitrary attribute.
 // ---------------------------------------------------------------------
 
-fn points(values: Vec<f32>) -> OwnedArg {
-    OwnedArg {
+fn points(values: Vec<f32>) -> OwnedArgument {
+    OwnedArgument {
         name: "P".to_string(),
         type_tag: Type::Point,
         array_length: 1,
@@ -3861,7 +3861,7 @@ fn sampled_model_indices_take_their_last_value() {
     for (handle, index) in [("a", 0), ("b", 1), ("c", 2)] {
         scene.create(handle, "mesh").unwrap();
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 handle,
                 None,
                 "inst",
@@ -3931,7 +3931,7 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
         .set_attribute_at_time(
             "inst",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "disabledinstances".to_string(),
                 type_tag: Type::I64,
                 array_length: 1,
@@ -4070,7 +4070,7 @@ fn the_borrowed_instances_agree_with_the_copied_ones() {
     for (handle, index) in [("a", 7), ("b", 3), ("c", 11)] {
         scene.create(handle, "mesh").unwrap();
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 handle,
                 None,
                 "inst",
@@ -4144,7 +4144,7 @@ fn the_borrowed_instances_agree_with_the_copied_ones() {
 /// because the instancer carried its own predicate at two more sites.
 #[test]
 fn instancer_matrices_are_a_doublematrix_by_declaration() {
-    let plain_doubles = |values: Vec<f64>| OwnedArg {
+    let plain_doubles = |values: Vec<f64>| OwnedArgument {
         name: "transformationmatrices".to_string(),
         type_tag: Type::F64,
         array_length: 1,
@@ -4153,7 +4153,7 @@ fn instancer_matrices_are_a_doublematrix_by_declaration() {
     };
     let two = || [instance_matrix(-1.0), instance_matrix(1.0)].concat();
 
-    let build = |arg: OwnedArg| {
+    let build = |arg: OwnedArgument| {
         let mut scene = Scene::default();
         scene.create("inst", "instances").unwrap();
         scene.create("proto", "mesh").unwrap();
@@ -4216,7 +4216,7 @@ fn instancer_matrices_are_a_doublematrix_by_declaration() {
     // copies. ɴsɪ marks an array with `NSIParamIsArray` rather than by
     // length, so this is a different *type*, and reading the tag alone
     // drew the instances anyway.
-    let as_array = |mut arg: OwnedArg| {
+    let as_array = |mut arg: OwnedArgument| {
         arg.flags |= nsi_ffi_wrap::nsi_sys::NSIParamFlags::IsArray.bits();
         arg
     };
@@ -4287,14 +4287,14 @@ fn the_two_interpolating_accessors_refuse_alike() {
 /// readable means; the rule is the resolver's own.
 #[test]
 fn the_typing_rule_is_available_for_any_attribute() {
-    let point = |x: f32| OwnedArg {
+    let point = |x: f32| OwnedArgument {
         name: "P".to_string(),
         type_tag: Type::Point,
         array_length: 1,
         flags: 0,
         data: OwnedData::F32(vec![x, 0.0, 0.0]),
     };
-    let readable = |arg: &OwnedArg| arg.type_tag == Type::Point;
+    let readable = |arg: &OwnedArgument| arg.type_tag == Type::Point;
 
     let mut scene = Scene::default();
     scene.create("q", "mesh").unwrap();
@@ -4322,7 +4322,7 @@ fn the_typing_rule_is_available_for_any_attribute() {
         .set_attribute_at_time(
             "q",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "P".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -4536,7 +4536,7 @@ fn a_wrong_typed_last_transform_sample_unsets_it() {
         .set_attribute_at_time(
             "xf",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -4616,7 +4616,7 @@ fn a_wrong_typed_earlier_sample_is_dropped() {
         .set_attribute_at_time(
             "xf",
             0.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -4677,7 +4677,7 @@ fn motion_times_and_attribute_times_differ_on_an_unreadable_sample() {
         .set_attribute_at_time(
             "xf",
             0.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -4736,7 +4736,7 @@ fn an_unreadable_sample_discards_the_ones_before_it() {
         .set_attribute_at_time(
             "xf",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -4806,7 +4806,7 @@ fn a_double_typed_matrix_is_not_a_matrix() {
     scene
         .set_attribute(
             "xf",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F64,
                 array_length: 1,
@@ -4934,7 +4934,7 @@ fn a_same_time_reset_after_an_unreadable_sample_stands_alone() {
         .set_attribute_at_time(
             "xf",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -5013,7 +5013,7 @@ fn a_later_definition_supersedes_an_unreadable_sample() {
         .set_attribute_at_time(
             "xf",
             1.0,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -5087,7 +5087,7 @@ fn sampled_reads_the_attribute_it_was_asked_for() {
 ///   g0, g1, float  -> identity      (nothing rebuilt it)
 #[test]
 fn an_unreadable_sample_discards_only_what_was_defined_before_it() {
-    let float = || OwnedArg {
+    let float = || OwnedArgument {
         name: "transformationmatrix".to_string(),
         type_tag: Type::F32,
         array_length: 1,
@@ -5158,7 +5158,7 @@ fn an_unreadable_sample_discards_only_what_was_defined_before_it() {
 /// 1.000. `SetAttributeAtTime` on an attribute that is not motion data
 /// sets it for the whole shutter.
 ///
-/// This crate read `node.attrs` alone and answered "not set", which is
+/// This crate read `node.attributes` alone and answered "not set", which is
 /// a silent wrong answer: a backend would have drawn a hidden object.
 /// The same rule was already applied to an instancer's `modelindices`
 /// and `disabledinstances`, and to nothing else.

@@ -24,14 +24,17 @@ impl Scene {
             .map(|screen_edge| {
                 let screen = &screen_edge.from;
                 let layers = self
-                    .edges_to_attr(screen, EdgeKind::OutputLayer.to_attr())
+                    .edges_to_attribute(
+                        screen,
+                        EdgeKind::OutputLayer.to_attribute(),
+                    )
                     .filter(|edge| edge.kind == EdgeKind::OutputLayer)
                     .map(|layer_edge| OutputLayer {
                         handle: layer_edge.from().to_string(),
                         drivers: self
-                            .edges_to_attr(
+                            .edges_to_attribute(
                                 &layer_edge.from,
-                                EdgeKind::OutputDriver.to_attr(),
+                                EdgeKind::OutputDriver.to_attribute(),
                             )
                             .filter(|edge| edge.kind == EdgeKind::OutputDriver)
                             .map(|edge| edge.from().to_string())

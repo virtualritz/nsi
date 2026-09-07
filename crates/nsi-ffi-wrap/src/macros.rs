@@ -127,18 +127,18 @@ macro_rules! define_nsi_renderer {
                 NSIConnect: extern "C" fn(
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                     nparams: std::os::raw::c_int,
                     params: *const NSIParam,
                 ),
                 NSIDisconnect: extern "C" fn(
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                 ),
                 NSIEvaluate: extern "C" fn(
                     ctx: NSIContext,
@@ -285,14 +285,20 @@ macro_rules! define_nsi_renderer {
                     &self,
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                     nparams: std::os::raw::c_int,
                     params: *const NSIParam,
                 ) {
                     self.api.NSIConnect(
-                        ctx, from, from_attr, to, to_attr, nparams, params,
+                        ctx,
+                        from,
+                        from_attribute,
+                        to,
+                        to_attribute,
+                        nparams,
+                        params,
                     );
                 }
 
@@ -301,11 +307,17 @@ macro_rules! define_nsi_renderer {
                     &self,
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                 ) {
-                    self.api.NSIDisconnect(ctx, from, from_attr, to, to_attr);
+                    self.api.NSIDisconnect(
+                        ctx,
+                        from,
+                        from_attribute,
+                        to,
+                        to_attribute,
+                    );
                 }
 
                 #[inline]
@@ -453,15 +465,21 @@ macro_rules! define_nsi_renderer {
                     &self,
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                     nparams: std::os::raw::c_int,
                     params: *const NSIParam,
                 ) {
                     unsafe {
                         NSIConnect(
-                            ctx, from, from_attr, to, to_attr, nparams, params,
+                            ctx,
+                            from,
+                            from_attribute,
+                            to,
+                            to_attribute,
+                            nparams,
+                            params,
                         )
                     };
                 }
@@ -471,11 +489,19 @@ macro_rules! define_nsi_renderer {
                     &self,
                     ctx: NSIContext,
                     from: NSIHandle,
-                    from_attr: *const std::ffi::c_char,
+                    from_attribute: *const std::ffi::c_char,
                     to: NSIHandle,
-                    to_attr: *const std::ffi::c_char,
+                    to_attribute: *const std::ffi::c_char,
                 ) {
-                    unsafe { NSIDisconnect(ctx, from, from_attr, to, to_attr) };
+                    unsafe {
+                        NSIDisconnect(
+                            ctx,
+                            from,
+                            from_attribute,
+                            to,
+                            to_attribute,
+                        )
+                    };
                 }
 
                 #[inline]

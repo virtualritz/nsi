@@ -41,18 +41,18 @@ struct NsiCApi {
     NSIConnect: extern "C" fn(
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
         nparams: c_int,
         params: *const NSIParam,
     ),
     NSIDisconnect: extern "C" fn(
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
     ),
     NSIEvaluate:
         extern "C" fn(ctx: NSIContext, nparams: c_int, params: *const NSIParam),
@@ -219,14 +219,21 @@ impl FfiApi for DynamicApi {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
         nparams: c_int,
         params: *const NSIParam,
     ) {
-        self.api
-            .NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params);
+        self.api.NSIConnect(
+            ctx,
+            from,
+            from_attribute,
+            to,
+            to_attribute,
+            nparams,
+            params,
+        );
     }
 
     #[inline]
@@ -234,11 +241,12 @@ impl FfiApi for DynamicApi {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
     ) {
-        self.api.NSIDisconnect(ctx, from, from_attr, to, to_attr);
+        self.api
+            .NSIDisconnect(ctx, from, from_attribute, to, to_attribute);
     }
 
     #[inline]

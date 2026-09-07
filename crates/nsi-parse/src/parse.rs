@@ -125,13 +125,13 @@ where
         }
         "Connect" | "Disconnect" => {
             let from = string(lexer, "a source handle")?;
-            let from_attr = string(lexer, "a source attribute")?;
+            let from_attribute = string(lexer, "a source attribute")?;
             let to = string(lexer, "a destination handle")?;
-            let to_attr = string(lexer, "a destination attribute")?;
+            let to_attribute = string(lexer, "a destination attribute")?;
 
             // ɴsɪ writes an unnamed source port as the empty string, and
             // documents that as equivalent to none.
-            let port = Some(from_attr.as_str()).filter(|p| !p.is_empty());
+            let port = Some(from_attribute.as_str()).filter(|p| !p.is_empty());
 
             if keyword == "Connect" {
                 let next = parameters(lexer, scratch)?;
@@ -141,7 +141,7 @@ where
                             from.as_str(),
                             port,
                             to.as_str(),
-                            to_attr.as_str(),
+                            to_attribute.as_str(),
                             Some(args),
                         )
                     })
@@ -152,7 +152,7 @@ where
                     from.as_str(),
                     port,
                     to.as_str(),
-                    to_attr.as_str(),
+                    to_attribute.as_str(),
                 )
                 .map_err(Error::Sink)?;
                 Ok(None)

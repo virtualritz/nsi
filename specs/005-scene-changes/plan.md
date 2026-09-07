@@ -36,7 +36,7 @@ Two halves, deliberately separate:
 The consumer has not run. `nsi-moonray`'s flush does not build against
 this crate's current API at all (it indexes the now-private `nodes`,
 reads `time_attrs` under its old name, and treats `world_transform` as
-non-`Result`), and it reads `Node::attrs` directly where the crate says
+non-`Result`), and it reads `Node::attributes` directly where the crate says
 to use `Node::effective` -- so an attribute set through
 `SetAttributeAtTime` is invisible to it today, before any interactive
 work. Until it builds, every row above is proven by this crate's own

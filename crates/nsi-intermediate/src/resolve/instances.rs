@@ -244,9 +244,9 @@ impl Scene {
     pub fn instances(
         &self,
         instances: &str,
-    ) -> Result<InstanceIter<'_>, ResolveError> {
+    ) -> Result<Instances<'_>, ResolveError> {
         let Some(node) = self.node(instances) else {
-            return Ok(InstanceIter::empty());
+            return Ok(Instances::empty());
         };
 
         // Refuses a sampled instancer exactly as the copying form
@@ -255,8 +255,7 @@ impl Scene {
         self.instance_matrices_at(node, instances, None)?;
 
         let matrices = node
-            .attrs
-            .get(MATRICES)
+            .attribute(MATRICES)
             .and_then(matrices_of)
             .unwrap_or(&[]);
         if !matrices.len().is_multiple_of(16) {
@@ -266,11 +265,11 @@ impl Scene {
             });
         }
 
-        let model_indices = match node.attrs.get(MODEL_INDICES) {
+        let model_indices = match node.attribute(MODEL_INDICES) {
             Some(arg) => arg.as_i32s().unwrap_or(&[]),
             None => &[],
         };
-        let disabled: HashSet<i32> = match node.attrs.get(DISABLED) {
+        let disabled: HashSet<i32> = match node.attribute(DISABLED) {
             Some(arg) => arg.as_i32s().unwrap_or(&[]).iter().copied().collect(),
             None => HashSet::new(),
         };
@@ -295,7 +294,7 @@ impl Scene {
             }
         }
 
-        Ok(InstanceIter {
+        Ok(Instances {
             matrices: matrices.as_chunks::<16>().0,
             model_indices,
             by_model,
@@ -367,7 +366,7 @@ impl Scene {
         };
 
         let sampled = self.instance_matrices_at(node, instances, time)?;
-        let matrices: &[f64] = match (&sampled, node.attrs.get(MATRICES)) {
+        let matrices: &[f64] = match (&sampled, node.attribute(MATRICES)) {
             (Some(values), _) => values,
             (None, Some(arg)) => matrices_of(arg).unwrap_or(&[]),
             (None, None) => &[],
@@ -378,12 +377,12 @@ impl Scene {
         // `disabledinstances` is set only through `SetAttributeAtTime`
         // renders the same one instance as the static form, and a
         // sampled `modelindices` selects the same prototype. Reading
-        // only `attrs` reported every instance as enabled and drawn from
+        // only `attributes` reported every instance as enabled and drawn from
         // source 0 -- the same silent-empty class as the matrices, one
         // level down.
         let sampled_models = self.instance_ints(node, MODEL_INDICES);
         let model_indices: &[i32] =
-            match (&sampled_models, node.attrs.get(MODEL_INDICES)) {
+            match (&sampled_models, node.attribute(MODEL_INDICES)) {
                 (Some(values), _) => values,
                 (None, Some(arg)) => match &arg.data {
                     OwnedData::I32(values) => values.as_slice(),
@@ -394,7 +393,7 @@ impl Scene {
 
         let sampled_disabled = self.instance_ints(node, DISABLED);
         let disabled: &[i32] =
-            match (&sampled_disabled, node.attrs.get(DISABLED)) {
+            match (&sampled_disabled, node.attribute(DISABLED)) {
                 (Some(values), _) => values,
                 (None, Some(arg)) => match &arg.data {
                     OwnedData::I32(values) => values.as_slice(),
@@ -465,7 +464,10 @@ impl Scene {
         instances: &str,
     ) -> Vec<(i32, String)> {
         let mut sources = self
-            .edges_to_attr(instances, EdgeKind::InstanceSource.to_attr())
+            .edges_to_attribute(
+                instances,
+                EdgeKind::InstanceSource.to_attribute(),
+            )
             .filter(|edge| edge.kind == EdgeKind::InstanceSource)
             .enumerate()
             .map(|(order, edge)| (edge.index(), order, edge.from().to_string()))
@@ -483,7 +485,7 @@ impl Scene {
 /// Returned by [`Scene::instances`]. Yields in instance order, with
 /// the disabled ones and those whose `modelindices` entry is negative
 /// left out -- ɴsɪ says a negative index draws nothing.
-pub struct InstanceIter<'a> {
+pub struct Instances<'a> {
     matrices: &'a [[f64; 16]],
     model_indices: &'a [i32],
     by_model: HashMap<i32, usize>,
@@ -491,7 +493,7 @@ pub struct InstanceIter<'a> {
     at: usize,
 }
 
-impl InstanceIter<'_> {
+impl Instances<'_> {
     fn empty() -> Self {
         Self {
             matrices: &[],
@@ -503,7 +505,7 @@ impl InstanceIter<'_> {
     }
 }
 
-impl<'a> Iterator for InstanceIter<'a> {
+impl<'a> Iterator for Instances<'a> {
     type Item = InstanceRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {

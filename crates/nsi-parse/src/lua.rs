@@ -135,7 +135,7 @@ where
         nsi.set(
             "Connect",
             record!(|_,
-                     (from, from_attr, to, to_attr, rest): (
+                     (from, from_attribute, to, to_attribute, rest): (
                 String,
                 String,
                 String,
@@ -143,11 +143,18 @@ where
                 Variadic<Value>,
             )| {
                 let params = params_of(rest)?;
-                let port = Some(from_attr.as_str()).filter(|p| !p.is_empty());
+                let port =
+                    Some(from_attribute.as_str()).filter(|p| !p.is_empty());
                 with_args(&params, |args| {
                     keep(
                         &failure,
-                        sink.connect(&from, port, &to, &to_attr, Some(args)),
+                        sink.connect(
+                            &from,
+                            port,
+                            &to,
+                            &to_attribute,
+                            Some(args),
+                        ),
                     )
                 })
             }),
@@ -155,14 +162,15 @@ where
         nsi.set(
             "Disconnect",
             record!(|_,
-                     (from, from_attr, to, to_attr): (
+                     (from, from_attribute, to, to_attribute): (
                 String,
                 String,
                 String,
                 String,
             )| {
-                let port = Some(from_attr.as_str()).filter(|p| !p.is_empty());
-                keep(&failure, sink.disconnect(&from, port, &to, &to_attr))
+                let port =
+                    Some(from_attribute.as_str()).filter(|p| !p.is_empty());
+                keep(&failure, sink.disconnect(&from, port, &to, &to_attribute))
             }),
         )?;
         nsi.set(

@@ -159,13 +159,13 @@ where
         &self,
         ctx: c_int,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
         args: Option<&ArgSlice>,
     ) {
         if let Some(nsi) = self.lookup(ctx) {
-            let _ = nsi.connect(from, from_attr, to, to_attr, args);
+            let _ = nsi.connect(from, from_attribute, to, to_attribute, args);
         }
     }
 
@@ -174,12 +174,12 @@ where
         &self,
         ctx: c_int,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) {
         if let Some(nsi) = self.lookup(ctx) {
-            let _ = nsi.disconnect(from, from_attr, to, to_attr);
+            let _ = nsi.disconnect(from, from_attribute, to, to_attribute);
         }
     }
 

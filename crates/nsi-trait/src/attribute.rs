@@ -208,7 +208,7 @@ pub const MATRIX: Attribute<Matrix4F64> =
 /// `filename` (currently `shaderfilename`) -- OSL shader filename.
 pub const FILENAME: Attribute<&'static str> = Attribute::new("shaderfilename");
 
-// Common geometry attrs -----------------------------------------------------
+// Common geometry attributes -----------------------------------------------------
 
 /// `position` (currently `P`) -- Cartesian control points/vertices.
 ///

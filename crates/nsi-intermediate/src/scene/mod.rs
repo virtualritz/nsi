@@ -5,12 +5,19 @@
 //! meaningless.
 
 use crate::{
-    ALL, Edge, EdgeKind, OwnedArg, RecordError, classify,
+    ALL, Edge, EdgeKind, OwnedArgument, RecordError, classify,
     handle::{self, Handle},
 };
 use core::{cmp::Ordering, mem};
 use indexmap::{IndexMap, IndexSet};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::LazyLock,
+};
+
+/// Every `set_attribute_at_time` call for one node, per attribute, in
+/// call order.
+pub(crate) type SampleTable = IndexMap<Handle, Vec<(f64, OwnedArgument)>>;
 
 /// One ɴsɪ node.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -23,7 +30,7 @@ pub struct Node {
     /// production scene says `"mesh"` a million times.
     pub(crate) node_type: Handle,
     /// Attributes set with `set_attribute`, keyed by name.
-    pub attrs: IndexMap<String, OwnedArg>,
+    pub(crate) attributes: IndexMap<Handle, OwnedArgument>,
     /// Every `set_attribute_at_time` call, per attribute, **in call
     /// order**.
     ///
@@ -50,10 +57,55 @@ pub struct Node {
     /// grows it. That is the record ɴsɪ's rules need, and for any
     /// scene an exporter writes -- each time set once -- it is the
     /// same values a table keyed by time would hold.
-    pub samples: IndexMap<String, Vec<(f64, OwnedArg)>>,
+    ///
+    /// Boxed and absent until something is set at a time: most nodes
+    /// in a scene never move, and an inline `IndexMap` cost every one
+    /// of them the header whether or not it held anything.
+    pub(crate) samples: Option<Box<SampleTable>>,
 }
 
+/// An empty table, for a node that has no samples.
+static NO_SAMPLES: LazyLock<SampleTable> = LazyLock::new(IndexMap::new);
+
 impl Node {
+    /// This node's static attributes, by name.
+    pub fn attributes(&self) -> impl Iterator<Item = (&str, &OwnedArgument)> {
+        self.attributes
+            .iter()
+            .map(|(name, arg)| (name.as_str(), arg))
+    }
+
+    /// One static attribute by name.
+    ///
+    /// **Use [`Node::effective`] unless you mean the static one
+    /// specifically**: an attribute set with `SetAttributeAtTime` is
+    /// not here, and the renderer honours it.
+    pub fn attribute(&self, name: &str) -> Option<&OwnedArgument> {
+        handle::map_get(&self.attributes, name)
+    }
+
+    /// This node's sampled attributes, by name, each in call order.
+    pub fn samples(
+        &self,
+    ) -> impl Iterator<Item = (&str, &[(f64, OwnedArgument)])> {
+        self.sample_table()
+            .iter()
+            .map(|(name, calls)| (name.as_str(), calls.as_slice()))
+    }
+
+    /// The calls that set one attribute at a time, in call order.
+    pub fn sample_calls(&self, name: &str) -> Option<&[(f64, OwnedArgument)]> {
+        handle::map_get(self.sample_table(), name).map(Vec::as_slice)
+    }
+
+    pub(crate) fn sample_table(&self) -> &SampleTable {
+        self.samples.as_deref().unwrap_or(&NO_SAMPLES)
+    }
+
+    pub(crate) fn sample_table_mut(&mut self) -> &mut SampleTable {
+        self.samples.get_or_insert_with(Box::default)
+    }
+
     /// The ɴsɪ node type this handle was created with.
     pub fn node_type(&self) -> &str {
         &self.node_type
@@ -61,11 +113,12 @@ impl Node {
 
     /// This node's effective value for an attribute.
     ///
-    /// **Use this, not `attrs`.** `SetAttributeAtTime` on an attribute
+    /// **Use this, not [`Node::attributes`].** `SetAttributeAtTime` on an
+    /// attribute
     /// that is not motion data sets it for the whole shutter, exactly
     /// as `SetAttribute` would: rendered, an `attributes` node whose
     /// `visibility` is set only through `SetAttributeAtTime` hides the
-    /// object, identically to the static form. Reading [`Node::attrs`]
+    /// object, identically to the static form. Reading [`Node::attributes`]
     /// alone answers "not set" for an attribute the renderer honours,
     /// which is a silent wrong answer -- and was one here until it was
     /// rendered.
@@ -79,11 +132,13 @@ impl Node {
     ///
     /// This is what the resolver reads, so a backend asking a node
     /// directly gets the same answer the resolver would.
-    pub fn effective(&self, name: &str) -> Option<&OwnedArg> {
-        if let Some(arg) = self.attrs.get(name) {
+    pub fn effective(&self, name: &str) -> Option<&OwnedArgument> {
+        if let Some(arg) = handle::map_get(&self.attributes, name) {
             return Some(arg);
         }
-        self.samples.get(name)?.last().map(|(_, arg)| arg)
+        handle::map_get(self.sample_table(), name)?
+            .last()
+            .map(|(_, arg)| arg)
     }
 }
 
@@ -95,8 +150,8 @@ impl Node {
 /// survived an unreadable one rather than over all of them. Two copies
 /// of a resolution rule have drifted apart in this crate four times.
 pub(crate) fn latest_per_time(
-    calls: &[(f64, OwnedArg)],
-) -> Vec<(f64, &OwnedArg)> {
+    calls: &[(f64, OwnedArgument)],
+) -> Vec<(f64, &OwnedArgument)> {
     // Sorted by time, and by **call order** within one time -- the
     // call index is part of the key rather than a stability the sort
     // happens to give. A reviewer switched this to `sort_unstable_by`
@@ -104,7 +159,7 @@ pub(crate) fn latest_per_time(
     // make an unstable sort actually reorder, so the guarantee the
     // rule rested on was one no test could see. With the index in the
     // key the order is total and any correct sort gives this answer.
-    let mut standing: Vec<(f64, usize, &OwnedArg)> = calls
+    let mut standing: Vec<(f64, usize, &OwnedArgument)> = calls
         .iter()
         .enumerate()
         .map(|(index, (time, arg))| (*time, index, arg))
@@ -281,7 +336,7 @@ pub struct Scene {
     /// would have produced is absent from the scene; recording the call
     /// at least means a stream carrying one is not silently reduced to
     /// a scene missing its geometry, with no error and no trace.
-    evaluations: Vec<Vec<OwnedArg>>,
+    evaluations: Vec<Vec<OwnedArgument>>,
     /// Edge positions keyed by source handle, and by destination.
     ///
     /// Resolution walks the graph per object, so without these every
@@ -536,14 +591,14 @@ impl Scene {
             if !out.insert(node) {
                 continue;
             }
-            for edge in self.edges_to_attr(node, "objects") {
+            for edge in self.edges_to_attribute(node, "objects") {
                 stack.push(&edge.from);
             }
             // A prototype's mover moves every instancer drawing it, and
             // the instancer is not below the transform that moved --
             // it is reached the other way, through `sourcemodels`.
             for edge in self.edges_from(node) {
-                if edge.kind.to_attr() == "sourcemodels" {
+                if edge.kind.to_attribute() == "sourcemodels" {
                     stack.push(&edge.to);
                 }
             }
@@ -558,7 +613,7 @@ impl Scene {
     ) {
         for edge in self.edges_from(handle) {
             if matches!(
-                edge.kind.to_attr(),
+                edge.kind.to_attribute(),
                 "geometryattributes" | "shaderattributes"
             ) {
                 insert_root(out, &edge.to);
@@ -574,7 +629,7 @@ impl Scene {
     /// `a_nested_sets_attributes_are_not_inherited` -- so descending
     /// through nested sets would name nodes the renderer never reaches.
     fn set_members<'a>(&'a self, handle: &str, out: &mut IndexSet<&'a str>) {
-        for edge in self.edges_to_attr(handle, "members") {
+        for edge in self.edges_to_attribute(handle, "members") {
             insert_root(out, &edge.from);
         }
     }
@@ -616,7 +671,7 @@ impl Scene {
     /// Each is the argument list as given. A backend that wants
     /// archives or procedurals has to execute them itself: this crate
     /// records the call and does not define an execution model for it.
-    pub fn evaluations(&self) -> impl Iterator<Item = &[OwnedArg]> {
+    pub fn evaluations(&self) -> impl Iterator<Item = &[OwnedArgument]> {
         self.evaluations.iter().map(Vec::as_slice)
     }
 
@@ -626,7 +681,7 @@ impl Scene {
     /// every `Evaluate` first, nothing reads a position, and a node
     /// count kept here would be wrong the moment a `delete` shifted
     /// it.
-    pub(crate) fn evaluate(&mut self, args: Vec<OwnedArg>) {
+    pub(crate) fn evaluate(&mut self, args: Vec<OwnedArgument>) {
         self.evaluations.push(args);
     }
 
@@ -678,21 +733,21 @@ impl Scene {
         self.indexed(&self.by_to, handle)
     }
 
-    /// The connections into `handle` through `to_attr`, in connection
+    /// The connections into `handle` through `to_attribute`, in connection
     /// order.
     ///
     /// Indexed on both, so this is proportional to the matches rather
     /// than to the scene.
-    pub fn edges_to_attr<'a>(
+    pub fn edges_to_attribute<'a>(
         &'a self,
         handle: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> impl Iterator<Item = &'a Edge> + use<'a> {
         // Without `ustr_handles` this allocates two `String`s to probe
         // the map, on what is the hot path's key: a `HashMap<(String,
         // String), _>` cannot be probed with a pair of `&str`.
         // Interned, the probe allocates nothing.
-        handle::get_pair(&self.by_to_attr, handle, to_attr)
+        handle::get_pair(&self.by_to_attr, handle, to_attribute)
             .into_iter()
             .flatten()
             .map(|position| &self.edges[*position])
@@ -728,7 +783,7 @@ impl Scene {
             self.by_to_attr
                 .entry((
                     handle::handle(&edge.to),
-                    handle::handle(edge.kind.to_attr()),
+                    handle::handle(edge.kind.to_attribute()),
                 ))
                 .or_default()
                 .push(position);
@@ -934,14 +989,15 @@ impl Scene {
     pub fn set_attribute(
         &mut self,
         handle: &str,
-        args: Vec<OwnedArg>,
+        args: Vec<OwnedArgument>,
     ) -> Result<(), RecordError> {
         let node = self.node_mut(handle)?;
         let mut touched = Vec::with_capacity(args.len());
         for arg in args {
-            node.samples.shift_remove(&arg.name);
+            node.sample_table_mut()
+                .shift_remove(&handle::handle(&arg.name));
             touched.push(arg.name.clone());
-            node.attrs.insert(arg.name.clone(), arg);
+            node.attributes.insert(handle::handle(&arg.name), arg);
         }
         for name in touched {
             self.changes.attributes.insert((handle.to_string(), name));
@@ -974,7 +1030,7 @@ impl Scene {
         &mut self,
         handle: &str,
         time: f64,
-        args: Vec<OwnedArg>,
+        args: Vec<OwnedArgument>,
     ) -> Result<(), RecordError> {
         // 3Delight answers a non-finite time with `E6026 invalid time`.
         if !time.is_finite() {
@@ -995,14 +1051,14 @@ impl Scene {
         for arg in args {
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
-            node.attrs.shift_remove(&arg.name);
+            node.attributes.shift_remove(&handle::handle(&arg.name));
             touched.push(arg.name.clone());
 
             // Appended, never merged: a re-set at a time already
             // recorded is another call, and what it superseded is part
             // of the record. `Node::samples` says why.
-            node.samples
-                .entry(arg.name.clone())
+            node.sample_table_mut()
+                .entry(handle::handle(&arg.name))
                 .or_default()
                 .push((time, arg));
         }
@@ -1024,8 +1080,8 @@ impl Scene {
             .attributes
             .insert((handle.to_string(), name.to_string()));
         if let Some(node) = handle::map_get_mut(&mut self.nodes, handle) {
-            node.attrs.shift_remove(name);
-            node.samples.shift_remove(name);
+            node.attributes.shift_remove(&handle::handle(name));
+            node.sample_table_mut().shift_remove(&handle::handle(name));
         }
     }
 
@@ -1036,11 +1092,17 @@ impl Scene {
     pub fn connect(
         &mut self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> Result<(), RecordError> {
-        self.connect_with_args(from, from_attr, to, to_attr, Vec::new())
+        self.connect_with_arguments(
+            from,
+            from_attribute,
+            to,
+            to_attribute,
+            Vec::new(),
+        )
     }
 
     /// Classify and record a connection carrying its ɴsɪ arguments.
@@ -1050,15 +1112,15 @@ impl Scene {
     /// rather than adding a second one. Recording both would make the
     /// node look like it had two parents, which would fail resolution
     /// for it and everything beneath it.
-    pub fn connect_with_args(
+    pub fn connect_with_arguments(
         &mut self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
-        args: Vec<OwnedArg>,
+        to_attribute: &str,
+        args: Vec<OwnedArgument>,
     ) -> Result<(), RecordError> {
-        let kind = classify(from_attr, to_attr);
+        let kind = classify(from_attribute, to_attribute);
 
         // ɴsɪ: "the nodes on which the connection is performed must
         // exist." `.root` and `.global` are reserved and need no
@@ -1104,7 +1166,10 @@ impl Scene {
                     .or_default()
                     .push(self.edges.len());
                 self.by_to_attr
-                    .entry((handle::handle(to), handle::handle(kind.to_attr())))
+                    .entry((
+                        handle::handle(to),
+                        handle::handle(kind.to_attribute()),
+                    ))
                     .or_default()
                     .push(self.edges.len());
                 let edge = Edge {
@@ -1137,18 +1202,18 @@ impl Scene {
     pub fn disconnect(
         &mut self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> Result<(), RecordError> {
         // `.all` matches every class, so there is nothing to classify.
-        let kind = if to_attr == ALL {
+        let kind = if to_attribute == ALL {
             None
         } else {
-            Some(classify(from_attr, to_attr))
+            Some(classify(from_attribute, to_attribute))
         };
 
-        let from_port = from_attr.unwrap_or_default();
+        let from_port = from_attribute.unwrap_or_default();
         let any_port = from_port == ALL;
 
         let mut removed = Vec::new();
@@ -1162,11 +1227,11 @@ impl Scene {
                 };
 
             let attr_matches = match &kind {
-                // A named `to_attr` fixes the class outright, unless the
+                // A named `to_attribute` fixes the class outright, unless the
                 // source port is `.all` -- then only the destination
                 // attribute is being matched.
                 Some(kind) if !any_port => &edge.kind == kind,
-                Some(kind) => edge.kind.to_attr() == kind.to_attr(),
+                Some(kind) => edge.kind.to_attribute() == kind.to_attribute(),
                 None => true,
             };
 

@@ -349,17 +349,18 @@ macro_rules! define_nsi_c_api {
         pub extern "C" fn NSIConnect(
             ctx: ::std::ffi::c_int,
             from: *const ::std::ffi::c_char,
-            from_attr: *const ::std::ffi::c_char,
+            from_attribute: *const ::std::ffi::c_char,
             to: *const ::std::ffi::c_char,
-            to_attr: *const ::std::ffi::c_char,
+            to_attribute: *const ::std::ffi::c_char,
             nparams: ::std::ffi::c_int,
             params: *const ::nsi_sys::NSIParam,
         ) {
             let from_str = unsafe { $crate::c_api::handle_to_str(from) };
             let from_attr_str =
-                unsafe { $crate::c_api::handle_to_str(from_attr) };
+                unsafe { $crate::c_api::handle_to_str(from_attribute) };
             let to_str = unsafe { $crate::c_api::handle_to_str(to) };
-            let to_attr_str = unsafe { $crate::c_api::handle_to_str(to_attr) };
+            let to_attr_str =
+                unsafe { $crate::c_api::handle_to_str(to_attribute) };
             let args = unsafe {
                 $crate::c_api::marshal_params_to_args(nparams, params)
             };
@@ -382,15 +383,16 @@ macro_rules! define_nsi_c_api {
         pub extern "C" fn NSIDisconnect(
             ctx: ::std::ffi::c_int,
             from: *const ::std::ffi::c_char,
-            from_attr: *const ::std::ffi::c_char,
+            from_attribute: *const ::std::ffi::c_char,
             to: *const ::std::ffi::c_char,
-            to_attr: *const ::std::ffi::c_char,
+            to_attribute: *const ::std::ffi::c_char,
         ) {
             let from_str = unsafe { $crate::c_api::handle_to_str(from) };
             let from_attr_str =
-                unsafe { $crate::c_api::handle_to_str(from_attr) };
+                unsafe { $crate::c_api::handle_to_str(from_attribute) };
             let to_str = unsafe { $crate::c_api::handle_to_str(to) };
-            let to_attr_str = unsafe { $crate::c_api::handle_to_str(to_attr) };
+            let to_attr_str =
+                unsafe { $crate::c_api::handle_to_str(to_attribute) };
 
             if let (Some(f), Some(t), Some(ta)) =
                 (from_str, to_str, to_attr_str)

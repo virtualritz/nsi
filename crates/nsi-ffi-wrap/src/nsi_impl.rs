@@ -74,12 +74,12 @@ impl<'a> Nsi for Context<'a> {
     fn connect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
         args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
-        Context::connect(self, from, from_attr, to, to_attr, args);
+        Context::connect(self, from, from_attribute, to, to_attribute, args);
         Ok(())
     }
 
@@ -87,11 +87,11 @@ impl<'a> Nsi for Context<'a> {
     fn disconnect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> Result<(), Self::Error> {
-        Context::disconnect(self, from, from_attr, to, to_attr);
+        Context::disconnect(self, from, from_attribute, to, to_attribute);
         Ok(())
     }
 

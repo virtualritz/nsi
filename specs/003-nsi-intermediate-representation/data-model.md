@@ -21,14 +21,14 @@ because `Nsi` takes `&self` throughout. `Send + Sync`.
 | --- | --- | --- |
 | `nodes` | `IndexMap<String, Node>` | owned, private |
 | `edges` | `Vec<Edge>` | owned, private |
-| `evaluations` | `Vec<Vec<OwnedArg>>` | owned, private; recorded `Evaluate` calls |
+| `evaluations` | `Vec<Vec<OwnedArgument>>` | owned, private; recorded `Evaluate` calls |
 | `by_from`, `by_to`, `by_to_attr` | `HashMap<_, Vec<usize>>` | derived indexes |
 | `changes` | `Changes` | owned, private; see `specs/005-scene-changes` |
 
 The fields are private and `Scene` is `#[non_exhaustive]`: the indexes
 are an implementation detail, and exposing the tables would have frozen
 them before the index existed. Read through `nodes()`, `node()`,
-`edges()`, `edges_from()`, `edges_to()`, `edges_to_attr()`,
+`edges()`, `edges_from()`, `edges_to()`, `edges_to_attribute()`,
 `evaluations()`, and -- for what changed since the last synchronise --
 `changes()`, `take_changes()`, `affected()` and `descendants()`.
 
@@ -47,12 +47,12 @@ replay reorders. `delete` uses `shift_remove`, not `swap_remove`.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `node_type` | `String` | the ɴsɪ node type |
-| `attrs` | `IndexMap<String, OwnedArg>` | static attributes |
-| `samples` | `IndexMap<String, Vec<(f64, OwnedArg)>>` | every `set_attribute_at_time` call, per attribute, in **call** order -- ɴsɪ's rules are stated over calls, and a table keyed by time cannot say which call was last |
+| `attributes` | `IndexMap<String, OwnedArgument>` | static attributes |
+| `samples` | `IndexMap<String, Vec<(f64, OwnedArgument)>>` | every `set_attribute_at_time` call, per attribute, in **call** order -- ɴsɪ's rules are stated over calls, and a table keyed by time cannot say which call was last |
 
 Motion samples are separate because transform composition is per-sample.
 
-### `OwnedArg` / `OwnedData`
+### `OwnedArgument` / `OwnedData`
 
 | Field | Type |
 | --- | --- |
@@ -67,7 +67,7 @@ Motion samples are separate because transform composition is per-sample.
 vector, normal and 4x4 `f32` matrices all live in `F32` and are told
 apart by `type_tag`.
 
-### `HostPtr`
+### `HostPointer`
 
 `#[repr(transparent)]` over `*const c_void`, with `Send`/`Sync`
 asserted. Recorded from `Type::Reference`; never dereferenced.
@@ -79,7 +79,7 @@ asserted. Recorded from `Type::Reference`; never dereferenced.
 | `from` | `String` | |
 | `to` | `String` | |
 | `kind` | `EdgeKind` | |
-| `args` | `Vec<OwnedArg>` | Every argument of the `connect` call, kept whole. `priority()`, `index()` and `strength()` read the three ɴsɪ defines. Not part of edge identity: `disconnect` ignores them. |
+| `args` | `Vec<OwnedArgument>` | Every argument of the `connect` call, kept whole. `priority()`, `index()` and `strength()` read the three ɴsɪ defines. Not part of edge identity: `disconnect` ignores them. |
 
 `EdgeKind` covers every `<connection>` attribute the ɴsɪ specification
 declares: `SceneMember`, `AttributeBinding`, `SurfaceShader`,
@@ -87,7 +87,7 @@ declares: `SceneMember`, `AttributeBinding`, `SurfaceShader`,
 `SetMember`, `LightSet`, `ShaderAttributes`, `BackgroundLayer`,
 `Bounds`, `SubsurfaceSet`, `ExclusiveShading`, `Screen`, `OutputLayer`,
 `OutputDriver`, and `ShaderNetwork { from_port, to_port }`.
-`EdgeKind::to_attr` is the inverse of `classify`; they live together in
+`EdgeKind::to_attribute` is the inverse of `classify`; they live together in
 `edge.rs` so the stream emitter, the Lua emitter and `disconnect` cannot
 drift apart.
 
@@ -137,13 +137,13 @@ transform of a node with no matrices above it.
 
 | Type | `PartialEq` | `Eq` / `Hash` | Why |
 | --- | --- | --- | --- |
-| `EdgeKind`, `ClassifyError`, `RecordError`, `Binding`, `RenderOutput`, `OutputLayer`, `HostPtr`, `RenderState` | yes | yes | No float fields. `HostPtr` hashes the address, which is what it is. |
-| `OwnedArg`, `OwnedData` | yes | **no** | Both carry `f32`/`f64` payloads. See `research.md` D7. |
-| `Edge` | yes | **no** | Carries its connection arguments, which are `OwnedArg`. |
+| `EdgeKind`, `ClassifyError`, `RecordError`, `Binding`, `RenderOutput`, `OutputLayer`, `HostPointer`, `RenderState` | yes | yes | No float fields. `HostPointer` hashes the address, which is what it is. |
+| `OwnedArgument`, `OwnedData` | yes | **no** | Both carry `f32`/`f64` payloads. See `research.md` D7. |
+| `Edge` | yes | **no** | Carries its connection arguments, which are `OwnedArgument`. |
 | `ResolveError` | yes | **no** | `MissingSampleAtTime` carries the requested time and the available ones. |
-| `Node`, `Scene` | yes | **no** | Transitively contain `OwnedArg`. `PartialEq` alone still lets a test assert a whole scene is unchanged, which is how the `evaluate` no-op is proven. |
+| `Node`, `Scene` | yes | **no** | Transitively contain `OwnedArgument`. `PartialEq` alone still lets a test assert a whole scene is unchanged, which is how the `evaluate` no-op is proven. |
 
-`Copy` where derivable: `HostPtr`, `RenderState`.
+`Copy` where derivable: `HostPointer`, `RenderState`.
 
 `#[non_exhaustive]` on `RecordError`, `ResolveError`, `EdgeKind`,
 `OwnedData` and `Binding`. Each grew a variant or a field during review,
@@ -201,7 +201,7 @@ cross-language format and needs its compatibility stated:
   expectation.
 - **Load behavior:** none. Emission is one-way; nothing here parses a
   `.nsi` stream.
-- **A `Scene` is process-local.** `HostPtr` values are addresses in the
+- **A `Scene` is process-local.** `HostPointer` values are addresses in the
   recording process. Cloning a `Scene` copies them; serialising one
   would carry dead addresses into another process. Neither is forbidden,
   and neither is meaningful.

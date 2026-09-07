@@ -15,7 +15,7 @@ with every feature.
       Evidence: `param_value::tests`, 4 cases.
 - [x] T1.2 `impl Nsi for Context` in `nsi-ffi-wrap`.
       Evidence: `nsi_impl::tests`, 2 cases.
-- [x] T1.3 `OwnedArg` / `OwnedData` / `HostPtr`.
+- [x] T1.3 `OwnedArgument` / `OwnedData` / `HostPointer`.
       Evidence: `owned::tests`, 5 cases.
 - [x] T1.4 `Scene` node and attribute tables.
       Evidence: `scene::tests`.
@@ -27,7 +27,7 @@ with every feature.
 - [x] T1.7 Test `delete_attribute` removing from a time sample.
       Evidence: `scene::tests::delete_attribute_removes_from_every_time_sample`.
       Closed `contracts/recording.md` `delete_attribute`.
-- [x] T1.8 Test `disconnect`, including an unmapped `to_attr`.
+- [x] T1.8 Test `disconnect`, including an unmapped `to_attribute`.
       Evidence: `scene::tests::disconnect_removes_only_the_named_edge`,
       `disconnect_rejects_an_unmapped_destination`,
       `disconnect_ignores_priority`;
@@ -54,7 +54,7 @@ with every feature.
       `disconnect_all_matches_destinations_and_attributes`,
       `disconnect_with_an_all_attribute_is_not_a_classify_error`.
       Spec: R19.
-- [x] T1.15 Edge identity is `(from, from_attr, to, to_attr)`; a repeat
+- [x] T1.15 Edge identity is `(from, from_attribute, to, to_attribute)`; a repeat
       updates rather than duplicates.
       Evidence: `scene::tests::a_repeated_connect_updates_rather_than_duplicates`.
       Spec: R18.
@@ -70,7 +70,7 @@ with every feature.
 
 ## User Story 2: Know What A Connection Means (P1)
 
-- [x] T2.1 Exhaustive `classify` over `to_attr`.
+- [x] T2.1 Exhaustive `classify` over `to_attribute`.
       Evidence: `tests/classifier.rs`.
 - [x] T2.2 Extend the roundtrip fixture to every non-shader edge class.
       Evidence: `stream_roundtrip`, which now drives all seven plus a
@@ -275,13 +275,13 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
 
 ## Found By Review, Round 8
 
-- [x] T8.1 `OwnedArg::from_param` copied every scalar, but the C call
+- [x] T8.1 `OwnedArgument::from_param` copied every scalar, but the C call
       hands the renderer `count = len / array_length` elements -- so a
       run that does not divide was kept here and dropped there, and this
       crate's own stream then failed the count `nsi-parse` checks.
       Evidence: `owned::tests::an_array_len_run_is_rounded_down_as_the_c_call_does`,
       `a_tuple_array_len_run_is_rounded_down_too`.
-- [x] T8.2 A shader-network edge's `to_attr` is its *port* name, so it
+- [x] T8.2 A shader-network edge's `to_attribute` is its *port* name, so it
       shared an index bucket with the class of that name and resolved as
       one. Evidence:
       `resolve::tests::a_shader_network_port_does_not_resolve_as_its_namesake_class`,
@@ -436,7 +436,7 @@ against this API now.
 
 ## Foreign Parameters
 
-- [x] T9.20 `OwnedArg::from_param` is `pub(crate)`. It was `pub` and
+- [x] T9.20 `OwnedArgument::from_param` is `pub(crate)`. It was `pub` and
       carried two paths nothing could reach -- a panic when
       `as_c_param` returns `None`, and an empty `f32` array for
       `Type::Invalid` -- both reachable only by a *foreign*

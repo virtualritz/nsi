@@ -170,21 +170,30 @@ SetAttribute "m"
     let recorder = Recorder::new();
     parse_stream(source, &recorder).expect("parse");
     let scene = recorder.into_scene();
-    let attrs = &scene.node("m").expect("created").attrs;
+    let attributes = scene.node("m").expect("created");
 
     use nsi_intermediate::OwnedData;
-    assert_eq!(attrs["before"].data, OwnedData::F32(vec![1.5]));
     assert_eq!(
-        attrs["P"].data,
+        attributes.attribute("before").unwrap().data,
+        OwnedData::F32(vec![1.5])
+    );
+    assert_eq!(
+        attributes.attribute("P").unwrap().data,
         OwnedData::F32(vec![0.0, 0.0, 0.0, 1.0, 2.0, 3.0])
     );
     assert_eq!(
-        attrs["after"].data,
+        attributes.attribute("after").unwrap().data,
         OwnedData::F32(vec![2.5]),
         "a tuple parameter must not disturb the scalars around it"
     );
-    assert_eq!(attrs["c"].data, OwnedData::F32(vec![0.25, 0.5, 0.75]));
-    assert_eq!(attrs["last"].data, OwnedData::F32(vec![8.0, 9.0]));
+    assert_eq!(
+        attributes.attribute("c").unwrap().data,
+        OwnedData::F32(vec![0.25, 0.5, 0.75])
+    );
+    assert_eq!(
+        attributes.attribute("last").unwrap().data,
+        OwnedData::F32(vec![8.0, 9.0])
+    );
 }
 
 /// A bare word that is not a statement keyword is an error, not a
@@ -219,7 +228,7 @@ fn octal_escapes_are_decoded() {
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        scene.node("m").unwrap().attrs["s"].data,
+        scene.node("m").unwrap().attribute("s").unwrap().data,
         OwnedData::String(vec![b"a\x01b\rc\td\ne".to_vec()])
     );
 }
@@ -297,7 +306,13 @@ fn a_short_octal_escape_is_decoded() {
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        recorder.into_scene().node("m").unwrap().attrs["s"].data,
+        recorder
+            .into_scene()
+            .node("m")
+            .unwrap()
+            .attribute("s")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"a\x01b\x0fc".to_vec()])
     );
 }
@@ -338,7 +353,12 @@ fn a_non_utf8_string_value_survives_parsing() {
     use nsi_intermediate::OwnedData;
     let scene = recorder.into_scene();
     assert_eq!(
-        scene.node("d").unwrap().attrs["imagefilename"].data,
+        scene
+            .node("d")
+            .unwrap()
+            .attribute("imagefilename")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
         "the byte is preserved, not replaced with U+FFFD",
     );
@@ -359,7 +379,13 @@ fn a_non_utf8_byte_survives_an_escaped_value() {
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        recorder.into_scene().node("d").unwrap().attrs["s"].data,
+        recorder
+            .into_scene()
+            .node("d")
+            .unwrap()
+            .attribute("s")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"a\tb\xE9".to_vec()]),
     );
 }
@@ -456,7 +482,13 @@ fn a_text_stream_with_high_bytes_is_not_taken_for_binary() {
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        recorder.into_scene().node("d").unwrap().attrs["f"].data,
+        recorder
+            .into_scene()
+            .node("d")
+            .unwrap()
+            .attribute("f")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"\xCCx".to_vec()]),
     );
 }
@@ -477,7 +509,7 @@ fn an_evaluate_statement_round_trips() {
     parse_stream(source, &recorder).expect("parse");
     let scene = recorder.into_scene();
 
-    let calls: Vec<&[nsi_intermediate::OwnedArg]> =
+    let calls: Vec<&[nsi_intermediate::OwnedArgument]> =
         scene.evaluations().collect();
     assert_eq!(calls.len(), 1, "the call is recorded, not dropped");
     assert_eq!(calls[0].len(), 2);

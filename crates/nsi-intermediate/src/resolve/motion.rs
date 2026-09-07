@@ -43,18 +43,20 @@ pub enum Sampled<'a> {
     /// timeline.
     Yes {
         /// In **time** order, which is what interpolation needs.
-        samples: Vec<(f64, &'a OwnedArg)>,
+        samples: Vec<(f64, &'a OwnedArgument)>,
         /// The survivor defined **last**, which is what an attribute
         /// that is not motion data takes for the whole shutter -- and
         /// is not the sample at the greatest time for a scene whose
         /// samples did not arrive in time order.
-        last_defined: &'a OwnedArg,
+        last_defined: &'a OwnedArgument,
     },
 }
 
 impl<'a> Sampled<'a> {
     /// The surviving samples, in time order.
-    pub(super) fn samples(self) -> impl Iterator<Item = (f64, &'a OwnedArg)> {
+    pub(super) fn samples(
+        self,
+    ) -> impl Iterator<Item = (f64, &'a OwnedArgument)> {
         match self {
             Self::Yes { samples, .. } => samples.into_iter(),
             Self::No | Self::Unset => Vec::new().into_iter(),
@@ -85,7 +87,7 @@ impl<'a> Sampled<'a> {
 pub(super) fn sampled_attr<'a>(
     node: &'a Node,
     name: &str,
-    readable: impl Fn(&OwnedArg) -> bool,
+    readable: impl Fn(&OwnedArgument) -> bool,
 ) -> Sampled<'a> {
     // In **call** order, not time order: 3Delight rejects an unreadable
     // argument at the call, so what survives is what was set after it.
@@ -93,7 +95,7 @@ pub(super) fn sampled_attr<'a>(
     // keyed by time answers by position on the timeline, which is a
     // different set of survivors for any scene whose samples did not
     // arrive in time order.
-    let Some(calls) = node.samples.get(name) else {
+    let Some(calls) = node.sample_calls(name) else {
         return Sampled::No;
     };
 
@@ -266,9 +268,9 @@ pub(super) fn interpolate_resolved(
 /// Non-`f64` matrices yield `None`: ɴsɪ documents the attribute as
 /// `doublematrix`, and silently reinterpreting an `f32` one would be
 /// worse than skipping it.
-pub(super) fn matrices_of(arg: &OwnedArg) -> Option<&[f64]> {
+pub(super) fn matrices_of(arg: &OwnedArgument) -> Option<&[f64]> {
     // The declared type, array suffix included -- one statement of it,
-    // in `OwnedArg::as_matrices`. Rendered twice over: sixteen
+    // in `OwnedArgument::as_matrices`. Rendered twice over: sixteen
     // `double`s are not a `doublematrix`, and a `doublematrix[2]` is
     // not one either (`E6007`, nothing drawn, where the plain
     // `doublematrix` draws two copies). Both leniencies drew what the
@@ -282,7 +284,7 @@ pub(super) fn matrices_of(arg: &OwnedArg) -> Option<&[f64]> {
 /// Non-`f64` matrices yield `None`: ɴsɪ documents the attribute as
 /// `doublematrix`, and silently reinterpreting an `f32` one would be
 /// worse than skipping it.
-pub(super) fn matrix_of(arg: &OwnedArg) -> Option<[f64; 16]> {
+pub(super) fn matrix_of(arg: &OwnedArgument) -> Option<[f64; 16]> {
     arg.as_matrix()
 }
 
@@ -385,8 +387,7 @@ impl Scene {
         // re-set at a time already recorded is another call and the
         // same sample.
         Ok(node
-            .samples
-            .get(name)
+            .sample_calls(name)
             .map(|calls| {
                 crate::scene::latest_per_time(calls)
                     .into_iter()
@@ -410,15 +411,14 @@ impl Scene {
         &self,
         handle: &str,
         name: &str,
-    ) -> Result<Vec<(f64, &OwnedArg)>, ResolveError> {
+    ) -> Result<Vec<(f64, &OwnedArgument)>, ResolveError> {
         let Some(node) = self.existing_node(handle)? else {
             return Ok(Vec::new());
         };
 
         Ok(node
-            .samples
-            .get(name)
-            .map(|calls| crate::scene::latest_per_time(calls))
+            .sample_calls(name)
+            .map(crate::scene::latest_per_time)
             .unwrap_or_default())
     }
 
@@ -465,7 +465,7 @@ impl Scene {
         &self,
         handle: &str,
         name: &str,
-        readable: impl Fn(&OwnedArg) -> bool,
+        readable: impl Fn(&OwnedArgument) -> bool,
     ) -> Result<Sampled<'_>, ResolveError> {
         let Some(node) = self.existing_node(handle)? else {
             return Ok(Sampled::No);
@@ -654,7 +654,7 @@ impl Scene {
     /// any other. See `contracts/resolution.md`.
     pub(super) fn local_transform(&self, handle: &str) -> Option<[f64; 16]> {
         let node = self.node(handle)?;
-        matrix_of(node.attrs.get(TRANSFORMATION_MATRIX)?)
+        matrix_of(node.attribute(TRANSFORMATION_MATRIX)?)
     }
 
     /// This node's matrix at `time`, interpolated.

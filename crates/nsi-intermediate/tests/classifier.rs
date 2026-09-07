@@ -56,7 +56,7 @@ fn an_unlisted_destination_is_carried_with_its_name() {
     assert_eq!(
         classify(None, "somethingnobodyimplemented"),
         EdgeKind::Other {
-            to_attr: "somethingnobodyimplemented".to_string()
+            to_attribute: "somethingnobodyimplemented".to_string()
         }
     );
 }
@@ -73,7 +73,7 @@ fn an_empty_source_port_is_not_a_port() {
     assert_eq!(
         classify(Some(""), "nonsense"),
         EdgeKind::Other {
-            to_attr: "nonsense".to_string()
+            to_attribute: "nonsense".to_string()
         }
     );
 }
@@ -124,6 +124,6 @@ fn every_connection_the_specification_declares_is_classified() {
             !matches!(kind, EdgeKind::Other { .. }),
             "{name} is declared by the specification and must have a name"
         );
-        assert_eq!(kind.to_attr(), name, "{name} does not round-trip");
+        assert_eq!(kind.to_attribute(), name, "{name} does not round-trip");
     }
 }

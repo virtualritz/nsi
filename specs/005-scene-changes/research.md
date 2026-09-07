@@ -57,7 +57,7 @@ material parameters.
 
 ## D5: Match on `EdgeKind`, not on the destination attribute string
 
-The first version matched `edge.kind.to_attr()` against string
+The first version matched `edge.kind.to_attribute()` against string
 literals with a `_` arm. `EdgeKind` is `#[non_exhaustive]`, but *inside
 the crate* an exhaustive `match` is still checked, so a new variant is a
 compile error at the place a decision is owed rather than a silent fall

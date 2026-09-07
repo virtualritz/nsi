@@ -4,7 +4,7 @@
 //! inline `#[cfg(test)]` modules.
 
 use super::{format_f64, quoted};
-use crate::{OwnedArg, OwnedData, Scene, write_stream};
+use crate::{OwnedArgument, OwnedData, Scene, write_stream};
 use nsi_trait::Type;
 
 /// The values 3Delight writes, captured from its own `apistream`
@@ -36,7 +36,7 @@ fn the_reserved_handles_are_never_declared() {
     scene
         .set_attribute(
             crate::GLOBAL,
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "renderatlowpriority".to_string(),
                 type_tag: Type::I32,
                 array_length: 1,
@@ -67,7 +67,7 @@ fn an_empty_slice_still_brackets() {
     scene
         .set_attribute(
             "m",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "empty".to_string(),
                 type_tag: Type::F32,
                 array_length: 1,
@@ -111,7 +111,7 @@ fn a_recorded_scene_with_hostile_strings_stays_one_statement_a_line() {
     scene
         .set_attribute(
             "me\"ss\ny",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "na\"me".to_string(),
                 type_tag: Type::String,
                 array_length: 1,
@@ -159,7 +159,7 @@ fn a_non_utf8_byte_replays_raw() {
     scene
         .set_attribute(
             "d",
-            vec![OwnedArg {
+            vec![OwnedArgument {
                 name: "imagefilename".to_string(),
                 type_tag: Type::String,
                 array_length: 1,

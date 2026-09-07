@@ -24,7 +24,7 @@
 //! destination cannot become a material by accident. The cost is that a
 //! typo is now quiet rather than loud -- as it is in the renderer.
 
-use crate::{OwnedArg, OwnedData};
+use crate::{OwnedArgument, OwnedData};
 
 /// What an ɴsɪ connection means, once classified.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -72,7 +72,7 @@ pub enum EdgeKind {
     /// kept, with its name, and resolution ignores it.
     Other {
         /// The destination attribute, verbatim.
-        to_attr: String,
+        to_attribute: String,
     },
     /// `geo -> instances "sourcemodels"`.
     InstanceSource,
@@ -126,7 +126,7 @@ pub struct Edge {
     /// needs, so `"strength"` -- which blocks a recursive delete -- and
     /// `"value"` survive for a backend that wants them, and so replay
     /// can emit what was passed.
-    pub args: Vec<OwnedArg>,
+    pub args: Vec<OwnedArgument>,
 }
 
 impl EdgeKind {
@@ -135,7 +135,7 @@ impl EdgeKind {
     /// Inverse of [`classify`] for every class but
     /// [`EdgeKind::ShaderNetwork`], whose destination is a port name the
     /// caller already holds. The two must change together.
-    pub fn to_attr(&self) -> &str {
+    pub fn to_attribute(&self) -> &str {
         match self {
             Self::SceneMember => "objects",
             Self::AttributeBinding => "geometryattributes",
@@ -148,7 +148,7 @@ impl EdgeKind {
             Self::SubsurfaceSet => "visibility.set.subsurface",
             Self::ExclusiveShading => "exclusiveshading",
             Self::FaceSet => "facesets",
-            Self::Other { to_attr } => to_attr,
+            Self::Other { to_attribute } => to_attribute,
             Self::InstanceSource => "sourcemodels",
             Self::SetMember => "members",
             Self::LightSet => "lightset",
@@ -207,22 +207,22 @@ impl Edge {
 
 /// Classify a connection by its destination attribute.
 ///
-/// A *named* `from_attr` means the source names an output port, which
+/// A *named* `from_attribute` means the source names an output port, which
 /// only happens for shader-network edges. `Some("")` is not a name:
 /// ɴsɪ documents it as equivalent to `None`, meaning the `from` node
 /// itself is connected, so it classifies by destination like any other
 /// node-level connection.
-pub fn classify(from_attr: Option<&str>, to_attr: &str) -> EdgeKind {
+pub fn classify(from_attribute: Option<&str>, to_attribute: &str) -> EdgeKind {
     // A named source port is always a shader network edge, whatever the
     // destination is called.
-    if let Some(from_port) = from_attr.filter(|port| !port.is_empty()) {
+    if let Some(from_port) = from_attribute.filter(|port| !port.is_empty()) {
         return EdgeKind::ShaderNetwork {
             from_port: from_port.to_string(),
-            to_port: to_attr.to_string(),
+            to_port: to_attribute.to_string(),
         };
     }
 
-    match to_attr {
+    match to_attribute {
         "objects" => EdgeKind::SceneMember,
         "geometryattributes" => EdgeKind::AttributeBinding,
         "surfaceshader" => EdgeKind::SurfaceShader,
@@ -244,7 +244,7 @@ pub fn classify(from_attr: Option<&str>, to_attr: &str) -> EdgeKind {
         // Not an error: ɴsɪ's destinations are an open set. Carried,
         // never resolved.
         other => EdgeKind::Other {
-            to_attr: other.to_string(),
+            to_attribute: other.to_string(),
         },
     }
 }

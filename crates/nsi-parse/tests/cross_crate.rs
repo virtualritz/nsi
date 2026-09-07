@@ -11,7 +11,7 @@
 //! perfectly and are caught elsewhere, on purpose:
 //!
 //! - **A shared mistake.** Both crates spell a connection through
-//!   `EdgeKind::to_attr` and `classify`, so a wrong entry there is
+//!   `EdgeKind::to_attribute` and `classify`, so a wrong entry there is
 //!   written and read back consistently. `classifier::
 //!   every_connection_the_specification_declares_is_classified` pins
 //!   that table against the ɴsɪ specification instead.
@@ -236,7 +236,11 @@ fn the_order_the_samples_were_set_in_survives_the_round_trip() {
     let scene = reparsed.into_scene();
 
     assert_eq!(
-        scene.node("a").expect("node").samples["visibility"]
+        scene
+            .node("a")
+            .expect("node")
+            .sample_calls("visibility")
+            .unwrap()
             .iter()
             .map(|(time, _)| *time)
             .collect::<Vec<_>>(),
@@ -310,7 +314,12 @@ fn a_superseded_same_time_call_survives_the_stream_round_trip() {
     let scene = rebuilt.into_scene();
 
     assert_eq!(
-        scene.node("xf").expect("node").samples["transformationmatrix"].len(),
+        scene
+            .node("xf")
+            .expect("node")
+            .sample_calls("transformationmatrix")
+            .unwrap()
+            .len(),
         3,
         "the superseded call is part of the record",
     );

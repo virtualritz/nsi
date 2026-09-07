@@ -24,20 +24,20 @@ which is why every class carries its own row.
 | `displacementshader` and `volumeshader` are shader references | Covered | `edge.rs` `classify` | `resolve::tests::displacement_and_volume_shaders_resolve_too`; before this both were rejected, so no displaced or volumetric scene could be recorded | -- |
 | `sourcemodels` is an instance source | Covered | `edge.rs` `classify` | `classifier::instancing_source_models` | -- |
 | `screens`, `outputlayers`, `outputdrivers` are output routing | Covered | `edge.rs` `classify` | `classifier::output_chain` | -- |
-| A named source port is a shader-network edge | Covered | `edge.rs` `classify` early return on `from_attr` | `classifier::a_named_output_port_is_a_shader_network_edge` | -- |
+| A named source port is a shader-network edge | Covered | `edge.rs` `classify` early return on `from_attribute` | `classifier::a_named_output_port_is_a_shader_network_edge` | -- |
 | An unlisted destination is carried, never interpreted | Covered | `edge.rs` `EdgeKind::Other`; `classify` is total and returns no error | `classifier::an_unlisted_destination_is_carried_with_its_name`; `recorder::tests::an_unlisted_connection_is_carried_not_interpreted` also asserts it does not become a material. ɴsɪ's destination set is open -- §4.8 connects a node to another's `visibility` -- so refusing what is not listed made legal scenes unrecordable. Resolution still interprets only the named classes | -- |
-| `classify` and `EdgeKind::to_attr` stay inverse | Covered | `edge.rs` `classify`, `edge.rs` `EdgeKind::to_attr` | `stream_roundtrip::recorder_replays_what_3delight_writes`; the fixture now connects `objects`, `geometryattributes`, `surfaceshader`, `sourcemodels`, `screens`, `outputlayers`, `outputdrivers` and a shader-network edge, and 3Delight's own stream is the expectation for each | -- |
+| `classify` and `EdgeKind::to_attribute` stay inverse | Covered | `edge.rs` `classify`, `edge.rs` `EdgeKind::to_attribute` | `stream_roundtrip::recorder_replays_what_3delight_writes`; the fixture now connects `objects`, `geometryattributes`, `surfaceshader`, `sourcemodels`, `screens`, `outputlayers`, `outputdrivers` and a shader-network edge, and 3Delight's own stream is the expectation for each | -- |
 | `Some("")` is not a source port | Covered | `edge.rs` `classify` filters the empty string before the port branch | `classifier::an_empty_source_port_is_not_a_port`, and `stream_roundtrip` drives one through 3Delight | -- |
-| Every `<connection>` the specification declares is classified | Covered | `edge.rs` `classify` | `classifier::every_connection_the_specification_declares_is_classified`, which pins the list read out of `nsi.pdf` and checks each round-trips through `EdgeKind::to_attr`. Five were missing, so an exporter using a lens shader or a background layer could not record at all | -- |
+| Every `<connection>` the specification declares is classified | Covered | `edge.rs` `classify` | `classifier::every_connection_the_specification_declares_is_classified`, which pins the list read out of `nsi.pdf` and checks each round-trips through `EdgeKind::to_attribute`. Five were missing, so an exporter using a lens shader or a background layer could not record at all | -- |
 | `members`, `lightset` and `shaderattributes` classify | Covered | `edge.rs` `classify` | `classifier::set_membership_and_light_sets`. ɴsɪ's light-set workflow connects lights to a `set` and that set to an `outputlayer` | -- |
 
 ## Invariants
 
-- Classification depends only on `from_attr` and `to_attr`, never on
+- Classification depends only on `from_attribute` and `to_attribute`, never on
   node types. ɴsɪ permits connections the node types would not imply.
-- A `from_attr` of `None` and of `Some("")` classify identically. ɴsɪ
+- A `from_attribute` of `None` and of `Some("")` classify identically. ɴsɪ
   documents both as connecting the `from` node itself.
-- `EdgeKind::to_attr` is the inverse of `classify` for every non-shader class.
+- `EdgeKind::to_attribute` is the inverse of `classify` for every non-shader class.
   These two functions must change together.
 
 ## Failure Modes
@@ -51,5 +51,5 @@ which is why every class carries its own row.
 
 - `cargo test -p nsi-intermediate --test classifier`
 - `cargo test -p nsi-intermediate --test stream_roundtrip`, which is
-  what holds `classify` and `EdgeKind::to_attr` inverse over every non-shader
+  what holds `classify` and `EdgeKind::to_attribute` inverse over every non-shader
   class. It needs 3Delight; see `quickstart.md`.

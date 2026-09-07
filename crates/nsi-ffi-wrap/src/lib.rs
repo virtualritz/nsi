@@ -208,9 +208,9 @@ pub trait FfiApi: Send + Sync {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
         nparams: c_int,
         params: *const NSIParam,
     );
@@ -218,9 +218,9 @@ pub trait FfiApi: Send + Sync {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
     );
     fn NSIEvaluate(
         &self,

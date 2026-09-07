@@ -31,7 +31,7 @@ naming `nsi.TypeDouble` or `nsi.TypeInt64` is a parse error.
 | `doublematrix` survives Lua | Covered | `lua.rs` `Type::MatrixF64 => TypeDoubleMatrix` | The gate's fixture sets a `transformationmatrix`; emitting it as `TypeMatrix` fails the gate | -- |
 | `arraylength` survives Lua | Covered | `lua.rs` `write_arg` | The gate's fixture sets `resolution` with `array_len(2)`; dropping it fails the gate | -- |
 | Lua strings are escaped | Covered | `lua.rs` `quoted` | The gate's fixture uses a name containing a quote; leaving it raw fails the gate | -- |
-| Every connection class emits in Lua | Covered | `lua.rs` uses `EdgeKind::to_attr` | The gate's fixture drives `objects`, `geometryattributes` and `surfaceshader`; emitting a fixed attribute fails the gate | -- |
+| Every connection class emits in Lua | Covered | `lua.rs` uses `EdgeKind::to_attribute` | The gate's fixture drives `objects`, `geometryattributes` and `surfaceshader`; emitting a fixed attribute fails the gate | -- |
 | Motion samples and connection arguments emit in Lua | Covered | `lua.rs` `nsi.SetAttributeAtTime`, and `edge.args` under `nsi.Connect` | The gate's fixture sets a sample at `1/3` and a prioritised connection | -- |
 | Reserved handles are not created in Lua | Covered | `lua.rs` skips `crate::is_reserved` | The Lua gate's fixture now sets `.global`, so this is proven through the renderer rather than by shared-code reasoning | -- |
 | gzip round-trips | Covered | `stream/mod.rs` `write_stream_with`, `flate2::write::GzEncoder` | `compression::gzip_decompresses_to_the_plain_stream` | -- |
@@ -52,7 +52,7 @@ naming `nsi.TypeDouble` or `nsi.TypeInt64` is a parse error.
   matching `write_stream`. Lua would allow one call per node, but then
   the two emitters would disagree about statement boundaries and could
   not be compared against each other -- which is how the Lua gate works.
-- The Lua emitter shares the classifier's `EdgeKind::to_attr`, so it
+- The Lua emitter shares the classifier's `EdgeKind::to_attribute`, so it
   cannot drift from the stream emitter's spelling of a connection.
 
 ## Failure Modes

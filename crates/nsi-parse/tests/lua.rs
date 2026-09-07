@@ -96,7 +96,7 @@ fn a_computed_scene_is_read() {
     for i in 1..=5 {
         let node = scene.node(&format!("mesh{i}")).expect("created");
         assert_eq!(
-            node.attrs["index"].data,
+            node.attribute("index").unwrap().data,
             nsi_intermediate::OwnedData::I32(vec![i]),
             "an untyped Lua integer is an ɴsɪ int"
         );
@@ -115,9 +115,13 @@ fn both_parameter_shapes_are_accepted() {
     let recorder = Recorder::new();
     run_lua(source.as_bytes(), &recorder).expect("run");
     let scene = recorder.into_scene();
-    let attrs = &scene.node("m").expect("created").attrs;
+    let node = scene.node("m").expect("created");
 
-    assert!(["a", "b", "c", "d"].iter().all(|k| attrs.contains_key(*k)));
+    assert!(
+        ["a", "b", "c", "d"]
+            .iter()
+            .all(|name| node.attribute(name).is_some())
+    );
 }
 
 /// A script error surfaces as an error, not a panic.
@@ -258,7 +262,13 @@ nsi.SetAttribute("d",{name="imagefilename", data="caf\xE9.exr"})"#;
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        recorder.into_scene().node("d").unwrap().attrs["imagefilename"].data,
+        recorder
+            .into_scene()
+            .node("d")
+            .unwrap()
+            .attribute("imagefilename")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
         "the byte survives; U+FFFD would be `ef bf bd`",
     );
@@ -280,7 +290,13 @@ fn a_raw_byte_in_the_chunk_survives() {
 
     use nsi_intermediate::OwnedData;
     assert_eq!(
-        recorder.into_scene().node("d").unwrap().attrs["f"].data,
+        recorder
+            .into_scene()
+            .node("d")
+            .unwrap()
+            .attribute("f")
+            .unwrap()
+            .data,
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
     );
 }
@@ -315,7 +331,8 @@ fn the_order_the_samples_were_set_in_survives_the_lua_round_trip() {
     let node = scene.node("a").expect("node");
 
     assert_eq!(
-        node.samples["visibility"]
+        node.sample_calls("visibility")
+            .unwrap()
             .iter()
             .map(|(time, _)| *time)
             .collect::<Vec<_>>(),
@@ -390,7 +407,12 @@ fn a_superseded_same_time_call_survives_the_lua_round_trip() {
     let scene = rebuilt.into_scene();
 
     assert_eq!(
-        scene.node("xf").expect("node").samples["transformationmatrix"].len(),
+        scene
+            .node("xf")
+            .expect("node")
+            .sample_calls("transformationmatrix")
+            .unwrap()
+            .len(),
         3,
         "the superseded call is part of the record",
     );

@@ -490,7 +490,7 @@ impl<'a> Context<'a> {
     ///
     /// * `from` -- The handle of the node from which the connection is made.
     ///
-    /// * `from_attr` -- The name of the attribute from which the connection is
+    /// * `from_attribute` -- The name of the attribute from which the connection is
     ///   made.
     ///
     ///   If this is `None` or `Some("")` the `from` node itself will be
@@ -498,7 +498,7 @@ impl<'a> Context<'a> {
     ///
     /// * `to` -- The handle of the node to which the connection is made.
     ///
-    /// * `to_attr` -- The name of the attribute to which the connection is
+    /// * `to_attribute` -- The name of the attribute to which the connection is
     ///   made. If this is an empty string then the connection is made to the
     ///   node instead of to a specific attribute of the node.
     ///
@@ -519,23 +519,23 @@ impl<'a> Context<'a> {
     pub fn connect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
         args: Option<&ArgSlice<'_, 'a>>,
     ) {
         let from = HandleString::from(from);
-        let from_attr = ustr(from_attr.unwrap_or(""));
+        let from_attribute = ustr(from_attribute.unwrap_or(""));
         let to = HandleString::from(to);
-        let to_attr = ustr(to_attr);
+        let to_attribute = ustr(to_attribute);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
         NSI_API.NSIConnect(
             self.0.context,
             from.as_char_ptr(),
-            from_attr.as_char_ptr(),
+            from_attribute.as_char_ptr(),
             to.as_char_ptr(),
-            to_attr.as_char_ptr(),
+            to_attribute.as_char_ptr(),
             args_len,
             args_ptr,
         );
@@ -560,21 +560,21 @@ impl<'a> Context<'a> {
     pub fn disconnect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) {
         let from = HandleString::from(from);
-        let from_attr = ustr(from_attr.unwrap_or(""));
+        let from_attribute = ustr(from_attribute.unwrap_or(""));
         let to = HandleString::from(to);
-        let to_attr = ustr(to_attr);
+        let to_attribute = ustr(to_attribute);
 
         NSI_API.NSIDisconnect(
             self.0.context,
             from.as_char_ptr(),
-            from_attr.as_char_ptr(),
+            from_attribute.as_char_ptr(),
             to.as_char_ptr(),
-            to_attr.as_char_ptr(),
+            to_attribute.as_char_ptr(),
         );
     }
 

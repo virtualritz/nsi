@@ -266,9 +266,9 @@ pub trait Nsi: Send + Sync {
     fn connect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
         args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error>;
 
@@ -276,9 +276,9 @@ pub trait Nsi: Send + Sync {
     fn disconnect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> Result<(), Self::Error>;
 
     /// Evaluate procedural nodes or Lua scripts.

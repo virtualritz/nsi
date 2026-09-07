@@ -8,16 +8,16 @@ use crate::OwnedData;
 use nsi_trait::Type;
 
 /// An ɴsɪ `"strength"` connection argument.
-fn strength(value: i32) -> OwnedArg {
-    OwnedArg {
+fn strength(value: i32) -> OwnedArgument {
+    OwnedArgument {
         name: "strength".to_string(),
         ..priority(value)
     }
 }
 
 /// An ɴsɪ `"priority"` connection argument.
-fn priority(value: i32) -> OwnedArg {
-    OwnedArg {
+fn priority(value: i32) -> OwnedArgument {
+    OwnedArgument {
         name: "priority".to_string(),
         type_tag: Type::I32,
         array_length: 1,
@@ -26,8 +26,8 @@ fn priority(value: i32) -> OwnedArg {
     }
 }
 
-fn arg(name: &str, value: f32) -> OwnedArg {
-    OwnedArg {
+fn arg(name: &str, value: f32) -> OwnedArgument {
+    OwnedArgument {
         name: name.to_string(),
         type_tag: Type::F32,
         array_length: 1,
@@ -49,9 +49,9 @@ fn set_attribute_overwrites_by_name() {
     scene.create("cam", "perspectivecamera").unwrap();
     scene.set_attribute("cam", vec![arg("fov", 45.0)]).unwrap();
     scene.set_attribute("cam", vec![arg("fov", 60.0)]).unwrap();
-    assert_eq!(scene.node("cam").unwrap().attrs.len(), 1);
+    assert_eq!(scene.node("cam").unwrap().attributes.len(), 1);
     assert_eq!(
-        scene.node("cam").unwrap().attrs["fov"].data,
+        scene.node("cam").unwrap().attribute("fov").unwrap().data,
         OwnedData::F32(vec![60.0])
     );
 }
@@ -72,14 +72,18 @@ fn time_samples_are_kept_separately_and_sorted() {
         "recorded later-time-first and reported in time order",
     );
     assert_eq!(
-        scene.node("xf").unwrap().samples["t"]
+        scene
+            .node("xf")
+            .unwrap()
+            .sample_calls("t")
+            .unwrap()
             .iter()
             .map(|(time, _)| *time)
             .collect::<Vec<_>>(),
         vec![1.0, 0.0],
         "while the log keeps the order they were set in",
     );
-    assert!(scene.node("xf").unwrap().attrs.is_empty());
+    assert!(scene.node("xf").unwrap().attributes.is_empty());
 }
 
 #[test]
@@ -103,8 +107,8 @@ fn delete_attribute_removes_one_key() {
         .set_attribute("cam", vec![arg("fov", 45.0), arg("fs", 1.0)])
         .unwrap();
     scene.delete_attribute("cam", "fov");
-    assert!(!scene.node("cam").unwrap().attrs.contains_key("fov"));
-    assert!(scene.node("cam").unwrap().attrs.contains_key("fs"));
+    assert!(scene.node("cam").unwrap().attribute("fov").is_none());
+    assert!(scene.node("cam").unwrap().attribute("fs").is_some());
 }
 
 /// Node order is insertion order. The `.nsi` stream diff against
@@ -129,7 +133,7 @@ fn connect_carries_an_unlisted_destination() {
     assert_eq!(
         scene.edges[0].kind,
         EdgeKind::Other {
-            to_attr: "nonsense".to_string()
+            to_attribute: "nonsense".to_string()
         }
     );
 }
@@ -151,9 +155,9 @@ fn delete_attribute_removes_from_every_time_sample() {
     scene.delete_attribute("xf", "t");
 
     let node = &scene.node("xf").unwrap();
-    assert!(!node.attrs.contains_key("t"), "static copy removed");
-    assert!(node.samples.get("t").is_none(), "every sample of it too");
-    assert!(node.samples.contains_key("keep"));
+    assert!(node.attribute("t").is_none(), "static copy removed");
+    assert!(node.sample_calls("t").is_none(), "every sample of it too");
+    assert!(node.sample_calls("keep").is_some());
 }
 
 /// `disconnect` removes the edge it names and leaves the others.
@@ -201,10 +205,10 @@ fn a_static_set_clears_the_motion_samples_of_that_name() {
     scene.set_attribute("xf", vec![arg("t", 5.0)]).unwrap();
 
     let node = &scene.node("xf").unwrap();
-    assert_eq!(node.attrs["t"].data, OwnedData::F32(vec![5.0]));
-    assert!(node.samples.get("t").is_none(), "its samples went with it");
+    assert_eq!(node.attribute("t").unwrap().data, OwnedData::F32(vec![5.0]));
+    assert!(node.sample_calls("t").is_none(), "its samples went with it");
     assert!(
-        node.samples.contains_key("keep"),
+        node.sample_calls("keep").is_some(),
         "an unrelated sampled attribute is untouched"
     );
 }
@@ -224,8 +228,8 @@ fn a_sampled_set_clears_the_static_value_of_that_name() {
         .unwrap();
 
     let node = &scene.node("xf").unwrap();
-    assert!(!node.attrs.contains_key("t"), "static value replaced");
-    assert!(node.attrs.contains_key("keep"), "others untouched");
+    assert!(node.attribute("t").is_none(), "static value replaced");
+    assert!(node.attribute("keep").is_some(), "others untouched");
 }
 
 /// ɴsɪ: "It is not an error to create a connection which already
@@ -237,7 +241,13 @@ fn a_repeated_connect_updates_rather_than_duplicates() {
     scene.create("grp", "transform").unwrap();
     scene.connect("grp", None, ".root", "objects").unwrap();
     scene
-        .connect_with_args("grp", None, ".root", "objects", vec![priority(4)])
+        .connect_with_arguments(
+            "grp",
+            None,
+            ".root",
+            "objects",
+            vec![priority(4)],
+        )
         .unwrap();
 
     assert_eq!(scene.edges.len(), 1, "one edge, not two parents");
@@ -283,7 +293,7 @@ fn disconnect_all_matches_destinations_and_attributes() {
     assert_eq!(scene.edges[0].from, "b");
 }
 
-/// `.all` as `to_attr` must not be classified -- it names no single
+/// `.all` as `to_attribute` must not be classified -- it names no single
 /// class -- and must not error.
 #[test]
 fn disconnect_with_an_all_attribute_is_not_a_classify_error() {
@@ -393,7 +403,7 @@ fn strength_blocks_a_recursive_delete() {
     scene.create("go", "shader").unwrap();
     scene.create("attr", "attributes").unwrap();
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "keep",
             None,
             "attr",
@@ -428,7 +438,7 @@ fn strength_blocks_a_recursive_delete_through_a_second_path() {
         .unwrap();
     // `keep` holds `attr` strongly, but also feeds `relay` weakly.
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "keep",
             None,
             "attr",
@@ -581,7 +591,7 @@ fn recreating_with_the_same_type_is_a_no_op() {
     scene.create("x", "mesh").unwrap();
 
     assert_eq!(
-        scene.node("x").unwrap().attrs.len(),
+        scene.node("x").unwrap().attributes.len(),
         1,
         "attributes survive"
     );
@@ -604,7 +614,7 @@ fn a_non_finite_sample_time_is_refused() {
             })
         );
     }
-    assert!(scene.node("xf").unwrap().samples.is_empty());
+    assert!(scene.node("xf").unwrap().samples().next().is_none());
 }
 
 /// `-0.0` and `0.0` are **one** sample. The renderer reads a `-0` time
@@ -690,7 +700,11 @@ fn a_re_set_time_is_another_call_and_the_later_one_stands() {
     }
 
     let node = scene.node("a").expect("created");
-    assert_eq!(node.samples["visibility"].len(), 3, "three calls");
+    assert_eq!(
+        node.sample_calls("visibility").unwrap().len(),
+        3,
+        "three calls"
+    );
     assert_eq!(
         node.effective("visibility").expect("set at a time").data,
         OwnedData::F32(vec![3.0]),
@@ -720,8 +734,8 @@ fn a_hand_built_node_does_not_panic_the_readers() {
     scene.connect("q", None, "xf", "objects").unwrap();
     crate::handle::map_get_mut(&mut scene.nodes, "xf")
         .expect("created")
-        .samples
-        .insert("transformationmatrix".to_string(), Vec::new());
+        .sample_table_mut()
+        .insert(crate::handle::handle("transformationmatrix"), Vec::new());
 
     let node = scene.node("xf").expect("created");
     assert!(node.effective("transformationmatrix").is_none());
@@ -757,7 +771,7 @@ fn a_static_call_clears_the_call_order() {
         .unwrap();
 
     let node = scene.node("a").expect("created");
-    assert!(node.samples.get("visibility").is_none());
+    assert!(node.sample_calls("visibility").is_none());
     assert_eq!(
         node.effective("visibility").expect("static").data,
         OwnedData::F32(vec![2.0]),
@@ -775,7 +789,7 @@ fn delete_attribute_clears_the_log() {
     scene.delete_attribute("a", "visibility");
 
     let node = scene.node("a").expect("created");
-    assert!(node.samples.get("visibility").is_none());
+    assert!(node.sample_calls("visibility").is_none());
     assert!(node.effective("visibility").is_none());
 }
 
@@ -833,12 +847,12 @@ fn a_connect_rearmed_in_place_is_recorded() {
     scene.take_changes();
 
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "shader",
             None,
             "attr",
             "surfaceshader",
-            vec![OwnedArg::new(
+            vec![OwnedArgument::new(
                 "priority",
                 Type::I32,
                 1,
@@ -870,12 +884,12 @@ fn re_arming_one_edge_repeatedly_is_one_entry() {
 
     for priority in 0..40 {
         scene
-            .connect_with_args(
+            .connect_with_arguments(
                 "shader",
                 None,
                 "attr",
                 "surfaceshader",
-                vec![OwnedArg::new(
+                vec![OwnedArgument::new(
                     "priority",
                     Type::I32,
                     1,
@@ -1035,12 +1049,12 @@ fn a_shader_edit_reaches_the_geometry_bound_through_it() {
     // Re-arming the connection changes which shader wins and adds no
     // edge; the geometry behind the set must still be named.
     scene
-        .connect_with_args(
+        .connect_with_arguments(
             "shader",
             None,
             "attr",
             "surfaceshader",
-            vec![OwnedArg::new(
+            vec![OwnedArgument::new(
                 "priority",
                 Type::I32,
                 1,
@@ -1203,7 +1217,7 @@ fn a_wildcard_disconnect_dirties_every_child_it_severed() {
 ///   is over-approximation either way.
 /// - **Dropping an `EdgeKind` arm.** That is now a compile error rather
 ///   than a surviving mutation: the match is exhaustive over the enum
-///   instead of over `to_attr()` strings, so a new edge class stops the
+///   instead of over `to_attribute()` strings, so a new edge class stops the
 ///   build at the place a decision is owed.
 ///
 /// Widened three times, each because a mutation survived it: the
@@ -1275,7 +1289,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
         scene
             .set_attribute(
                 "inst",
-                vec![OwnedArg::new(
+                vec![OwnedArgument::new(
                     "transformationmatrices",
                     Type::MatrixF64,
                     1,
@@ -1326,7 +1340,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
         scene
             .set_attribute(
                 "outer",
-                vec![OwnedArg::new(
+                vec![OwnedArgument::new(
                     "transformationmatrix",
                     Type::MatrixF64,
                     1,
@@ -1346,7 +1360,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 "far",
                 vec![
                     arg("visibility", 0.0),
-                    OwnedArg::new(
+                    OwnedArgument::new(
                         "visibility.priority",
                         Type::I32,
                         1,
@@ -1376,8 +1390,8 @@ fn every_changed_answer_is_named_in_the_affected_set() {
     // 3Delight and `None` to `matrix_of`, so a script that used one
     // would be editing nothing at all -- which is how this fixture
     // first failed to notice a truncated descent.
-    fn matrix(x: f64) -> OwnedArg {
-        OwnedArg::new(
+    fn matrix(x: f64) -> OwnedArgument {
+        OwnedArgument::new(
             "transformationmatrix",
             Type::MatrixF64,
             1,
@@ -1415,7 +1429,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
             7 => {
                 // Re-arm: no edge added, none removed, and which of the
                 // two rival shaders wins changes.
-                let _ = scene.connect_with_args(
+                let _ = scene.connect_with_arguments(
                     // Keyed on the *handle*, not on `op`: `op` is 7
                     // throughout this arm, so `op % 2` was a constant
                     // and only one of the two rivals was ever re-armed.
@@ -1427,7 +1441,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                     None,
                     "near",
                     "surfaceshader",
-                    vec![OwnedArg::new(
+                    vec![OwnedArgument::new(
                         "priority",
                         Type::I32,
                         1,
@@ -1453,7 +1467,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 // nothing and precedence would never be exercised.
                 let _ = scene.set_attribute(
                     handle,
-                    vec![OwnedArg::new(
+                    vec![OwnedArgument::new(
                         "visibility.priority",
                         Type::I32,
                         1,
@@ -1537,7 +1551,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
 /// `Node::effective` is what the resolver reads, so asking a node
 /// directly gives the resolver's answer.
 ///
-/// Reading `attrs` alone answers "not set" for an attribute set with
+/// Reading `attributes` alone answers "not set" for an attribute set with
 /// `SetAttributeAtTime`, which the renderer honours -- the silent wrong
 /// answer this method exists to prevent a caller from reinventing.
 #[test]
@@ -1550,7 +1564,7 @@ fn effective_reads_a_sampled_attribute() {
 
     let node = scene.node("a").expect("created");
     assert!(
-        node.attrs.get("visibility").is_none(),
+        node.attribute("visibility").is_none(),
         "it is not a static attribute",
     );
     assert!(

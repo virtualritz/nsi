@@ -34,7 +34,7 @@
 //! only ever sees final values -- but it means a comparison fixture has
 //! to be built one attribute per call for the two to align literally.
 
-use crate::{EdgeKind, OwnedArg, OwnedData, Scene};
+use crate::{EdgeKind, OwnedArgument, OwnedData, Scene};
 use core::fmt;
 use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
 use nsi_trait::Type;
@@ -290,7 +290,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             )?;
         }
 
-        for arg in node.attrs.values() {
+        for arg in node.attributes.values() {
             writeln!(out, "SetAttribute {}", quoted_str(handle))?;
             write_arg(out, arg)?;
         }
@@ -301,7 +301,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
         // re-ordering the calls re-orders the answer, and dropping a
         // call a same-time re-set superseded loses what unset the
         // attribute. See `Node::samples`.
-        for calls in node.samples.values() {
+        for (_, calls) in node.samples() {
             for (time, arg) in calls {
                 writeln!(
                     out,
@@ -319,7 +319,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
             EdgeKind::ShaderNetwork { from_port, to_port } => {
                 (from_port.as_str(), to_port.as_str())
             }
-            other => ("", other.to_attr()),
+            other => ("", other.to_attribute()),
         };
         writeln!(
             out,
@@ -340,7 +340,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
 }
 
 /// Write one attribute line: two-space indent, name, type, count, data.
-fn write_arg<W: Write>(out: &mut W, arg: &OwnedArg) -> io::Result<()> {
+fn write_arg<W: Write>(out: &mut W, arg: &OwnedArgument) -> io::Result<()> {
     // A host pointer has no stream representation. 3Delight omits the
     // whole parameter line, keeping the statement that carried it, so
     // writing a header with no value would be malformed where 3Delight
@@ -408,7 +408,7 @@ fn write_scalars<W: Write, T: fmt::Display>(
 }
 
 /// Total scalars stored, across every element.
-fn scalar_count(arg: &OwnedArg) -> usize {
+fn scalar_count(arg: &OwnedArgument) -> usize {
     match &arg.data {
         OwnedData::F32(v) => v.len(),
         OwnedData::F64(v) => v.len(),
@@ -424,7 +424,7 @@ fn scalar_count(arg: &OwnedArg) -> usize {
 /// A two-point `P` is 2. A `resolution` of two `i32`s with
 /// `array_len(2)` is 1, because the array length is carried by the type
 /// name instead.
-fn element_count(arg: &OwnedArg) -> usize {
+fn element_count(arg: &OwnedArgument) -> usize {
     let per = components_per_element(arg.type_tag);
     scalar_count(arg) / per / arg.array_length.max(1)
 }
@@ -439,7 +439,7 @@ const fn components_per_element(type_tag: Type) -> usize {
 
 /// ɴsɪ stream type name, with the array length appended when there is
 /// one -- `int` becomes `int[2]` under `array_len(2)`.
-fn type_name(arg: &OwnedArg) -> String {
+fn type_name(arg: &OwnedArgument) -> String {
     let base = base_type_name(arg.type_tag);
     // ɴsɪ marks an array with `NSIParamIsArray`, not by its length, and
     // `array_len(1)` is a real one-element array: 3Delight writes

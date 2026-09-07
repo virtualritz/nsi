@@ -1,7 +1,7 @@
 //! Owned mirrors of borrowed ɴsɪ arguments.
 //!
 //! The recorder outlives the calls that feed it, so it cannot hold a
-//! borrowed `Arg`. [`OwnedArg`] copies the payload out.
+//! borrowed `Arg`. [`OwnedArgument`] copies the payload out.
 //!
 //! This mirrors the ɴsɪ C API's own contract: every argument except a
 //! `NSIType` pointer is copied during the call, so a caller may free its
@@ -26,7 +26,7 @@ use nsi_trait::{ParamValue, Type};
 /// `Send` and `Sync` are asserted on two grounds, both structural
 /// rather than hopeful:
 ///
-/// 1. **The recorder never dereferences it.** A `HostPtr` is stored on
+/// 1. **The recorder never dereferences it.** A `HostPointer` is stored on
 ///    the way in and handed back on the way out, nothing else. No data
 ///    race is possible through a pointer that is never read.
 /// 2. **The pointee outlives everything.** The recorder's `Nsi` impl
@@ -41,23 +41,23 @@ use nsi_trait::{ParamValue, Type};
 /// non-`Send` field added later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct HostPtr(pub *const c_void);
+pub struct HostPointer(pub *const c_void);
 
 // SAFETY: see the type's documentation.
-unsafe impl Send for HostPtr {}
+unsafe impl Send for HostPointer {}
 // SAFETY: see the type's documentation.
-unsafe impl Sync for HostPtr {}
+unsafe impl Sync for HostPointer {}
 
 /// An ɴsɪ argument's payload, owned.
 ///
 /// Variants are storage representations, not ɴsɪ types: colour, point,
 /// vector, normal and 4x4 `f32` matrices all live in [`OwnedData::F32`]
-/// and are told apart by [`OwnedArg::type_tag`].
+/// and are told apart by [`OwnedArgument::type_tag`].
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum OwnedData {
     /// `f32` scalars, flattened. Also holds colour, point, vector,
-    /// normal and 4x4 `f32` matrices; [`OwnedArg::type_tag`] tells them
+    /// normal and 4x4 `f32` matrices; [`OwnedArgument::type_tag`] tells them
     /// apart.
     F32(Vec<f32>),
     /// `f64` scalars, flattened. Also holds 4x4 `f64` matrices.
@@ -115,13 +115,13 @@ pub enum OwnedData {
     /// API); it is not an object link and is never forwarded to a
     /// renderer as one. Stored so output-driver callbacks survive a
     /// replay. The recorder never dereferences these.
-    Reference(Vec<HostPtr>),
+    Reference(Vec<HostPointer>),
 }
 
 /// A recorded ɴsɪ argument.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
-pub struct OwnedArg {
+pub struct OwnedArgument {
     /// The attribute name this argument sets.
     pub name: String,
     /// The ɴsɪ type, which is what tells one [`OwnedData`] layout from
@@ -137,7 +137,7 @@ pub struct OwnedArg {
     pub data: OwnedData,
 }
 
-impl OwnedArg {
+impl OwnedArgument {
     /// One recorded argument, built by hand.
     ///
     /// [`Scene::set_attribute`](crate::Scene::set_attribute) and its
@@ -165,7 +165,7 @@ impl OwnedArg {
     /// The payload as `f32` scalars, or `None` for another layout.
     ///
     /// Colour, point, vector, normal and an `f32` matrix all share this
-    /// storage flattened; [`OwnedArg::type_tag`] tells them apart.
+    /// storage flattened; [`OwnedArgument::type_tag`] tells them apart.
     pub fn as_f32s(&self) -> Option<&[f32]> {
         match &self.data {
             OwnedData::F32(values) => Some(values),
@@ -219,7 +219,7 @@ impl OwnedArg {
         }
     }
 
-    /// A single `i32`, on the same terms as [`OwnedArg::as_f32`].
+    /// A single `i32`, on the same terms as [`OwnedArgument::as_f32`].
     pub fn as_i32(&self) -> Option<i32> {
         match self.as_i32s() {
             Some([value]) => Some(*value),
@@ -282,7 +282,7 @@ impl OwnedArg {
     /// Narrowing it makes both unreachable by construction rather than
     /// by argument, which is cheaper than a `Result` every internal
     /// caller would have to unwrap for a case that cannot arise.
-    /// Callers wanting an [`OwnedArg`] use [`OwnedArg::new`].
+    /// Callers wanting an [`OwnedArgument`] use [`OwnedArgument::new`].
     ///
     /// It takes `Arg` rather than any `ParamValue` for the same reason:
     /// while it stayed generic, "unreachable" rested on nobody in this
@@ -350,7 +350,7 @@ impl OwnedArg {
                         scalars,
                     )
                     .iter()
-                    .map(|p| HostPtr(*p))
+                    .map(|p| HostPointer(*p))
                     .collect(),
                 ),
                 // Also unreachable: `Invalid` is ɴsɪ's C sentinel for

@@ -24,7 +24,10 @@ fn records_a_node_and_its_attribute() {
 
     let scene = r.scene();
     assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
-    assert_eq!(scene.node("cam").unwrap().attrs["fov"].name, "fov");
+    assert_eq!(
+        scene.node("cam").unwrap().attribute("fov").unwrap().name,
+        "fov"
+    );
 }
 
 /// ɴsɪ's destinations are an open set -- its own §4.8 connects a node to
@@ -43,7 +46,7 @@ fn an_unlisted_connection_is_carried_not_interpreted() {
     assert_eq!(
         scene.edges().next().expect("carried").kind,
         EdgeKind::Other {
-            to_attr: "nonsense".to_string()
+            to_attribute: "nonsense".to_string()
         }
     );
     // ...and it never becomes a material. `b` is not in the scene, so
@@ -160,7 +163,7 @@ fn evaluate_is_recorded_but_not_executed() {
     assert_eq!(scene.nodes().count(), 1);
 
     // But recorded, with its arguments intact.
-    let calls: Vec<&[OwnedArg]> = scene.evaluations().collect();
+    let calls: Vec<&[OwnedArgument]> = scene.evaluations().collect();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].len(), 2);
     assert_eq!(calls[0][0].name, "filename");
@@ -209,7 +212,13 @@ fn a_reference_through_the_trait_records_the_host_address() {
     .unwrap();
 
     let scene = r.scene();
-    match &scene.node("driver").unwrap().attrs["callbackdata"].data {
+    match &scene
+        .node("driver")
+        .unwrap()
+        .attribute("callbackdata")
+        .unwrap()
+        .data
+    {
         OwnedData::Reference(pointers) => {
             assert_eq!(pointers.len(), 1);
             assert_eq!(pointers[0].0 as usize, expected);
@@ -252,7 +261,14 @@ fn a_callback_records_its_address_and_leaks_its_payload() {
         r.set_attribute("driver", &[nsi::callback!("cb", Payload(1))])
             .unwrap();
 
-        match &r.scene().node("driver").unwrap().attrs["cb"].data {
+        match &r
+            .scene()
+            .node("driver")
+            .unwrap()
+            .attribute("cb")
+            .unwrap()
+            .data
+        {
             OwnedData::Reference(pointers) => {
                 assert_eq!(pointers.len(), 1);
                 assert!(!pointers[0].0.is_null(), "address recorded");
@@ -304,7 +320,7 @@ fn create_arguments_are_inert_but_the_type_is_not() {
     let scene = recorder.into_scene();
     assert_eq!(scene.node("n").unwrap().node_type(), "attributes");
     assert!(
-        scene.node("n").unwrap().attrs.is_empty(),
+        scene.node("n").unwrap().attributes.is_empty(),
         "a create argument is not an attribute",
     );
 }

@@ -463,7 +463,7 @@ impl<'a> Iterator for WorldTransforms<'a> {
             };
 
             self.stack.push(Step::Leave(handle));
-            for edge in self.scene.edges_to_attr(handle, "objects") {
+            for edge in self.scene.edges_to_attribute(handle, "objects") {
                 self.stack.push(Step::Enter(edge.from(), here));
             }
 
@@ -500,7 +500,7 @@ impl Scene {
     /// once, not the motion pass.
     pub fn world_transforms(&self) -> WorldTransforms<'_> {
         let mut stack = Vec::new();
-        for edge in self.edges_to_attr(crate::ROOT, "objects") {
+        for edge in self.edges_to_attribute(crate::ROOT, "objects") {
             stack.push(Step::Enter(edge.from(), IDENTITY));
         }
         WorldTransforms {

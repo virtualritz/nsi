@@ -6,7 +6,7 @@
 //! resolves geometry to world space too. So the chain has to be
 //! composed here, once.
 
-use crate::{Edge, EdgeKind, Node, OwnedArg, OwnedData, Scene};
+use crate::{Edge, EdgeKind, Node, OwnedArgument, OwnedData, Scene};
 use core::{cmp::Ordering, fmt};
 use std::collections::HashSet;
 
@@ -22,7 +22,7 @@ mod outputs;
 // instancer, and the output chain. `mod.rs` keeps what all five need
 // so none of them has to reach sideways.
 pub use chain::WorldTransforms;
-pub use instances::InstanceIter;
+pub use instances::Instances;
 pub use motion::Sampled;
 
 /// A 4x4 identity, row-major.
@@ -387,7 +387,7 @@ pub struct AttributeValue<'a> {
     /// names the winner and leaves the value to the backend: `None`
     /// means *the default of [`AttributeValue::name`]*, never
     /// *undefined*.
-    pub arg: Option<&'a OwnedArg>,
+    pub arg: Option<&'a OwnedArgument>,
     /// The `ATTR.priority` that selected it; `0` when none is set.
     pub priority: i32,
 }

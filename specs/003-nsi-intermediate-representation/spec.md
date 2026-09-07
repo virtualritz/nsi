@@ -92,7 +92,7 @@ demonstrated rather than asserted.
 - R4: `Type::Reference` stores the host address, never its contents, and
   is never forwarded to a renderer as an object link.
 - R5: Every `<connection>` attribute the specification declares is
-  classified by name. A `from_attr` of `Some("")` is `None`.
+  classified by name. A `from_attribute` of `Some("")` is `None`.
 
   **A destination that is not one of them is carried, not refused.**
   ɴsɪ's set of destinations is open: its own §4.8 connects one
@@ -174,7 +174,7 @@ demonstrated rather than asserted.
   a no-op and with a different type an error, because ɴsɪ says it
   "does nothing if all other parameters match ... Otherwise, it emits an
   error".
-- R18: A connection's identity is `(from, from_attr, to, to_attr)`.
+- R18: A connection's identity is `(from, from_attribute, to, to_attribute)`.
   Repeating one updates its arguments rather than recording a second
   edge, because ɴsɪ says "it is not an error to create a connection
   which already exists" -- and a duplicate would read as a second parent.

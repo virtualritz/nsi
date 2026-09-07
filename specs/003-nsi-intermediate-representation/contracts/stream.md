@@ -13,7 +13,7 @@ R10 names the preconditions and every row below inherits them:
 
 - One attribute per `set_attribute` call.
 - A node's static attributes set before its motion samples, because
-  `write_stream` emits `attrs` before the sample log per node.
+  `write_stream` emits `attributes` before the sample log per node.
 - No repeated `create` for one handle: 3Delight logs the second call and
   a recorder holds one node.
 - Every `create` and `set_attribute` before every `connect`, because
@@ -33,7 +33,7 @@ about such a scene. This is not a caveat on the gate; it is its domain.
 | Exactly one scalar is bare; everything else is bracketed | Covered | `stream/mod.rs` `write_arg` | `stream_roundtrip` carries an empty slice, which 3Delight writes as `[ ]`; `stream::tests::an_empty_slice_still_brackets`. The rule was "more than one is bracketed", which wrote an empty slice as nothing at all. | -- |
 | Motion samples emit as `SetAttributeAtTime` | Covered | `stream/mod.rs` `write_stream` | same test; `build` sets one at `t=0.5` | -- |
 | Motion samples emit in the order they were **set** | Covered | `stream/mod.rs` `write_stream` walks `Node::samples`, which is the call log | `nsi-parse` `cross_crate::the_order_the_samples_were_set_in_survives_the_round_trip` and `a_superseded_same_time_call_survives_the_stream_round_trip`, with `lua::a_superseded_same_time_call_survives_the_lua_round_trip` for the other emitter; replaying the timeline reddens the first, and skipping a call a same-time re-set superseded reddens the second -- which nothing caught until a reviewer mutated it, because both order tests until then used two distinct times, where the difference cannot show. An attribute resolves by the last *call*, so a writer that emitted the timeline handed the reader a scene that resolves differently from the one it wrote -- silently, and in the direction that matters: `t=1` set before `t=0` renders the `t=0` value. `write_lua` does the same | -- |
-| Every connection class emits correctly | Covered | `edge.rs` `EdgeKind::to_attr` and the port branch | same test; the fixture drives all seven non-shader classes, a shader-network edge, and a `Some("")` source port | -- |
+| Every connection class emits correctly | Covered | `edge.rs` `EdgeKind::to_attribute` and the port branch | same test; the fixture drives all seven non-shader classes, a shader-network edge, and a `Some("")` source port | -- |
 | Matrices emit as `matrix` / `doublematrix` | Covered | `stream/mod.rs` `base_type_name` | same test; `build` sets a `matrix_f64!` `transformationmatrix` and a `matrix_f32!` `othermatrix`, and 3Delight's own stream is the expectation | -- |
 | Doubles format as 3Delight formats them | Covered | `stream/mod.rs` `format_f64`, C `%.17g` | `stream::tests::doubles_format_the_way_3delight_writes_them` pins the captured values; `stream_roundtrip` drives `0.1`, `1/3`, `1e-7`, `1e20` and `-0.0` through live 3Delight | -- |
 | Sample *times* format the same way | Covered | `stream/mod.rs` writes the time through `format_f64` | `stream_roundtrip` sets a sample at `1.0 / 3.0`, which the two formatters render differently | -- |

@@ -108,9 +108,9 @@ impl FfiApi for LinkedApi {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
         nparams: c_int,
         params: *const NSIParam,
     ) {
@@ -118,7 +118,15 @@ impl FfiApi for LinkedApi {
         // All pointers are valid C strings or parameter arrays as guaranteed
         // by HandleString, Ustr, and to_c_param_vec().
         unsafe {
-            NSIConnect(ctx, from, from_attr, to, to_attr, nparams, params)
+            NSIConnect(
+                ctx,
+                from,
+                from_attribute,
+                to,
+                to_attribute,
+                nparams,
+                params,
+            )
         };
     }
 
@@ -127,13 +135,13 @@ impl FfiApi for LinkedApi {
         &self,
         ctx: NSIContext,
         from: NSIHandle,
-        from_attr: *const c_char,
+        from_attribute: *const c_char,
         to: NSIHandle,
-        to_attr: *const c_char,
+        to_attribute: *const c_char,
     ) {
         // SAFETY: NSIDisconnect is an external C function from the NSI library.
         // All pointers are valid C strings as guaranteed by HandleString and Ustr.
-        unsafe { NSIDisconnect(ctx, from, from_attr, to, to_attr) };
+        unsafe { NSIDisconnect(ctx, from, from_attribute, to, to_attribute) };
     }
 
     #[inline]

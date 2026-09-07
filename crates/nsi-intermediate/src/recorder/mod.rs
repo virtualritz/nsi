@@ -2,7 +2,7 @@
 //!
 //! `Nsi` takes `&self` everywhere, so the scene lives behind a `Mutex`.
 
-use crate::{OwnedArg, OwnedData, RecordError, Scene};
+use crate::{OwnedArgument, OwnedData, RecordError, Scene};
 use nsi_ffi_wrap::Arg;
 use nsi_trait::{Action, Nsi};
 use std::sync::{Mutex, MutexGuard};
@@ -83,8 +83,8 @@ impl Recorder {
         *self.state.lock().expect("state mutex poisoned")
     }
 
-    fn own(args: &[Arg<'_, 'static>]) -> Vec<OwnedArg> {
-        args.iter().map(OwnedArg::from_param).collect()
+    fn own(args: &[Arg<'_, 'static>]) -> Vec<OwnedArgument> {
+        args.iter().map(OwnedArgument::from_param).collect()
     }
 }
 
@@ -112,7 +112,7 @@ impl Nsi for Recorder {
         let recursive = args
             .unwrap_or_default()
             .iter()
-            .map(OwnedArg::from_param)
+            .map(OwnedArgument::from_param)
             .find(|arg| arg.name == "recursive")
             .is_some_and(|arg| match &arg.data {
                 OwnedData::I32(values) => {
@@ -162,24 +162,30 @@ impl Nsi for Recorder {
     fn connect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
         args: Option<&[Self::Arg<'_>]>,
     ) -> Result<(), Self::Error> {
         let args = args.map(Self::own).unwrap_or_default();
-        self.scene()
-            .connect_with_args(from, from_attr, to, to_attr, args)
+        self.scene().connect_with_arguments(
+            from,
+            from_attribute,
+            to,
+            to_attribute,
+            args,
+        )
     }
 
     fn disconnect(
         &self,
         from: &str,
-        from_attr: Option<&str>,
+        from_attribute: Option<&str>,
         to: &str,
-        to_attr: &str,
+        to_attribute: &str,
     ) -> Result<(), Self::Error> {
-        self.scene().disconnect(from, from_attr, to, to_attr)
+        self.scene()
+            .disconnect(from, from_attribute, to, to_attribute)
     }
 
     fn evaluate(&self, args: &[Self::Arg<'_>]) -> Result<(), Self::Error> {

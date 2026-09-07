@@ -231,10 +231,10 @@ pub use edge::{Edge, EdgeKind, classify};
 pub use error::RecordError;
 #[cfg(feature = "lua")]
 pub use lua::{LuaError, write_lua};
-pub use owned::{HostPtr, OwnedArg, OwnedData};
+pub use owned::{HostPointer, OwnedArgument, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{
-    AttributeValue, Binding, IDENTITY, Instance, InstanceIter, InstanceRef,
+    AttributeValue, Binding, IDENTITY, Instance, InstanceRef, Instances,
     OutputLayer, Placement, RAY_TYPES, RenderOutput, ResolveError, Sampled,
     WorldTransforms,
 };

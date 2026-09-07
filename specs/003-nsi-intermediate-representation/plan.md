@@ -14,7 +14,7 @@ to be read off a live 3Delight rather than decided here.
 
 Three layers, each testable without a renderer:
 
-1. **Capture** — `OwnedArg` copies a borrowed `Arg`'s payload, mirroring
+1. **Capture** — `OwnedArgument` copies a borrowed `Arg`'s payload, mirroring
    the ɴsɪ C API's own copy contract.
 2. **Structure** — `Scene` holds nodes, attributes and classified edges
    in insertion order.

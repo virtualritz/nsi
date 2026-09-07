@@ -40,7 +40,7 @@
 //! in one call, but then the two emitters would disagree about
 //! statement boundaries and could not be compared against one another.
 
-use crate::{OwnedArg, OwnedData, Scene};
+use crate::{OwnedArgument, OwnedData, Scene};
 use core::{error::Error, fmt};
 use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
 use nsi_trait::Type;
@@ -169,14 +169,14 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
             )?;
         }
 
-        for arg in node.attrs.values() {
+        for arg in node.attributes.values() {
             write!(out, "nsi.SetAttribute({}, ", quoted_str(handle))?;
             write_arg(out, handle, arg)?;
             writeln!(out, ")")?;
         }
 
         // In call order, as `write_stream` explains.
-        for calls in node.samples.values() {
+        for (_, calls) in node.samples() {
             for (time, arg) in calls {
                 write!(
                     out,
@@ -195,7 +195,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
             crate::EdgeKind::ShaderNetwork { from_port, to_port } => {
                 (from_port.as_str(), to_port.as_str())
             }
-            other => ("", other.to_attr()),
+            other => ("", other.to_attribute()),
         };
 
         write!(
@@ -220,7 +220,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
 fn write_arg<W: Write>(
     out: &mut W,
     handle: &str,
-    arg: &OwnedArg,
+    arg: &OwnedArgument,
 ) -> Result<(), LuaError> {
     // A Lua parameter table has room for `name`, `data`, `type` and
     // `arraylength` -- and nothing else. Dropping a flag silently
