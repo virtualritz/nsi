@@ -6,7 +6,8 @@
 
 <!-- cargo-rdme start -->
 
-Core traits and types for the Nodal Scene Interface -- ɴsɪ.
+Core traits and types for the
+[Nodal Scene Interface](https://nsi.readthedocs.io/) -- ɴsɪ.
 
 This crate provides the fundamental abstractions for ɴsɪ without any FFI
 dependencies. It defines:
@@ -25,7 +26,8 @@ dependencies. It defines:
 - Node type constants (`ROOT`, `MESH`, etc.)
 - [`Attribute<T>`](attribute::Attribute) -- Typed attribute names with
   per-name compile-time data-shape verification, plus standard attribute
-  constants ([`P`](attribute::P), [`FOV`](attribute::FOV), etc.)
+  constants ([`attribute::POSITION`](https://docs.rs/nsi-trait/latest/nsi_trait/attribute/const.POSITION.html), [`attribute::FIELD_OF_VIEW`](https://docs.rs/nsi-trait/latest/nsi_trait/attribute/const.FIELD_OF_VIEW.html),
+  etc.)
 
 ## Crate Organization
 

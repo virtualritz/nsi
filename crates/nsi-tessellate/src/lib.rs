@@ -1,4 +1,5 @@
-//! Explicit geometry from ɴsɪ subdivision surfaces.
+//! Explicit geometry from [ɴsɪ](https://nsi.readthedocs.io/)
+//! subdivision surfaces.
 //!
 //! ɴsɪ describes geometry a renderer may not be able to intersect
 //! directly. A `mesh` with `subdivision.scheme` is a *control cage* for

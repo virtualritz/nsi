@@ -1,4 +1,5 @@
-//! Core traits and types for the Nodal Scene Interface -- ɴsɪ.
+//! Core traits and types for the
+//! [Nodal Scene Interface](https://nsi.readthedocs.io/) -- ɴsɪ.
 //!
 //! This crate provides the fundamental abstractions for ɴsɪ without any FFI
 //! dependencies. It defines:

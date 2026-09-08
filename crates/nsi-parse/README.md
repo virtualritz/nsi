@@ -6,7 +6,7 @@
 
 <!-- cargo-rdme start -->
 
-A fast reader for ɴsɪ scenes.
+A fast reader for [ɴsɪ](https://nsi.readthedocs.io/) scenes.
 
 `nsi-intermediate` writes ɴsɪ out; this reads it back. Together they
 close the loop: a scene can be captured, inspected, replayed and
@@ -22,9 +22,9 @@ consumer translate.
 
 A sink brings its own *behaviour*, not its own argument type: every
 entry point here binds `Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call,
-'static>>`, because the parser has to build the arguments it hands over
-and can only build the one shape. Implement `nsi_trait::Nsi` with that
-associated type and the parser will drive it.
+'static>>`, because the parser has to build the arguments it hands
+over and can only build the one shape. Implement `nsi_trait::Nsi`
+with that associated type and the parser will drive it.
 
 ```rust
 let bytes = std::fs::read("scene.nsi")?;

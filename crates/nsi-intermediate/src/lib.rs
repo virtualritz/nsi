@@ -1,5 +1,5 @@
-//! A renderer-agnostic intermediate representation for the Nodal Scene
-//! Interface.
+//! A renderer-agnostic intermediate representation for the
+//! [Nodal Scene Interface](https://nsi.readthedocs.io/) -- ɴsɪ.
 //!
 //! ɴsɪ is the front end and a renderer is the back end; this is what
 //! sits between them. It does the jobs an IR does -- capture the

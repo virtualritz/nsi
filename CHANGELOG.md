@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### `nsi-intermediate` 0.1.0 -- first release
+
+A renderer-agnostic intermediate representation for ɴsɪ: it records
+the calls, classifies the connections, resolves ɴsɪ's graph semantics
+into flat facts a backend can consume, and writes the result back as a
+stream or a Lua script.
+
+Published now because a backend has driven it. `nsi-moonray`
+integrated against it and reported four things every backend would
+otherwise implement itself, all of which it now does: primitive-variable
+interpolation (`<name>.indices`, the `per_face`/`per_vertex` tie-break
+and the length inference), the `outputlayer` attributes with the
+specification's defaults and its `sortkey` ordering, `nholes`
+resolution against `nvertices`, and typed attribute accessors.
+
+### `nsi-ffi-wrap` 0.10.1 -> 0.10.2
+
+- Hash maps are `ahash` and locks are `parking_lot`. Internal, with
+  one visible consequence: `FfiApiAdapter::begin` no longer has a
+  branch returning a bad context for a poisoned lock, because
+  `parking_lot` does not poison.
+- `from_attr`/`to_attr` parameters are spelled `from_attribute` and
+  `to_attribute`, which shows in the docs and changes no call.
+- Every library `unwrap`/`expect` carries a `// SAFETY:` comment
+  naming the invariant that makes it unreachable.
+
+### `nsi-trait` 0.4.1 -> 0.4.2
+
+- `from_attr`/`to_attr` parameters are spelled `from_attribute` and
+  `to_attribute` on the `Nsi` trait, matching `nsi-ffi-wrap`. Rust has
+  no named arguments, so no call site changes.
+- The README is regenerated from the crate documentation, and the
+  first mention of ɴsɪ links to the specification.
+
 ### `nsi-toolbelt` 0.10.2 -> 0.10.3
 
 - **0.10.2 shipped its `tests/` directory.** Without an `include` list

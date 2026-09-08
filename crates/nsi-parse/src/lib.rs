@@ -1,4 +1,4 @@
-//! A fast reader for ɴsɪ scenes.
+//! A fast reader for [ɴsɪ](https://nsi.readthedocs.io/) scenes.
 //!
 //! `nsi-intermediate` writes ɴsɪ out; this reads it back. Together they
 //! close the loop: a scene can be captured, inspected, replayed and

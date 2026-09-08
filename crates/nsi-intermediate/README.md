@@ -6,11 +6,11 @@
 
 <!-- cargo-rdme start -->
 
-A renderer-agnostic intermediate representation for the Nodal Scene
-Interface.
+A renderer-agnostic intermediate representation for the
+[Nodal Scene Interface](https://nsi.readthedocs.io/) -- ɴsɪ.
 
 ɴsɪ is the front end and a renderer is the back end; this is what
-sits between them. It does the jobs an IR does — capture the
+sits between them. It does the jobs an IR does -- capture the
 incoming calls, classify and canonicalise them, lower ɴsɪ's graph
 semantics into flat facts a renderer can consume, and serialise the
 result for inspection.
@@ -20,9 +20,9 @@ renderer present to build or test.
 
 It does need **libclang** to build: the dependency chain reaches
 `nsi-sys`, whose build script runs `bindgen` over ɴsɪ's header
-unconditionally. That is a build-host requirement, not a runtime one --
-no renderer has to be installed -- but a machine without libclang fails
-there rather than here.
+unconditionally. That is a build-host requirement, not a runtime
+one -- no renderer has to be installed -- but a machine without
+libclang fails there rather than here.
 
 Backends consume a lowered scene and flush it into their own
 representation: `nsi-mitsuba` into Mitsuba `Properties`,
@@ -68,8 +68,8 @@ for output in scene.render_outputs() {
 
 let meshes: Vec<String> = scene
     .nodes()
-    .filter(|(_, node)| node.node_type == "mesh")
-    .map(|(handle, _)| handle.clone())
+    .filter(|(_, node)| node.node_type() == "mesh")
+    .map(|(handle, _)| handle.to_string())
     .collect();
 
 for handle in &meshes {
