@@ -17,6 +17,19 @@ and the length inference), the `outputlayer` attributes with the
 specification's defaults and its `sortkey` ordering, `nholes`
 resolution against `nvertices`, and typed attribute accessors.
 
+### `nsi-parse` 0.1.0 -- first release
+
+A reader for ɴsɪ streams and Lua scenes, generic over the `Nsi` trait:
+whatever implements it receives the calls, so a parse can terminate in
+a recorded `Scene`, in a live renderer, or in a filter that forwards
+some calls and swallows others -- 3Delight's `nsicallbacks.h` in Rust,
+with a `Result` where it has a `bool`. Published now that
+`nsi-intermediate` is, since its round-trip gates read that crate.
+
+The packaged crate carries `examples/filter.rs`, a working ɴsɪ filter:
+it reads a stream, drops the connections into one attribute, and
+writes the rest out.
+
 ### `nsi-ffi-wrap` 0.10.1 -> 0.10.2
 
 - Hash maps are `ahash` and locks are `parking_lot`. Internal, with

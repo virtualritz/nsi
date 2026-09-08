@@ -12,7 +12,14 @@ readme = "README.md"
 homepage = "https://www.3delight.com/"
 documentation = "https://docs.rs/nsi-parse/"
 repository = "https://github.com/virtualritz/nsi/"
-include = ["src/**/*", "/Cargo.toml", "/README.md"]
+include = [
+    "src/**/*",
+    # The worked filter, which is what a reader wants first. Its two
+    # dependencies are published, so it builds from the packaged crate.
+    "examples/filter.rs",
+    "/Cargo.toml",
+    "/README.md",
+]
 
 [features]
 default = []
