@@ -8,12 +8,14 @@ subdivision maths, no patch evaluation, no geometry types.
 
 Order of work, cheapest useful thing first:
 
-1. **Subdivision surfaces.** A `mesh` with `subdivision.scheme`,
-   through `subdiv-kernels`. This is the case a renderer meets first
-   and the one both dependencies are ready for.
-2. **Primitive variables through the same stencils**, per the class
-   `nsi-intermediate` resolved -- positions are just the first channel.
-3. **The two drivers**: a tolerance, and a camera-derived tolerance.
+1. ~~**Subdivision surfaces.**~~ Done: `Cage::read` maps an ɴsɪ `mesh`
+   onto the kernel's topology -- building the edge list ɴsɪ never
+   states, and mapping `subdivision.creasevertices`/`creasesharpness`
+   and the corner pair onto per-edge and per-vertex values.
+2. ~~**Primitive variables through the same stencils.**~~ Done:
+   `refine_variable` routes by the class `nsi-intermediate` resolved.
+3. **The two drivers**: `Options::for_edge_length` converts a
+   tolerance to a level; the camera-derived one is still to write.
 4. **Sparse re-evaluation**, composing `Scene::affected` with
    `subdiv-kernels`'s `affected_outputs`.
 5. **`nurbs`**, once R2 has an answer from the renderer.
@@ -43,7 +45,7 @@ Order of work, cheapest useful thing first:
 - [x] `spec.md`
 - [x] `plan.md`
 - [x] `research.md`
-- [ ] `data-model.md`
+- [ ] `data-model.md`  (with the nurbs half)
 - [ ] `contracts/tessellation.md`
 - [ ] `quickstart.md`
 - [ ] `tasks.md`

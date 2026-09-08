@@ -1,0 +1,22 @@
+[package]
+name = "nsi-tessellate"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "subdivision", "tessellation"]
+categories = ["graphics", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Explicit geometry from Nodal Scene Interface – ɴsɪ – subdivision surfaces, for consumers that cannot intersect them analytically."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-tessellate/"
+repository = "https://github.com/virtualritz/nsi/"
+include = ["src/**/*", "/Cargo.toml", "/README.md"]
+
+[dependencies]
+nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
+subdiv-kernels = "0.1"
+
+[dev-dependencies]
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
