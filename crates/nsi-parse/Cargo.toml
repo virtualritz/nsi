@@ -35,7 +35,7 @@ nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
 flate2 = { version = "1", optional = true }
 mlua = { version = "0.10", features = ["lua54", "vendored"], optional = true }
-zstd = { version = "0.13", optional = true }
+zstd = { version = "0.14", optional = true }
 
 [dev-dependencies]
 nsi-intermediate = { version = "0.1", path = "../nsi-intermediate", features = ["lua", "gzip", "zstd"] }
