@@ -1,6 +1,7 @@
 use crate::{FfiApi, *};
 use dlopen2::wrapper::{Container, WrapperApi};
-use std::{env, error::Error, ffi::c_char, os::raw::c_int, path::Path};
+use crate::backend;
+use std::{error::Error, ffi::c_char, os::raw::c_int, path::Path};
 
 pub type ApiImpl = DynamicApi;
 
@@ -72,66 +73,101 @@ pub struct DynamicApi {
     api: Container<NsiCApi>,
 }
 
-#[cfg(target_os = "linux")]
-static DELIGHT_APP_PATH: &str = "/usr/local/3delight/lib/lib3delight.so";
-
-#[cfg(target_os = "macos")]
-static DELIGHT_APP_PATH: &str = "/Applications/3Delight/lib/lib3delight.dylib";
-
-#[cfg(target_os = "windows")]
-static DELIGHT_APP_PATH: &str = "C:/%ProgramFiles%/3Delight/bin/3Delight.dll";
-
-#[cfg(target_os = "linux")]
-static DELIGHT_LIB: &str = "lib3delight.so";
-
-#[cfg(target_os = "macos")]
-static DELIGHT_LIB: &str = "lib3delight.dylib";
-
-#[cfg(target_os = "windows")]
-static DELIGHT_LIB: &str = "3Delight.dll";
-
 impl DynamicApi {
-    #[inline]
-    pub fn new() -> Result<Self, Box<dyn Error>> {
-        // SAFETY: Container::load calls dlopen which is safe to call with any string.
-        // The paths are hardcoded constants and the library handles invalid paths gracefully.
-        match unsafe { Container::load(DELIGHT_APP_PATH) }
-            .or_else(|_| unsafe { Container::load(DELIGHT_LIB) })
-            .or_else(|_| match env::var("DELIGHT") {
-                Err(e) => Err(Box::new(e) as _),
-                Ok(delight) => {
-                    #[cfg(any(target_os = "linux", target_os = "macos"))]
-                    let path =
-                        Path::new(&delight).join("lib").join(DELIGHT_LIB);
-                    #[cfg(target_os = "windows")]
-                    let path =
-                        Path::new(&delight).join("bin").join(DELIGHT_LIB);
+    /// The renderer a name refers to.
+    ///
+    /// A name in [`backend::KNOWN`] is searched for where its vendor
+    /// installs; anything else is treated as a library to load. See
+    /// [`backend`] for the whole rule and why it is that way round.
+    ///
+    /// **Every candidate is tried before failing**, and the error
+    /// names all of them. A renderer that cannot be found is the one
+    /// failure this crate cannot render through, so the message has to
+    /// carry enough to fix it without a second run.
+    pub fn load(name: &str) -> Result<Self, LoadError> {
+        let candidates = backend::candidates(name);
+        let mut tried = Vec::with_capacity(candidates.len());
 
-                    // SAFETY: Container::load is safe to call with any path.
-                    // The library handles invalid paths gracefully.
-                    unsafe { Container::load(path) }
-                        .map_err(|e| Box::new(e) as _)
+        for path in candidates {
+            // SAFETY: `Container::load` is `dlopen`, which is safe to
+            // call with any path; a path that is not a library is an
+            // error rather than undefined behaviour. The symbols
+            // `NsiCApi` names are the ɴsɪ C API, whose signatures are
+            // fixed by the specification -- so a library that resolves
+            // them at all resolves them with these types.
+            match unsafe { Container::load(&path) } {
+                Ok(api) => {
+                    let api = DynamicApi { api };
+
+                    #[cfg(feature = "output")]
+                    super::register_output_drivers(&api);
+
+                    return Ok(api);
                 }
-            }) {
-            Err(e) => Err(e),
-            Ok(api) => {
-                let api = DynamicApi { api };
-
-                #[cfg(feature = "output")]
-                super::register_output_drivers(&api);
-
-                Ok(api)
+                Err(error) => tried.push((path, error.to_string())),
             }
         }
+
+        Err(LoadError {
+            name: std::string::String::from(name),
+            known: backend::lookup(name).is_some(),
+            tried,
+        })
     }
 }
+
+/// No ɴsɪ renderer could be loaded for a name.
+#[derive(Debug)]
+pub struct LoadError {
+    /// What was asked for.
+    name: std::string::String,
+    /// Whether it was a name this crate knows, which decides what the
+    /// message can usefully suggest.
+    known: bool,
+    /// Every path tried, and why each failed.
+    tried: Vec<(std::path::PathBuf, std::string::String)>,
+}
+
+impl std::fmt::Display for LoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { name, known, tried } = self;
+
+        if *known {
+            let prefix_var = backend::lookup(name.as_str())
+                .map(|backend| backend.prefix_var)
+                .unwrap_or_default();
+            write!(
+                f,
+                "the ɴsɪ renderer {name:?} is known but its library could \
+                 not be loaded; set ${prefix_var} to its install prefix, \
+                 or pass the library's path as the \"renderer\" argument"
+            )?;
+        } else {
+            let known: Vec<&str> = backend::known_names().collect();
+            write!(
+                f,
+                "no ɴsɪ renderer is named {name:?}, and no library by that \
+                 name could be loaded either; the names this build knows \
+                 are {}, and anything else is taken as a library to open",
+                known.join(", ")
+            )?;
+        }
+
+        writeln!(f, ". Tried:")?;
+        for (path, why) in tried {
+            writeln!(f, "  {} -- {why}", path.display())?;
+        }
+        Ok(())
+    }
+}
+
+impl Error for LoadError {}
 
 impl TryFrom<&Path> for DynamicApi {
     type Error = dlopen2::Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        // SAFETY: Container::load is safe to call with any path.
-        // The library handles invalid paths gracefully.
+        // SAFETY: as in `load` above.
         match unsafe { Container::load(path) } {
             Err(e) => Err(e),
             Ok(api) => {

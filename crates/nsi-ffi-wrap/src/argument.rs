@@ -575,6 +575,19 @@ impl String {
 
         String { data, pointer }
     }
+
+    /// The value, when it is text.
+    ///
+    /// A `String` argument is a `CString` on its way to a renderer,
+    /// and this reads it back. `Context::new` needs it: `"renderer"`
+    /// is answered here rather than forwarded, so its value has to be
+    /// legible on this side of the boundary.
+    ///
+    /// `None` for anything that is not valid UTF-8, which no renderer
+    /// name is.
+    pub fn as_str(&self) -> Option<&str> {
+        self.data.to_str().ok()
+    }
 }
 
 impl ArgDataMethods for String {

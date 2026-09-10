@@ -7,15 +7,21 @@ use nsi_sys::*;
 use std::{ffi::c_char, os::raw::c_int};
 
 // Re-export dependencies needed by the macro
-#[cfg(not(feature = "link_lib3delight"))]
 #[doc(hidden)]
 /// The crate's hash map, hashed by `ahash`.
 ///
 /// `std`'s `SipHash` resists collision attacks on adversarial input.
 /// The keys here are callback and context identifiers the host itself
 /// supplied, so the trade buys nothing and costs hashing speed.
+///
+/// **Not gated on the dynamic backend**, though it used to be:
+/// `context.rs` and `c_adapter.rs` use it whichever way the renderer
+/// is bound, so `link_lib3delight` did not compile at all.
 pub(crate) type HashMap<K, V> = ahash::AHashMap<K, V>;
 
+// Gated for the same reason: `dlopen2` is an optional dependency and
+// is absent when the renderer is linked at build time.
+#[cfg(not(feature = "link_lib3delight"))]
 pub use dlopen2;
 #[doc(hidden)]
 pub extern crate lazy_static;
@@ -61,11 +67,135 @@ use self::dynamic as api;
 #[cfg(feature = "link_lib3delight")]
 use self::linked as api;
 
-// API initalization/on-demand loading of lib3delight -----------------
+pub mod backend;
 
+// Which renderer, and loading it on demand -------------------------
+
+// **One library per name, not one per process.** The renderer used to
+// be a `lazy_static` resolved the first time anything touched it, so a
+// process had exactly one for its whole life and a `Context` could not
+// ask for another. Two contexts naming the same renderer still share
+// one library here; two naming different ones each get theirs.
+//
+// Keyed by the *canonical* name where there is one, so `"delight"` and
+// `"3delight"` do not open the library twice. An unresolved name keys
+// on itself, verbatim: it may be a path, and paths are case-sensitive
+// on the systems that matter.
 lazy_static::lazy_static! {
-    static ref NSI_API: api::ApiImpl =
-        api::ApiImpl::new().expect("Could not load lib3delight");
+    static ref LOADED: parking_lot::Mutex<
+        std::collections::HashMap<std::string::String, std::sync::Arc<api::ApiImpl>>
+    > = parking_lot::Mutex::new(std::collections::HashMap::new());
+}
+
+// **Which renderer a raw context handle belongs to.**
+//
+// Two places get a bare `NSIContext` and no other clue: `From<NSIContext>`,
+// and the status-callback trampoline, which C hands a handle rather than
+// anything of ours. When there was one renderer per process the answer was
+// never in doubt. Now it is, so it is recorded.
+//
+// **Handles are per renderer and both start at 1**, so two contexts from
+// two renderers can collide. A collision cannot be resolved from a handle
+// alone, so it is recorded as ambiguous rather than guessed at: the lookup
+// then falls back to the default renderer and says so. Silently handing a
+// callback a context wired to the wrong renderer is the failure worth
+// spending this on.
+lazy_static::lazy_static! {
+    static ref BY_HANDLE: parking_lot::Mutex<
+        std::collections::HashMap<NSIContext, Option<std::sync::Arc<dyn FfiApi>>>
+    > = parking_lot::Mutex::new(std::collections::HashMap::new());
+}
+
+/// Record which renderer made a context.
+pub(crate) fn remember(context: NSIContext, api: &std::sync::Arc<dyn FfiApi>) {
+    BY_HANDLE
+        .lock()
+        .entry(context)
+        .and_modify(|known| {
+            // Same renderer reusing a handle it had freed is fine; a
+            // different one holding the same number at the same time is
+            // not answerable.
+            if !matches!(known, Some(existing)
+                if std::sync::Arc::ptr_eq(existing, api))
+            {
+                *known = None;
+            }
+        })
+        .or_insert_with(|| Some(api.clone()));
+}
+
+/// Forget a context, once its renderer can no longer be asked about it.
+pub(crate) fn forget(context: NSIContext) {
+    BY_HANDLE.lock().remove(&context);
+}
+
+/// The renderer that made a context, or the default.
+pub(crate) fn renderer_of(
+    context: NSIContext,
+) -> Result<std::sync::Arc<dyn FfiApi>, std::string::String> {
+    match BY_HANDLE.lock().get(&context) {
+        Some(Some(api)) => return Ok(api.clone()),
+        Some(None) => eprintln!(
+            "nsi: context {context} exists in more than one loaded \
+             renderer, so which one it belongs to cannot be told from the \
+             handle; using the default. Build the context with \
+             `Context::new` and a \"renderer\" argument to avoid this."
+        ),
+        None => {}
+    }
+
+    renderer(None)
+}
+
+/// The renderer a name refers to, loading it if this is the first ask.
+///
+/// `None` means whatever [`backend::from_environment`] says, or
+/// 3Delight.
+pub(crate) fn renderer(
+    name: Option<&str>,
+) -> Result<std::sync::Arc<dyn FfiApi>, std::string::String> {
+    let requested = match name {
+        Some(name) => name.trim().to_string(),
+        None => backend::from_environment()
+            .unwrap_or_else(|| backend::KNOWN[0].name.to_string()),
+    };
+
+    let key = backend::lookup(&requested)
+        .map(|backend| backend.name.to_string())
+        .unwrap_or_else(|| requested.clone());
+
+    let mut loaded = LOADED.lock();
+    if let Some(api) = loaded.get(&key) {
+        return Ok(api.clone() as _);
+    }
+
+    let api = std::sync::Arc::new(load_renderer(&requested)?);
+    loaded.insert(key, api.clone());
+    Ok(api as _)
+}
+
+#[cfg(not(feature = "link_lib3delight"))]
+fn load_renderer(name: &str) -> Result<api::ApiImpl, std::string::String> {
+    api::ApiImpl::load(name).map_err(|error| error.to_string())
+}
+
+// **Linked means one renderer, by construction.** The symbols are
+// resolved by the linker at build time, so there is nothing to choose
+// between at runtime and a name that asks for something else has to be
+// refused rather than silently ignored -- a scene rendering in
+// 3Delight when it asked for MoonRay is the failure this whole
+// mechanism exists to prevent.
+#[cfg(feature = "link_lib3delight")]
+fn load_renderer(name: &str) -> Result<api::ApiImpl, std::string::String> {
+    if backend::lookup(name).map(|backend| backend.name) != Some("3delight") {
+        return Err(format!(
+            "this build links 3Delight at build time, so it cannot also \
+             load the ɴsɪ renderer {name:?} at runtime; rebuild without \
+             the `link_lib3delight` feature to choose a renderer by name"
+        ));
+    }
+
+    api::ApiImpl::new().map_err(|error| error.to_string())
 }
 
 // Default modules ----------------------------------------------------

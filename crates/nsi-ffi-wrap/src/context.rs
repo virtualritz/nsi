@@ -20,9 +20,17 @@ use ustr::{Ustr, ustr};
 ///
 /// We wrap this in an [`Arc`] in [`Context`] to make sure drop() is only
 /// called when the last clone ceases existing.
-#[derive(Debug)]
 struct InnerContext<'a> {
     context: NSIContext,
+    /// The renderer this context is talking to.
+    ///
+    /// **Held here rather than looked up.** The renderer used to be a
+    /// process-wide static, so a process had one for its whole life.
+    /// Carrying it means two contexts in one process can be two
+    /// different renderers, which is what `"renderer"` promises -- and
+    /// it means the library cannot be dropped while a context still
+    /// needs it to run `NSIEnd`.
+    api: std::sync::Arc<dyn FfiApi>,
     /// The callbacks this context was handed, keyed by the node handle and
     /// attribute name they were set on.
     ///
@@ -43,6 +51,23 @@ struct InnerContext<'a> {
     _marker: PhantomData<*mut &'a ()>,
 }
 
+/// The `"renderer"` argument's value, if the caller gave one.
+///
+/// Only a string is meaningful: a renderer is named, not measured. An
+/// argument by that name carrying anything else is ignored here, and
+/// then dropped from what is forwarded like any other -- so a caller
+/// who passes the wrong type gets the default renderer rather than a
+/// renderer that receives an argument it cannot read.
+fn requested_renderer(args: &ArgSlice<'_, '_>) -> Option<std::string::String> {
+    args.iter()
+        .find(|arg| crate::backend::RENDERER == arg.name.as_str())
+        .and_then(|arg| match &arg.data {
+            ArgData::String(value) => value.as_str(),
+            _ => None,
+        })
+        .map(|name| name.to_string())
+}
+
 /// A callback pointer the context owns, with the function that frees it.
 #[derive(Debug)]
 struct CallbackOwned {
@@ -61,6 +86,19 @@ impl Drop for CallbackOwned {
 
 // The context id alone identifies a context; the callback tables are
 // interior mutability and say nothing about identity.
+// By hand, because `dyn FfiApi` is not `Debug` and giving it that
+// bound would constrain every implementation for the sake of a
+// derive.
+impl<'a> core::fmt::Debug for InnerContext<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InnerContext")
+            .field("context", &self.context)
+            .field("callbacks", &self.callbacks)
+            .field("retired", &self.retired)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> PartialEq for InnerContext<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.context == other.context
@@ -74,9 +112,10 @@ impl<'a> core::hash::Hash for InnerContext<'a> {
 }
 
 impl<'a> InnerContext<'a> {
-    fn new(context: NSIContext) -> Self {
+    fn new(context: NSIContext, api: std::sync::Arc<dyn FfiApi>) -> Self {
         Self {
             context,
+            api,
             callbacks: Mutex::new(HashMap::new()),
             retired: Mutex::new(Vec::new()),
             _marker: PhantomData,
@@ -127,7 +166,8 @@ impl<'a> Drop for InnerContext<'a> {
     fn drop(&mut self) {
         // Order matters: the renderer may still reach a callback until
         // `NSIEnd` returns, so free nothing before it does.
-        NSI_API.NSIEnd(self.context);
+        self.api.NSIEnd(self.context);
+        crate::forget(self.context);
         self.callbacks.lock().clear();
         self.retired.lock().clear();
     }
@@ -213,9 +253,20 @@ impl<'a> From<Context<'a>> for NSIContext {
 }
 
 impl<'a> From<NSIContext> for Context<'a> {
+    /// **The default renderer**, because a bare handle does not say
+    /// which one made it. Adopting a handle from a renderer that is
+    /// not the default is not expressible here; make the [`Context`]
+    /// with [`Context::new`] and a `"renderer"` argument instead.
+    ///
+    /// # Panics
+    ///
+    /// If no renderer can be loaded at all. Every other path returns
+    /// an error, but this conversion has nowhere to put one.
     #[inline]
     fn from(context: NSIContext) -> Self {
-        Self(Arc::new(InnerContext::new(context)))
+        let api = crate::renderer_of(context)
+            .unwrap_or_else(|error| panic!("{error}"));
+        Self(Arc::new(InnerContext::new(context, api)))
     }
 }
 
@@ -233,11 +284,62 @@ impl<'a> Context<'a> {
     ///     nsi::Context::new(Some(&[nsi::string!("streamfilename", "stdout")]))
     ///         .expect("Could not create ɴsɪ context.");
     /// ```
+    /// # Choosing a renderer
+    ///
+    /// ɴsɪ is an interface and more than one renderer implements it.
+    /// A `"renderer"` argument says which:
+    ///
+    /// ```no_run
+    /// # use nsi_ffi_wrap as nsi;
+    /// let ctx = nsi::Context::new(Some(&[
+    ///     nsi::string!("renderer", "moonray"),
+    /// ]));
+    /// ```
+    ///
+    /// A name this crate knows is looked for where that renderer
+    /// installs; anything else is taken as a library to load, so an
+    /// implementation released after this crate still works, as does
+    /// a path to a build of your own. Without the argument,
+    /// `$NSI_RENDERER` decides, and without that, 3Delight.
+    /// [`backend`](crate::backend) has the whole rule.
+    ///
+    /// The argument is **consumed here and never forwarded**: it tells
+    /// this crate which library to open, and no renderer would know
+    /// what to do with it.
+    ///
     /// # Error
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
+        // Read before anything is turned into C parameters. Dropped
+        // from what is, further down -- and dropped *there* rather
+        // than by filtering `args` into a new slice, which is what a
+        // first version did and which is unsound: `as_c_ptr` yields
+        // the address of a field *inside* an `Arg`, so a cloned `Arg`
+        // in a temporary `Vec` hands the renderer a pointer that dies
+        // when this function returns. `args` itself is never touched.
+        let renderer = args.and_then(requested_renderer);
+
+        let api = match crate::renderer(renderer.as_deref()) {
+            Ok(api) => api,
+            Err(error) => {
+                // The one failure this crate cannot render through, so
+                // it is worth a line even though the signature can
+                // only say `None`.
+                eprintln!("nsi: {error}");
+                return None;
+            }
+        };
+
         let (_, _, mut args_out) = to_c_param_vec(args);
+
+        // **Not forwarded.** `"renderer"` told this crate which
+        // library to open; no renderer declares it. `Ustr` interns, so
+        // equal names are one pointer and this compares addresses.
+        if renderer.is_some() {
+            let directive = ustr(crate::backend::RENDERER).as_char_ptr();
+            args_out.retain(|param| !std::ptr::eq(param.name, directive));
+        }
 
         let fn_pointer: nsi_sys::NSIErrorHandler = Some(
             error_handler
@@ -269,12 +371,14 @@ impl<'a> Context<'a> {
             });
         }
 
-        let context = NSI_API.NSIBegin(args_out.len() as _, args_out.as_ptr());
+        let context =
+            api.NSIBegin(args_out.len() as _, args_out.as_ptr());
 
         if 0 == context {
             None
         } else {
-            let inner = InnerContext::new(context);
+            crate::remember(context, &api);
+            let inner = InnerContext::new(context, api);
             // The error handler is a callback like any other; the context
             // owns it under a reserved key, since it belongs to no node.
             inner.own_callbacks(".context", args);
@@ -323,7 +427,7 @@ impl<'a> Context<'a> {
         let node_type = ustr(node_type);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
-        NSI_API.NSICreate(
+        self.0.api.NSICreate(
             self.0.context,
             handle.as_char_ptr(),
             node_type.as_char_ptr(),
@@ -363,7 +467,7 @@ impl<'a> Context<'a> {
         let handle = HandleString::from(handle);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
-        NSI_API.NSIDelete(
+        self.0.api.NSIDelete(
             self.0.context,
             handle.as_char_ptr(),
             args_len,
@@ -398,7 +502,7 @@ impl<'a> Context<'a> {
         let handle = HandleString::from(handle);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
-        NSI_API.NSISetAttribute(
+        self.0.api.NSISetAttribute(
             self.0.context,
             handle.as_char_ptr(),
             args_len,
@@ -441,7 +545,7 @@ impl<'a> Context<'a> {
         let handle = HandleString::from(handle);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
-        NSI_API.NSISetAttributeAtTime(
+        self.0.api.NSISetAttributeAtTime(
             self.0.context,
             handle.as_char_ptr(),
             time,
@@ -473,7 +577,7 @@ impl<'a> Context<'a> {
         let handle = HandleString::from(handle);
         let name = ustr(name);
 
-        NSI_API.NSIDeleteAttribute(
+        self.0.api.NSIDeleteAttribute(
             self.0.context,
             handle.as_char_ptr(),
             name.as_char_ptr(),
@@ -530,7 +634,7 @@ impl<'a> Context<'a> {
         let to_attribute = ustr(to_attribute);
         let (args_len, args_ptr, _args_out) = to_c_param_vec(args);
 
-        NSI_API.NSIConnect(
+        self.0.api.NSIConnect(
             self.0.context,
             from.as_char_ptr(),
             from_attribute.as_char_ptr(),
@@ -569,7 +673,7 @@ impl<'a> Context<'a> {
         let to = HandleString::from(to);
         let to_attribute = ustr(to_attribute);
 
-        NSI_API.NSIDisconnect(
+        self.0.api.NSIDisconnect(
             self.0.context,
             from.as_char_ptr(),
             from_attribute.as_char_ptr(),
@@ -631,7 +735,7 @@ impl<'a> Context<'a> {
     pub fn evaluate(&self, args: &ArgSlice<'_, 'a>) {
         let (args_len, args_ptr, _args_out) = to_c_param_vec(Some(args));
 
-        NSI_API.NSIEvaluate(self.0.context, args_len, args_ptr);
+        self.0.api.NSIEvaluate(self.0.context, args_len, args_ptr);
     }
 
     /// This function is the only control function of the API.
@@ -730,7 +834,7 @@ impl<'a> Context<'a> {
 
         self.0.own_callbacks(".context", args);
 
-        NSI_API.NSIRenderControl(
+        self.0.api.NSIRenderControl(
             self.0.context,
             args_out.len() as _,
             args_out.as_ptr(),
@@ -849,7 +953,13 @@ pub(crate) extern "C" fn render_status(
             // ownership, so the pointer stays valid for the lifetime of the
             // context.
             let fn_status = unsafe { &*(payload as *mut Box<dyn FnStatus>) };
-            let ctx = Context(Arc::new(InnerContext::new(context)));
+            // The renderer that made this context, so a closure
+            // calling back into it reaches the right one. See
+            // `crate::renderer_of`.
+            let Ok(api) = crate::renderer_of(context) else {
+                return;
+            };
+            let ctx = Context(Arc::new(InnerContext::new(context, api)));
 
             fn_status(&ctx, status.into());
 

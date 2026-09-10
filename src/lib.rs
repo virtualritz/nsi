@@ -242,6 +242,30 @@
 //!   changing while an app using ɴsɪ is running but is not advised otherwise
 //!   (`ustr` are never freed).
 //!
+//! ## Choosing A Renderer
+//!
+//! ɴsɪ is an interface, not a renderer, and more than one
+//! implementation of it exists. A `"renderer"` argument says which one
+//! a [`Context`] talks to:
+//!
+//! ```no_run
+//! # use nsi_ffi_wrap as nsi;
+//! let ctx = nsi::Context::new(Some(&[
+//!     nsi::string!("renderer", "moonray"),
+//! ]));
+//! ```
+//!
+//! A name this crate knows is looked for where that renderer installs.
+//! Anything else is taken as a library to load, so an implementation
+//! released after this crate works without a release of this crate,
+//! and so a path points at a build of your own. Without the argument,
+//! `$NSI_RENDERER` decides; without that, 3Delight.
+//!
+//! Two contexts in one process may name two different renderers, and
+//! the argument itself is answered here rather than forwarded to any
+//! of them. [`backend`] has the whole rule, the known names and the
+//! environment variable each of them reads.
+//!
 //! ## Linking Style
 //!
 //! The 3Delight dynamic library (`lib3delight`) can either be linked to during
@@ -279,6 +303,11 @@
 //!     outdated version. This feature mainly exists for CI purposes.
 //!
 //!   * The feature is called `download_lib3delight`.
+//!
+//! Linking is 3Delight only and is one renderer for the life of the
+//! process, so a `"renderer"` naming anything else is refused rather
+//! than quietly ignored. Choosing at runtime needs the default,
+//! dynamic style.
 
 // Re-export everything from nsi_ffi_wrap, which includes Action from nsi-trait crate
 pub use nsi_ffi_wrap::*;
