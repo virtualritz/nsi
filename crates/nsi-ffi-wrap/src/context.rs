@@ -311,13 +311,19 @@ impl<'a> Context<'a> {
     /// If this method fails for some reason, it returns [`None`].
     #[inline]
     pub fn new(args: Option<&ArgSlice<'_, 'a>>) -> Option<Self> {
-        // Read before anything is turned into C parameters. Dropped
-        // from what is, further down -- and dropped *there* rather
-        // than by filtering `args` into a new slice, which is what a
-        // first version did and which is unsound: `as_c_ptr` yields
-        // the address of a field *inside* an `Arg`, so a cloned `Arg`
-        // in a temporary `Vec` hands the renderer a pointer that dies
-        // when this function returns. `args` itself is never touched.
+        // Read before anything is turned into C parameters, and
+        // dropped from what is, further down.
+        //
+        // Dropped *there* rather than by filtering `args` into a new
+        // slice, which is what a first version did. Both are correct:
+        // the filtered `Vec` was a local that outlived the `NSIBegin`
+        // call, and a renderer copies what it is handed during the
+        // call -- `nsi-intermediate`'s `OwnedData` owns every payload,
+        // and the one thing it does not copy, a `HostPointer`, it
+        // never dereferences. This way simply does not clone the
+        // caller's arguments, which allocates nothing and leaves no
+        // second `Arg` holding a duplicate of a callback pointer that
+        // stands for ownership of a leaked box.
         let renderer = args.and_then(requested_renderer);
 
         let api = match crate::renderer(renderer.as_deref()) {
