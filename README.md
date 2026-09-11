@@ -262,6 +262,36 @@ or use channels to stream pixels back to a main thread (see the
   changing while an app using ɴsɪ is running but is not advised otherwise
   (`ustr` are never freed).
 
+### Choosing A Renderer
+
+ɴsɪ is an interface, not a renderer, and more than one implementation of
+it exists. A `"renderer"` argument says which one a `Context` talks to:
+
+```rust
+let ctx = nsi::Context::new(Some(&[
+    nsi::string!("renderer", "moonray"),
+]));
+```
+
+A name the crate knows is looked for where that renderer installs --
+`3delight` and `moonray` today, each with its own prefix variable
+(`$DELIGHT`, `$NSI_MOONRAY`). Anything else is taken as a library to
+load, trying `libnsi_<name>` and `lib<name>`, so an implementation
+released after this crate works without a release of this crate, and a
+path points at a build of your own.
+
+Without the argument, `$NSI_RENDERER` decides; without that, 3Delight
+-- which is what every caller got before the argument existed, so
+nothing changes for one that does not ask.
+
+Two contexts in one process may name two different renderers. The
+argument is answered by this crate and never forwarded, since no
+renderer declares it.
+
+[`nsi-moonray`](https://github.com/virtualritz/nsi-moonray) is an ɴsɪ
+backend on [MoonRay](https://openmoonray.org/), DreamWorks Animation's
+production renderer, and is what `"moonray"` names.
+
 ### Linking Style
 
 The 3Delight dynamic library (`lib3delight`) can either be linked to during
@@ -299,6 +329,10 @@ By default the lib is loaded at runtime.
     outdated version. This feature mainly exists for CI purposes.
 
   * The feature is called `download_lib3delight`.
+
+Linking is 3Delight only and is one renderer for the life of the
+process, so a `"renderer"` naming anything else is refused rather than
+quietly ignored. Choosing at runtime needs the default, dynamic style.
 
 <!-- cargo-rdme end -->
 
