@@ -166,3 +166,39 @@ fn two_renderers_coexist() {
     moonray.create("in_moonray", nsi::TRANSFORM, None);
     delight.create("also_in_delight", nsi::TRANSFORM, None);
 }
+
+/// **The shape a real application already uses.**
+///
+/// `akatela` builds its context as an `errorhandler` callback and
+/// nothing else. That path predates the `"renderer"` argument and has
+/// to keep working untouched: the argument is additive, the default is
+/// what it always was, and the callback the caller owns must survive
+/// the new code that reads and drops one argument before the rest are
+/// converted.
+#[test]
+fn an_error_handler_alone_still_makes_a_context() {
+    let context = nsi::Context::new(Some(&[nsi::callback!(
+        "errorhandler",
+        nsi::ErrorCallback::new(|_level, _code, _message| {})
+    )]))
+    .expect("the default renderer, as before");
+
+    context.create("a", nsi::TRANSFORM, None);
+    context.connect("a", None, nsi::ROOT, "objects", None);
+}
+
+/// And the same with a renderer named, so the two features compose
+/// rather than one quietly displacing the other.
+#[test]
+fn a_named_renderer_keeps_the_error_handler() {
+    let context = nsi::Context::new(Some(&[
+        nsi::string!("renderer", "3delight"),
+        nsi::callback!(
+            "errorhandler",
+            nsi::ErrorCallback::new(|_level, _code, _message| {})
+        ),
+    ]))
+    .expect("3delight");
+
+    context.create("a", nsi::TRANSFORM, None);
+}
