@@ -26,6 +26,33 @@
 //! deliberate: a name meaning a predictable thing is worth more than
 //! the convenience, and there are two escape hatches already.
 //!
+//! # Linked in, rather than loaded
+//!
+//! A name can also be answered by an implementation compiled into this
+//! process, with [`register`]. That is the route for a Rust host that
+//! builds against its renderer:
+//!
+//! ```ignore
+//! nsi::backend::register("moonray", std::sync::Arc::new(backend));
+//! ```
+//!
+//! **Why it matters is not convenience.** A renderer reached by loading
+//! a library is a separately compiled artefact, and Rust has no stable
+//! ABI -- so a `Box<dyn Fn…>` an application hands to an
+//! `outputdriver`'s `callback.write` carries a vtable that means nothing
+//! inside that library. Passing it through the C interface as an opaque
+//! pointer is how it crosses, not why it breaks. A registered backend
+//! shares this compilation, so those closures are native and the pixels
+//! come back without an ABI-stable shim in the middle.
+//!
+//! The cost is that the renderer becomes a build-time dependency, which
+//! is exactly the property loading gives up. Both routes exist because
+//! both trades are reasonable.
+//!
+//! A registered name wins over a library of the same name: registering
+//! is a deliberate act by the host, and there is no reading under which
+//! it wanted the other one.
+//!
 //! # Where the name comes from
 //!
 //! The `"renderer"` argument to
@@ -137,6 +164,48 @@ const MOONRAY_PREFIX: &str = "C:/%ProgramFiles%/nsi-moonray";
 const LIBRARY_DIRECTORY: &str = "lib";
 #[cfg(target_os = "windows")]
 const LIBRARY_DIRECTORY: &str = "bin";
+
+/// Renderers compiled into this process, by name.
+///
+/// Consulted before any library search. See "Linked in, rather than
+/// loaded" above for why a host would want this.
+static LINKED: std::sync::LazyLock<
+    std::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Arc<dyn crate::FfiApi>>,
+    >,
+> = std::sync::LazyLock::new(Default::default);
+
+/// Answer `name` with an implementation compiled into this process.
+///
+/// Call before the first [`Context`](crate::Context) that asks for it;
+/// a context already built keeps the renderer it was built with.
+///
+/// Registering a name twice replaces the earlier one, which is what
+/// makes this usable from a test.
+pub fn register(name: &str, api: std::sync::Arc<dyn crate::FfiApi>) {
+    let key = name.trim().to_ascii_lowercase();
+    if let Ok(mut linked) = LINKED.lock() {
+        linked.insert(key, api);
+    }
+}
+
+/// Whether a name is answered by a linked implementation.
+pub fn is_linked(name: &str) -> bool {
+    linked(name).is_some()
+}
+
+/// The linked implementation for a name, if one was registered.
+pub(crate) fn linked(name: &str) -> Option<std::sync::Arc<dyn crate::FfiApi>> {
+    let key = name.trim().to_ascii_lowercase();
+    // A canonical name and its aliases reach the same entry, so
+    // registering `"moonray"` also answers `"nsi-moonray"`.
+    let canonical = lookup(&key).map(|backend| backend.name);
+    let linked = LINKED.lock().ok()?;
+    linked
+        .get(&key)
+        .or_else(|| canonical.and_then(|name| linked.get(name)))
+        .cloned()
+}
 
 /// The backend a name refers to, if this crate knows one.
 ///

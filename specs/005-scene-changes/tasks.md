@@ -16,8 +16,20 @@
 - [x] T7 `Affected` borrows rather than owns.
 - [x] T8 Reconcile `003`'s `data-model.md` with the `Scene` this adds
       to.
-- [ ] T9 A backend drives it. Blocked on `nsi-moonray` building against
-      the current API at all; see `plan.md`.
+- [x] T9 **A backend drives it.** `nsi-moonray` builds against the
+      current API, and its interactive path is this crate's:
+      `session.rs` calls `Scene::affected(&changes)` and hands the
+      result to its own `apply_affected`, which narrows an edit to the
+      objects it touched and falls back to a full re-apply for anything
+      it cannot narrow. `incremental::a_session_runs_a_synchronise_loop`
+      and `a_synchronise_is_measured_not_assumed` are where it is
+      exercised -- the second measures the cost rather than assuming
+      it, which is what turned up the BVH-only tier being unreachable
+      and produced the report in `upstream/`.
+
+      So the *unblocking* is what this task was waiting for, and it has
+      happened. What a second backend would add is independent
+      confirmation, and `nsi-mitsuba` is where that goes.
 - [ ] T10 Decide whether overlapping roots are worth collapsing, with a
       measurement rather than a guess. `contracts/changes.md` carries
       it as `Partial`.

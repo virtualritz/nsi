@@ -160,6 +160,15 @@ pub(crate) fn renderer(
             .unwrap_or_else(|| backend::KNOWN[0].name.to_string()),
     };
 
+    // **A linked backend answers first.** Registering one is a
+    // deliberate act by the host, and it is also the only route on which
+    // an `outputdriver`'s Rust closures are sound: a loaded library is a
+    // separately compiled artefact, so a `Box<dyn Fn…>` built here
+    // carries a vtable that means nothing inside it. See `backend`.
+    if let Some(api) = backend::linked(&requested) {
+        return Ok(api);
+    }
+
     let key = backend::lookup(&requested)
         .map(|backend| backend.name.to_string())
         .unwrap_or_else(|| requested.clone());
