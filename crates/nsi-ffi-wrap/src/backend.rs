@@ -6,9 +6,8 @@
 //!
 //! ```no_run
 //! # use nsi_ffi_wrap as nsi;
-//! let context = nsi::Context::new(Some(&[
-//!     nsi::string!("renderer", "moonray"),
-//! ]));
+//! let context =
+//!     nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]));
 //! ```
 //!
 //! # A name, or a library
@@ -391,10 +390,9 @@ mod tests {
             "{names:?}"
         );
         assert!(
-            names
-                .iter()
-                .any(|name| name.contains("mitsuba") && !name.contains("nsi_")
-                    && name != "mitsuba"),
+            names.iter().any(|name| name.contains("mitsuba")
+                && !name.contains("nsi_")
+                && name != "mitsuba"),
             "{names:?}"
         );
     }
@@ -433,22 +431,20 @@ mod tests {
         let paths = lookup("moonray").expect("moonray is known").candidates();
 
         match previous {
-            Some(value) => unsafe {
-                std::env::set_var("NSI_MOONRAY", value)
-            },
+            Some(value) => unsafe { std::env::set_var("NSI_MOONRAY", value) },
             None => unsafe { std::env::remove_var("NSI_MOONRAY") },
         }
 
         assert!(
-            paths.contains(&PathBuf::from("/tmp/checkout/lib").join(
-                MOONRAY_LIBRARY
-            )),
+            paths.contains(
+                &PathBuf::from("/tmp/checkout/lib").join(MOONRAY_LIBRARY)
+            ),
             "the install-prefix shape: {paths:?}"
         );
         assert!(
-            paths.contains(&PathBuf::from("/tmp/checkout").join(
-                MOONRAY_LIBRARY
-            )),
+            paths.contains(
+                &PathBuf::from("/tmp/checkout").join(MOONRAY_LIBRARY)
+            ),
             "the library-directory shape: {paths:?}"
         );
     }

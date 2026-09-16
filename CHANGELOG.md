@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### `nsi-ffi-wrap` 0.10.2 -> 0.10.3
+
+- **Choose the renderer at runtime, by name.** ɴsɪ is an interface with
+  more than one implementation, so a context can say which it wants:
+  `Context::new(Some(&[nsi::string!("renderer", "moonray")]))`. A known
+  name is looked for where that renderer installs; anything else is
+  loaded as a library, so a renderer released after this crate works
+  without a release of it. Without the argument `$NSI_RENDERER`
+  decides, and without that, 3Delight -- so a caller that does not ask
+  sees no change.
+- New public `backend` module: `Backend`, `KNOWN`, `register`,
+  `lookup`, `known_names`, `library_candidates`, `from_environment`,
+  `LoadError`, and the `RENDERER`/`RENDERER_ENV` names. Additive; the
+  loader constructor that changed was never exported.
+
 ### `nsi-intermediate` 0.1.0 -- first release
 
 A renderer-agnostic intermediate representation for ɴsɪ: it records

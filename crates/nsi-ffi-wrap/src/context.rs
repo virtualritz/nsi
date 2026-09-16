@@ -291,9 +291,7 @@ impl<'a> Context<'a> {
     ///
     /// ```no_run
     /// # use nsi_ffi_wrap as nsi;
-    /// let ctx = nsi::Context::new(Some(&[
-    ///     nsi::string!("renderer", "moonray"),
-    /// ]));
+    /// let ctx = nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]));
     /// ```
     ///
     /// A name this crate knows is looked for where that renderer
@@ -377,8 +375,7 @@ impl<'a> Context<'a> {
             });
         }
 
-        let context =
-            api.NSIBegin(args_out.len() as _, args_out.as_ptr());
+        let context = api.NSIBegin(args_out.len() as _, args_out.as_ptr());
 
         if 0 == context {
             None

@@ -1,6 +1,5 @@
-use crate::{FfiApi, *};
+use crate::{FfiApi, backend, *};
 use dlopen2::wrapper::{Container, WrapperApi};
-use crate::backend;
 use std::{error::Error, ffi::c_char, os::raw::c_int, path::Path};
 
 pub type ApiImpl = DynamicApi;

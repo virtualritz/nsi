@@ -82,10 +82,7 @@ fn the_renderer_argument_is_not_forwarded() {
         let context = nsi::Context::new(Some(&[
             nsi::string!("renderer", "3delight"),
             nsi::string!("type", "apistream"),
-            nsi::string!(
-                "streamfilename",
-                stream.to_string_lossy().as_ref()
-            ),
+            nsi::string!("streamfilename", stream.to_string_lossy().as_ref()),
         ]))
         .expect("3delight is the default and should be present");
 
@@ -122,11 +119,11 @@ fn moonray_loads_when_it_is_installed() {
         return;
     };
 
-    let context = nsi::Context::new(Some(&[nsi::string!(
-        "renderer",
-        "moonray"
-    )]))
-    .unwrap_or_else(|| panic!("{} exists but did not load", path.display()));
+    let context =
+        nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]))
+            .unwrap_or_else(|| {
+                panic!("{} exists but did not load", path.display())
+            });
 
     // It is a real context, so it takes a real scene.
     context.create("a", nsi::TRANSFORM, None);
@@ -150,16 +147,12 @@ fn two_renderers_coexist() {
         return;
     }
 
-    let delight = nsi::Context::new(Some(&[nsi::string!(
-        "renderer",
-        "3delight"
-    )]))
-    .expect("3delight");
-    let moonray = nsi::Context::new(Some(&[nsi::string!(
-        "renderer",
-        "moonray"
-    )]))
-    .expect("moonray");
+    let delight =
+        nsi::Context::new(Some(&[nsi::string!("renderer", "3delight")]))
+            .expect("3delight");
+    let moonray =
+        nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]))
+            .expect("moonray");
 
     // Each takes its own scene, and neither disturbs the other.
     delight.create("in_delight", nsi::TRANSFORM, None);
