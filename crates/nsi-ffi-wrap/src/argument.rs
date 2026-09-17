@@ -569,6 +569,15 @@ unsafe impl Send for String {}
 unsafe impl Sync for String {}
 
 impl String {
+    /// A string argument.
+    ///
+    /// # Panics
+    ///
+    /// On an interior NUL byte, which C has no way to carry: a ɴsɪ
+    /// string reaches the renderer as a `const char *`, so the byte
+    /// would silently truncate the value instead. Every other byte is
+    /// passed through, including non-UTF-8 ones -- a file name on Linux
+    /// is not required to be UTF-8.
     pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
         let data = CString::new(data).unwrap();
         let pointer = data.as_ptr() as _;
@@ -698,6 +707,11 @@ unsafe impl Send for StringSlice {}
 unsafe impl Sync for StringSlice {}
 
 impl StringSlice {
+    /// An array of string arguments.
+    ///
+    /// # Panics
+    ///
+    /// On an interior NUL byte in any element; see [`String::new`].
     pub fn new<T: Into<Vec<u8>> + Copy>(data: &[T]) -> Self {
         let data = data
             .iter()

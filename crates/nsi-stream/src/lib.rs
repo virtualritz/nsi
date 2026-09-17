@@ -141,10 +141,8 @@ pub use transport::{
     negotiate,
 };
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use parking_lot::Mutex;
+use std::{sync::Arc, time::Duration};
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -270,7 +268,7 @@ impl StreamDriver {
     /// delivered by then, so a sink installed here sees publications and the
     /// close only.
     pub fn set_callbacks(&self, callbacks: CallbackTransport) {
-        *self.callbacks.lock().expect("callback mutex") = callbacks;
+        *self.callbacks.lock() = callbacks;
     }
 
     /// The decoded configuration.
@@ -293,7 +291,7 @@ impl StreamDriver {
 
     /// Current lifecycle state.
     pub fn state(&self) -> StreamState {
-        let state = *self.state.lock().expect("state mutex");
+        let state = *self.state.lock();
 
         if StreamState::Draining == state && self.ring.is_drained() {
             StreamState::Closed
@@ -357,7 +355,7 @@ impl StreamDriver {
     /// See [`PublicationRing::resize`].
     pub fn resize(&self, extent: Extent) -> Result<()> {
         self.ring.resize(extent)?;
-        *self.state.lock().expect("state mutex") = StreamState::Resizing;
+        *self.state.lock() = StreamState::Resizing;
 
         Ok(())
     }
@@ -368,32 +366,27 @@ impl StreamDriver {
     pub fn close(&self) -> u64 {
         let final_value = self.ring.close();
 
-        *self.state.lock().expect("state mutex") = StreamState::Draining;
+        *self.state.lock() = StreamState::Draining;
 
-        self.callbacks.lock().expect("callback mutex").notify_close(
-            &CloseNotice {
-                final_timeline_value: final_value,
-                published: self.ring.published(),
-                dropped: self.ring.dropped(),
-            },
-        );
+        self.callbacks.lock().notify_close(&CloseNotice {
+            final_timeline_value: final_value,
+            published: self.ring.published(),
+            dropped: self.ring.dropped(),
+        });
 
         final_value
     }
 
     fn after_publish(&self, published: Option<Publication>) {
         if let Some(publication) = published {
-            let mut state = self.state.lock().expect("state mutex");
+            let mut state = self.state.lock();
 
             if StreamState::Open == *state || StreamState::Resizing == *state {
                 *state = StreamState::Streaming;
             }
             drop(state);
 
-            self.callbacks
-                .lock()
-                .expect("callback mutex")
-                .notify_publish(&publication);
+            self.callbacks.lock().notify_publish(&publication);
         }
     }
 }

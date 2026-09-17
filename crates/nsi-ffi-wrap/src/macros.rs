@@ -561,6 +561,13 @@ macro_rules! define_nsi_renderer {
         // Global API instance
         $crate::lazy_static::lazy_static! {
             /// Global NSI API instance.
+            ///
+            /// # Panics
+            ///
+            /// On first use, when the renderer's library cannot be
+            /// loaded. It is a `lazy_static`, so the panic happens
+            /// wherever the API is first touched rather than at
+            /// startup.
             pub static ref NSI_API: ApiImpl =
                 ApiImpl::new().expect(concat!("Could not load ", $linux_lib));
         }

@@ -326,9 +326,6 @@ impl OwnedArgument {
         let elements = param.len() / array_length * array_length;
         let scalars = elements * components_per_element(type_tag);
 
-        // Unreachable while this is `pub(crate)`: the only implementor
-        // reaching here is `nsi_ffi_wrap::Arg`, whose `as_c_param`
-        // returns `Some` unconditionally.
         // SAFETY: unreachable while this is `pub(crate)` -- the only
         // implementor that reaches here is `nsi_ffi_wrap::Arg`, whose
         // `as_c_param` returns `Some` unconditionally.

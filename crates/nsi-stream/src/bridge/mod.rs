@@ -108,8 +108,9 @@ use crate::{
     transport::{StaticProbe, Transport},
 };
 use nsi_ffi_wrap::output;
+use parking_lot::Mutex;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
@@ -245,7 +246,7 @@ impl DelightBridge {
     /// [`DelightBridge::error`] -- it means the `screen` node and the bridge
     /// disagree.
     pub fn open_extent(&self) -> Option<Extent> {
-        *self.shared.open_extent.lock().expect("open-extent mutex")
+        *self.shared.open_extent.lock()
     }
 
     /// The current scene generation: the number of applied `synchronize`
@@ -274,7 +275,7 @@ impl DelightBridge {
     /// [`output::Error`] code, so this is where the typed reason lives.
     /// Check it after every render.
     pub fn error(&self) -> Option<Error> {
-        self.shared.error.lock().expect("error mutex").clone()
+        self.shared.error.lock().clone()
     }
 
     /// Take the lease the finish callback latched on the final publication.
@@ -290,11 +291,7 @@ impl DelightBridge {
     /// fully leased at finish time, or when the lease was already taken. A
     /// lease still parked here is released when the bridge is dropped.
     pub fn final_image(&self) -> Option<AcquireToken> {
-        self.shared
-            .final_image
-            .lock()
-            .expect("final-image mutex")
-            .take()
+        self.shared.final_image.lock().take()
     }
 
     // ── Driver Side ────────────────────────────────────────────────────────
@@ -436,7 +433,7 @@ impl Shared {
     /// Record `error` (the first one wins) and answer the renderer with
     /// `status`.
     fn fail(&self, error: Error, status: output::Error) -> output::Error {
-        let mut recorded = self.error.lock().expect("error mutex");
+        let mut recorded = self.error.lock();
 
         if recorded.is_none() {
             *recorded = Some(error);
@@ -450,7 +447,6 @@ impl Shared {
     fn poisoned(&self) -> Option<output::Error> {
         self.error
             .lock()
-            .expect("error mutex")
             .is_some()
             .then_some(output::Error::BadParameters)
     }
@@ -464,7 +460,7 @@ impl Shared {
         format: &output::PixelFormat,
     ) -> output::Error {
         let reported = Extent::new(width as u32, height as u32);
-        *self.open_extent.lock().expect("open-extent mutex") = Some(reported);
+        *self.open_extent.lock() = Some(reported);
 
         if reported != self.extent {
             return self.fail(
@@ -636,8 +632,7 @@ impl Shared {
                     // Close retires the pending publication, so latch it
                     // first; see `DelightBridge::final_image`.
                     if let Some(token) = self.driver.ring().acquire() {
-                        *self.final_image.lock().expect("final-image mutex") =
-                            Some(token);
+                        *self.final_image.lock() = Some(token);
                     }
 
                     output::Error::None

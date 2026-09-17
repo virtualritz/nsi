@@ -399,8 +399,8 @@ impl PixelFormat {
 
     fn split_into_layer_name_and_channel_id(name: &str) -> (&str, &str) {
         let mut split = name.rsplitn(3, '.');
-        // We know we never get an empty string so we can safely unwrap
-        // here.
+        // SAFETY: `rsplitn` always yields at least one item, even for
+        // an empty input, so the first `next` cannot be `None`.
         let mut postfix = split.next().unwrap();
         if "000" == postfix {
             postfix = "s";

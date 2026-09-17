@@ -49,8 +49,9 @@ use crate::{
     layer::{Bucket, Extent, Layer},
     timeline::CpuTimeline,
 };
+use parking_lot::{Mutex, MutexGuard};
 use std::sync::{
-    Arc, Mutex, MutexGuard,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -652,8 +653,7 @@ impl PublicationRing {
             Err(Error::invalid_write(format!("degenerate extent {extent}")))?;
         }
 
-        let mut accumulation =
-            self.accumulation.lock().expect("accumulation mutex");
+        let mut accumulation = self.accumulation.lock();
         let mut state = self.locked();
 
         if state.closed {
@@ -763,7 +763,7 @@ impl PublicationRing {
     // ── Internals ──────────────────────────────────────────────────────────
 
     fn locked(&self) -> MutexGuard<'_, RingState> {
-        self.state.lock().expect("ring state mutex")
+        self.state.lock()
     }
 
     /// Return an abandoned (never published) slot to the ring.
@@ -784,8 +784,7 @@ impl PublicationRing {
         // Taking the accumulation lock first is what "after in-flight
         // buckets complete" means: no bucket write can be half-applied
         // while the copy runs.
-        let accumulation =
-            self.accumulation.lock().expect("accumulation mutex");
+        let accumulation = self.accumulation.lock();
 
         let Some(mut guard) = self.begin_write()? else {
             return Ok(None);
@@ -840,8 +839,7 @@ impl PublicationRing {
             )))?;
         }
 
-        let mut accumulation =
-            self.accumulation.lock().expect("accumulation mutex");
+        let mut accumulation = self.accumulation.lock();
         let extent = accumulation.extent;
 
         if !bucket.fits(extent) {

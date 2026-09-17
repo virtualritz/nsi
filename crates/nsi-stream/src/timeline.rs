@@ -15,11 +15,9 @@
 //! (`publication-lifecycle.md`, failure modes).
 
 use crate::{Error, Result};
+use parking_lot::{Condvar, Mutex};
 use std::{
-    sync::{
-        Condvar, Mutex,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
 
@@ -49,7 +47,7 @@ impl CpuTimeline {
     /// Lower or equal values are ignored -- the timeline never moves
     /// backwards. Every waiter is woken.
     pub fn signal(&self, value: u64) {
-        let mut current = self.guarded.lock().expect("timeline mutex");
+        let mut current = self.guarded.lock();
 
         if value > *current {
             *current = value;
@@ -68,14 +66,11 @@ impl CpuTimeline {
     /// first.
     pub fn wait(&self, value: u64, timeout: Option<Duration>) -> Result<()> {
         let deadline = timeout.map(|timeout| Instant::now() + timeout);
-        let mut current = self.guarded.lock().expect("timeline mutex");
+        let mut current = self.guarded.lock();
 
         while *current < value {
             match deadline {
-                None => {
-                    current =
-                        self.signaled.wait(current).expect("timeline condvar");
-                }
+                None => self.signaled.wait(&mut current),
                 Some(deadline) => {
                     let remaining = deadline
                         .checked_duration_since(Instant::now())
@@ -85,11 +80,8 @@ impl CpuTimeline {
                         Err(Error::WaitTimeout { serial: value })?;
                     }
 
-                    let (guard, result) = self
-                        .signaled
-                        .wait_timeout(current, remaining)
-                        .expect("timeline condvar");
-                    current = guard;
+                    let result =
+                        self.signaled.wait_for(&mut current, remaining);
 
                     if result.timed_out() && *current < value {
                         Err(Error::WaitTimeout { serial: value })?;

@@ -19,6 +19,7 @@ nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = [
     "output",
 ], optional = true }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
+parking_lot = "0.12"
 rustix = { version = "1", optional = true, features = [
     "event",
     "fs",

@@ -90,6 +90,9 @@ mod inner {
         /// Get the token as a string slice.
         #[inline(always)]
         pub fn as_str(&self) -> &str {
+            // SAFETY: the only constructor takes a `&str`, which is
+            // UTF-8 by definition, and a `CString` copies its bytes
+            // unchanged.
             self.0.to_str().expect("Token contains invalid UTF-8")
         }
 

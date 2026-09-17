@@ -21,6 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(target_os = "linux")]
         let lib = "https://www.dropbox.com/s/wfw6w6p41lqd8ko/lib3delight.so";
 
+        // SAFETY: the URLs above are literals ending in a file name,
+        // so `file_name` is always `Some`.
         let lib_path = lib_path.join(Path::new(lib).file_name().unwrap());
 
         eprintln!("lib:     {}", lib_path.display());
@@ -47,6 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })();
         }
 
+        // SAFETY: `lib_path` was built by joining a file name onto a
+        // directory, so it has a parent.
         lib_path.parent().unwrap().to_path_buf()
     };
 
