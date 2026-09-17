@@ -635,13 +635,21 @@ impl Reader<'_> {
     }
 
     fn u32(&mut self) -> Result<u32> {
-        self.take(4)
-            .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("4 bytes")))
+        self.take(4).map(|bytes| {
+            // SAFETY: `take` either yields exactly the 4 bytes asked
+            // for or returns an error, so the slice is the array's
+            // length by construction.
+            u32::from_le_bytes(bytes.try_into().expect("4 bytes"))
+        })
     }
 
     fn u64(&mut self) -> Result<u64> {
-        self.take(8)
-            .map(|bytes| u64::from_le_bytes(bytes.try_into().expect("8 bytes")))
+        self.take(8).map(|bytes| {
+            // SAFETY: `take` either yields exactly the 8 bytes asked
+            // for or returns an error, so the slice is the array's
+            // length by construction.
+            u64::from_le_bytes(bytes.try_into().expect("8 bytes"))
+        })
     }
 
     fn string(&mut self) -> Result<String> {

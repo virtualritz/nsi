@@ -544,6 +544,9 @@ impl PublicationRing {
     ) -> Result<Option<Publication>> {
         let index = guard.slot;
         let epoch = guard.epoch;
+        // SAFETY: a guard is constructed with its storage and this is
+        // the only place that takes it, on the path that consumes the
+        // guard.
         let storage = guard.storage.take().expect("guard holds its storage");
 
         let publication = {
@@ -850,6 +853,9 @@ impl PublicationRing {
         }
 
         let row_bytes = description.row_bytes(extent);
+        // SAFETY: the plane vector is rebuilt from the layer list on
+        // every resize, so it has one entry per layer and `layer` was
+        // validated against the same list.
         let plane = accumulation
             .planes
             .get_mut(layer)

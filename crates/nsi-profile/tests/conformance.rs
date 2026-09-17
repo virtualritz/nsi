@@ -564,3 +564,19 @@ fn edit_classification() {
         Err(nsi_profile::Error::ParameterTypeMismatch { .. })
     ));
 }
+
+/// Every node in the table declares at least one output.
+///
+/// `NodeDef::sole_output` reads the first one without checking, on the
+/// grounds that the table is a `const` and every entry has one. That is
+/// only true while this passes.
+#[test]
+fn every_node_declares_an_output() {
+    let empty: Vec<&str> = nsi_profile::v1::V1_NODES
+        .iter()
+        .filter(|node| node.outputs.is_empty())
+        .map(|node| node.name)
+        .collect();
+
+    assert!(empty.is_empty(), "nodes with no output: {empty:?}");
+}

@@ -281,6 +281,9 @@ impl NodeDef {
     /// `nodedef_completeness` contract row enforces it.
     #[must_use]
     pub fn sole_output(&self) -> &'static Port {
+        // SAFETY: the node table is a `const` in `v1.rs` and every
+        // entry in it declares at least one output; a conformance test
+        // asserts that over the whole table.
         self.outputs
             .first()
             .expect("every profile node declares at least one output")

@@ -311,6 +311,9 @@ fn png_to_jupyter(width: usize, height: usize, layer: &Layer, data: &[u8]) {
         _ => unreachable!(),
     });
     png_encoder.set_depth(png::BitDepth::Sixteen);
+    // SAFETY: the sink is a `Vec`, so neither call can fail for I/O
+    // reasons, and the header matches the data written right after it:
+    // both come from the same `PixelFormat` a few lines above.
     png_encoder
         .write_header()
         .unwrap()

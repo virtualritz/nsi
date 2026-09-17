@@ -10,15 +10,20 @@ Measured across the workspace on 2026-09-07, after `nsi-intermediate`,
 what a scan found, not an estimate; re-run the scans before working on a
 row, since they move.
 
-- **`SAFETY` comments on library `unwrap`/`expect`: about 60 sites
-  left**, by crate: `nsi-stream` 31, `nsi-display` 16, `nsi-profile` 8,
-  plus singles in `nsi-toolbelt`, `nsi-jupyter` and `nsi-sys`'s
-  `build.rs`. Each needs the invariant read out of the surrounding code
-  and stated -- a *wrong* `SAFETY` comment is worse than none, so this
-  is a per-crate pass, not a sweep. `nsi-ffi-wrap`'s own remaining ones
-  sit in test modules, which are exempt.
-  Scan: group `\.unwrap\(\)|\.expect\(` hits in `src/` and report any
-  without `SAFETY` in the four lines above.
+- **`SAFETY` comments on library `unwrap`/`expect`: done, bar a
+  decision.** The scan that found about sixty sites now finds six, and
+  each of those is a *reachable* panic with a `# Panics` section rather
+  than an invariant-guaranteed unwrap, so a `SAFETY` comment would be
+  the wrong annotation: `Token::new`, `Handle::new`, `String::new` and
+  `StringSlice::new` panic on an interior NUL, which C cannot carry,
+  and `NSI_API` panics when the renderer's library will not load.
+  Turning those into `Result` is the blueprint's preference and an API
+  change on a published crate, so it needs approval first.
+
+  Most of the backlog was removed rather than commented:
+  `nsi-stream` moved to `parking_lot`, and twenty-two of the sites
+  existed only to handle lock poisoning, which `parking_lot` does not
+  have.
 
 - **Comment blocks not ending in punctuation: 302**, concentrated in
   `nsi-ffi-wrap` (`tests/safety.rs` 40, `tests/materials.rs` 24,

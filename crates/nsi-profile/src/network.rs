@@ -244,6 +244,9 @@ impl Network {
                     order.push(index);
                 }
                 None => {
+                    // SAFETY: this arm runs only when the emitted
+                    // count is short of the node count, so at least one
+                    // entry is still `false`.
                     let blocked = emitted
                         .iter()
                         .position(|done| !done)

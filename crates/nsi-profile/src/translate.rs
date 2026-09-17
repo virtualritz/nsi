@@ -162,6 +162,9 @@ pub fn translate_with_version(
                 .map(|&index| {
                     let node = &network.nodes()[index];
 
+                    // SAFETY: translation runs on a validated
+                    // network, and validation already resolved every
+                    // node's scheme reference against this profile.
                     parse_scheme(&node.shaderfilename)
                         .ok()
                         .and_then(|reference| profile.node(reference.node))
@@ -241,6 +244,10 @@ fn texture_bindings(
                         .any(|texture| texture.filename == filename)
                     {
                         textures.push(TextureBinding {
+                            // SAFETY: the index is the length of a
+                            // `Vec` that grows one texture per node of
+                            // the network, so it cannot reach `u32::MAX`
+                            // before memory runs out.
                             index: u32::try_from(textures.len())
                                 .expect("texture count fits in u32"),
                             filename,
@@ -475,6 +482,10 @@ impl Assembly<'_> {
                                     port.name,
                                     &value,
                                 )
+                                // SAFETY: the layout was built from
+                                // this node's own ports a few lines
+                                // above, so the port being written is
+                                // one the layout declares.
                                 .expect(
                                     "layout and port agree by construction",
                                 );
@@ -573,6 +584,9 @@ impl Assembly<'_> {
                 .iter()
                 .position(|allowed| *allowed == text)
                 .map_or(0, |position| {
+                    // SAFETY: the position indexes `port.allowed`, a
+                    // `const` list of enumerants with a handful of
+                    // entries.
                     i64::try_from(position).expect("enumerant index fits")
                 })
         }

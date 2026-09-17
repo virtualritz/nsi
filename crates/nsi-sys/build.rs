@@ -54,6 +54,7 @@ impl ParseCallbacks for CleanNsiNamingCallbacks {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=include/wrapper.h");
 
+    // SAFETY: cargo sets `CARGO_MANIFEST_DIR` for every build script.
     let include_path =
         PathBuf::from(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("include");
 
@@ -86,13 +87,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         binding_builder = binding_builder.allowlist_function("NSI.*");
     }
 
+    // A build script reports a real failure by stopping the build:
+    // without bindings there is no crate, and libclang missing is the
+    // usual cause.
     let bindings = binding_builder
         .generate()
         .expect("Unable to generate bindings");
 
     // Write the bindings to the $OUT_DIR/bindings.rs file.
+    // SAFETY: cargo sets `OUT_DIR` for every build script.
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
+    // As above: an unwritable `OUT_DIR` is a broken build, not a case
+    // to recover from.
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Could not write bindings.");
