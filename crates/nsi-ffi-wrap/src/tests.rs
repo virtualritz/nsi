@@ -84,7 +84,7 @@ fn reference() {
         "driver1",
         &[
             nsi::string!("drivername", "idisplay"),
-            // Pass a pointer to foo to NSI
+            // Pass a pointer to foo to NSI.
             nsi::reference!("_foo", &foo),
         ],
     );
@@ -244,4 +244,4 @@ fn live_edit() {
     c.render_control(nsi::Action::Wait, None);
 }
 
-// FIXME: port rest of live_edit example from Python
+// FIXME: port rest of live_edit example from Python.

@@ -852,7 +852,7 @@ impl<'a> Context<'a> {
     }
 }
 
-// Action is re-exported from nsi-trait via lib.rs
+// Action is re-exported from nsi-trait via lib.rs.
 
 /// The status of a *interactive* render session.
 #[repr(i32)]
@@ -1078,7 +1078,7 @@ pub(crate) extern "C" fn error_handler(
                     Ok(s) => s,
                     Err(_) => {
                         // If the string is not valid UTF-8, use lossy conversion
-                        // This prevents crashes while still conveying the message
+                        // This prevents crashes while still conveying the message.
                         &c_str.to_string_lossy()
                     }
                 }

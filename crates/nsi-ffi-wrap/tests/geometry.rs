@@ -15,11 +15,11 @@ use test_utils::assert_render_test;
 #[test]
 fn sphere() {
     assert_render_test("sphere", |ctx| {
-        // Add a simple sphere
+        // Add a simple sphere.
         common::add_test_sphere(ctx, "sphere1", &[0.0, 0.0, 0.0], 1.5);
         common::add_diffuse_material(ctx, "sphere1", &[0.8, 0.3, 0.3], 0.2);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[3.0, 3.0, 3.0], 2.0, 50.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.2], 0.5);
     });
@@ -28,7 +28,7 @@ fn sphere() {
 #[test]
 fn multiple_spheres() {
     assert_render_test("multiple_spheres", |ctx| {
-        // Three spheres with different materials
+        // Three spheres with different materials.
         common::add_test_sphere(ctx, "sphere1", &[-2.0, 0.0, 0.0], 0.8);
         common::add_diffuse_material(ctx, "sphere1", &[0.8, 0.2, 0.2], 0.1);
 
@@ -38,10 +38,10 @@ fn multiple_spheres() {
         common::add_test_sphere(ctx, "sphere3", &[2.0, 0.0, 0.0], 0.8);
         common::add_diffuse_material(ctx, "sphere3", &[0.2, 0.2, 0.8], 0.5);
 
-        // Add ground plane
+        // Add ground plane.
         common::add_ground_plane(ctx, -1.0);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[0.0, 4.0, 2.0], 3.0, 100.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.15], 0.3);
     });
@@ -50,7 +50,7 @@ fn multiple_spheres() {
 #[test]
 fn cube() {
     assert_render_test("cube", |ctx| {
-        // Create a cube
+        // Create a cube.
         ctx.create("cube", nsi::MESH, None);
         ctx.connect("cube", None, nsi::ROOT, "objects", None);
 
@@ -81,7 +81,7 @@ fn cube() {
 
         common::add_diffuse_material(ctx, "cube", &[0.6, 0.6, 0.2], 0.3);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[3.0, 3.0, 3.0], 2.0, 80.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.15], 0.4);
     });
@@ -90,7 +90,7 @@ fn cube() {
 #[test]
 fn dodecahedron() {
     assert_render_test("dodecahedron", |ctx| {
-        // Create a dodecahedron
+        // Create a dodecahedron.
         let face_index: [i32; 60] = [
             0, 16, 2, 10, 8, 0, 8, 4, 14, 12, 16, 17, 1, 12, 0, 1, 9, 11, 3,
             17, 1, 12, 14, 5, 9, 2, 13, 15, 6, 10, 13, 3, 17, 16, 2, 3, 11, 7,
@@ -125,7 +125,7 @@ fn dodecahedron() {
 
         common::add_metal_material(ctx, "dodecahedron", &[0.9, 0.7, 0.3], 0.1);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[3.0, 3.0, 3.0], 2.0, 80.0);
         common::add_constant_environment(ctx, &[0.05, 0.05, 0.1], 0.3);
     });
@@ -134,17 +134,17 @@ fn dodecahedron() {
 #[test]
 fn plane() {
     assert_render_test("plane", |ctx| {
-        // Add a ground plane at origin
+        // Add a ground plane at origin.
         common::add_ground_plane(ctx, 0.0);
 
-        // Add a few spheres on the plane
+        // Add a few spheres on the plane.
         common::add_test_sphere(ctx, "sphere1", &[-1.0, 0.8, 0.0], 0.8);
         common::add_diffuse_material(ctx, "sphere1", &[0.8, 0.3, 0.3], 0.2);
 
         common::add_test_sphere(ctx, "sphere2", &[1.0, 0.8, 0.0], 0.8);
         common::add_metal_material(ctx, "sphere2", &[0.8, 0.8, 0.8], 0.02);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[0.0, 4.0, 2.0], 3.0, 100.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.15], 0.2);
     });
@@ -153,11 +153,11 @@ fn plane() {
 #[test]
 fn subdivision_surface() {
     assert_render_test("subdivision_surface", |ctx| {
-        // Create a simple control mesh
+        // Create a simple control mesh.
         ctx.create("subdiv_mesh", nsi::MESH, None);
         ctx.connect("subdiv_mesh", None, nsi::ROOT, "objects", None);
 
-        // Pyramid-like control mesh
+        // Pyramid-like control mesh.
         let positions = [
             -1., 0., -1., 1., 0., -1., 1., 0., 1., -1., 0., 1., 0., 2., 0.,
         ];
@@ -185,7 +185,7 @@ fn subdivision_surface() {
 
         common::add_diffuse_material(ctx, "subdiv_mesh", &[0.3, 0.6, 0.8], 0.2);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[2.0, 4.0, 3.0], 2.0, 80.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.15], 0.4);
     });

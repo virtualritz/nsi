@@ -30,7 +30,7 @@
 /// This generates a renderer that:
 /// - Loads `lib3delight.so` on Linux, `lib3delight.dylib` on macOS, `3Delight.dll` on Windows
 /// - Falls back to searching the `$DELIGHT/lib` (or `$DELIGHT/bin` on Windows) directory
-/// - Uses static linking when the `link_lib3delight` feature is enabled
+/// - Uses static linking when the `link_lib3delight` feature is enabled.
 #[macro_export]
 macro_rules! define_nsi_renderer {
     (
@@ -43,7 +43,7 @@ macro_rules! define_nsi_renderer {
         env_var: $env_var:literal,
         link_feature: $link_feature:literal $(,)?
     ) => {
-        // Re-export common types from nsi-ffi-wrap
+        // Re-export common types from nsi-ffi-wrap.
         pub use $crate::{
             Action, FfiApi, NodeType, Nsi, argument::*, context::*, node::*,
         };
@@ -51,7 +51,7 @@ macro_rules! define_nsi_renderer {
         #[cfg(feature = "output")]
         pub use $crate::output;
 
-        // Platform-specific library paths
+        // Platform-specific library paths.
         #[cfg(target_os = "linux")]
         static LIB_NAME: &str = $linux_lib;
 
@@ -61,7 +61,7 @@ macro_rules! define_nsi_renderer {
         #[cfg(target_os = "windows")]
         static LIB_NAME: &str = $windows_lib;
 
-        // Default installation paths
+        // Default installation paths.
         #[cfg(target_os = "linux")]
         static DEFAULT_LIB_PATH: &str =
             concat!("/usr/local/3delight/lib/", $linux_lib);
@@ -74,7 +74,7 @@ macro_rules! define_nsi_renderer {
         static DEFAULT_LIB_PATH: &str =
             concat!("C:/%ProgramFiles%/3Delight/bin/", $windows_lib);
 
-        // Environment variable for custom installation path
+        // Environment variable for custom installation path.
         static ENV_VAR: &str = $env_var;
 
         /// Dynamic API implementation using dlopen2.
@@ -549,7 +549,7 @@ macro_rules! define_nsi_renderer {
             pub type ApiImpl = LinkedApi;
         }
 
-        // Select the appropriate API module
+        // Select the appropriate API module.
         #[cfg(not(feature = $link_feature))]
         use dynamic as api_impl;
         #[cfg(feature = $link_feature)]
@@ -558,7 +558,7 @@ macro_rules! define_nsi_renderer {
         /// The API implementation type for this renderer.
         pub type ApiImpl = api_impl::ApiImpl;
 
-        // Global API instance
+        // Global API instance.
         $crate::lazy_static::lazy_static! {
             /// Global NSI API instance.
             ///

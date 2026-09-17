@@ -307,7 +307,7 @@
 //! than quietly ignored. Choosing at runtime needs the default,
 //! dynamic style.
 
-// Re-export everything from nsi_ffi_wrap, which includes Action from nsi-trait crate
+// Re-export everything from nsi_ffi_wrap, which includes Action from nsi-trait crate.
 pub use nsi_ffi_wrap::*;
 
 #[cfg(feature = "delight")]

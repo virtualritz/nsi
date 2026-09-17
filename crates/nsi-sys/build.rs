@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("include: {}", include_path.display());
 
-    // Build bindings
+    // Build bindings.
     let mut binding_builder = bindgen::Builder::default()
         .header("include/wrapper.h")
         .allowlist_type("NSI.*")

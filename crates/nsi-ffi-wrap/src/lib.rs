@@ -6,7 +6,7 @@
 use nsi_sys::*;
 use std::{ffi::c_char, os::raw::c_int};
 
-// Re-export dependencies needed by the macro
+// Re-export dependencies needed by the macro.
 #[doc(hidden)]
 /// The crate's hash map, hashed by `ahash`.
 ///
@@ -251,7 +251,7 @@ pub mod macros;
 /// Helper function to register output drivers for an API implementation.
 #[cfg(feature = "output")]
 pub fn register_output_drivers<A: FfiApi>(api: &A) {
-    // Register typed drivers for each pixel type
+    // Register typed drivers for each pixel type.
     api.DspyRegisterDriver(
         b"ferris_f32\0" as *const u8 as _,
         Some(output::image_open::<f32>),

@@ -31,11 +31,11 @@ fn sphere_generation() {
     unsafe { std::env::set_var("RUST_TEST_UPDATE", "1") };
 
     test_utils::assert_render_test("sphere", |ctx| {
-        // Add a simple sphere
+        // Add a simple sphere.
         common::add_test_sphere(ctx, "sphere1", &[0.0, 0.0, 0.0], 1.5);
         common::add_diffuse_material(ctx, "sphere1", &[0.8, 0.3, 0.3], 0.2);
 
-        // Add lighting
+        // Add lighting.
         common::add_area_light(ctx, "light1", &[3.0, 3.0, 3.0], 2.0, 50.0);
         common::add_constant_environment(ctx, &[0.1, 0.1, 0.2], 0.5);
     });

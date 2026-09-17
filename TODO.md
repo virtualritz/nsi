@@ -25,11 +25,14 @@ row, since they move.
   existed only to handle lock poisoning, which `parking_lot` does not
   have.
 
-- **Comment blocks not ending in punctuation: 302**, concentrated in
-  `nsi-ffi-wrap` (`tests/safety.rs` 40, `tests/materials.rs` 24,
-  `src/output/mod.rs` 21, `src/c_api.rs` 18) and `nsi-stream`
-  (`ring.rs` 11, `bridge/mod.rs` 10). Check the *last* line of each
-  block, not every line -- a sentence continued across lines is fine.
+- **Comment blocks not ending in punctuation: done.** 178 blocks
+  fixed across 23 files; the scan now finds none. Two classes of false
+  positive had to be excluded first, and the second was caught only
+  because the diff was read: section banners (`// ─── Publication ───`)
+  are not sentences, and **intra-doc link definitions**
+  (``[`Nsi`]: nsi_trait::Nsi``) break outright when a period lands
+  inside the target. A blanket pass over "comments not ending in a
+  period" silently breaks documentation links.
 
 - **Files over the 1,000-line target**, none over the 2,000 soft limit:
   `nsi-ffi-wrap/src/output/mod.rs` 1434, `nsi-ffi-wrap/src/argument.rs`

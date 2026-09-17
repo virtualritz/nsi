@@ -54,7 +54,7 @@ use std::ffi::{CStr, c_char, c_int};
 /// The caller must ensure:
 /// - `params` is valid for `nparams` elements (or null if nparams is 0)
 /// - The parameter data pointers are valid for the duration of the call
-/// - String data is valid UTF-8 or at least valid C strings
+/// - String data is valid UTF-8 or at least valid C strings.
 pub unsafe fn marshal_params_to_args<'a>(
     nparams: c_int,
     params: *const NSIParam,
@@ -63,13 +63,13 @@ pub unsafe fn marshal_params_to_args<'a>(
         return None;
     }
 
-    // SAFETY: Caller guarantees params is valid for nparams elements
+    // SAFETY: Caller guarantees params is valid for nparams elements.
     let params_slice =
         unsafe { std::slice::from_raw_parts(params, nparams as usize) };
     let mut args = Vec::with_capacity(nparams as usize);
 
     for param in params_slice {
-        // SAFETY: Each param in the slice is valid per caller's guarantee
+        // SAFETY: Each param in the slice is valid per caller's guarantee.
         if let Some(arg) = unsafe { marshal_single_param(param) } {
             args.push(arg);
         }
@@ -88,39 +88,39 @@ unsafe fn marshal_single_param<'a>(param: &NSIParam) -> Option<Arg<'a, 'a>> {
         return None;
     }
 
-    // SAFETY: Caller guarantees param.name is a valid C string
+    // SAFETY: Caller guarantees param.name is a valid C string.
     let name = unsafe { CStr::from_ptr(param.name) }.to_str().ok()?;
 
     // Convert based on type
-    // This is a simplified version - full implementation would handle all types
+    // This is a simplified version - full implementation would handle all types.
     let arg_data = match param.type_ {
         t if t == nsi_sys::NSIType::F32 as i32 => {
-            // SAFETY: Caller guarantees param.data points to valid f32
+            // SAFETY: Caller guarantees param.data points to valid f32.
             let value = unsafe { *(param.data as *const f32) };
             ArgData::from(F32::new(value))
         }
         t if t == nsi_sys::NSIType::F64 as i32 => {
-            // SAFETY: Caller guarantees param.data points to valid f64
+            // SAFETY: Caller guarantees param.data points to valid f64.
             let value = unsafe { *(param.data as *const f64) };
             ArgData::from(F64::new(value))
         }
         t if t == nsi_sys::NSIType::I32 as i32 => {
-            // SAFETY: Caller guarantees param.data points to valid i32
+            // SAFETY: Caller guarantees param.data points to valid i32.
             let value = unsafe { *(param.data as *const i32) };
             ArgData::from(I32::new(value))
         }
         t if t == nsi_sys::NSIType::I64 as i32 => {
-            // SAFETY: Caller guarantees param.data points to valid i64
+            // SAFETY: Caller guarantees param.data points to valid i64.
             let value = unsafe { *(param.data as *const i64) };
             ArgData::from(I64::new(value))
         }
         t if t == nsi_sys::NSIType::String as i32 => {
-            // SAFETY: Caller guarantees param.data points to valid string pointer
+            // SAFETY: Caller guarantees param.data points to valid string pointer.
             let ptr = unsafe { *(param.data as *const *const c_char) };
             if ptr.is_null() {
                 return None;
             }
-            // SAFETY: Caller guarantees the string pointer is valid
+            // SAFETY: Caller guarantees the string pointer is valid.
             let s = unsafe { CStr::from_ptr(ptr) }.to_str().ok()?;
             ArgData::from(NsiString::new(s))
         }
@@ -140,7 +140,7 @@ pub unsafe fn parse_node_type(type_str: *const c_char) -> Option<NodeType> {
     if type_str.is_null() {
         return None;
     }
-    // SAFETY: Caller guarantees type_str is a valid C string
+    // SAFETY: Caller guarantees type_str is a valid C string.
     let s = unsafe { CStr::from_ptr(type_str) }.to_str().ok()?;
     NodeType::from_name(s)
 }
@@ -154,7 +154,7 @@ pub unsafe fn parse_action(action_str: *const c_char) -> Option<Action> {
     if action_str.is_null() {
         return None;
     }
-    // SAFETY: Caller guarantees action_str is a valid C string
+    // SAFETY: Caller guarantees action_str is a valid C string.
     let s = unsafe { CStr::from_ptr(action_str) }.to_str().ok()?;
     Action::from_name(s)
 }
@@ -174,7 +174,7 @@ pub unsafe fn extract_action_from_params(
         return None;
     }
 
-    // SAFETY: Caller guarantees params is valid for nparams elements
+    // SAFETY: Caller guarantees params is valid for nparams elements.
     let params_slice =
         unsafe { std::slice::from_raw_parts(params, nparams as usize) };
 
@@ -183,17 +183,17 @@ pub unsafe fn extract_action_from_params(
             continue;
         }
 
-        // SAFETY: We checked param.name is not null
+        // SAFETY: We checked param.name is not null.
         let name = match unsafe { CStr::from_ptr(param.name) }.to_str() {
             Ok(s) => s,
             Err(_) => continue,
         };
 
         if name == "action" && param.type_ == nsi_sys::NSIType::String as i32 {
-            // SAFETY: Caller guarantees param.data is valid for String type
+            // SAFETY: Caller guarantees param.data is valid for String type.
             let ptr = unsafe { *(param.data as *const *const c_char) };
             if !ptr.is_null() {
-                // SAFETY: We checked ptr is not null
+                // SAFETY: We checked ptr is not null.
                 if let Ok(s) = unsafe { CStr::from_ptr(ptr) }.to_str() {
                     return Action::from_name(s);
                 }
@@ -213,7 +213,7 @@ pub unsafe fn handle_to_str<'a>(handle: *const c_char) -> Option<&'a str> {
     if handle.is_null() {
         return None;
     }
-    // SAFETY: Caller guarantees handle is a valid C string
+    // SAFETY: Caller guarantees handle is a valid C string.
     unsafe { CStr::from_ptr(handle) }.to_str().ok()
 }
 

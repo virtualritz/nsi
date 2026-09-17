@@ -1,4 +1,4 @@
-//! Test to verify the callback memory management fix
+//! Test to verify the callback memory management fix.
 
 // The renderer's pixel-streaming API lives behind `output`, so this
 // file is empty without it. Without the gate the whole test target
@@ -22,7 +22,7 @@ fn simple_callback() {
         let ctx =
             nsi::Context::new(None).expect("Could not create NSI context");
 
-        // Minimal scene - need camera for valid output
+        // Minimal scene - need camera for valid output.
         ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
         ctx.connect("camera", None, nsi::ROOT, "objects", None);
 
@@ -44,7 +44,7 @@ fn simple_callback() {
         );
         ctx.connect("beauty", None, "screen", "outputlayers", None);
 
-        // Test finish callback - note: FnFinish no longer receives pixel data
+        // Test finish callback - note: FnFinish no longer receives pixel data.
         let finish = nsi::output::FinishCallback::new(
             move |_name: String,
                   _width: usize,
@@ -73,7 +73,7 @@ fn simple_callback() {
         println!("Render complete");
     }
 
-    // Check callback was called
+    // Check callback was called.
     let count = *counter.lock().unwrap();
     println!("Callback was called {} times", count);
     assert!(count > 0, "Callback was not called");

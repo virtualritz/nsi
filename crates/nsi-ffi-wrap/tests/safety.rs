@@ -20,16 +20,16 @@ use std::{
 
 #[test]
 fn callback_lifetime_management() {
-    // Test that callbacks are properly managed and don't leak memory
+    // Test that callbacks are properly managed and don't leak memory.
     let counter = Arc::new(Mutex::new(0));
     let counter_clone = Arc::clone(&counter);
 
-    // Create a context and setup rendering with callbacks
+    // Create a context and setup rendering with callbacks.
     {
         let ctx =
             nsi::Context::new(None).expect("Could not create NSI context");
 
-        // Setup camera transform
+        // Setup camera transform.
         ctx.create("camera_xform", nsi::TRANSFORM, None);
         ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
         ctx.set_attribute(
@@ -43,7 +43,7 @@ fn callback_lifetime_management() {
             )],
         );
 
-        // Setup camera
+        // Setup camera.
         ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
         ctx.connect("camera", None, "camera_xform", "objects", None);
 
@@ -65,7 +65,7 @@ fn callback_lifetime_management() {
         );
         ctx.connect("beauty", None, "screen", "outputlayers", None);
 
-        // Add a simple plane geometry so there's something to render
+        // Add a simple plane geometry so there's something to render.
         ctx.create("mesh", nsi::MESH, None);
         ctx.connect("mesh", None, nsi::ROOT, "objects", None);
         let positions: &[[f32; 3]] = &[
@@ -79,7 +79,7 @@ fn callback_lifetime_management() {
             &[nsi::point_slice!("P", positions), nsi::i32!("nvertices", 4)],
         );
 
-        // Write callback that increments counter - use f32 driver
+        // Write callback that increments counter - use f32 driver.
         let write = nsi::output::WriteCallback::<f32>::new(
             move |_: &str,
                   _: usize,
@@ -127,49 +127,49 @@ fn callback_lifetime_management() {
 
 #[test]
 fn reference_lifetime() {
-    // Test that references passed through FFI are handled safely
+    // Test that references passed through FFI are handled safely.
     let data = Box::new(vec![42u64, 84, 126]);
 
     {
         let ctx =
             nsi::Context::new(None).expect("Could not create NSI context");
 
-        // Pass reference to NSI
+        // Pass reference to NSI.
         ctx.create("test_node", nsi::ATTRIBUTES, None);
         ctx.set_attribute("test_node", &[nsi::reference!("test_data", &data)]);
 
-        // The context should keep the reference valid
+        // The context should keep the reference valid.
         ctx.render_control(nsi::Action::Start, None);
         ctx.render_control(nsi::Action::Wait, None);
     }
 
-    // Data should still be valid after context is dropped
+    // Data should still be valid after context is dropped.
     assert_eq!(data[0], 42);
 }
 
 #[test]
 fn multiple_contexts() {
-    // Test that multiple contexts can coexist safely
+    // Test that multiple contexts can coexist safely.
     let ctx1 = nsi::Context::new(None).expect("Could not create NSI context 1");
     let ctx2 = nsi::Context::new(None).expect("Could not create NSI context 2");
 
-    // Create nodes in both contexts
+    // Create nodes in both contexts.
     ctx1.create("node1", nsi::ATTRIBUTES, None);
     ctx2.create("node2", nsi::ATTRIBUTES, None);
 
-    // Set attributes
+    // Set attributes.
     ctx1.set_attribute("node1", &[nsi::i32!("test", 1)]);
     ctx2.set_attribute("node2", &[nsi::i32!("test", 2)]);
 
-    // Both contexts should work independently
+    // Both contexts should work independently.
     drop(ctx1);
-    // ctx2 should still be valid
+    // ctx2 should still be valid.
     ctx2.set_attribute("node2", &[nsi::i32!("test", 3)]);
 }
 
 #[test]
 fn thread_safety() {
-    // Test that contexts can be used from multiple threads
+    // Test that contexts can be used from multiple threads.
     let ctx = Arc::new(
         nsi::Context::new(None).expect("Could not create NSI context"),
     );
@@ -178,7 +178,7 @@ fn thread_safety() {
         .map(|i| {
             let ctx_clone = Arc::clone(&ctx);
             thread::spawn(move || {
-                // Each thread creates its own node
+                // Each thread creates its own node.
                 let node_name = format!("thread_node_{}", i);
                 ctx_clone.create(&node_name, nsi::ATTRIBUTES, None);
                 ctx_clone
@@ -187,7 +187,7 @@ fn thread_safety() {
         })
         .collect();
 
-    // Wait for all threads
+    // Wait for all threads.
     for handle in handles {
         handle.join().unwrap();
     }
@@ -195,7 +195,7 @@ fn thread_safety() {
 
 #[test]
 fn error_callback() {
-    // Test error callback handling
+    // Test error callback handling.
     let error_count = Arc::new(Mutex::new(0));
     let error_count_clone = Arc::clone(&error_count);
 
@@ -212,21 +212,21 @@ fn error_callback() {
     )]))
     .expect("Could not create NSI context");
 
-    // Trigger an error by connecting non-existent nodes
+    // Trigger an error by connecting non-existent nodes.
     ctx.connect("nonexistent1", None, "nonexistent2", "objects", None);
 
-    // Give some time for error to be reported
+    // Give some time for error to be reported.
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     // We should have received at least one error
-    // Note: This might not work if the NSI implementation doesn't report this as an error
+    // Note: This might not work if the NSI implementation doesn't report this as an error.
     let count = *error_count.lock().unwrap();
     println!("Error count: {}", count);
 }
 
 #[test]
 fn status_callback() {
-    // Test render status callback
+    // Test render status callback.
     let status_received = Arc::new(Mutex::new(false));
     let status_clone = Arc::clone(&status_received);
 
@@ -239,7 +239,7 @@ fn status_callback() {
 
     let ctx = nsi::Context::new(None).expect("Could not create NSI context");
 
-    // Minimal scene setup
+    // Minimal scene setup.
     ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("camera", None, nsi::ROOT, "objects", None);
 
@@ -251,7 +251,7 @@ fn status_callback() {
             .array_len(const { NonZeroUsize::new(2).unwrap() })],
     );
 
-    // Start interactive render with callback
+    // Start interactive render with callback.
     ctx.render_control(
         nsi::Action::Start,
         Some(&[
@@ -262,7 +262,7 @@ fn status_callback() {
 
     ctx.render_control(nsi::Action::Wait, None);
 
-    // Status callback should have been called
+    // Status callback should have been called.
     assert!(
         *status_received.lock().unwrap(),
         "Status callback was not called"
@@ -271,10 +271,10 @@ fn status_callback() {
 
 #[test]
 fn large_data_transfer() {
-    // Test transferring large amounts of data through FFI
+    // Test transferring large amounts of data through FFI.
     let ctx = nsi::Context::new(None).expect("Could not create NSI context");
 
-    // Create a mesh with many vertices
+    // Create a mesh with many vertices.
     let vertex_count = 10000;
     let positions: Vec<f32> =
         (0..vertex_count * 3).map(|i| (i as f32) / 1000.0).collect();
@@ -282,7 +282,7 @@ fn large_data_transfer() {
     ctx.create("large_mesh", nsi::MESH, None);
     ctx.connect("large_mesh", None, nsi::ROOT, "objects", None);
 
-    // This should not crash or leak memory
+    // This should not crash or leak memory.
     let points: &[[f32; 3]] = bytemuck::cast_slice(&positions);
     ctx.set_attribute(
         "large_mesh",
@@ -295,13 +295,13 @@ fn large_data_transfer() {
 
 #[test]
 fn string_handling() {
-    // Test various string edge cases
+    // Test various string edge cases.
     let ctx = nsi::Context::new(None).expect("Could not create NSI context");
 
-    // Test empty string
+    // Test empty string.
     ctx.create("", nsi::ATTRIBUTES, None);
 
-    // Test very long string
+    // Test very long string.
     let long_name = "a".repeat(1000);
     ctx.create(&long_name, nsi::ATTRIBUTES, None);
 
@@ -315,11 +315,11 @@ fn string_handling() {
 
 #[test]
 fn callback_panic_safety() {
-    // Test that panics in callbacks don't cause undefined behavior
+    // Test that panics in callbacks don't cause undefined behavior.
 
     let ctx = nsi::Context::new(None).expect("Could not create NSI context");
 
-    // Setup minimal scene
+    // Setup minimal scene.
     ctx.create("screen", nsi::SCREEN, None);
     ctx.set_attribute(
         "screen",
@@ -330,7 +330,7 @@ fn callback_panic_safety() {
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);
     ctx.connect("beauty", None, "screen", "outputlayers", None);
 
-    // Callback that might panic - use f32 driver
+    // Callback that might panic - use f32 driver.
     let write = nsi::output::WriteCallback::<f32>::new(
         |_: &str,
          _: usize,
@@ -341,7 +341,7 @@ fn callback_panic_safety() {
          _: usize,
          _: &nsi::output::PixelFormat,
          _: &[f32]| {
-            // This should be caught and not cause UB
+            // This should be caught and not cause UB.
             if rand::random::<f32>() > 0.5 {
                 panic!("Test panic in callback");
             }
@@ -359,12 +359,12 @@ fn callback_panic_safety() {
         ],
     );
 
-    // This might panic but should not cause undefined behavior
+    // This might panic but should not cause undefined behavior.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
         ctx.render_control(nsi::Action::Start, None);
         ctx.render_control(nsi::Action::Wait, None);
     }));
 
-    // We don't care if it panicked, just that it didn't crash
+    // We don't care if it panicked, just that it didn't crash.
     println!("Panic test result: {:?}", result.is_ok());
 }

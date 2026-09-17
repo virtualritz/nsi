@@ -367,7 +367,7 @@ unsafe impl Sync for Reference<'static> {}
 /// Trait for types that can be safely converted to a Reference.
 /// This is implemented only for types that guarantee stable memory addresses.
 pub trait StableDeref<'a> {
-    /// Get a stable pointer to the data
+    /// Get a stable pointer to the data.
     fn stable_deref(&self) -> *const c_void;
 }
 
@@ -455,7 +455,7 @@ impl<'a> Reference<'a> {
     ///
     /// This is NOT safe for:
     /// - Stack allocated data that might move
-    /// - Data inside collections that might reallocate
+    /// - Data inside collections that might reallocate.
     pub unsafe fn from_stable<T: ?Sized>(data: &'a T) -> Self {
         let ptr = data as *const T as *const c_void;
         debug_assert!(!ptr.is_null(), "Reference created with null pointer");

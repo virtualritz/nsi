@@ -1,12 +1,12 @@
-//! Test to investigate Box sizes for FFI callbacks
+//! Test to investigate Box sizes for FFI callbacks.
 
 use std::mem;
 
 #[test]
 fn box_sizes() {
-    // Let's check the size and alignment of different Box levels
+    // Let's check the size and alignment of different Box levels.
 
-    // A simple closure
+    // A simple closure.
     let closure = |x: i32| x + 1;
 
     println!("Size of closure: {}", mem::size_of_val(&closure));
@@ -45,13 +45,13 @@ fn box_sizes() {
     let ptr = Box::into_raw(boxed);
     println!("\nRaw pointer: {:?}", ptr);
 
-    // Clean up - use the same type for from_raw as we used for into_raw
+    // Clean up - use the same type for from_raw as we used for into_raw.
     let _cleaned = unsafe { Box::from_raw(ptr) };
 }
 
 #[test]
 fn ffi_pattern() {
-    // This simulates the correct FFI pattern: always use trait objects from the start
+    // This simulates the correct FFI pattern: always use trait objects from the start.
     trait MyCallback: FnMut(i32) -> i32 {}
     impl<T: FnMut(i32) -> i32> MyCallback for T {}
 
@@ -62,24 +62,24 @@ fn ffi_pattern() {
     };
 
     // Triple Box with trait object from the start
-    // This is the correct pattern for FFI where we need a thin pointer
+    // This is the correct pattern for FFI where we need a thin pointer.
     let triple: Box<Box<Box<dyn MyCallback>>> =
         Box::new(Box::new(Box::new(callback)));
     let triple_ptr = Box::into_raw(triple);
     println!("Triple Box ptr: {:?}", triple_ptr);
 
-    // Pointer is thin (single pointer size) because the outer Box is a concrete type
+    // Pointer is thin (single pointer size) because the outer Box is a concrete type.
     assert_eq!(
         mem::size_of_val(&triple_ptr),
         mem::size_of::<*const ()>(),
         "Outer pointer should be thin"
     );
 
-    // Reconstruct with the same type
+    // Reconstruct with the same type.
     let mut reconstructed: Box<Box<Box<dyn MyCallback>>> =
         unsafe { Box::from_raw(triple_ptr) };
 
-    // Call the callback through all the layers
+    // Call the callback through all the layers.
     let result = reconstructed(10);
     println!("Callback result: {}", result);
     assert_eq!(result, 11); // 10 + 1 (first call increments counter to 1)

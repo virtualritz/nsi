@@ -140,11 +140,11 @@ where
         resolution.unwrap_or((TEST_IMAGE_WIDTH, TEST_IMAGE_HEIGHT));
     let samples = samples.unwrap_or(DEFAULT_SAMPLES);
 
-    // Render the scene
+    // Render the scene.
     let render_data =
         render_scene(test_name, scene_setup, width, height, samples)?;
 
-    // Save the output image
+    // Save the output image.
     let output_path = args.output_path(test_name);
     save_png(&output_path, &render_data)?;
 
@@ -160,7 +160,7 @@ where
         return Ok(ImageTestResult::MissingExpected);
     }
 
-    // Compare images
+    // Compare images.
     match compare_png_files(&output_path, &expected_path) {
         Ok(diff) => {
             if diff < 0.001 {
@@ -192,7 +192,7 @@ where
     let render_data = Arc::new(Mutex::new(RenderData::new(width, height)));
     let render_data_clone = Arc::clone(&render_data);
 
-    // Create callbacks - use f32 driver for floating point pixel data
+    // Create callbacks - use f32 driver for floating point pixel data.
     let write = nsi::output::WriteCallback::<f32>::new(
         move |_name: &str,
               width: usize,
@@ -205,7 +205,7 @@ where
               pixel_data: &[f32]| {
             let mut data = render_data_clone.lock().unwrap();
 
-            // Copy pixel data
+            // Copy pixel data.
             for y in y_min..y_max_plus_one {
                 for x in x_min..x_max_plus_one {
                     let src_idx = ((y - y_min) * (x_max_plus_one - x_min)
@@ -213,12 +213,12 @@ where
                         * pixel_format.channels();
                     let dst_idx = (y * width + x) * 4; // RGBA
 
-                    // Copy RGBA channels
+                    // Copy RGBA channels.
                     let n = 4.min(pixel_format.channels());
                     data.pixel_data[dst_idx..dst_idx + n]
                         .copy_from_slice(&pixel_data[src_idx..src_idx + n]);
 
-                    // Quantize to u8 with sRGB conversion
+                    // Quantize to u8 with sRGB conversion.
                     let alpha = if pixel_format.channels() > 3 {
                         pixel_data[src_idx + 3]
                     } else {
@@ -245,11 +245,11 @@ where
         },
     );
 
-    // Create NSI context
+    // Create NSI context.
     let ctx =
         nsi::Context::new(None).context("Could not create NSI context")?;
 
-    // Set global rendering settings
+    // Set global rendering settings.
     ctx.set_attribute(
         nsi::GLOBAL,
         &[
@@ -261,13 +261,13 @@ where
         ],
     );
 
-    // Setup camera
+    // Setup camera.
     setup_test_camera(&ctx, width, height);
 
-    // Setup output
+    // Setup output.
     setup_test_output(&ctx, test_name, write);
 
-    // Let the test setup the scene
+    // Let the test setup the scene.
     scene_setup(&ctx);
 
     // Render
@@ -291,7 +291,7 @@ where
 
 /// Setup a standard test camera.
 fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
-    // Camera transform
+    // Camera transform.
     ctx.create("camera_xform", nsi::TRANSFORM, None);
     ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
@@ -327,7 +327,7 @@ fn setup_test_output(
     test_name: &str,
     write: nsi::output::WriteCallback<f32>,
 ) {
-    // Output layer
+    // Output layer.
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);
     ctx.set_attribute(
         "beauty",
@@ -339,7 +339,7 @@ fn setup_test_output(
     );
     ctx.connect("beauty", None, "screen", "outputlayers", None);
 
-    // Output driver
+    // Output driver.
     ctx.create("driver", nsi::OUTPUT_DRIVER, None);
     ctx.connect("driver", None, "beauty", "outputdrivers", None);
     ctx.set_attribute(

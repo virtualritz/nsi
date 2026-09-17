@@ -4,7 +4,7 @@
 //! implementations based on feature flags:
 //!
 //! - Default (`CString`): For C FFI, owned strings
-//! - `ustr_handles`: Uses `Ustr` for zero-cost `*const c_char` + string interning
+//! - `ustr_handles`: Uses `Ustr` for zero-cost `*const c_char` + string interning.
 
 use std::ffi::c_char;
 

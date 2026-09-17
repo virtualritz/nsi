@@ -41,13 +41,13 @@ pub fn add_test_sphere(
     ctx.create(name, nsi::MESH, None);
     ctx.connect(name, None, &xform_name, "objects", None);
 
-    // Unit cube vertices
+    // Unit cube vertices.
     let positions = [
         -1., -1., -1., 1., -1., -1., 1., 1., -1., -1., 1., -1., -1., -1., 1.,
         1., -1., 1., 1., 1., 1., -1., 1., 1.,
     ];
 
-    // Cube faces
+    // Cube faces.
     let face_indices: [i32; 24] = [
         0, 1, 2, 3, // front
         4, 7, 6, 5, // back
@@ -81,7 +81,7 @@ pub fn add_diffuse_material(
     let attrib_name = format!("{}_attrib", geometry_name);
     let shader_name = format!("{}_shader", geometry_name);
 
-    // Attributes node
+    // Attributes node.
     ctx.create(&attrib_name, nsi::ATTRIBUTES, None);
     ctx.connect(
         &attrib_name,
@@ -118,7 +118,7 @@ pub fn add_metal_material(
     let attrib_name = format!("{}_attrib", geometry_name);
     let shader_name = format!("{}_shader", geometry_name);
 
-    // Attributes node
+    // Attributes node.
     ctx.create(&attrib_name, nsi::ATTRIBUTES, None);
     ctx.connect(
         &attrib_name,
@@ -200,7 +200,7 @@ pub fn add_area_light(
     ctx.create(&attrib_name, nsi::ATTRIBUTES, None);
     ctx.connect(&attrib_name, None, name, "geometryattributes", None);
 
-    // Emissive shader
+    // Emissive shader.
     ctx.create(&shader_name, nsi::SHADER, None);
     ctx.connect(&shader_name, None, &attrib_name, "surfaceshader", None);
 

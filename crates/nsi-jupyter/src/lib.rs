@@ -69,7 +69,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     );
     ctx.connect("jupyter_beauty", None, screen, "outputlayers", None);
 
-    // Use AccumulatingCallbacks to collect all pixels and process at finish
+    // Use AccumulatingCallbacks to collect all pixels and process at finish.
     let (write, finish) = nsi::output::AccumulatingCallbacks::<f32>::new(
         |_name: String,
          width: usize,

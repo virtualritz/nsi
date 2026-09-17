@@ -105,7 +105,7 @@ impl DisplayDriver for Png {
             if alpha != 0 {
                 for c in pixel[..3].iter_mut() {
                     let channel = *c as u32;
-                    // channel * 256 / alpha
+                    // channel * 256 / alpha.
                     *c = (((channel << 8) - channel) / alpha as u32) as u8;
                 }
             }

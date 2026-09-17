@@ -26,37 +26,37 @@ unsafe impl PixelType for f32 {
     const NDSPY_TYPE: u32 = 1;
 }
 
-// SAFETY: u32 matches PkDspyUnsigned32
+// SAFETY: u32 matches PkDspyUnsigned32.
 unsafe impl PixelType for u32 {
     // PkDspyUnsigned32.
     const NDSPY_TYPE: u32 = 2;
 }
 
-// SAFETY: i32 matches PkDspySigned32
+// SAFETY: i32 matches PkDspySigned32.
 unsafe impl PixelType for i32 {
     // PkDspySigned32.
     const NDSPY_TYPE: u32 = 3;
 }
 
-// SAFETY: u16 matches PkDspyUnsigned16
+// SAFETY: u16 matches PkDspyUnsigned16.
 unsafe impl PixelType for u16 {
     // PkDspyUnsigned16.
     const NDSPY_TYPE: u32 = 4;
 }
 
-// SAFETY: i16 matches PkDspySigned16
+// SAFETY: i16 matches PkDspySigned16.
 unsafe impl PixelType for i16 {
     // PkDspySigned16.
     const NDSPY_TYPE: u32 = 5;
 }
 
-// SAFETY: u8 matches PkDspyUnsigned8
+// SAFETY: u8 matches PkDspyUnsigned8.
 unsafe impl PixelType for u8 {
     // PkDspyUnsigned8.
     const NDSPY_TYPE: u32 = 6;
 }
 
-// SAFETY: i8 matches PkDspySigned8
+// SAFETY: i8 matches PkDspySigned8.
 unsafe impl PixelType for i8 {
     // PkDspySigned8.
     const NDSPY_TYPE: u32 = 7;
@@ -66,4 +66,4 @@ unsafe impl PixelType for i8 {
 // #[cfg(feature = "half")]
 // unsafe impl PixelType for half::f16 {
 //     const NDSPY_TYPE: u32 = 12; // PkDspyFloat16
-// }
+// }.

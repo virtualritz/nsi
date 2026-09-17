@@ -256,7 +256,7 @@ pub fn rotation(
 /// created a node under it and dropped it on the floor, leaving a node
 /// nothing could ever reference.
 ///
-/// **Convenience method; not part of the official ɴsɪ API.**
+/// **Convenience method; not part of the official ɴsɪ API.**.
 pub fn look_at_camera(
     ctx: &nsi::Context,
     handle: Option<&str>,

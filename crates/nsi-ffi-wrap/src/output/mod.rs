@@ -534,7 +534,7 @@ struct DisplayData<'a, T: PixelType> {
     // FIXME: unused atm.
     #[allow(dead_code)]
     fn_query: Option<*mut Box<dyn FnQuery<'a>>>,
-    // PhantomData to ensure T is used
+    // PhantomData to ensure T is used.
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -553,7 +553,7 @@ fn extract_callback<T: ?Sized>(
     parameters: &[ndspy_sys::UserParameter],
 ) -> Option<*mut Box<T>> {
     for p in parameters.iter() {
-        // SAFETY: Parameter names come from NSI API and should be valid C strings
+        // SAFETY: Parameter names come from NSI API and should be valid C strings.
         if p.name.is_null() {
             continue;
         }
@@ -613,14 +613,14 @@ pub(crate) extern "C" fn image_open<T: PixelType>(
 
         let mut display_data = Box::new(DisplayData::<T> {
             name: {
-                // SAFETY: output_filename is checked for null above and comes from NSI C API
+                // SAFETY: output_filename is checked for null above and comes from NSI C API.
                 let c_str = unsafe { CStr::from_ptr(output_filename) };
                 c_str.to_string_lossy().into_owned()
             },
             width: width as _,
             height: height as _,
             pixel_format: PixelFormat::default(),
-            // NO pixel_data allocation - we pass buckets directly
+            // NO pixel_data allocation - we pass buckets directly.
             fn_write: extract_callback::<dyn FnWrite<T>>(
                 "callback.write",
                 b'p',
@@ -642,7 +642,7 @@ pub(crate) extern "C" fn image_open<T: PixelType>(
             std::slice::from_raw_parts_mut(format, format_count as _)
         };
 
-        // Set format to the requested pixel type T
+        // Set format to the requested pixel type T.
         format.iter_mut().for_each(|f| f.type_ = T::NDSPY_TYPE);
 
         display_data.pixel_format = PixelFormat::new(format);
@@ -664,7 +664,7 @@ pub(crate) extern "C" fn image_open<T: PixelType>(
             Error::None
         };
 
-        // SAFETY: image_handle_ptr and flag_stuff are valid pointers from NSI C API
+        // SAFETY: image_handle_ptr and flag_stuff are valid pointers from NSI C API.
         unsafe {
             *image_handle_ptr = Box::into_raw(display_data) as _;
             // Preserve renderer-provided flags, but clear the empty-bucket request.
@@ -676,7 +676,7 @@ pub(crate) extern "C" fn image_open<T: PixelType>(
     }) {
         Ok(result) => result,
         Err(_) => {
-            // If we panicked, return an error to the renderer
+            // If we panicked, return an error to the renderer.
             Error::Undefined.into()
         }
     }
@@ -776,7 +776,7 @@ pub(crate) extern "C" fn image_query(
     }) {
         Ok(result) => result,
         Err(_) => {
-            // If we panicked, return an error to the renderer
+            // If we panicked, return an error to the renderer.
             Error::Undefined.into()
         }
     }
@@ -793,9 +793,9 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
     _entry_size: c_int,
     pixel_data: *const u8,
 ) -> ndspy_sys::PtDspyError {
-    // Catch any panics to prevent unwinding into C code
+    // Catch any panics to prevent unwinding into C code.
     match std::panic::catch_unwind(|| {
-        // SAFETY: image_handle_ptr should be valid as it was created by image_open
+        // SAFETY: image_handle_ptr should be valid as it was created by image_open.
         if image_handle_ptr.is_null() {
             return Error::BadParameters.into();
         }
@@ -811,7 +811,7 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
         let bucket_height = (y_max_plus_one - y_min) as usize;
         let bucket_pixel_count = bucket_width * bucket_height * channels;
 
-        // SAFETY: pixel_data comes from the renderer and should be valid
+        // SAFETY: pixel_data comes from the renderer and should be valid.
         if pixel_data.is_null() {
             return Error::None.into();
         }
@@ -851,7 +851,7 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
     }) {
         Ok(result) => result,
         Err(_) => {
-            // If we panicked, return an error to the renderer
+            // If we panicked, return an error to the renderer.
             Error::Undefined.into()
         }
     }
@@ -862,16 +862,16 @@ pub(crate) extern "C" fn image_write<T: PixelType>(
 pub(crate) extern "C" fn image_close<T: PixelType>(
     image_handle_ptr: ndspy_sys::PtDspyImageHandle,
 ) -> ndspy_sys::PtDspyError {
-    // Catch any panics to prevent unwinding into C code
+    // Catch any panics to prevent unwinding into C code.
     match std::panic::catch_unwind(|| {
-        // SAFETY: image_handle_ptr should be valid as it was created by image_open
+        // SAFETY: image_handle_ptr should be valid as it was created by image_open.
         if image_handle_ptr.is_null() {
             return Error::BadParameters.into();
         }
         let mut display_data =
             unsafe { Box::from_raw(image_handle_ptr as *mut DisplayData<T>) };
 
-        // FnFinish receives no pixel data - user accumulates if needed
+        // FnFinish receives no pixel data - user accumulates if needed.
         let error = if let Some(fn_finish) = display_data.fn_finish {
             // SAFETY: borrowed, renderer-owned; see `extract_callback`.
             let fn_finish = unsafe { &mut *fn_finish };
@@ -894,7 +894,7 @@ pub(crate) extern "C" fn image_close<T: PixelType>(
     }) {
         Ok(result) => result,
         Err(_) => {
-            // If we panicked, return an error to the renderer
+            // If we panicked, return an error to the renderer.
             Error::Undefined.into()
         }
     }
@@ -905,7 +905,7 @@ extern "C" fn image_progress(
     _image_handle_ptr: ndspy_sys::PtDspyImageHandle,
     _progress: f32,
 ) -> ndspy_sys::PtDspyError {
-    // Progress logging disabled to reduce spam
+    // Progress logging disabled to reduce spam.
     Error::None.into()
 }
 
@@ -948,7 +948,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
     ///
     /// Returns `(WriteCallback, FinishCallback)` where:
     /// - The write callback accumulates buckets into an internal buffer
-    /// - The finish callback delivers the complete buffer to your closure
+    /// - The finish callback delivers the complete buffer to your closure.
     pub fn new<'a, F>(
         mut on_finish: F,
     ) -> (WriteCallback<'a, T>, FinishCallback<'a>)
@@ -987,7 +987,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
                   bucket_data: &[T]| {
                 let mut state = write_state.lock();
 
-                // Initialize on first bucket
+                // Initialize on first bucket.
                 if !state.initialized {
                     state.width = width;
                     state.height = height;
@@ -997,7 +997,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
                     state.initialized = true;
                 }
 
-                // Copy bucket into the full buffer
+                // Copy bucket into the full buffer.
                 let bucket_width = x_max_plus_one - x_min;
                 let channels = state.channels;
 
