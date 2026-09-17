@@ -1615,3 +1615,82 @@ fn an_emptied_sample_table_equals_an_absent_one() {
         static_only.node("a").expect("created"),
     );
 }
+
+/// A root under another root is dropped: walking the ancestor covers
+/// it, so a consumer that walks both walks the subtree twice.
+#[test]
+fn a_root_under_another_root_is_collapsed_away() {
+    let mut scene = Scene::default();
+    for (handle, parent) in
+        [("asset", ".root"), ("part", "asset"), ("bolt", "part")]
+    {
+        scene.create(handle, "transform").unwrap();
+        scene.connect(handle, None, parent, "objects").unwrap();
+    }
+    let _ = scene.take_changes();
+
+    for handle in ["asset", "bolt"] {
+        scene
+            .set_attribute(handle, vec![arg("visibility", 1.0)])
+            .unwrap();
+    }
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+
+    assert_eq!(affected.roots.len(), 2, "both edits name a root");
+    let collapsed: Vec<&str> =
+        scene.collapsed_roots(&affected).into_iter().collect();
+    assert_eq!(collapsed, vec!["asset"], "\"bolt\" is under \"asset\"");
+}
+
+/// Unrelated roots all survive: there is nothing to collapse, and
+/// dropping one would lose a subtree.
+#[test]
+fn unrelated_roots_all_survive_collapsing() {
+    let mut scene = Scene::default();
+    for handle in ["a", "b", "c"] {
+        scene.create(handle, "transform").unwrap();
+        scene.connect(handle, None, ".root", "objects").unwrap();
+    }
+    let _ = scene.take_changes();
+
+    for handle in ["a", "c"] {
+        scene
+            .set_attribute(handle, vec![arg("visibility", 1.0)])
+            .unwrap();
+    }
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+
+    assert_eq!(scene.collapsed_roots(&affected).len(), 2);
+}
+
+/// A node under two parents is never collapsed away. ɴsɪ's lightweight
+/// instancing puts it on two paths, and a root covering one path does
+/// not cover the other -- dropping it would lose the second copy.
+#[test]
+fn a_multi_parent_root_is_kept() {
+    let mut scene = Scene::default();
+    for handle in ["left", "right", "shared"] {
+        scene.create(handle, "transform").unwrap();
+    }
+    scene.connect("left", None, ".root", "objects").unwrap();
+    scene.connect("right", None, ".root", "objects").unwrap();
+    scene.connect("shared", None, "left", "objects").unwrap();
+    scene.connect("shared", None, "right", "objects").unwrap();
+    let _ = scene.take_changes();
+
+    for handle in ["left", "shared"] {
+        scene
+            .set_attribute(handle, vec![arg("visibility", 1.0)])
+            .unwrap();
+    }
+    let changes = scene.take_changes();
+    let affected = scene.affected(&changes);
+    let collapsed = scene.collapsed_roots(&affected);
+
+    assert!(
+        collapsed.contains("shared"),
+        "under two parents, only one of which is covered: {collapsed:?}",
+    );
+}

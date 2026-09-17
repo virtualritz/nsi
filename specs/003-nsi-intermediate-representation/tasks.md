@@ -63,10 +63,14 @@ with every feature.
       `recorder::tests::connect_records_the_priority_argument`.
       Spec: R16.
 - [x] T1.16b `recursive` delete. See T6.11.
-- [ ] T1.17 Non-UTF-8 strings. The loss is at recording, not replay:
-      the boundary is `nsi-ffi-wrap` `String::new`, which takes
-      `Into<Vec<u8>>`. Making it `AsRef<str>` renders the bad case
-      unrepresentable. Gate: `contracts/recording.md`.
+- [x] T1.17 Non-UTF-8 strings. **Closed against its own premise.**
+      `contracts/recording.md` carries "Non-UTF-8 strings survive
+      recording" as `Covered`, and records why the proposal here --
+      making the bad case unrepresentable by narrowing `String::new` to
+      `AsRef<str>` -- is the wrong invariant: `nsi-parse` must
+      represent a stream 3Delight wrote, `renderdl -cat` echoes a
+      Latin-1 `café.exr` back raw, and a file name on Linux is not
+      required to be UTF-8. Bytes are kept instead.
 
 ## User Story 2: Know What A Connection Means (P1)
 
@@ -190,10 +194,22 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       `a_recorded_scene_with_hostile_strings_stays_one_statement_a_line`.
       Spec: R21.
 - [x] T5.9 `RecordError`, `#[non_exhaustive]`, as the one recorder error.
-- [ ] T5.10 Per-path transforms for an instanced node, and an
+- [x] T5.10 Per-path transforms for an instanced node, and an
       `instances` node's `transformationmatrices` / `modelindices`.
-      Gate: two `Open` rows in `contracts/resolution.md`.
-- [ ] T5.11 Honour `INTERPOLATE_LINEAR` on a sampled transform.
+      Done under other rows: `placements`, `placements_at`,
+      `motion_times_along`, `gathered_along`, `instance_transforms`
+      and `instance_transforms_at`, all `Covered` in
+      `contracts/resolution.md`; neither gating row is `Open` any
+      more. `world_transform` still *refuses* a multi-parent node,
+      which is deliberate -- it promises one answer and there is
+      none.
+- [x] T5.11 `INTERPOLATE_LINEAR` on a sampled transform. **Closed
+      against its own premise**, by rendering: transform samples
+      interpolate by default, and setting `l` on a
+      `transformationmatrix` changes the image not at all -- identical
+      to six digits. There is no other default for motion samples to
+      override. The flag is recorded and emitted, never interpreted.
+      See the `Covered` row in `contracts/resolution.md`.
 - [x] T5.12 Sample times of an arbitrary attribute, for deforming
       geometry whose `P` is sampled under a static transform.
       `attribute_times` and `attribute_samples`. A mesh deforming under
@@ -255,14 +271,18 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
 - [x] T6.12 Lua and compressed stream output, behind features.
       Evidence: `lua_roundtrip`, `compression`, and `contracts/output.md`.
       Spec: R25-R28.
-- [ ] T6.13 Per-path world transforms for an instanced node. T6.9 and
-      T6.10 make instancing usable without them; this would make it
-      automatic.
-- [ ] T6.14 `INTERPOLATE_LINEAR` on a sampled transform.
-- [ ] T6.15 Sample times of an arbitrary attribute, for deforming
-      geometry whose `P` is sampled under a static transform.
+- [x] T6.13 Per-path world transforms for an instanced node.
+      Duplicate of T5.10; see there.
+- [x] T6.14 `INTERPOLATE_LINEAR` on a sampled transform. Duplicate of
+      T5.11; see there.
+- [x] T6.15 Sample times of an arbitrary attribute. Duplicate of
+      T5.12, which is done: `attribute_times` and `attribute_samples`.
 - [ ] T6.16 Decide the attribute vocabulary: legacy or documentation
-      draft. See `research.md` D10.
+      draft. Duplicate of T5.13; see there. **Blocked on a decision, not
+      on work**: the renderer accepts only the legacy names today, and
+      the draft's `sourcemodels` -> `objects` would force `classify` to
+      consult node types, inverting the invariant
+      `contracts/classification.md` states.
 - [x] T6.17 Test modules moved to their own files, per the workspace
       rule that source files do not grow inline `#[cfg(test)]` blocks.
       No source file is over 900 lines.
@@ -270,8 +290,10 @@ merely specced; see the commit `follow ɴsɪ's own rules`.
       `nsi-ffi-wrap` 0.10.0, every dependent repinned. `publish
       --dry-run` now fails on the missing upstream *version* rather than
       on a trait bound, which is the correct pre-publish state.
-- [ ] T6.18b Publish, in order. Irreversible and needs credentials, so
-      it is a person's action. See `plan.md`.
+- [x] T6.18b Publish, in order. Done: `nsi-trait` 0.4.2,
+      `nsi-ffi-wrap` 0.10.2 and `nsi-intermediate` 0.1.0 went to
+      crates.io on 2026-09-07, `nsi-parse` 0.1.0 behind them, and
+      `nsi-ffi-wrap` 0.10.3 on 2026-09-16.
 
 ## Found By Review, Round 8
 

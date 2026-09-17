@@ -250,9 +250,7 @@
 //!
 //! ```no_run
 //! # use nsi_ffi_wrap as nsi;
-//! let ctx = nsi::Context::new(Some(&[
-//!     nsi::string!("renderer", "moonray"),
-//! ]));
+//! let ctx = nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]));
 //! ```
 //!
 //! A name this crate knows is looked for where that renderer installs.

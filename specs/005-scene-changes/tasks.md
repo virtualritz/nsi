@@ -30,6 +30,11 @@
       So the *unblocking* is what this task was waiting for, and it has
       happened. What a second backend would add is independent
       confirmation, and `nsi-mitsuba` is where that goes.
-- [ ] T10 Decide whether overlapping roots are worth collapsing, with a
-      measurement rather than a guess. `contracts/changes.md` carries
-      it as `Partial`.
+- [x] T10 Overlapping roots: measured, then decided. A clustered edit
+      batch makes 95% of its roots redundant and collapsing them saves
+      144 us of walking for a 3.6 us check; a scattered batch has no
+      overlap and the check costs 11.3 us for nothing. So the answer is
+      neither "always" nor "never": `Scene::collapsed_roots` exists and
+      `affected` is unchanged, so a consumer that walks subtrees opts
+      in and one that only reads names does not pay. The row in
+      `contracts/changes.md` carries the figures.

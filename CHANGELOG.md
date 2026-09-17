@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### `nsi` 0.10.0 -> 0.10.1
+
+- Documents choosing a renderer at runtime, the feature `nsi-ffi-wrap`
+  0.10.3 added: a `"renderer"` argument on `Context::new`, or
+  `$NSI_RENDERER`, with 3Delight the default. Two contexts in one
+  process may name two different renderers.
+
+### `nsi-toolbelt` 0.10.3 -> 0.10.4
+
+- Naming a node no longer panics. `petname` returns `None` only when
+  its word lists are empty, which the `default-words` feature rules
+  out -- but "cannot happen" is not a reason for a library to abort
+  someone's render, so an unnamed node falls back to a process-unique
+  counter.
+
 ### `nsi-ffi-wrap` 0.10.2 -> 0.10.3
 
 - **Choose the renderer at runtime, by name.** ɴsɪ is an interface with

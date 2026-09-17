@@ -39,6 +39,24 @@
 //! unambiguous -- and a line-oriented reader would be wrong on valid
 //! input.
 //!
+//! # Paths are carried verbatim
+//!
+//! A string value may hold a `${VAR}` reference -- ɴsɪ's
+//! `streampathreplacement` writes them so a scene can move between
+//! machines -- and this parser **does not expand them**. Rendered,
+//! that is what 3Delight does too: `renderdl -cat` echoes
+//! `${NSI_PATH_TEST}/out.exr` back unexpanded, while a render whose
+//! `imagefilename` holds it writes to the expanded path. Expansion
+//! happens at *use*, in whatever opens the file.
+//!
+//! Expanding here would bake one machine's paths into a stream whose
+//! purpose is to move between them. The obligation is the consumer's:
+//! open a path without expanding and you open the wrong file, on
+//! exactly the machines where the variable was meant to matter. Note
+//! that **any** variable expands, not only `NSI_PATH_`-prefixed ones;
+//! the prefix governs only which ones 3Delight *writes* as
+//! references.
+//!
 //! # Features
 //!
 //! | Feature | What it adds |

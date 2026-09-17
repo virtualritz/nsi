@@ -9,8 +9,19 @@ An ɴsɪ OpenEXR display driver, with optional OIDN denoising.
 
 A worked example of `nsi-display` that is meant to grow into a
 production driver, which is why it is a crate of its own rather than
-an example inside `nsi-display`: it has real dependencies (OpenEXR
-and OIDN) that no other user of `nsi-display` should have to build.
+an example inside `nsi-display`: it carries dependencies no other
+user of `nsi-display` should have to build.
+
+**The ᴇxʀ side is pure Rust**: [`exr`](https://crates.io/crates/exr),
+not a binding to the C++ OpenEXR library, so writing a file needs
+nothing installed. Only denoising is native, through `oidn`, and it
+is off by default -- see below.
+
+One consequence of that choice: `exr` does not support **deep
+data**, so this driver writes flat images only. Deep output would
+need the C++ library or deep support upstream. Every other feature
+the format has, including the `dwaa`/`dwab` lossy compressions, is
+there.
 
 Build it and give the artefact the name the renderer looks for:
 

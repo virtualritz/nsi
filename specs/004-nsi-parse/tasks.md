@@ -50,8 +50,16 @@ gates were green before anything was measured.
 
 ## Open Questions
 
-- [ ] T5.1 `NSI_PATH_` replacement: establish the trigger and the
-      reference syntax, then expand or document. `research.md` Q1.
+- [x] T5.1 `NSI_PATH_` replacement: **documented, not expanded.**
+      `research.md` Q1 settled the question by rendering: the syntax is
+      `${VAR}`, 3Delight expands at *use* rather than at read --
+      `renderdl -cat` echoes a reference back unexpanded while a render
+      resolves it -- and any variable expands, not only
+      `NSI_PATH_`-prefixed ones. Expanding in the parser would bake one
+      machine's paths into a stream written to move between machines,
+      so the crate documentation now states the consumer's obligation
+      instead: `crates/nsi-parse/src/lib.rs`, "Paths are carried
+      verbatim".
 
 ## Found By Review, Round 6
 
