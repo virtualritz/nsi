@@ -1,0 +1,25 @@
+[package]
+name = "nsi-parse-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Its own workspace: the fuzz crate builds with a different profile and
+# pulls `libfuzzer-sys`, neither of which the parent workspace wants.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nsi-parse = { path = ".." }
+nsi-trait = { path = "../../nsi-trait" }
+nsi-ffi-wrap = { path = "../../nsi-ffi-wrap" }
+
+[[bin]]
+name = "parse_stream"
+path = "fuzz_targets/parse_stream.rs"
+test = false
+doc = false
+bench = false

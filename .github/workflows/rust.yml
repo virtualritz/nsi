@@ -103,3 +103,20 @@ jobs:
         run: >
           cargo +nightly miri test -p nsi-ffi-wrap --features output --lib --
           pointer_marshalling ffi_round_trip argument::tests param_value
+
+  # The parser's fuzz target. Built, never run: fuzzing has no natural
+  # end, and a time-boxed run here would be a flaky test wearing a
+  # fuzzer's clothes. Building keeps the target from rotting as the
+  # parser changes; `specs/008-fuzzing/quickstart.md` has the run.
+  fuzz-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install nightly and cargo-fuzz
+        run: |
+          rustup toolchain install nightly
+          cargo install cargo-fuzz --locked
+      - name: Build the parse_stream fuzz target
+        working-directory: crates/nsi-parse
+        run: cargo +nightly fuzz build parse_stream

@@ -1,6 +1,8 @@
 # `nsi` -- To Do
 
-- **Fuzz the FFI boundary.** Malformed input and error paths are untested.
+- **Fuzz `nsi-ffi-wrap`'s C boundary.** The parser is fuzzed
+  (`specs/008-fuzzing`: two million executions, no finding); the C
+  boundary is its T5 and needs a sanitizer run.
 
 ## Blueprint Compliance Backlog
 
