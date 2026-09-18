@@ -15,7 +15,7 @@ documentation = "https://docs.rs/nsi-jupyter/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 bytemuck = "1"
 evcxr_runtime = "1"
 nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
