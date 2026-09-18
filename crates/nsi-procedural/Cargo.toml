@@ -1,13 +1,28 @@
 [package]
 name = "nsi-procedural"
 version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
 rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "procedural", "plugin"]
+categories = ["graphics", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
-description = "Procedural geometry helpers for the Nodal Scene Interface -- ɴsɪ."
+description = "Write ɴsɪ procedurals in safe Rust."
+readme = "README.md"
+documentation = "https://docs.rs/nsi-procedural/"
 repository = "https://github.com/virtualritz/nsi/"
-# A stub: not released until it does something.
-publish = false
 
 [dependencies]
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+
+[dev-dependencies]
+nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
+log = "0.4"
+
+[[example]]
+name = "hello_procedural"
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+all-features = true

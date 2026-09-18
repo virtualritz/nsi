@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### `nsi-procedural` 0.1.0 -- first release (not yet published)
+
+Write ɴsɪ procedurals in safe Rust: implement `Procedural`, invoke
+`declare_procedural!`, build a `cdylib`, and any ɴsɪ renderer loads it
+with `NSIEvaluate` or a `procedural` node. The calls go through the
+ɴsɪ implementation that loaded it. A renderer written against `Nsi`
+links the same code in and calls it through `execute`, with no C in
+between. Parameters are read in place, every type and arrays
+included; errors and panics are reported through the renderer.
+
+### `nsi-ffi-wrap` 0.10.3 -> 0.10.4 (not yet published)
+
+- `Context::from_renderer_context(handle, library)`: a `Context` over a
+  context the renderer owns, which never runs `NSIEnd` on it --
+  `From<NSIContext>` does, which ends the renderer's context when the
+  wrapper drops. Callbacks passed through it are leaked rather than
+  freed under the renderer. Additive.
+
 ### `nsi` 0.10.0 -> 0.10.1
 
 - Documents choosing a renderer at runtime, the feature `nsi-ffi-wrap`

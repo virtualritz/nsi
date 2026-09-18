@@ -34,6 +34,7 @@ Directory numbers reflect creation order, not coverage order.
 | `006-stream-filter` | Filtering an ɴsɪ stream: reading with `nsi-parse`, writing with `nsi-intermediate`, and anything in between | active; implemented |
 | `007-tessellation` | `nsi-tessellate`: explicit geometry from subdivision surfaces and ɴsɪ's undocumented `nurbs`, for consumers that cannot intersect them analytically | active; specified, not implemented |
 | `008-fuzzing` | Fuzzing the untrusted boundaries: `nsi-parse` first, `nsi-ffi-wrap`'s C boundary next | active; parser done, C boundary open |
+| `009-procedurals` | Procedurals in Rust: a trait and an export macro, standalone through C or compiled into a Rust renderer | active; T8, T9 partial |
 
 `003` arrived with the crate, which was extracted from `nsi-mitsuba`
 once a second backend made its renderer-agnosticism structural rather

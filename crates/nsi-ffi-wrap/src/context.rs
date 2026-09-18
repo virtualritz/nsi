@@ -45,6 +45,10 @@ struct InnerContext<'a> {
     /// pointer. They are reclaimed at the next `Stop`/`Wait` -- when no
     /// render is in flight -- or when the context drops.
     retired: Mutex<Vec<CallbackOwned>>,
+    /// Whether dropping this runs `NSIEnd`. Only a context this crate
+    /// began may be ended by it; one wrapped with
+    /// [`Context::from_renderer_context`] belongs to the renderer.
+    ends_context: bool,
     // _marker needs to be invariant in 'a.
     // See "Making a struct outlive a parameter given to a method of
     // that struct": https://stackoverflow.com/questions/62374326/.
@@ -118,6 +122,7 @@ impl<'a> InnerContext<'a> {
             api,
             callbacks: Mutex::new(HashMap::new()),
             retired: Mutex::new(Vec::new()),
+            ends_context: true,
             _marker: PhantomData,
         }
     }
@@ -164,6 +169,19 @@ unsafe impl<'a> Sync for InnerContext<'a> {}
 impl<'a> Drop for InnerContext<'a> {
     #[inline]
     fn drop(&mut self) {
+        if !self.ends_context {
+            // The renderer's context lives on, and may still reach any
+            // callback it was handed through this wrapper -- for as long
+            // as it likes. Nothing here can know when that ends, so they
+            // are leaked rather than freed under it.
+            self.callbacks
+                .get_mut()
+                .drain()
+                .for_each(|(_, callback)| core::mem::forget(callback));
+            self.retired.get_mut().drain(..).for_each(core::mem::forget);
+            return;
+        }
+
         // Order matters: the renderer may still reach a callback until
         // `NSIEnd` returns, so free nothing before it does.
         self.api.NSIEnd(self.context);
@@ -387,6 +405,41 @@ impl<'a> Context<'a> {
             inner.own_callbacks(".context", args);
             Some(Self(Arc::new(inner)))
         }
+    }
+
+    /// Wraps a context the renderer owns, to make calls on it.
+    ///
+    /// This is what a procedural is handed: a context that exists before
+    /// it is called and outlives it. The wrapper **never runs `NSIEnd`**
+    /// -- unlike [`From<NSIContext>`](#impl-From<NSIContext>-for-Context<'a>),
+    /// whose `Context` ends the context when it drops.
+    ///
+    /// `library` is the ɴsɪ implementation that made `context`, as a name
+    /// or a path; a procedural receives it as `nsi_library_path`. The
+    /// calls go through that library, not whichever this process would
+    /// load by default, and a handle only means something to the
+    /// library that issued it.
+    ///
+    /// A [`Callback`] passed through the wrapper is **leaked**, not freed,
+    /// when it drops: the renderer may use it for as long as the context
+    /// lives, and nothing here can tell when that ends.
+    ///
+    /// # Errors
+    ///
+    /// If `library` cannot be loaded.
+    ///
+    /// # Safety
+    ///
+    /// `context` must be a live context of `library`, and stay live for as
+    /// long as the returned `Context` or any clone of it exists.
+    pub unsafe fn from_renderer_context(
+        context: NSIContext,
+        library: &str,
+    ) -> Result<Self, std::string::String> {
+        let api = crate::renderer(Some(library))?;
+        let mut inner = InnerContext::new(context, api);
+        inner.ends_context = false;
+        Ok(Self(Arc::new(inner)))
     }
 
     /// Creates a new node.
