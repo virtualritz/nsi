@@ -65,6 +65,7 @@
 //! | `lua` | Reading a Lua scene, which **runs** the script. Builds Lua 5.4 from vendored C source. |
 //! | `gzip` | Reading a gzip-compressed stream. |
 //! | `zstd` | Reading a zstd-compressed stream. |
+//! | `parallel` | [`parse_stream_parallel`]: reading and applying a stream on every core. |
 //!
 //! Reading a Lua scene means executing it. ɴsɪ's Lua front end is a
 //! programming language -- a script may compute the scene it describes
@@ -76,6 +77,8 @@
 mod lex;
 #[cfg(feature = "lua")]
 mod lua;
+#[cfg(feature = "parallel")]
+mod parallel;
 mod parse;
 mod value;
 
@@ -203,6 +206,63 @@ where
     }
 
     parse::parse(input, sink)
+}
+
+/// Read an ɴsɪ stream on every core, applying it to `sink`.
+///
+/// For a sink that accepts calls from many threads at once -- a
+/// renderer's context. The resulting scene is the one [`parse_stream`]
+/// produces, but the calls arrive in a different order:
+///
+/// 1. every `Create`, concurrently, in stream order per handle;
+/// 2. then every `SetAttribute` and `SetAttributeAtTime`, concurrently,
+///    in stream order per handle, and every `Connect`, concurrently, in
+///    stream order per destination attribute.
+///
+/// `Delete`, `DeleteAttribute`, `Disconnect`, `Evaluate` and
+/// `RenderControl` are **barriers**: everything before one is applied
+/// before it, it is applied alone, and nothing after it is applied
+/// before it. So an interactive stream -- edits, a `RenderControl`,
+/// more edits -- keeps its meaning.
+///
+/// # What it buys
+///
+/// Measured on 20 000 meshes, 5.3 MiB, 16 threads: into a sink that does
+/// nothing, 166 MiB/s becomes about 320. **Into 3Delight 2.9, only
+/// 1.15-1.4x**: its context serialises calls internally -- 20 000
+/// `SetAttribute`s take 11.8 ms from one thread and 21.4 ms from
+/// sixteen -- so what is gained there is parsing overlapped with the
+/// renderer, not calls made side by side. A sink that takes calls
+/// concurrently gains the most.
+///
+/// # Differences from `parse_stream`
+///
+/// - **A reference to a node created later succeeds.** Every `Create`
+///   in a segment runs first, so a `SetAttribute` on a node the stream
+///   creates further down finds it, where the sequential parser fails.
+/// - **On failure, which statements were applied is unspecified.**
+///   Statements that do not depend on the failing one may have been
+///   applied, before or after it in the stream. The error returned is
+///   the earliest failure found, and a stream with a single error
+///   reports the same error as [`parse_stream`].
+///
+/// # Errors
+///
+/// As [`parse_stream`].
+#[cfg(feature = "parallel")]
+pub fn parse_stream_parallel<N>(
+    input: &[u8],
+    sink: &N,
+) -> Result<(), Error<N::Error>>
+where
+    N: Nsi + Sync,
+    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+{
+    if input.starts_with(&[0xCC, 0x00]) {
+        return Err(Error::BinaryStream);
+    }
+
+    parallel::parse(input, sink)
 }
 
 /// Read an ɴsɪ stream that may be compressed, applying it to `sink`.

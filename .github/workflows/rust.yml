@@ -50,9 +50,9 @@ jobs:
           cargo test -p nsi-intermediate --test classifier
       - name: Test nsi-parse
         run: |
-          cargo test -p nsi-parse --features lua,gzip,zstd \
+          cargo test -p nsi-parse --features lua,gzip,zstd,parallel \
             --lib --test roundtrip --test cross_crate --test lua \
-            --test compressed --test allocation
+            --test compressed --test allocation --test parallel
 
   # Zero warnings, with every feature on. A feature-gated `match` arm
   # that only becomes unreachable under `--all-features` is exactly what

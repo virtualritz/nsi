@@ -25,7 +25,7 @@ const KEYWORDS: [&str; 9] = [
     "RenderControl",
 ];
 
-fn is_keyword(word: &str) -> bool {
+pub(crate) fn is_keyword(word: &str) -> bool {
     KEYWORDS.contains(&word)
 }
 
@@ -65,7 +65,7 @@ where
 
 /// Read one statement's operands, apply it, and return the token that
 /// ended it if one was read ahead.
-fn apply<'a, N>(
+pub(crate) fn apply<'a, N>(
     keyword: &str,
     lexer: &mut Lexer<'a>,
     sink: &N,

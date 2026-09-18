@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### `nsi-parse` 0.1.0 -> 0.1.1 (not yet published)
+
+- `parse_stream_parallel`, behind a new `parallel` feature: reads and
+  applies a stream on every core. Every `Create` first, then every
+  `SetAttribute` and `Connect`, each group in stream order per node or
+  per destination attribute; `Delete`, `DeleteAttribute`, `Disconnect`,
+  `Evaluate` and `RenderControl` are barriers. The recorded scene is the
+  sequential parser's. 1.9x into a null sink; 1.15-1.4x into 3Delight,
+  whose context serialises calls. Additive.
+
 ### `nsi-procedural` 0.1.0 -- first release (not yet published)
 
 Write ɴsɪ procedurals in safe Rust: implement `Procedural`, invoke

@@ -117,6 +117,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// A cursor at `position`, for reading one statement of `input`
+    /// whose start is already known. Offsets stay relative to `input`.
+    #[cfg(feature = "parallel")]
+    pub(crate) const fn starting_at(input: &'a [u8], position: usize) -> Self {
+        Self {
+            input,
+            position,
+            token_start: position,
+        }
+    }
+
     /// Where the token last returned began.
     pub(crate) const fn offset(&self) -> usize {
         self.token_start
@@ -233,7 +244,7 @@ impl<'a> Lexer<'a> {
 ///
 /// The result is bytes: the raw high bytes above are exactly what must
 /// survive, so this cannot end in a UTF-8 check.
-fn unescape(raw: &[u8], offset: usize) -> Result<Vec<u8>, LexError> {
+pub(crate) fn unescape(raw: &[u8], offset: usize) -> Result<Vec<u8>, LexError> {
     let mut out = Vec::with_capacity(raw.len());
     let mut index = 0;
 

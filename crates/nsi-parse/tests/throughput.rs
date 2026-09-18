@@ -130,3 +130,56 @@ fn throughput() {
         megabytes / elapsed.as_secs_f64()
     );
 }
+
+/// The same corpus through `parse_stream_parallel`, into the same sink.
+/// Run it as the test above, with `--features parallel`.
+#[cfg(feature = "parallel")]
+#[test]
+#[ignore = "measure with --release; a debug figure is not comparable"]
+fn throughput_parallel() {
+    let bytes = corpus(20_000);
+    let megabytes = bytes.len() as f64 / (1024.0 * 1024.0);
+
+    nsi_parse::parse_stream_parallel(&bytes, &Sink).expect("parse");
+
+    let start = Instant::now();
+    nsi_parse::parse_stream_parallel(&bytes, &Sink).expect("parse");
+    let elapsed = start.elapsed();
+
+    println!(
+        "parallel: parsed {megabytes:.1} MiB in {elapsed:?} -- {:.0} MiB/s on {} threads",
+        megabytes / elapsed.as_secs_f64(),
+        rayon::current_num_threads()
+    );
+}
+
+/// Both parsers into a live 3Delight context, which is what the parallel
+/// one is for: the renderer's own work per call, not parsing, is most of
+/// the cost, and a context takes calls from many threads. Nothing is
+/// rendered, so no license is involved.
+#[cfg(feature = "parallel")]
+#[test]
+#[ignore = "needs 3Delight; measure with --release"]
+fn throughput_into_3delight() {
+    let bytes = corpus(20_000);
+    let megabytes = bytes.len() as f64 / (1024.0 * 1024.0);
+
+    let measure =
+        |name: &str, parse: &dyn Fn(&nsi_ffi_wrap::Context<'static>)| {
+            let context = nsi_ffi_wrap::Context::new(None).expect("context");
+            let start = Instant::now();
+            parse(&context);
+            let elapsed = start.elapsed();
+            println!(
+                "{name} into 3Delight: {megabytes:.1} MiB in {elapsed:?} -- {:.0} MiB/s",
+                megabytes / elapsed.as_secs_f64()
+            );
+        };
+
+    measure("sequential", &|context| {
+        parse_stream(&bytes, context).expect("parse")
+    });
+    measure("parallel", &|context| {
+        nsi_parse::parse_stream_parallel(&bytes, context).expect("parse")
+    });
+}

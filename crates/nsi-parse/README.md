@@ -43,6 +43,24 @@ statement -- parameter names are always quoted, which makes that
 unambiguous -- and a line-oriented reader would be wrong on valid
 input.
 
+## Paths are carried verbatim
+
+A string value may hold a `${VAR}` reference -- ɴsɪ's
+`streampathreplacement` writes them so a scene can move between
+machines -- and this parser **does not expand them**. Rendered,
+that is what 3Delight does too: `renderdl -cat` echoes
+`${NSI_PATH_TEST}/out.exr` back unexpanded, while a render whose
+`imagefilename` holds it writes to the expanded path. Expansion
+happens at *use*, in whatever opens the file.
+
+Expanding here would bake one machine's paths into a stream whose
+purpose is to move between them. The obligation is the consumer's:
+open a path without expanding and you open the wrong file, on
+exactly the machines where the variable was meant to matter. Note
+that **any** variable expands, not only `NSI_PATH_`-prefixed ones;
+the prefix governs only which ones 3Delight *writes* as
+references.
+
 ## Features
 
 | Feature | What it adds |
@@ -51,6 +69,7 @@ input.
 | `lua` | Reading a Lua scene, which **runs** the script. Builds Lua 5.4 from vendored C source. |
 | `gzip` | Reading a gzip-compressed stream. |
 | `zstd` | Reading a zstd-compressed stream. |
+| `parallel` | [`parse_stream_parallel`](https://docs.rs/nsi-parse/latest/nsi_parse/fn.parse_stream_parallel.html): reading and applying a stream on every core. |
 
 Reading a Lua scene means executing it. ɴsɪ's Lua front end is a
 programming language -- a script may compute the scene it describes
