@@ -65,7 +65,7 @@
 //! | `lua` | Reading a Lua scene, which **runs** the script. Builds Lua 5.4 from vendored C source. |
 //! | `gzip` | Reading a gzip-compressed stream. |
 //! | `zstd` | Reading a zstd-compressed stream. |
-//! | `parallel` | [`parse_stream_parallel`]: reading and applying a stream on every core. |
+//! | `parallel` | `parse_stream_parallel`: reading and applying a stream on every core. |
 //!
 //! Reading a Lua scene means executing it. ɴsɪ's Lua front end is a
 //! programming language -- a script may compute the scene it describes
