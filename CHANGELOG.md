@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### `nsi-intermediate` 0.1.0 -> 0.1.1 (not yet published)
+
+- `Scene::order_decided` and `order_decided_along` report every
+  attribute or shader that two or more nodes define at the same priority
+  and distance from a geometry, where only connection order decides. Each
+  `OrderDecided` names the winner and the dropped definitions, and its
+  `Display` text is the warning a renderer should print; 3Delight 2.9
+  prints none. Resolution already took the first-connected definition,
+  which is what 3Delight renders; that is now pinned by mirrored tests.
+  Additive.
+
 ### `nsi-parse` 0.1.0 -> 0.1.1 (not yet published)
 
 - `parse_stream_parallel`, behind a new `parallel` feature: reads and

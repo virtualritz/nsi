@@ -519,6 +519,56 @@ pub struct AttributeValue<'a> {
     pub priority: i32,
 }
 
+/// An attribute that two or more nodes define at the same rank, so that
+/// only the order they were connected in decides which one applies.
+///
+/// ɴsɪ ranks definitions by priority, then by proximity to the geometry,
+/// and does not say what happens when both are equal. Rendered in
+/// 3Delight 2.9.207, **the node connected first wins**, for a plain
+/// attribute and for a shader alike, and the renderer says nothing about
+/// the definitions it drops. A scene whose look depends on call order
+/// is almost never what its author meant, so this names both sides; a
+/// backend warns with its [`Display`](fmt::Display) text.
+///
+/// Returned by [`Scene::order_decided`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OrderDecided<'a> {
+    /// The geometry the attribute applies to.
+    pub geometry: &'a str,
+    /// The attribute: its name on an `attributes` node, or
+    /// `surfaceshader`, `displacementshader` or `volumeshader`.
+    pub attribute: &'a str,
+    /// The definition that applies: an `attributes` node, or for a
+    /// shader slot the shader.
+    pub winner: &'a str,
+    /// The definitions dropped only for being connected later, in
+    /// connection order.
+    pub dropped: Vec<&'a str>,
+}
+
+impl fmt::Display for OrderDecided<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ɴsɪ attribute {:?} on {:?} is defined {} times at equal \
+             priority and distance; {:?} applies because it was \
+             connected first, dropping ",
+            self.attribute,
+            self.geometry,
+            self.dropped.len() + 1,
+            self.winner,
+        )?;
+        self.dropped
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, handle)| {
+                let separator = if index == 0 { "" } else { ", " };
+                write!(f, "{separator}{handle:?}")
+            })
+    }
+}
+
 /// One renderable output: a camera paired with a screen, and the AOVs
 /// written from it.
 /// `Eq` and `Hash` are absent for the reason `OwnedArgument`'s are

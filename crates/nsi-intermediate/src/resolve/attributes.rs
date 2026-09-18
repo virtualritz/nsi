@@ -522,6 +522,145 @@ impl Scene {
         gathered
     }
 
+    /// Every attribute on a geometry's path that only connection order
+    /// decides: defined on two or more nodes at the same priority and
+    /// the same distance from the geometry. See [`OrderDecided`].
+    ///
+    /// Covers the `attributes` nodes reached through
+    /// `geometryattributes`, ranked as [`Scene::attribute_value`] ranks
+    /// them; the three shader slots, ranked by their connection's
+    /// priority as [`Scene::geometry_binding`] ranks them; and the
+    /// `shaderattributes` containers, which rank by distance alone.
+    /// A definition overridden by priority or by proximity is not
+    /// reported: that is the scene working as written.
+    ///
+    /// # Errors
+    ///
+    /// As [`Scene::geometry_binding`]: walking the path can fail.
+    pub fn order_decided(
+        &self,
+        geometry: &str,
+    ) -> Result<Vec<OrderDecided<'_>>, ResolveError> {
+        let chain = self.chain(geometry)?;
+        Ok(self.order_decided_along(&chain))
+    }
+
+    /// The same, along one [`Placement`]'s path.
+    pub fn order_decided_along(
+        &self,
+        path: &[String],
+    ) -> Vec<OrderDecided<'_>> {
+        let Some(geometry) = path.first().and_then(|g| self.node_entry(g))
+        else {
+            return Vec::new();
+        };
+        let geometry = geometry.0;
+
+        let attributes = self.gathered_along(path, &EdgeKind::AttributeBinding);
+        let mut found = self.order_decided_values(geometry, &attributes, true);
+        found.extend(self.order_decided_values(
+            geometry,
+            &self.gathered_along(path, &EdgeKind::ShaderAttributes),
+            false,
+        ));
+        found.extend(
+            [
+                EdgeKind::SurfaceShader,
+                EdgeKind::DisplacementShader,
+                EdgeKind::VolumeShader,
+            ]
+            .iter()
+            .filter_map(|kind| {
+                self.order_decided_shader(geometry, &attributes, kind)
+            }),
+        );
+        found
+    }
+
+    /// Ties among the values on gathered containers.
+    ///
+    /// `with_priority` is whether `ATTR.priority` ranks them: it does
+    /// for `geometryattributes`, and `shaderattributes` has none.
+    fn order_decided_values<'a>(
+        &'a self,
+        geometry: &'a str,
+        gathered: &[(usize, usize, &'a Edge)],
+        with_priority: bool,
+    ) -> Vec<OrderDecided<'a>> {
+        // Per attribute, every definition: (priority, depth, handle), in
+        // gathered order -- which is already the order a tie resolves in.
+        let mut definitions: Vec<(&'a str, Vec<Definition<'a>>)> = Vec::new();
+        for (depth, _, edge) in gathered {
+            let Some(node) = self.node(edge.from()) else {
+                continue;
+            };
+            // A lone readable `ATTR.priority` defines `ATTR` too; see
+            // `resolve_attribute`.
+            let names = node
+                .attributes()
+                .filter_map(|(name, arg)| {
+                    match name.strip_suffix(".priority") {
+                        Some(base) if with_priority => {
+                            priority_value(arg).map(|_| base)
+                        }
+                        _ => Some(name),
+                    }
+                })
+                .collect::<HashSet<_>>();
+            for name in names {
+                let priority = if with_priority {
+                    node.effective(&format!("{name}.priority"))
+                        .and_then(priority_value)
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                let entry = (priority, *depth, edge.from());
+                match definitions.iter_mut().find(|(known, _)| *known == name) {
+                    Some((_, list)) => list.push(entry),
+                    None => definitions.push((name, vec![entry])),
+                }
+            }
+        }
+
+        definitions
+            .into_iter()
+            .filter_map(|(attribute, list)| {
+                tie(list).map(|(winner, dropped)| OrderDecided {
+                    geometry,
+                    attribute,
+                    winner,
+                    dropped,
+                })
+            })
+            .collect()
+    }
+
+    /// A tie on one shader slot, across every gathered `attributes` node.
+    fn order_decided_shader<'a>(
+        &'a self,
+        geometry: &'a str,
+        gathered: &[(usize, usize, &'a Edge)],
+        kind: &'a EdgeKind,
+    ) -> Option<OrderDecided<'a>> {
+        let list = gathered
+            .iter()
+            .flat_map(|(depth, _, edge)| {
+                self.edges_to_attribute(edge.from(), kind.to_attribute())
+                    .filter(move |shader| shader.kind == *kind)
+                    .map(move |shader| {
+                        (shader.priority(), *depth, shader.from())
+                    })
+            })
+            .collect();
+        tie(list).map(|(winner, dropped)| OrderDecided {
+            geometry,
+            attribute: kind.to_attribute(),
+            winner,
+            dropped,
+        })
+    }
+
     /// The shader of one kind reached from any gathered `attributes`
     /// node, by ɴsɪ's precedence.
     ///
@@ -546,4 +685,29 @@ impl Scene {
             .min_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)))
             .map(|(_, _, shader)| shader.from().to_string())
     }
+}
+
+/// One definition of an attribute on a path: its priority, its distance
+/// from the geometry, and the node or shader carrying it.
+type Definition<'a> = (i32, usize, &'a str);
+
+/// The winner of `definitions`, given in gathered order, and the ones it
+/// beat only by coming first, if there are any.
+///
+/// Highest priority wins, then the nearest; among equals, the first.
+/// That is the rule `resolve_attribute` and `shader_on` apply, so the
+/// winner named here is the one they return.
+fn tie(definitions: Vec<Definition<'_>>) -> Option<(&str, Vec<&str>)> {
+    // `min_by_key` keeps the first of equal keys, as the resolvers do.
+    let (priority, depth, winner) = *definitions
+        .iter()
+        .min_by_key(|(priority, depth, _)| (-i64::from(*priority), *depth))?;
+    let dropped = definitions
+        .iter()
+        .filter(|(p, d, handle)| {
+            *p == priority && *d == depth && *handle != winner
+        })
+        .map(|(_, _, handle)| *handle)
+        .collect::<Vec<_>>();
+    (!dropped.is_empty()).then_some((winner, dropped))
 }

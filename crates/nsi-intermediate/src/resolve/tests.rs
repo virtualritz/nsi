@@ -5770,3 +5770,231 @@ fn an_absent_variable_is_none() {
 fn float_attribute(name: &str, values: &[f32]) -> OwnedArgument {
     OwnedArgument::new(name, Type::F32, 1, 0, OwnedData::F32(values.to_vec()))
 }
+
+/// A plane with two sibling `attributes` nodes, `aa_hidden` setting
+/// `visibility.camera` 0 and `zz_visible` setting it 1, connected in the
+/// order given. Names and creation order run *against* connection order,
+/// so neither can stand in for it.
+fn sibling_visibility(connected: [&str; 2]) -> Scene {
+    let mut scene = Scene::default();
+    scene.create("floor", "plane").unwrap();
+    scene.connect("floor", None, ".root", "objects").unwrap();
+    for (handle, visible) in [("zz_visible", 1), ("aa_hidden", 0)] {
+        scene.create(handle, "attributes").unwrap();
+        scene
+            .set_attribute(
+                handle,
+                vec![integers("visibility.camera", vec![visible])],
+            )
+            .unwrap();
+    }
+    for handle in connected {
+        scene
+            .connect(handle, None, "floor", "geometryattributes")
+            .unwrap();
+    }
+    scene
+}
+
+/// At equal priority and distance the node connected first wins.
+///
+/// Rendered in 3Delight 2.9.207 with this scene and a red constant
+/// shader: `zz_visible` connected first draws the plane red,
+/// `aa_hidden` connected first draws it black. Both orders, so the
+/// answer cannot come from creation order or from the names.
+#[test]
+fn the_first_connected_sibling_wins_a_tie() {
+    for (connected, winner) in [
+        (["zz_visible", "aa_hidden"], "zz_visible"),
+        (["aa_hidden", "zz_visible"], "aa_hidden"),
+    ] {
+        let scene = sibling_visibility(connected);
+        let value = scene
+            .attribute_value("floor", "visibility.camera")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.node, winner, "connected {connected:?}");
+    }
+}
+
+/// The same for a shader, mirrored against
+/// `the_shader_agrees_with_the_gathered_order`, whose winner is also the
+/// one created first and named first. Rendered: `red` connected before
+/// `green` draws red, and the reverse draws green.
+#[test]
+fn the_first_connected_shader_wins_a_tie_whatever_its_name() {
+    for (connected, winner) in [
+        (["red_attributes", "green_attributes"], "red"),
+        (["green_attributes", "red_attributes"], "green"),
+    ] {
+        let mut scene = Scene::default();
+        scene.create("plane", "plane").unwrap();
+        scene.connect("plane", None, ".root", "objects").unwrap();
+        for colour in ["red", "green"] {
+            scene.create(colour, "shader").unwrap();
+            let attributes = format!("{colour}_attributes");
+            scene.create(&attributes, "attributes").unwrap();
+            scene
+                .connect(colour, None, &attributes, "surfaceshader")
+                .unwrap();
+        }
+        for handle in connected {
+            scene
+                .connect(handle, None, "plane", "geometryattributes")
+                .unwrap();
+        }
+
+        let binding = scene.geometry_binding("plane").unwrap().unwrap();
+        assert_eq!(binding.surface_shader.as_deref(), Some(winner));
+    }
+}
+
+#[test]
+fn a_tie_decided_by_order_is_reported_with_what_it_dropped() {
+    let scene = sibling_visibility(["aa_hidden", "zz_visible"]);
+
+    let found = scene.order_decided("floor").unwrap();
+
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].attribute, "visibility.camera");
+    assert_eq!(found[0].winner, "aa_hidden");
+    assert_eq!(found[0].dropped, ["zz_visible"]);
+    assert_eq!(
+        found[0].to_string(),
+        "ɴsɪ attribute \"visibility.camera\" on \"floor\" is defined 2 \
+         times at equal priority and distance; \"aa_hidden\" applies \
+         because it was connected first, dropping \"zz_visible\""
+    );
+}
+
+/// The winner reported is the one resolution returns, however many tie,
+/// and every loser is listed in connection order.
+#[test]
+fn a_three_way_tie_lists_every_dropped_node() {
+    let mut scene = sibling_visibility(["zz_visible", "aa_hidden"]);
+    scene.create("mm_third", "attributes").unwrap();
+    scene
+        .set_attribute("mm_third", vec![integers("visibility.camera", vec![1])])
+        .unwrap();
+    scene
+        .connect("mm_third", None, "floor", "geometryattributes")
+        .unwrap();
+
+    let found = scene.order_decided("floor").unwrap();
+    let resolved = scene
+        .attribute_value("floor", "visibility.camera")
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(found[0].winner, resolved.node);
+    assert_eq!(found[0].dropped, ["aa_hidden", "mm_third"]);
+}
+
+/// Priority and proximity are how a scene overrides on purpose; neither
+/// is a tie.
+#[test]
+fn an_override_by_priority_or_distance_is_not_reported() {
+    // By priority: the later node outranks the first.
+    let mut scene = sibling_visibility(["zz_visible", "aa_hidden"]);
+    scene
+        .set_attribute(
+            "aa_hidden",
+            vec![integers("visibility.camera.priority", vec![5])],
+        )
+        .unwrap();
+    assert_eq!(scene.order_decided("floor").unwrap(), []);
+
+    // By distance: one definition on the geometry's parent.
+    let mut scene = Scene::default();
+    scene.create("xf", "transform").unwrap();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("xf", None, ".root", "objects").unwrap();
+    scene.connect("mesh", None, "xf", "objects").unwrap();
+    for (handle, target) in [("near", "mesh"), ("far", "xf")] {
+        scene.create(handle, "attributes").unwrap();
+        scene
+            .set_attribute(handle, vec![integers("visibility", vec![1])])
+            .unwrap();
+        scene
+            .connect(handle, None, target, "geometryattributes")
+            .unwrap();
+    }
+    assert_eq!(scene.order_decided("mesh").unwrap(), []);
+}
+
+#[test]
+fn a_shader_tie_is_reported_and_a_shader_priority_settles_it() {
+    let build = |priority_on_second: i32| {
+        let mut scene = Scene::default();
+        scene.create("plane", "plane").unwrap();
+        scene.connect("plane", None, ".root", "objects").unwrap();
+        for (colour, shader_priority) in
+            [("red", 0), ("green", priority_on_second)]
+        {
+            scene.create(colour, "shader").unwrap();
+            let attributes = format!("{colour}_attributes");
+            scene.create(&attributes, "attributes").unwrap();
+            scene
+                .connect_with_arguments(
+                    colour,
+                    None,
+                    &attributes,
+                    "surfaceshader",
+                    vec![priority(shader_priority)],
+                )
+                .unwrap();
+            scene
+                .connect(&attributes, None, "plane", "geometryattributes")
+                .unwrap();
+        }
+        scene
+    };
+
+    let scene = build(0);
+    let tied = scene.order_decided("plane").unwrap();
+    assert_eq!(tied.len(), 1, "{tied:?}");
+    assert_eq!(tied[0].attribute, "surfaceshader");
+    assert_eq!(tied[0].winner, "red");
+    assert_eq!(tied[0].dropped, ["green"]);
+
+    assert_eq!(build(1).order_decided("plane").unwrap(), []);
+}
+
+#[test]
+fn a_shaderattributes_tie_is_reported() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    for (handle, tint) in [("second", 2), ("first", 1)] {
+        scene.create(handle, "attributes").unwrap();
+        scene
+            .set_attribute(handle, vec![integers("tint", vec![tint])])
+            .unwrap();
+    }
+    for handle in ["first", "second"] {
+        scene
+            .connect(handle, None, "mesh", "shaderattributes")
+            .unwrap();
+    }
+
+    let found = scene.order_decided("mesh").unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!((found[0].attribute, found[0].winner), ("tint", "first"));
+    assert_eq!(found[0].dropped, ["second"]);
+}
+
+/// Nothing to report on a scene without competing definitions.
+#[test]
+fn a_scene_without_ties_reports_nothing() {
+    let mut scene = Scene::default();
+    scene.create("mesh", "mesh").unwrap();
+    scene.create("attributes", "attributes").unwrap();
+    scene.connect("mesh", None, ".root", "objects").unwrap();
+    scene
+        .connect("attributes", None, "mesh", "geometryattributes")
+        .unwrap();
+    scene
+        .set_attribute("attributes", vec![integers("visibility", vec![1])])
+        .unwrap();
+    assert_eq!(scene.order_decided("mesh").unwrap(), []);
+}
