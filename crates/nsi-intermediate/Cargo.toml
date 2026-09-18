@@ -55,7 +55,7 @@ indexmap = "2"
 parking_lot = "0.12"
 ustr = { version = "1", optional = true }
 flate2 = { version = "1", optional = true }
-zstd = { version = "0.13", optional = true }
+zstd = { version = "0.14", optional = true }
 # `nsi-ffi-wrap` is here for its `Arg` type only -- it is the shared
 # argument currency across backends, so consumers keep using the
 # `nsi::point_slice!` family unchanged. Constructing an `Arg` loads no
