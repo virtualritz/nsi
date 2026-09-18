@@ -40,6 +40,7 @@ included; errors and panics are reported through the renderer.
   `From<NSIContext>` does, which ends the renderer's context when the
   wrapper drops. Callbacks passed through it are leaked rather than
   freed under the renderer. Additive.
+- Drops the unused `null-terminated-str` dependency.
 
 ### `nsi` 0.10.0 -> 0.10.1
 

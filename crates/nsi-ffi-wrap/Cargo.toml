@@ -54,7 +54,6 @@ log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
 nsi-sys = { version = "0.9", path = "../nsi-sys" }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
-null-terminated-str = "0.1"
 num_enum = "0.7"
 parking_lot = "0.12"
 triomphe = "0.1"
