@@ -142,8 +142,29 @@ replaces the `stitch.edge-id` criterion above.
   negative control that makes the first result mean something.
 - One mesh per ɴsɪ node, so per-face attributes and shaders still apply;
   the shared seams are what make them one watertight surface.
-- Orientation follows 3Delight's convention for `nurbs`, checked by the
-  signed volume of a closed solid.
+- Orientation follows 3Delight's convention for `nurbs`: the front is
+  the side ∂P/∂u × ∂P/∂v points to. The convention is established by
+  rendering 3Delight's own `nurbs`, not by reading the manual, which
+  does not state it.
+- Displaced by a shader that pushes along `N`, a welded solid renders
+  closed and the same solid unwelded renders cracked, in 3Delight.
+
+### Evidence
+
+`tests/displacement.rs` renders a cube with a camera at a corner, a
+shader that paints back faces red, and a displacement of 0.15 along `N`
+(3Delight needs the undocumented `displacementbound` attribute to
+displace at all). Red pixels are surface seen from inside.
+
+| Subject                                   | Red pixels |
+| ----------------------------------------- | ---------- |
+| 3Delight `nurbs`, u × v outward           | 0          |
+| 3Delight `nurbs`, u × v inward            | 11488      |
+| Tessellated, welded, displaced            | 0          |
+| Tessellated, unwelded, displaced          | 3753       |
+
+Falsified: skipping the merge of welded seam points, or flipping the
+shell orientation, each fails the suite.
 
 ### Non-Goals
 

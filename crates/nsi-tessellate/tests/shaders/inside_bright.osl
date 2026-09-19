@@ -1,0 +1,10 @@
+// Black seen from the front, red seen from the back. A closed surface
+// facing outward renders black; a crack shows its red inside; an
+// inside-out surface renders red all over.
+surface inside_bright()
+{
+    if (backfacing())
+        Ci = color(1, 0, 0) * emission();
+    else
+        Ci = 0;
+}

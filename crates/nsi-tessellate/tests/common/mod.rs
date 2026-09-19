@@ -1,6 +1,9 @@
-//! Tests for [`super`]: a cube of six trimmed patches, welded and not.
+//! A cube of six trimmed NURBS patches, the shape a STEP solid's faces
+//! take in ɴsɪ, welded along its twelve edges or not.
 
-use super::{NurbsOptions, nurbs_meshes};
+// Each test binary uses its own part of this module.
+#![allow(dead_code)]
+
 use nsi_ffi_wrap as nsi;
 use nsi_intermediate::{Recorder, Scene};
 use nsi_trait::Nsi;
@@ -26,15 +29,38 @@ const FACES: [[usize; 4]; 6] = [
     [1, 3, 7, 5], // x = 1
 ];
 
+/// Which way a cube's faces face, by 3Delight's convention for `nurbs`:
+/// the front is the side `∂P/∂u × ∂P/∂v` points to. Rendered, not
+/// assumed: `nurbs_fronts_face_the_standard_way` in `tests/displacement.rs`.
+#[derive(Clone, Copy)]
+pub enum Facing {
+    /// Every face's front outside.
+    Outward,
+    /// Every face's front inside: the negative control.
+    Inward,
+}
+
 /// A cube of six bilinear patches, each trimmed by the four lines around
 /// its domain -- the shape a STEP solid's faces take in ɴsɪ. With
 /// `welded`, one weld per cube edge, each used by the two faces it joins.
-fn cube(welded: bool) -> Scene {
+/// Faces point outward.
+pub fn cube(welded: bool) -> Scene {
+    cube_facing(welded, Facing::Outward)
+}
+
+/// The same, facing either way.
+pub fn cube_facing(welded: bool, facing: Facing) -> Scene {
     let recorder = Recorder::new();
     if welded {
         recorder.create("cube_welds", "weld", None).unwrap();
     }
     for (face, corners) in FACES.iter().enumerate() {
+        // `FACES` lists corners with ∂P/∂u × ∂P/∂v outward; swapping the
+        // roles of u and v turns the cube inside out.
+        let corners = match facing {
+            Facing::Outward => *corners,
+            Facing::Inward => [corners[0], corners[3], corners[2], corners[1]],
+        };
         let handle = format!("face{face}");
         recorder.create(&handle, nsi::NURBS, None).unwrap();
         recorder
@@ -103,50 +129,4 @@ fn cube(welded: bool) -> Scene {
         }
     }
     recorder.into_scene()
-}
-
-#[test]
-fn a_welded_cube_is_watertight() {
-    let scene = cube(true);
-    assert_eq!(scene.welds().welds.len(), 12, "twelve edges");
-
-    let tessellation = nurbs_meshes(&scene, &NurbsOptions::default());
-
-    assert_eq!(tessellation.problems, Vec::<String>::new());
-    assert_eq!(tessellation.meshes.len(), 6);
-    assert_eq!(
-        tessellation.open_edges, 0,
-        "every triangle edge has a partner"
-    );
-}
-
-/// The negative control: the same patches without welds are six separate
-/// pieces, and their borders are open.
-#[test]
-fn the_same_cube_without_welds_is_open() {
-    let tessellation = nurbs_meshes(&cube(false), &NurbsOptions::default());
-    assert_eq!(tessellation.meshes.len(), 6);
-    assert!(tessellation.open_edges > 0, "unwelded borders stay open");
-}
-
-/// Along a seam, both sides carry the same position and the same normal,
-/// bit for bit -- what a displacement needs to move them together.
-#[test]
-fn seam_points_carry_identical_normals_on_both_sides() {
-    let tessellation = nurbs_meshes(&cube(true), &NurbsOptions::default());
-    let mut seen = std::collections::HashMap::new();
-    let mut shared = 0;
-    for mesh in &tessellation.meshes {
-        for (position, normal) in mesh.positions.iter().zip(&mesh.normals) {
-            let key = position.map(f64::to_bits);
-            if let Some(previous) = seen.insert(key, *normal) {
-                assert_eq!(
-                    previous, *normal,
-                    "normals disagree at {position:?}"
-                );
-                shared += 1;
-            }
-        }
-    }
-    assert!(shared > 0, "the faces share seam points");
 }

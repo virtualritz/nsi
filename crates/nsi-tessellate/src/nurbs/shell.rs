@@ -355,9 +355,10 @@ fn mesh_shell(
                             .collect()
                     })
                     .collect(),
-                // 3Delight's front side of a `nurbs` node is opposite to
-                // `monstertruck`'s u×v normal; see the spec's research.
-                orientation: false,
+                // 3Delight's front side of a `nurbs` node is the side
+                // ∂P/∂u × ∂P/∂v points to -- `monstertruck`'s own. Rendered:
+                // see `tests/displacement.rs`.
+                orientation: true,
                 surface: patch.surface.clone(),
             })
             .collect(),

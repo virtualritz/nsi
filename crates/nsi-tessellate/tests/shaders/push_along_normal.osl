@@ -1,0 +1,7 @@
+// Moves the surface along its normal. A seam whose two sides disagree on
+// either position or normal opens under this shader.
+displacement push_along_normal(float amount = 0.1)
+{
+    P += amount * normalize(N);
+    N = calculatenormal(P);
+}

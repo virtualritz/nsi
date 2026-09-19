@@ -27,5 +27,3 @@ mod shell;
 
 pub use shell::{NurbsMesh, NurbsOptions, NurbsTessellation, nurbs_meshes};
 
-#[cfg(test)]
-mod tests;
