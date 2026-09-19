@@ -637,6 +637,19 @@ impl Scene {
                     insert_root(&mut affected.roots, &edge.from);
                     affected.roots.insert(edge.to.as_str());
                 }
+                // A geometry joining or leaving a weld namespace. Its
+                // own boundaries change, and so do those of every
+                // geometry it was, or now is, welded to: a seam has two
+                // sides.
+                EdgeKind::Weld => {
+                    insert_root(&mut affected.roots, &edge.to);
+                    for partner in self
+                        .edges_from(&edge.from)
+                        .filter(|partner| partner.kind == EdgeKind::Weld)
+                    {
+                        insert_root(&mut affected.roots, &partner.to);
+                    }
+                }
                 // A container bound to something, or unbound from it.
                 EdgeKind::AttributeBinding | EdgeKind::ShaderAttributes => {
                     insert_root(&mut affected.roots, &edge.to);

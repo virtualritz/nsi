@@ -555,3 +555,25 @@ fn an_hpoint_round_trips() {
         r#""Pw" "hpoint" 2"#,
     );
 }
+
+/// A weld table -- the draft's five-curve chain -- round-trips, and still
+/// reads as one five-segment use afterwards.
+#[test]
+fn a_weld_table_round_trips() {
+    let scene = round_trips(
+        r#"Create "solid_welds" "weld"
+           Create "patch" "nurbs"
+           SetAttribute "patch" "trimcurves.ncurves" "int" 1 [ 5 ]
+           Connect "patch" "" ".root" "objects"
+           Connect "solid_welds" "" "patch" "weld"
+           SetAttribute "patch"
+               "weld.id" "int" 1 [ 12 ]
+               "weld.segment-count" "int" 1 [ 5 ]
+               "weld.kind" "string" 5 [ "trim-curve" "trim-curve" "trim-curve" "trim-curve" "trim-curve" ]
+               "weld.index" "int[3]" 5 [ 0 0 0  1 0 0  2 0 0  3 0 0  4 0 0 ]"#,
+        r#""weld.index" "int[3]" 5"#,
+    );
+    let table = scene.weld_table("patch");
+    assert_eq!(table.problems, []);
+    assert_eq!(table.uses[0].segments.len(), 5);
+}

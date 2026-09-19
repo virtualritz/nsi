@@ -247,8 +247,9 @@ pub use recorder::{Recorder, RenderState};
 pub use resolve::{
     AttributeValue, Binding, Face, Faces, IDENTITY, Instance, InstanceRef,
     Instances, Interpolation, OrderDecided, OutputLayer, Placement,
-    PrimitiveVariable, RAY_TYPES, RenderOutput, ResolveError, Sampled,
-    WorldTransforms,
+    NurbsSide, PrimitiveVariable, RAY_TYPES, RenderOutput, ResolveError,
+    Sampled, Weld, WeldKind, WeldProblem, WeldProblemKind, WeldSegment,
+    WeldTable, WeldUse, Welds, WorldTransforms,
 };
 pub use scene::{Affected, Changes, Node, Scene};
 pub use stream::{Compression, StreamWriter, write_stream, write_stream_with};

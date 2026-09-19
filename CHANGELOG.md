@@ -28,6 +28,12 @@ Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),
 
 ### `nsi-intermediate` 0.1.0 -> 0.2.0 (not yet published)
 
+- **Weld declarations** (spec 013), from the ɴsɪ draft *Shared
+  Boundaries*: `EdgeKind::Weld`, `Scene::weld_table(geometry)` and
+  `Scene::welds()`. A geometry's `weld.*` table is parsed and checked
+  against its own trim loops, curves, sides and mesh faces; uses are
+  grouped by `(weld node, id)`; every invalid declaration is a
+  `WeldProblem` a backend prints. Additive.
 - `Scene::order_decided` and `order_decided_along` report every
   attribute or shader that two or more nodes define at the same priority
   and distance from a geometry, where only connection order decides. Each

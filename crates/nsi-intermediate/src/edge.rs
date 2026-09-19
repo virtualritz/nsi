@@ -60,6 +60,10 @@ pub enum EdgeKind {
     ExclusiveShading,
     /// `set -> geometry "facesets"`. ɴsɪ's own Listing 3.2.
     FaceSet,
+    /// `weld -> geometry "weld"`. The geometry's `weld.*` table declares
+    /// boundary uses in that `weld` node's namespace; see
+    /// [`Scene::weld_table`](crate::Scene::weld_table).
+    Weld,
     /// A connection to some other attribute, carried but never
     /// interpreted.
     ///
@@ -148,6 +152,7 @@ impl EdgeKind {
             Self::SubsurfaceSet => "visibility.set.subsurface",
             Self::ExclusiveShading => "exclusiveshading",
             Self::FaceSet => "facesets",
+            Self::Weld => "weld",
             Self::Other { to_attribute } => to_attribute,
             Self::InstanceSource => "sourcemodels",
             Self::SetMember => "members",
@@ -241,6 +246,7 @@ pub fn classify(from_attribute: Option<&str>, to_attribute: &str) -> EdgeKind {
         "outputlayers" => EdgeKind::OutputLayer,
         "outputdrivers" => EdgeKind::OutputDriver,
         "facesets" => EdgeKind::FaceSet,
+        "weld" => EdgeKind::Weld,
         // Not an error: ɴsɪ's destinations are an open set. Carried,
         // never resolved.
         other => EdgeKind::Other {

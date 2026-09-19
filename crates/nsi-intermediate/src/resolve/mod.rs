@@ -16,6 +16,7 @@ mod mesh;
 mod motion;
 mod outputs;
 mod primvar;
+mod weld;
 
 // The types are here; the walks are in the five modules above. Split
 // at 2530 lines against a stated 300-500, along the seams the code
@@ -27,6 +28,10 @@ pub use instances::Instances;
 pub use mesh::{Face, Faces};
 pub use motion::Sampled;
 pub use primvar::{Interpolation, PrimitiveVariable};
+pub use weld::{
+    NurbsSide, Weld, WeldKind, WeldProblem, WeldProblemKind, WeldSegment,
+    WeldTable, WeldUse, Welds,
+};
 
 /// A 4x4 identity, row-major.
 #[rustfmt::skip]
