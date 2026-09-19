@@ -116,3 +116,38 @@ and R3 for whether identity should reach `mesh` boundaries too.
   plausibly and wrongly, which is the failure `nsi-intermediate`'s
   `AmbiguousInterpolation` exists to prevent. The same discipline
   applies here: refuse rather than guess.
+
+## Addendum (2026-09-19): NURBS With Weld Declarations
+
+The draft this spec cited, `stitch.edge-id`, has been superseded by
+[weld declarations](https://nsi.readthedocs.io/en/latest/design/shared-boundaries.html),
+which `nsi-intermediate` now resolves (spec 013). This addendum
+replaces the `stitch.edge-id` criterion above.
+
+### Acceptance Criteria
+
+- Behind a `nurbs` feature, `nurbs_meshes(scene, options)` tessellates
+  every `nurbs` node through `monstertruck-meshing`, reading the shipped
+  3Delight 2.9.210 attributes (`nu`, `uorder`, `uknot`, `P` or `Pw`,
+  `trimcurves.*`).
+- The `nurbs` nodes of one weld namespace are meshed as **one shell**:
+  each `(weld, id)` group is one shared edge, so both sides sample it
+  once. Vertex identity at edge ends comes from topology -- loop
+  junctions linked through shared edges -- never from positions.
+- Along a welded edge, the output shares positions **and normals**
+  across faces, bit for bit, so a displacement that depends on `P` and
+  `N` displaces both sides identically.
+- A closed solid with complete welds comes back with **no open edges**;
+  the same solid without welds comes back with open edges -- the
+  negative control that makes the first result mean something.
+- One mesh per ɴsɪ node, so per-face attributes and shaders still apply;
+  the shared seams are what make them one watertight surface.
+- Orientation follows 3Delight's convention for `nurbs`, checked by the
+  signed volume of a closed solid.
+
+### Non-Goals
+
+- Natural-side (`nurbs-side`) welds on untrimmed faces: the STEP
+  procedural keeps full-domain trim loops when welding, so every welded
+  boundary is a trim curve. Sides are a follow-up.
+- Mesh-edge welds between `nurbs` and subdivision surfaces.

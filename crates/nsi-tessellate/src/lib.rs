@@ -45,6 +45,10 @@ mod cage;
 mod error;
 mod refine;
 
+#[cfg(feature = "nurbs")]
+mod nurbs;
+#[cfg(feature = "nurbs")]
+pub use nurbs::{NurbsMesh, NurbsOptions, NurbsTessellation, nurbs_meshes};
 pub use cage::Cage;
 pub use error::Error;
 pub use refine::{Options, Tessellation, refine_variable, subdivision_surface};

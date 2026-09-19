@@ -14,9 +14,17 @@ documentation = "https://docs.rs/nsi-tessellate/"
 repository = "https://github.com/virtualritz/nsi/"
 include = ["src/**/*", "/Cargo.toml", "/README.md"]
 
+[features]
+# `nurbs_meshes`: `nurbs` nodes through `monstertruck`, welded along
+# declared shared boundaries.
+nurbs = ["dep:monstertruck", "dep:ahash"]
+
 [dependencies]
+ahash = { version = "0.8", optional = true }
+monstertruck = { version = "0.4", features = ["meshing"], optional = true }
 nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
 subdiv-kernels = "0.1"
 
 [dev-dependencies]
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
