@@ -34,7 +34,7 @@ fn render_scene(out: &Path) {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[16, 16])
+        &[nsi::integer_i32_slice!("resolution", &[16, 16])
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     );
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);
@@ -46,7 +46,7 @@ fn render_scene(out: &Path) {
             // The port assumes RGBA throughout, same as the original
             // it ports -- this is what asks 3Delight for the alpha
             // channel.
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
         ],
     );
     ctx.connect("beauty", None, "screen", "outputlayers", None);

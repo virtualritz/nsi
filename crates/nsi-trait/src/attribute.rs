@@ -18,7 +18,7 @@
 //! exported `const`s through the parameter macros:
 //!
 //! ```text
-//! nsi::point_slice!(POSITION, &points)  // node attribute (was: P)
+//! nsi::point3_f32_slice!(POSITION, &points)  // node attribute (was: P)
 //! nsi::string!(STREAM_FORMAT, "nsi")    // function parameter to NSIBegin
 //! ```
 //!

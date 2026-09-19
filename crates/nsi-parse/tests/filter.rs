@@ -17,12 +17,12 @@ where
     for<'call> R: Nsi<Arg<'call> = nsi::Arg<'call, 'static>>,
 {
     sink.create("cam", "perspectivecamera", None)?;
-    sink.set_attribute("cam", &[nsi::f32!("fov", 45.0)])?;
+    sink.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
     // The same attribute again: a `Scene` keeps the last value, a
     // stream keeps both calls.
-    sink.set_attribute("cam", &[nsi::f32!("fov", 60.0)])?;
+    sink.set_attribute("cam", &[nsi::real_f32!("fov", 60.0)])?;
     sink.create("xf", "transform", None)?;
-    sink.set_attribute_at_time("xf", 0.5, &[nsi::f32!("t", 1.0)])?;
+    sink.set_attribute_at_time("xf", 0.5, &[nsi::real_f32!("t", 1.0)])?;
     sink.connect("xf", None, ".root", "objects", None)?;
     sink.connect("cam", Some("out"), "xf", "objects", None)?;
     sink.delete_attribute("cam", "fov")?;

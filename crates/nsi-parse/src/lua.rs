@@ -14,8 +14,12 @@ use crate::Error;
 use core::num::NonZeroUsize;
 use mlua::{Lua, Table, Value, Variadic};
 use nsi_ffi_wrap::{
-    Arg, ArgData, ColorSlice, F32Slice, I32Slice, MatrixF32Slice,
-    MatrixF64Slice, NormalSlice, PointSlice, StringSlice, VectorSlice,
+    Arg, ArgData, StringSlice,
+    argument::{
+        Color3F32Slice, IntegerI32Slice, Matrix4F32Slice, Matrix4F64Slice,
+        Normal3F32Slice, Point3F32Slice, Point4F32Slice, RealF32Slice,
+        Vector3F32Slice,
+    },
 };
 use nsi_trait::{Action, Nsi, Type};
 use std::cell::RefCell;
@@ -67,15 +71,16 @@ where
         // `TypeDouble` and `TypeInt64` are `nil` there, so offering them
         // here would let a script be written that the renderer refuses.
         for (name, tag) in [
-            ("TypeFloat", Type::F32),
-            ("TypeInteger", Type::I32),
+            ("TypeFloat", Type::RealF32),
+            ("TypeInteger", Type::IntegerI32),
             ("TypeString", Type::String),
-            ("TypeColor", Type::Color),
-            ("TypePoint", Type::Point),
-            ("TypeVector", Type::Vector),
-            ("TypeNormal", Type::Normal),
-            ("TypeMatrix", Type::MatrixF32),
-            ("TypeDoubleMatrix", Type::MatrixF64),
+            ("TypeColor", Type::Color3F32),
+            ("TypePoint", Type::Point3F32),
+            ("TypeVector", Type::Vector3F32),
+            ("TypeNormal", Type::Normal3F32),
+            ("TypeMatrix", Type::Matrix4F32),
+            ("TypeDoubleMatrix", Type::Matrix4F64),
+            ("TypeHPoint", Type::Point4F32),
         ] {
             nsi.set(name, tag as i32)?;
         }
@@ -284,8 +289,8 @@ fn param_of(table: Table) -> mlua::Result<Param> {
     let type_tag = match declared {
         Some(value) => tag_of(value)?,
         None => match &data {
-            Value::Integer(_) => Type::I32,
-            Value::Number(_) => Type::F32,
+            Value::Integer(_) => Type::IntegerI32,
+            Value::Number(_) => Type::RealF32,
             Value::String(_) => Type::String,
             _ => {
                 return Err(mlua::Error::runtime(
@@ -321,13 +326,15 @@ fn param_of(table: Table) -> mlua::Result<Param> {
                 }
                 param.strings.push(text);
             }
-            Type::I32 => {
+            Type::IntegerI32 => {
                 param.i32s.push(i32::try_from(integer(&value)?).map_err(
                     |_| mlua::Error::runtime("an ɴsɪ int does not fit 32 bits"),
                 )?)
             }
-            Type::I64 => param.i64s.push(integer(&value)?),
-            Type::F64 | Type::MatrixF64 => param.f64s.push(number(&value)?),
+            Type::IntegerI64 => param.i64s.push(integer(&value)?),
+            Type::RealF64 | Type::Matrix4F64 => {
+                param.f64s.push(number(&value)?)
+            }
             _ => param.f32s.push(number(&value)? as f32),
         }
     }
@@ -335,17 +342,21 @@ fn param_of(table: Table) -> mlua::Result<Param> {
     // ɴsɪ's tuple types need whole elements; `as_chunks` would drop a
     // remainder, turning a two-value point into an empty one.
     let width = match type_tag {
-        Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
-        Type::MatrixF32 | Type::MatrixF64 => 16,
+        Type::Color3F32
+        | Type::Point3F32
+        | Type::Vector3F32
+        | Type::Normal3F32 => 3,
+        Type::Point4F32 => 4,
+        Type::Matrix4F32 | Type::Matrix4F64 => 16,
         _ => 1,
     };
     // The count has to come from the buffer this type actually filled,
     // or the `arraylength` check below compares against zero and lets
     // anything through.
     let count = match type_tag {
-        Type::F64 | Type::MatrixF64 => param.f64s.len(),
-        Type::I32 => param.i32s.len(),
-        Type::I64 => param.i64s.len(),
+        Type::RealF64 | Type::Matrix4F64 => param.f64s.len(),
+        Type::IntegerI32 => param.i32s.len(),
+        Type::IntegerI64 => param.i64s.len(),
         Type::String => param.strings.len(),
         _ => param.f32s.len(),
     };
@@ -403,15 +414,16 @@ fn action_of(name: &[u8]) -> Option<Action> {
 
 fn tag_of(value: i32) -> mlua::Result<Type> {
     Ok(match value {
-        1 => Type::F32,
-        2 => Type::I32,
+        1 => Type::RealF32,
+        2 => Type::IntegerI32,
         3 => Type::String,
-        4 => Type::Color,
-        5 => Type::Point,
-        6 => Type::Vector,
-        7 => Type::Normal,
-        8 => Type::MatrixF32,
-        0x18 => Type::MatrixF64,
+        4 => Type::Color3F32,
+        5 => Type::Point3F32,
+        6 => Type::Vector3F32,
+        7 => Type::Normal3F32,
+        8 => Type::Matrix4F32,
+        0x18 => Type::Matrix4F64,
+        10 => Type::Point4F32,
         _ => return Err(mlua::Error::runtime("unknown ɴsɪ type")),
     })
 }
@@ -424,6 +436,10 @@ fn with_args<T>(
     let triples: Vec<Vec<[f32; 3]>> = params
         .iter()
         .map(|p| p.f32s.as_chunks::<3>().0.to_vec())
+        .collect();
+    let quads: Vec<Vec<[f32; 4]>> = params
+        .iter()
+        .map(|p| p.f32s.as_chunks::<4>().0.to_vec())
         .collect();
     let matrices_f32: Vec<Vec<[f32; 16]>> = params
         .iter()
@@ -443,31 +459,43 @@ fn with_args<T>(
         .enumerate()
         .map(|(index, p)| {
             let data = match p.type_tag {
-                Type::F32 => ArgData::from(F32Slice::new(&p.f32s)),
-                Type::I32 => ArgData::from(I32Slice::new(&p.i32s)),
+                Type::RealF32 => ArgData::from(RealF32Slice::new(&p.f32s)),
+                Type::IntegerI32 => {
+                    ArgData::from(IntegerI32Slice::new(&p.i32s))
+                }
                 Type::String => {
                     ArgData::from(StringSlice::new(&borrowed[index]))
                 }
-                Type::Color => ArgData::from(ColorSlice::new(&triples[index])),
-                Type::Point => ArgData::from(PointSlice::new(&triples[index])),
-                Type::Vector => {
-                    ArgData::from(VectorSlice::new(&triples[index]))
+                Type::Color3F32 => {
+                    ArgData::from(Color3F32Slice::new(&triples[index]))
                 }
-                Type::Normal => {
-                    ArgData::from(NormalSlice::new(&triples[index]))
+                Type::Point3F32 => {
+                    ArgData::from(Point3F32Slice::new(&triples[index]))
                 }
-                Type::MatrixF32 => {
-                    ArgData::from(MatrixF32Slice::new(&matrices_f32[index]))
+                Type::Vector3F32 => {
+                    ArgData::from(Vector3F32Slice::new(&triples[index]))
                 }
-                Type::MatrixF64 => {
-                    ArgData::from(MatrixF64Slice::new(&matrices_f64[index]))
+                Type::Normal3F32 => {
+                    ArgData::from(Normal3F32Slice::new(&triples[index]))
+                }
+                Type::Matrix4F32 => {
+                    ArgData::from(Matrix4F32Slice::new(&matrices_f32[index]))
+                }
+                Type::Matrix4F64 => {
+                    ArgData::from(Matrix4F64Slice::new(&matrices_f64[index]))
+                }
+                Type::Point4F32 => {
+                    ArgData::from(Point4F32Slice::new(&quads[index]))
                 }
                 // `tag_of` yields none of these and inference produces
                 // none: ɴsɪ's Lua binding has no name for a double, a
                 // 64-bit integer or a pointer.
                 // `tag_of` accepts none of these, and inference
                 // produces none.
-                Type::F64 | Type::I64 | Type::Reference | Type::Invalid => {
+                Type::RealF64
+                | Type::IntegerI64
+                | Type::Reference
+                | Type::Invalid => {
                     unreachable!("no Lua spelling yields {:?}", p.type_tag)
                 }
             };

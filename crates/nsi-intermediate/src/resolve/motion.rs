@@ -448,9 +448,9 @@ impl Scene {
     /// predicate is not always the right one. Rendered: `P` declared
     /// `vector`, `normal`, `color`, `float 12` or `double 12` is
     /// `E6007` and the mesh does not draw -- there an exact
-    /// `type_tag == Type::Point` matches the renderer. But `N`
+    /// `type_tag == Type::Point3F32` matches the renderer. But `N`
     /// declared `vector` raises **no** error and renders identically
-    /// to a `normal`, so a predicate demanding `Type::Normal` reports
+    /// to a `normal`, so a predicate demanding `Type::Normal3F32` reports
     /// `Unset` for a call 3Delight accepts. The rule this applies is
     /// proven for the attributes the renderer type-checks; for the
     /// others, `readable` is the backend's own policy and this crate

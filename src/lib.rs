@@ -99,16 +99,16 @@
 //!         // Typed name: `nsi::POSITION` is `Attribute<[nsi::Point3F32]>`.
 //!         // Wrong-shape data (e.g. a `&[f32]`) is rejected by rustc at
 //!         // this call site.
-//!         nsi::point_slice!(nsi::POSITION, &positions),
-//!         nsi::i32_slice!("P.indices", &face_index),
+//!         nsi::point3_f32_slice!(nsi::POSITION, &positions),
+//!         nsi::integer_i32_slice!("P.indices", &face_index),
 //!         // 5 vertices per each face.
-//!         nsi::i32_slice!("nvertices", &[5; 12]),
+//!         nsi::integer_i32_slice!("nvertices", &[5; 12]),
 //!         // Render this as a subdivison surface.
 //!         nsi::string!("subdivision.scheme", "catmull-clark"),
 //!         // Crease each of the dodecahedron's 30 edges. Each edge is
 //!         // a pair (start, end) of vertex indices into `positions`,
 //!         // so this list is twice as long as `creasesharpness`.
-//!         nsi::i32_slice!(
+//!         nsi::integer_i32_slice!(
 //!             "subdivision.creasevertices",
 //!             &[
 //!                 0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13, 2,
@@ -117,7 +117,7 @@
 //!                 11, 12, 14, 13, 15, 16, 17, 18, 19,
 //!             ]
 //!         ),
-//!         nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
+//!         nsi::real_f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
 //!     ],
 //! );
 //! ```
@@ -208,9 +208,9 @@
 //! crates without touching this one -- `Attribute::new("custom_name")` is
 //! `const`, so consumers declare their own typed constants.
 //!
-//! Note: the parameter macros (`nsi::f32!`, `nsi::point_slice!`, …)
-//! currently accept the wire-side string literal directly; static
-//! verification against [`Attribute<T>`] is in progress.
+//! The parameter macros (`nsi::real_f32!`, `nsi::point3_f32_slice!`, …)
+//! accept either a string literal, unchecked, or a typed
+//! [`Attribute<T>`] constant, whose shape is checked at compile time.
 //!
 //! ## Getting Pixels
 //!

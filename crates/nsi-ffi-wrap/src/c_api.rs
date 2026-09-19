@@ -42,7 +42,8 @@
 //! ```
 
 use crate::{
-    Action, Arg, ArgData, F32, F64, I32, I64, NodeType, String as NsiString,
+    Action, Arg, ArgData, NodeType, String as NsiString,
+    argument::{IntegerI32, IntegerI64, RealF32, RealF64},
 };
 use nsi_sys::NSIParam;
 use std::ffi::{CStr, c_char, c_int};
@@ -97,22 +98,22 @@ unsafe fn marshal_single_param<'a>(param: &NSIParam) -> Option<Arg<'a, 'a>> {
         t if t == nsi_sys::NSIType::F32 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid f32.
             let value = unsafe { *(param.data as *const f32) };
-            ArgData::from(F32::new(value))
+            ArgData::from(RealF32::new(value))
         }
         t if t == nsi_sys::NSIType::F64 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid f64.
             let value = unsafe { *(param.data as *const f64) };
-            ArgData::from(F64::new(value))
+            ArgData::from(RealF64::new(value))
         }
         t if t == nsi_sys::NSIType::I32 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid i32.
             let value = unsafe { *(param.data as *const i32) };
-            ArgData::from(I32::new(value))
+            ArgData::from(IntegerI32::new(value))
         }
         t if t == nsi_sys::NSIType::I64 as i32 => {
             // SAFETY: Caller guarantees param.data points to valid i64.
             let value = unsafe { *(param.data as *const i64) };
-            ArgData::from(I64::new(value))
+            ArgData::from(IntegerI64::new(value))
         }
         t if t == nsi_sys::NSIType::String as i32 => {
             // SAFETY: Caller guarantees param.data points to valid string pointer.

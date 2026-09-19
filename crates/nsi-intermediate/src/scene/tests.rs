@@ -19,7 +19,7 @@ fn strength(value: i32) -> OwnedArgument {
 fn priority(value: i32) -> OwnedArgument {
     OwnedArgument {
         name: "priority".to_string(),
-        type_tag: Type::I32,
+        type_tag: Type::IntegerI32,
         array_length: 1,
         flags: 0,
         data: OwnedData::I32(vec![value]),
@@ -29,7 +29,7 @@ fn priority(value: i32) -> OwnedArgument {
 fn arg(name: &str, value: f32) -> OwnedArgument {
     OwnedArgument {
         name: name.to_string(),
-        type_tag: Type::F32,
+        type_tag: Type::RealF32,
         array_length: 1,
         flags: 0,
         data: OwnedData::F32(vec![value]),
@@ -850,7 +850,7 @@ fn a_connect_rearmed_in_place_is_recorded() {
             "surfaceshader",
             vec![OwnedArgument::new(
                 "priority",
-                Type::I32,
+                Type::IntegerI32,
                 1,
                 0,
                 OwnedData::I32(vec![10]),
@@ -887,7 +887,7 @@ fn re_arming_one_edge_repeatedly_is_one_entry() {
                 "surfaceshader",
                 vec![OwnedArgument::new(
                     "priority",
-                    Type::I32,
+                    Type::IntegerI32,
                     1,
                     0,
                     OwnedData::I32(vec![priority]),
@@ -1052,7 +1052,7 @@ fn a_shader_edit_reaches_the_geometry_bound_through_it() {
             "surfaceshader",
             vec![OwnedArgument::new(
                 "priority",
-                Type::I32,
+                Type::IntegerI32,
                 1,
                 0,
                 OwnedData::I32(vec![10]),
@@ -1287,7 +1287,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 "inst",
                 vec![OwnedArgument::new(
                     "transformationmatrices",
-                    Type::MatrixF64,
+                    Type::Matrix4F64,
                     1,
                     0,
                     OwnedData::F64(
@@ -1338,7 +1338,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                 "outer",
                 vec![OwnedArgument::new(
                     "transformationmatrix",
-                    Type::MatrixF64,
+                    Type::Matrix4F64,
                     1,
                     0,
                     OwnedData::F64(vec![
@@ -1358,7 +1358,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                     arg("visibility", 0.0),
                     OwnedArgument::new(
                         "visibility.priority",
-                        Type::I32,
+                        Type::IntegerI32,
                         1,
                         0,
                         OwnedData::I32(vec![10]),
@@ -1389,7 +1389,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
     fn matrix(x: f64) -> OwnedArgument {
         OwnedArgument::new(
             "transformationmatrix",
-            Type::MatrixF64,
+            Type::Matrix4F64,
             1,
             0,
             OwnedData::F64(vec![
@@ -1439,7 +1439,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                     "surfaceshader",
                     vec![OwnedArgument::new(
                         "priority",
-                        Type::I32,
+                        Type::IntegerI32,
                         1,
                         0,
                         OwnedData::I32(vec![7]),
@@ -1465,7 +1465,7 @@ fn every_changed_answer_is_named_in_the_affected_set() {
                     handle,
                     vec![OwnedArgument::new(
                         "visibility.priority",
-                        Type::I32,
+                        Type::IntegerI32,
                         1,
                         0,
                         OwnedData::I32(vec![20]),

@@ -10,7 +10,7 @@ fn scene() -> nsi_intermediate::Scene {
     let recorder = Recorder::new();
     recorder.create("m", "mesh", None).unwrap();
     recorder
-        .set_attribute("m", &[nsi::f32!("fov", 45.0)])
+        .set_attribute("m", &[nsi::real_f32!("fov", 45.0)])
         .unwrap();
     recorder
         .connect("m", None, ".root", "objects", None)

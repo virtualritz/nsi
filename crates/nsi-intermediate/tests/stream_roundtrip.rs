@@ -22,25 +22,25 @@ where
 {
     // `.global` is reserved: it carries attributes but is never
     // declared, so a stream that emits `Create ".global" ""` diverges.
-    ctx.set_attribute(".global", &[nsi::i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
 
     ctx.create("cam", "perspectivecamera", None)?;
-    ctx.set_attribute("cam", &[nsi::f32!("fov", 45.0)])?;
+    ctx.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
     ctx.set_attribute("cam", &[nsi::string!("name", "hello")])?;
 
     ctx.create("m", "mesh", None)?;
     let points = [[0.0f32, 0.0, 0.0], [1.0, 2.0, 3.0]];
-    ctx.set_attribute("m", &[nsi::point_slice!("P", &points)])?;
-    ctx.set_attribute("m", &[nsi::i32_slice!("nvertices", &[4i32])])?;
+    ctx.set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])?;
+    ctx.set_attribute("m", &[nsi::integer_i32_slice!("nvertices", &[4i32])])?;
     let resolution = [1280i32, 720];
     ctx.set_attribute(
         "m",
-        &[nsi::i32_slice!("resolution", &resolution)
+        &[nsi::integer_i32_slice!("resolution", &resolution)
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     )?;
-    ctx.set_attribute("m", &[nsi::color!("c", &[0.1, 0.2, 0.3])])?;
-    ctx.set_attribute("m", &[nsi::i64!("big", 7i64)])?;
-    ctx.set_attribute("m", &[nsi::f64!("d", 0.5f64)])?;
+    ctx.set_attribute("m", &[nsi::color3_f32!("c", &[0.1, 0.2, 0.3])])?;
+    ctx.set_attribute("m", &[nsi::integer_i64!("big", 7i64)])?;
+    ctx.set_attribute("m", &[nsi::real_f64!("d", 0.5f64)])?;
 
     ctx.create("xf", "transform", None)?;
 
@@ -54,7 +54,7 @@ where
         0.0, 0.0, 1.0, 0.0,
         1.0, 2.0, 3.0, 1.0,
     ];
-    ctx.set_attribute("xf", &[nsi::matrix_f64!("transformationmatrix", &m64)])?;
+    ctx.set_attribute("xf", &[nsi::matrix4_f64!("transformationmatrix", &m64)])?;
     #[rustfmt::skip]
     let m32 = [
         2.0f32, 0.0, 0.0, 0.0,
@@ -62,13 +62,13 @@ where
         0.0, 0.0, 2.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
     ];
-    ctx.set_attribute("xf", &[nsi::matrix_f32!("othermatrix", &m32)])?;
+    ctx.set_attribute("xf", &[nsi::matrix4_f32!("othermatrix", &m32)])?;
 
     // After the static attributes, deliberately: `write_stream` emits a
     // node's `attributes` before its sample log, so a fixture that
     // interleaved them would diverge on ordering alone. See the
     // "What this is not" note in `nsi_intermediate::stream`.
-    ctx.set_attribute_at_time("xf", 0.5, &[nsi::f64!("t", 1.0)])?;
+    ctx.set_attribute_at_time("xf", 0.5, &[nsi::real_f64!("t", 1.0)])?;
 
     // Every non-shader connection class, so the classifier and the
     // emitter are held to being inverse over all of them rather than
@@ -85,22 +85,22 @@ where
     // one of these was wrong before the emitter formatted doubles the
     // way 3Delight does.
     ctx.create("floats", "mesh", None)?;
-    ctx.set_attribute("floats", &[nsi::f64!("tenth", 0.1f64)])?;
-    ctx.set_attribute("floats", &[nsi::f64!("third", 1.0f64 / 3.0)])?;
-    ctx.set_attribute("floats", &[nsi::f64!("tiny", 1e-7f64)])?;
-    ctx.set_attribute("floats", &[nsi::f64!("huge", 1e20f64)])?;
-    ctx.set_attribute("floats", &[nsi::f64!("neg_zero", -0.0f64)])?;
+    ctx.set_attribute("floats", &[nsi::real_f64!("tenth", 0.1f64)])?;
+    ctx.set_attribute("floats", &[nsi::real_f64!("third", 1.0f64 / 3.0)])?;
+    ctx.set_attribute("floats", &[nsi::real_f64!("tiny", 1e-7f64)])?;
+    ctx.set_attribute("floats", &[nsi::real_f64!("huge", 1e20f64)])?;
+    ctx.set_attribute("floats", &[nsi::real_f64!("neg_zero", -0.0f64)])?;
 
     // Argument flags, which ɴsɪ writes as letters prefixed to the type.
     let flagged = [[0.0f32, 1.0, 2.0], [3.0, 4.0, 5.0]];
     ctx.set_attribute(
         "floats",
-        &[nsi::point_slice!("P_pv", &flagged).per_vertex()],
+        &[nsi::point3_f32_slice!("P_pv", &flagged).per_vertex()],
     )?;
-    ctx.set_attribute("floats", &[nsi::f32!("w_pf", 1.0).per_face()])?;
+    ctx.set_attribute("floats", &[nsi::real_f32!("w_pf", 1.0).per_face()])?;
     ctx.set_attribute(
         "floats",
-        &[nsi::f32!("w_lin", 1.0).linear_interpolation()],
+        &[nsi::real_f32!("w_lin", 1.0).linear_interpolation()],
     )?;
 
     // Control bytes. 3Delight writes these as three-digit octal, and a
@@ -126,25 +126,25 @@ where
 
     // Floats whose Rust `Display` and 3Delight's printer differ: it
     // picks whichever of decimal and exponent notation is shorter.
-    ctx.set_attribute("floats", &[nsi::f32!("f_1e5", 100_000.0f32)])?;
-    ctx.set_attribute("floats", &[nsi::f32!("f_tiny", 1e-7f32)])?;
-    ctx.set_attribute("floats", &[nsi::f32!("f_wide", 123_456_792.0f32)])?;
+    ctx.set_attribute("floats", &[nsi::real_f32!("f_1e5", 100_000.0f32)])?;
+    ctx.set_attribute("floats", &[nsi::real_f32!("f_tiny", 1e-7f32)])?;
+    ctx.set_attribute("floats", &[nsi::real_f32!("f_wide", 123_456_792.0f32)])?;
 
     // `array_len(1)` is a real one-element array. ɴsɪ marks it with a
     // flag, not by its length, and 3Delight writes `float[1]`.
     ctx.set_attribute(
         "floats",
-        &[nsi::f32_slice!("one_array", &[1.0f32, 2.0])
+        &[nsi::real_f32_slice!("one_array", &[1.0f32, 2.0])
             .array_len(const { std::num::NonZeroUsize::new(1).unwrap() })],
     )?;
 
     // An empty slice: 3Delight writes `[ ]`, so the bracket rule is
     // "exactly one scalar is bare", not "more than one is bracketed".
     let nothing: [f32; 0] = [];
-    ctx.set_attribute("floats", &[nsi::f32_slice!("empty", &nothing)])?;
+    ctx.set_attribute("floats", &[nsi::real_f32_slice!("empty", &nothing)])?;
 
     // A sample time that also discriminates the two formatters.
-    ctx.set_attribute_at_time("floats", 1.0 / 3.0, &[nsi::f64!("t", 1.0)])?;
+    ctx.set_attribute_at_time("floats", 1.0 / 3.0, &[nsi::real_f64!("t", 1.0)])?;
 
     ctx.create("prio_attr", "attributes", None)?;
     ctx.create("s1", "shader", None)?;
@@ -174,7 +174,7 @@ where
         None,
         "floats",
         "geometryattributes",
-        Some(&[nsi::i32!("priority", 3)]),
+        Some(&[nsi::integer_i32!("priority", 3)]),
     )?;
     Ok(())
 }

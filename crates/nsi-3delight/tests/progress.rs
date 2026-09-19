@@ -46,7 +46,7 @@ fn render(reporter: Option<&ProgressReporter<Recorder>>) {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[64, 64])
+        &[nsi::integer_i32_slice!("resolution", &[64, 64])
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     );
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);
@@ -55,7 +55,7 @@ fn render(reporter: Option<&ProgressReporter<Recorder>>) {
         &[
             nsi::string!("variablename", "Ci"),
             nsi::string!("scalarformat", "float"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
         ],
     );
     ctx.connect("beauty", None, "screen", "outputlayers", None);

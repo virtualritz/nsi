@@ -188,7 +188,7 @@ pub fn scaling(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &transform::scaling_matrix(scale)
         )],
@@ -212,7 +212,7 @@ pub fn translation(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &transform::translation_matrix(translate)
         )],
@@ -238,7 +238,7 @@ pub fn rotation(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &transform::rotation_matrix(angle, axis)
         )],
@@ -268,7 +268,7 @@ pub fn look_at_camera(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &transform::look_at_matrix(eye, to, up)
         )],
@@ -342,7 +342,7 @@ pub fn look_at_bounding_box_perspective_camera(
     ctx.create(handle.as_str(), nsi::node::TRANSFORM, None);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &transform::look_at_matrix(
                 (bounding_box_center

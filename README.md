@@ -119,16 +119,16 @@ ctx.set_attribute(
         // Typed name: `nsi::POSITION` is `Attribute<[nsi::Point3F32]>`.
         // Wrong-shape data (e.g. a `&[f32]`) is rejected by rustc at
         // this call site.
-        nsi::point_slice!(nsi::POSITION, &positions),
-        nsi::i32_slice!("P.indices", &face_index),
+        nsi::point3_f32_slice!(nsi::POSITION, &positions),
+        nsi::integer_i32_slice!("P.indices", &face_index),
         // 5 vertices per each face.
-        nsi::i32_slice!("nvertices", &[5; 12]),
+        nsi::integer_i32_slice!("nvertices", &[5; 12]),
         // Render this as a subdivison surface.
         nsi::string!("subdivision.scheme", "catmull-clark"),
         // Crease each of the dodecahedron's 30 edges. Each edge is
         // a pair (start, end) of vertex indices into `positions`,
         // so this list is twice as long as `creasesharpness`.
-        nsi::i32_slice!(
+        nsi::integer_i32_slice!(
             "subdivision.creasevertices",
             &[
                 0, 8, 0, 12, 0, 16, 1, 9, 1, 12, 1, 17, 2, 10, 2, 13, 2,
@@ -137,7 +137,7 @@ ctx.set_attribute(
                 11, 12, 14, 13, 15, 16, 17, 18, 19,
             ]
         ),
-        nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
+        nsi::real_f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
     ],
 );
 ```
@@ -228,9 +228,9 @@ Renderer-specific or experimental attributes are added in their own
 crates without touching this one -- `Attribute::new("custom_name")` is
 `const`, so consumers declare their own typed constants.
 
-Note: the parameter macros (`nsi::f32!`, `nsi::point_slice!`, …)
-currently accept the wire-side string literal directly; static
-verification against `Attribute<T>` is in progress.
+The parameter macros (`nsi::real_f32!`, `nsi::point3_f32_slice!`, …)
+accept either a string literal, unchecked, or a typed
+`Attribute<T>` constant, whose shape is checked at compile time.
 
 ### Getting Pixels
 
@@ -264,33 +264,24 @@ or use channels to stream pixels back to a main thread (see the
 
 ### Choosing A Renderer
 
-ɴsɪ is an interface, not a renderer, and more than one implementation of
-it exists. A `"renderer"` argument says which one a `Context` talks to:
+ɴsɪ is an interface, not a renderer, and more than one
+implementation of it exists. A `"renderer"` argument says which one
+a `Context` talks to:
 
 ```rust
-let ctx = nsi::Context::new(Some(&[
-    nsi::string!("renderer", "moonray"),
-]));
+let ctx = nsi::Context::new(Some(&[nsi::string!("renderer", "moonray")]));
 ```
 
-A name the crate knows is looked for where that renderer installs --
-`3delight` and `moonray` today, each with its own prefix variable
-(`$DELIGHT`, `$NSI_MOONRAY`). Anything else is taken as a library to
-load, trying `libnsi_<name>` and `lib<name>`, so an implementation
-released after this crate works without a release of this crate, and a
-path points at a build of your own.
+A name this crate knows is looked for where that renderer installs.
+Anything else is taken as a library to load, so an implementation
+released after this crate works without a release of this crate,
+and so a path points at a build of your own. Without the argument,
+`$NSI_RENDERER` decides; without that, 3Delight.
 
-Without the argument, `$NSI_RENDERER` decides; without that, 3Delight
--- which is what every caller got before the argument existed, so
-nothing changes for one that does not ask.
-
-Two contexts in one process may name two different renderers. The
-argument is answered by this crate and never forwarded, since no
-renderer declares it.
-
-[`nsi-moonray`](https://github.com/virtualritz/nsi-moonray) is an ɴsɪ
-backend on [MoonRay](https://openmoonray.org/), DreamWorks Animation's
-production renderer, and is what `"moonray"` names.
+Two contexts in one process may name two different renderers, and
+the argument itself is answered here rather than forwarded to any
+of them. `backend` has the whole rule, the known names and the
+environment variable each of them reads.
 
 ### Linking Style
 
@@ -331,8 +322,9 @@ By default the lib is loaded at runtime.
   * The feature is called `download_lib3delight`.
 
 Linking is 3Delight only and is one renderer for the life of the
-process, so a `"renderer"` naming anything else is refused rather than
-quietly ignored. Choosing at runtime needs the default, dynamic style.
+process, so a `"renderer"` naming anything else is refused rather
+than quietly ignored. Choosing at runtime needs the default,
+dynamic style.
 
 <!-- cargo-rdme end -->
 

@@ -67,8 +67,8 @@ fn what_3delight_writes_parses_back_into_the_same_scene() {
         ctx.set_attribute(
             "cam",
             &[
-                nsi::f32!("fov", 45.0),
-                nsi::f64!("shutter", 0.1f64),
+                nsi::real_f32!("fov", 45.0),
+                nsi::real_f64!("shutter", 0.1f64),
                 nsi::string!("name", "hero"),
             ],
         );
@@ -80,9 +80,9 @@ fn what_3delight_writes_parses_back_into_the_same_scene() {
         ctx.set_attribute(
             "m",
             &[
-                nsi::point_slice!("P", &points),
-                nsi::i32_slice!("nvertices", &[4i32]),
-                nsi::color!("c", &[0.1, 0.2, 0.3]),
+                nsi::point3_f32_slice!("P", &points),
+                nsi::integer_i32_slice!("nvertices", &[4i32]),
+                nsi::color3_f32!("c", &[0.1, 0.2, 0.3]),
             ],
         );
 
@@ -96,9 +96,9 @@ fn what_3delight_writes_parses_back_into_the_same_scene() {
         ];
         ctx.set_attribute(
             "xf",
-            &[nsi::matrix_f64!("transformationmatrix", &matrix)],
+            &[nsi::matrix4_f64!("transformationmatrix", &matrix)],
         );
-        ctx.set_attribute_at_time("xf", 0.5, &[nsi::f64!("t", 1.0)]);
+        ctx.set_attribute_at_time("xf", 0.5, &[nsi::real_f64!("t", 1.0)]);
 
         ctx.connect("xf", None, ".root", "objects", None);
         ctx.connect("m", None, "xf", "objects", None);
@@ -199,12 +199,12 @@ fn a_filtered_stream_is_one_3delight_reads_back() {
         ctx.create("cam", "perspectivecamera", None);
         ctx.set_attribute(
             "cam",
-            &[nsi::f32!("fov", 45.0), nsi::string!("name", "hero")],
+            &[nsi::real_f32!("fov", 45.0), nsi::string!("name", "hero")],
         );
         ctx.create("m", "mesh", None);
         let points: Vec<[f32; 3]> =
             (0..40).map(|i| [i as f32, 0.5, -1.25]).collect();
-        ctx.set_attribute("m", &[nsi::point_slice!("P", &points)]);
+        ctx.set_attribute("m", &[nsi::point3_f32_slice!("P", &points)]);
         ctx.connect("m", None, ".root", "objects", None);
     }
 

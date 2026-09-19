@@ -20,7 +20,7 @@ fn recorder_implements_nsi() {
 fn records_a_node_and_its_attribute() {
     let r = Recorder::new();
     r.create("cam", "perspectivecamera", None).unwrap();
-    r.set_attribute("cam", &[nsi::f32!("fov", 45.0)]).unwrap();
+    r.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)]).unwrap();
 
     let scene = r.scene();
     assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
@@ -186,7 +186,7 @@ fn connect_records_the_priority_argument() {
         None,
         "mesh",
         "geometryattributes",
-        Some(&[nsi::i32!("priority", 7)]),
+        Some(&[nsi::integer_i32!("priority", 7)]),
     )
     .unwrap();
 
@@ -303,10 +303,10 @@ fn a_callback_records_its_address_and_leaks_its_payload() {
 fn create_arguments_are_inert_but_the_type_is_not() {
     let recorder = Recorder::new();
     recorder
-        .create("n", "attributes", Some(&[nsi::i32!("foo", 1)]))
+        .create("n", "attributes", Some(&[nsi::integer_i32!("foo", 1)]))
         .expect("first create");
     recorder
-        .create("n", "attributes", Some(&[nsi::i32!("foo", 2)]))
+        .create("n", "attributes", Some(&[nsi::integer_i32!("foo", 2)]))
         .expect("3Delight accepts a differing create argument");
 
     assert!(

@@ -407,7 +407,7 @@ pub fn transform_with(
         node_of(ctx, handle, nsi::node::TRANSFORM);
     ctx.set_attribute(
         handle.as_str(),
-        &[nsi::matrix_f64!("transformationmatrix", matrix)],
+        &[nsi::matrix4_f64!("transformationmatrix", matrix)],
     );
     handle
 }

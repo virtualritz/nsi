@@ -76,12 +76,12 @@ fn glass() {
             shader_name,
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-                nsi::color!("i_color", &[1.0, 1.0, 1.0]),
-                nsi::f32!("roughness", 0.0),
-                nsi::f32!("specular_level", 1.0),
-                nsi::f32!("metallic", 0.0),
-                nsi::f32!("glass", 1.0),
-                nsi::f32!("glass_ior", 1.5),
+                nsi::color3_f32!("i_color", &[1.0, 1.0, 1.0]),
+                nsi::real_f32!("roughness", 0.0),
+                nsi::real_f32!("specular_level", 1.0),
+                nsi::real_f32!("metallic", 0.0),
+                nsi::real_f32!("glass", 1.0),
+                nsi::real_f32!("glass_ior", 1.5),
             ],
         );
 
@@ -121,8 +121,8 @@ fn emissive() {
             shader_name,
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/emitter"),
-                nsi::f32!("intensity", 10.0),
-                nsi::color!("tint", &[1.0, 0.8, 0.5]),
+                nsi::real_f32!("intensity", 10.0),
+                nsi::color3_f32!("tint", &[1.0, 0.8, 0.5]),
             ],
         );
 
@@ -161,12 +161,12 @@ fn anisotropic() {
             shader_name,
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-                nsi::color!("i_color", &[0.9, 0.7, 0.3]),
-                nsi::f32!("roughness", 0.3),
-                nsi::f32!("specular_level", 1.0),
-                nsi::f32!("metallic", 1.0),
-                nsi::f32!("anisotropy", 0.8),
-                nsi::color!("anisotropy_direction", &[1., 0., 0.]),
+                nsi::color3_f32!("i_color", &[0.9, 0.7, 0.3]),
+                nsi::real_f32!("roughness", 0.3),
+                nsi::real_f32!("specular_level", 1.0),
+                nsi::real_f32!("metallic", 1.0),
+                nsi::real_f32!("anisotropy", 0.8),
+                nsi::color3_f32!("anisotropy_direction", &[1., 0., 0.]),
             ],
         );
 
@@ -200,13 +200,13 @@ fn subsurface_scattering() {
             shader_name,
             &[
                 nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-                nsi::color!("i_color", &[0.9, 0.7, 0.6]),
-                nsi::f32!("roughness", 0.4),
-                nsi::f32!("specular_level", 0.5),
-                nsi::f32!("metallic", 0.0),
-                nsi::f32!("sss_weight", 1.0),
-                nsi::color!("sss_color", &[0.8, 0.4, 0.3]),
-                nsi::f32!("sss_scale", 0.5),
+                nsi::color3_f32!("i_color", &[0.9, 0.7, 0.6]),
+                nsi::real_f32!("roughness", 0.4),
+                nsi::real_f32!("specular_level", 0.5),
+                nsi::real_f32!("metallic", 0.0),
+                nsi::real_f32!("sss_weight", 1.0),
+                nsi::color3_f32!("sss_color", &[0.8, 0.4, 0.3]),
+                nsi::real_f32!("sss_scale", 0.5),
             ],
         );
 

@@ -53,15 +53,15 @@ fn dodecahedron() {
     ctx.set_attribute(
         "dodecahedron",
         &[
-            nsi::point_slice!("P", points),
-            nsi::i32_slice!("P.indices", &face_index),
+            nsi::point3_f32_slice!("P", points),
+            nsi::integer_i32_slice!("P.indices", &face_index),
             // 5 vertices per each face.
-            nsi::i32_slice!("nvertices", &[5; 12]),
+            nsi::integer_i32_slice!("nvertices", &[5; 12]),
             // Render this as a subdivison surface.
             nsi::string!("subdivision.scheme", "catmull-clark"),
             // Crease each of our 30 edges a bit.
-            nsi::i32_slice!("subdivision.creasevertices", &face_index),
-            nsi::f32_slice!("subdivision.creasesharpness", &[10.; 30]),
+            nsi::integer_i32_slice!("subdivision.creasevertices", &face_index),
+            nsi::real_f32_slice!("subdivision.creasesharpness", &[10.; 30]),
         ],
     );
 }
@@ -111,7 +111,7 @@ fn live_edit() {
 
     c.set_attribute(
         "cam1_trs",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
@@ -122,7 +122,7 @@ fn live_edit() {
     // Setup a camera.
     c.create("cam1", nsi::PERSPECTIVE_CAMERA, None);
 
-    c.set_attribute("cam1", &[nsi::f32!("fov", 35.)]);
+    c.set_attribute("cam1", &[nsi::real_f32!("fov", 35.)]);
     c.connect("cam1", None, "cam1_trs", "objects", None);
 
     // Setup a screen.
@@ -131,9 +131,9 @@ fn live_edit() {
     c.set_attribute(
         "s1",
         &[
-            nsi::i32_slice!("resolution", &[1280, 720])
+            nsi::integer_i32_slice!("resolution", &[1280, 720])
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
-            nsi::i32!("oversampling", 16),
+            nsi::integer_i32!("oversampling", 16),
         ],
     );
 
@@ -143,9 +143,9 @@ fn live_edit() {
         "beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             nsi::string!("scalarformat", "half"),
-            nsi::color!("some_color", &[0.1f32, 0.2, 0.3]),
+            nsi::color3_f32!("some_color", &[0.1f32, 0.2, 0.3]),
         ],
     );
     c.connect("beauty", None, "s1", "outputlayers", None);
@@ -161,8 +161,8 @@ fn live_edit() {
     c.set_attribute(
         "mesh1",
         &[
-            nsi::i32!("nvertices", 4),
-            nsi::point_slice!(
+            nsi::integer_i32!("nvertices", 4),
+            nsi::point3_f32_slice!(
                 "P",
                 &[
                     [-1.0f32, -0.8, -1.],
@@ -191,7 +191,7 @@ fn live_edit() {
 
     c.set_attribute(
         "light1_trs",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 0.1f64, 0., 0., 0., 0., 0.1, 0., 0., 0., 0., 0.1, 0., 0., 4.,
@@ -207,8 +207,8 @@ fn live_edit() {
     c.set_attribute(
         "light1",
         &[
-            nsi::i32!("nvertices", 3),
-            nsi::point_slice!(
+            nsi::integer_i32!("nvertices", 3),
+            nsi::point3_f32_slice!(
                 "P",
                 &[[-1., 0., 0.], [0., 0., 1.], [1., 0., 0.]]
             ),
@@ -220,7 +220,7 @@ fn live_edit() {
         "light1_shader",
         &[
             nsi::string!("shaderfilename", "areaLight"),
-            nsi::f32!("intensity", 8.0),
+            nsi::real_f32!("intensity", 8.0),
         ],
     );
 

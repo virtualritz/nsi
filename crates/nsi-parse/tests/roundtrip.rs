@@ -16,28 +16,28 @@ where
     for<'call> R: Nsi<Arg<'call> = nsi::Arg<'call, 'static>>,
 {
     ctx.create("cam", "perspectivecamera", None)?;
-    ctx.set_attribute("cam", &[nsi::f32!("fov", 45.0)])?;
-    ctx.set_attribute("cam", &[nsi::f64!("shutter", 0.1f64)])?;
-    ctx.set_attribute("cam", &[nsi::i32!("n", 4)])?;
-    ctx.set_attribute("cam", &[nsi::i64!("big", 9_007_199_254_740_993i64)])?;
+    ctx.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
+    ctx.set_attribute("cam", &[nsi::real_f64!("shutter", 0.1f64)])?;
+    ctx.set_attribute("cam", &[nsi::integer_i32!("n", 4)])?;
+    ctx.set_attribute("cam", &[nsi::integer_i64!("big", 9_007_199_254_740_993i64)])?;
     ctx.set_attribute("cam", &[nsi::string!("name", "he said \"hi\"\nbye")])?;
 
     ctx.create("m", "mesh", None)?;
     let points = [[0.0f32, 0.0, 0.0], [1.0, 2.0, 3.0]];
-    ctx.set_attribute("m", &[nsi::point_slice!("P", &points)])?;
-    ctx.set_attribute("m", &[nsi::color!("c", &[0.1, 0.2, 0.3])])?;
+    ctx.set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])?;
+    ctx.set_attribute("m", &[nsi::color3_f32!("c", &[0.1, 0.2, 0.3])])?;
     let normals = [[0.0f32, 1.0, 0.0], [0.0, 1.0, 0.0]];
-    ctx.set_attribute("m", &[nsi::normal_slice!("N", &normals).per_vertex()])?;
-    ctx.set_attribute("m", &[nsi::f32!("w", 1.0).per_face()])?;
+    ctx.set_attribute("m", &[nsi::normal3_f32_slice!("N", &normals).per_vertex()])?;
+    ctx.set_attribute("m", &[nsi::real_f32!("w", 1.0).per_face()])?;
 
     // A flat scalar and a tuple parameter on one node: folding the
     // tuple must not disturb the scalar's values.
-    ctx.set_attribute("m", &[nsi::f32!("after_tuple", 7.5)])?;
+    ctx.set_attribute("m", &[nsi::real_f32!("after_tuple", 7.5)])?;
 
     let resolution = [1280i32, 720];
     ctx.set_attribute(
         "m",
-        &[nsi::i32_slice!("resolution", &resolution)
+        &[nsi::integer_i32_slice!("resolution", &resolution)
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     )?;
 
@@ -51,9 +51,9 @@ where
     ];
     ctx.set_attribute(
         "xf",
-        &[nsi::matrix_f64!("transformationmatrix", &matrix)],
+        &[nsi::matrix4_f64!("transformationmatrix", &matrix)],
     )?;
-    ctx.set_attribute_at_time("xf", 1.0 / 3.0, &[nsi::f32!("t", 1.0)])?;
+    ctx.set_attribute_at_time("xf", 1.0 / 3.0, &[nsi::real_f32!("t", 1.0)])?;
 
     ctx.create("attr", "attributes", None)?;
     ctx.create("shader", "shader", None)?;
@@ -65,7 +65,7 @@ where
         None,
         "m",
         "geometryattributes",
-        Some(&[nsi::i32!("priority", 3)]),
+        Some(&[nsi::integer_i32!("priority", 3)]),
     )?;
     ctx.connect("shader", Some("outColor"), "attr", "inColor", None)?;
     Ok(())
@@ -525,4 +525,33 @@ fn an_evaluate_statement_round_trips() {
     let again = Recorder::new();
     parse_stream(text.as_bytes(), &again).expect("re-parse");
     assert_eq!(again.into_scene().evaluations().count(), 1);
+}
+
+/// Parses `text`, writes it, parses that, writes again: the two written
+/// streams must agree, and the first must carry `needle`.
+fn round_trips(text: &str, needle: &str) -> nsi_intermediate::Scene {
+    let first = Recorder::new();
+    parse_stream(text.as_bytes(), &first).expect("parse the input");
+    let first = first.into_scene();
+    let written = stream_of(&first);
+    let written_text = String::from_utf8(written.clone()).unwrap();
+    assert!(written_text.contains(needle), "{written_text}");
+
+    let second = Recorder::new();
+    parse_stream(&written, &second).expect("parse what was written");
+    assert_eq!(
+        String::from_utf8(stream_of(&second.into_scene())).unwrap(),
+        written_text
+    );
+    first
+}
+
+/// 3Delight 2.9.210's homogeneous point, as a NURBS surface's `Pw`.
+#[test]
+fn an_hpoint_round_trips() {
+    round_trips(
+        r#"Create "patch" "nurbs"
+           SetAttribute "patch" "Pw" "hpoint" 2 [ -1 -1 0 2  1 1 0 0.5 ]"#,
+        r#""Pw" "hpoint" 2"#,
+    );
 }

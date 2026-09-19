@@ -21,17 +21,17 @@ fn cube(scheme: Option<&str>) -> Scene {
     ];
 
     let mut attributes = vec![
-        OwnedArgument::new("P", Type::Point, 1, 0, OwnedData::F32(positions)),
+        OwnedArgument::new("P", Type::Point3F32, 1, 0, OwnedData::F32(positions)),
         OwnedArgument::new(
             "nvertices",
-            Type::I32,
+            Type::IntegerI32,
             1,
             0,
             OwnedData::I32(vec![4; 6]),
         ),
         OwnedArgument::new(
             "P.indices",
-            Type::I32,
+            Type::IntegerI32,
             1,
             0,
             OwnedData::I32(indices),
@@ -151,7 +151,7 @@ fn a_per_vertex_variable_refines_with_the_surface() {
             "cage",
             vec![OwnedArgument::new(
                 "Cs",
-                Type::Color,
+                Type::Color3F32,
                 1,
                 0,
                 // One colour per vertex, matching `P`.

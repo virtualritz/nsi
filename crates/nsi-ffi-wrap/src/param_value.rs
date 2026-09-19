@@ -18,17 +18,18 @@ use ::nsi_trait::{FfiParam, ParamValue, Type};
 #[inline]
 const fn to_trait_type(data_type: DataType) -> Type {
     match data_type {
-        DataType::F32 => Type::F32,
-        DataType::F64 => Type::F64,
-        DataType::I32 => Type::I32,
-        DataType::I64 => Type::I64,
+        DataType::RealF32 => Type::RealF32,
+        DataType::RealF64 => Type::RealF64,
+        DataType::IntegerI32 => Type::IntegerI32,
+        DataType::IntegerI64 => Type::IntegerI64,
         DataType::String => Type::String,
-        DataType::Color => Type::Color,
-        DataType::Point => Type::Point,
-        DataType::Vector => Type::Vector,
-        DataType::Normal => Type::Normal,
-        DataType::MatrixF32 => Type::MatrixF32,
-        DataType::MatrixF64 => Type::MatrixF64,
+        DataType::Color3F32 => Type::Color3F32,
+        DataType::Point3F32 => Type::Point3F32,
+        DataType::Vector3F32 => Type::Vector3F32,
+        DataType::Normal3F32 => Type::Normal3F32,
+        DataType::Point4F32 => Type::Point4F32,
+        DataType::Matrix4F32 => Type::Matrix4F32,
+        DataType::Matrix4F64 => Type::Matrix4F64,
         DataType::Reference => Type::Reference,
     }
 }
@@ -89,9 +90,9 @@ mod tests {
 
     #[test]
     fn f32_arg_reports_name_type_and_len() {
-        let arg = nsi::f32!("roughness", 0.3);
+        let arg = nsi::real_f32!("roughness", 0.3);
         assert_eq!(arg.name(), "roughness");
-        assert_eq!(arg.type_tag(), Type::F32);
+        assert_eq!(arg.type_tag(), Type::RealF32);
         assert_eq!(arg.len(), 1);
         assert_eq!(arg.array_length(), 1);
         assert_eq!(arg.flags(), 0);
@@ -102,8 +103,8 @@ mod tests {
         // PointSlice is nsi_tuple_data_array_def!(f32, .., 3), so it
         // takes `&[[f32; 3]]` -- a flat `&[f32]` will not compile.
         let points = [[0.0f32, 0.0, 0.0], [1.0, 0.0, 0.0]];
-        let arg = nsi::point_slice!("P", &points);
-        assert_eq!(arg.type_tag(), Type::Point);
+        let arg = nsi::point3_f32_slice!("P", &points);
+        assert_eq!(arg.type_tag(), Type::Point3F32);
         assert_eq!(arg.len(), 2);
         assert_eq!(arg.as_c_param().unwrap().count, 2);
     }
@@ -114,7 +115,7 @@ mod tests {
     fn array_len_divides_the_c_count() {
         use std::num::NonZeroUsize;
         let resolution = [1280i32, 720];
-        let arg = nsi::i32_slice!("resolution", &resolution)
+        let arg = nsi::integer_i32_slice!("resolution", &resolution)
             .array_len(const { NonZeroUsize::new(2).unwrap() });
         assert_eq!(arg.len(), 2);
         let c = arg.as_c_param().unwrap();
@@ -124,9 +125,9 @@ mod tests {
 
     #[test]
     fn as_c_param_matches_the_arg() {
-        let arg = nsi::f32!("fov", 45.0);
+        let arg = nsi::real_f32!("fov", 45.0);
         let c = arg.as_c_param().expect("Arg always has a C view");
-        assert_eq!(c.type_, Type::F32 as i32);
+        assert_eq!(c.type_, Type::RealF32 as i32);
         assert_eq!(c.count, 1);
         assert_eq!(c.arraylength, 1);
         assert!(!c.data.is_null());

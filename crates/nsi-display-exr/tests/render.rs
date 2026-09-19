@@ -41,7 +41,7 @@ fn render_scene(out: &Path) {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!("resolution", &[16, 16])
+        &[nsi::integer_i32_slice!("resolution", &[16, 16])
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     );
 
@@ -54,7 +54,7 @@ fn render_scene(out: &Path) {
             nsi::string!("compression", "zips"),
             nsi::string!("header.comment", "written by nsi-display"),
             // Exercise the OIDN path with both auxiliary inputs.
-            nsi::i32!("denoise", 1),
+            nsi::integer_i32!("denoise", 1),
             nsi::string!("denoise.quality", "fast"),
             // `albedo` and `N` are left at their defaults; the depth
             // layer below is named `depth`, so say so. If any of the
@@ -70,7 +70,7 @@ fn render_scene(out: &Path) {
         &[
             nsi::string!("variablename", "Ci"),
             nsi::string!("scalarformat", "float"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             // 3Delight forwards this to the driver verbatim.
             nsi::string!("colorprofile", "srgb"),
         ],

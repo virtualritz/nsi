@@ -21,15 +21,15 @@ fn every_type_reads_back_what_was_written() {
         4.0, 1.0,
     ];
     let args = [
-        nsi::f32!("f32", 0.5),
-        nsi::f64!("f64", 0.25),
-        nsi::i32!("i32", -7),
-        nsi::i64!("i64", 1 << 40),
+        nsi::real_f32!("f32", 0.5),
+        nsi::real_f64!("f64", 0.25),
+        nsi::integer_i32!("i32", -7),
+        nsi::integer_i64!("i64", 1 << 40),
         nsi::string!("string", "hello"),
-        nsi::color!("color", &[0.1, 0.2, 0.3]),
-        nsi::matrix_f64!("matrix", &matrix),
+        nsi::color3_f32!("color", &[0.1, 0.2, 0.3]),
+        nsi::matrix4_f64!("matrix", &matrix),
         nsi::string_slice!("strings", &["a", "b", "c"]),
-        nsi::i32_slice!("pairs", &[1, 2, 3, 4, 5, 6])
+        nsi::integer_i32_slice!("pairs", &[1, 2, 3, 4, 5, 6])
             .array_len(NonZeroUsize::new(2).unwrap()),
     ];
     let raw = raw(&args);
@@ -49,7 +49,7 @@ fn every_type_reads_back_what_was_written() {
     );
 
     let color = params.get("color").unwrap();
-    assert_eq!(color.type_tag(), Some(Type::Color));
+    assert_eq!(color.type_tag(), Some(Type::Color3F32));
     assert_eq!(color.f32s(), Some(&[0.1, 0.2, 0.3][..]));
 
     assert_eq!(
@@ -73,7 +73,7 @@ fn every_type_reads_back_what_was_written() {
 
 #[test]
 fn the_wrong_type_is_a_miss_not_a_reinterpretation() {
-    let args = [nsi::i32!("count", 3), nsi::f64!("scale", 2.0)];
+    let args = [nsi::integer_i32!("count", 3), nsi::real_f64!("scale", 2.0)];
     let raw = raw(&args);
     let params = params(&raw);
 
@@ -151,7 +151,7 @@ fn a_compiled_in_procedural_runs_on_the_hosts_own_nsi() {
         &procedural,
         &recorder,
         &Report::new(&sink),
-        &[nsi::i32!("count", 3)],
+        &[nsi::integer_i32!("count", 3)],
     )
     .unwrap();
 

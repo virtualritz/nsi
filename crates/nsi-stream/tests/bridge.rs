@@ -114,10 +114,10 @@ fn render(bridge: &DelightBridge) -> bool {
     ctx.set_attribute(
         nsi::GLOBAL,
         &[
-            nsi::i32!("renderatlowpriority", 1),
+            nsi::integer_i32!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "horizontal"),
-            nsi::i32!("quality.shadingsamples", 1),
-            nsi::i32!("maximumraydepth.reflection", 1),
+            nsi::integer_i32!("quality.shadingsamples", 1),
+            nsi::integer_i32!("maximumraydepth.reflection", 1),
         ],
     );
 
@@ -126,7 +126,7 @@ fn render(bridge: &DelightBridge) -> bool {
     ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "camera_xform",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.
@@ -136,13 +136,13 @@ fn render(bridge: &DelightBridge) -> bool {
 
     ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("camera", None, "camera_xform", "objects", None);
-    ctx.set_attribute("camera", &[nsi::f32!("fov", 45.)]);
+    ctx.set_attribute("camera", &[nsi::real_f32!("fov", 45.)]);
 
     ctx.create("screen", nsi::SCREEN, None);
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[nsi::i32_slice!(
+        &[nsi::integer_i32_slice!(
             "resolution",
             &[EXTENT.width as i32, EXTENT.height as i32]
         )
@@ -155,7 +155,7 @@ fn render(bridge: &DelightBridge) -> bool {
     ctx.set_attribute(
         "plane",
         &[
-            nsi::point_slice!(
+            nsi::point3_f32_slice!(
                 "P",
                 &[
                     [-4.0f32, -4., 0.],
@@ -164,7 +164,7 @@ fn render(bridge: &DelightBridge) -> bool {
                     [-4., 4., 0.]
                 ]
             ),
-            nsi::i32_slice!("nvertices", &[4]),
+            nsi::integer_i32_slice!("nvertices", &[4]),
         ],
     );
 
@@ -173,7 +173,7 @@ fn render(bridge: &DelightBridge) -> bool {
         "beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             nsi::string!("scalarformat", "float"),
         ],
     );

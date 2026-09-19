@@ -253,11 +253,11 @@ where
     ctx.set_attribute(
         nsi::GLOBAL,
         &[
-            nsi::i32!("renderatlowpriority", 1),
+            nsi::integer_i32!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "horizontal"),
-            nsi::i32!("quality.shadingsamples", samples as _),
-            nsi::i32!("maximumraydepth.reflection", 3),
-            nsi::i32!("maximumraydepth.refraction", 3),
+            nsi::integer_i32!("quality.shadingsamples", samples as _),
+            nsi::integer_i32!("maximumraydepth.reflection", 3),
+            nsi::integer_i32!("maximumraydepth.refraction", 3),
         ],
     );
 
@@ -296,7 +296,7 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "camera_xform",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.
@@ -307,7 +307,7 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     // Camera
     ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("camera", None, "camera_xform", "objects", None);
-    ctx.set_attribute("camera", &[nsi::f32!("fov", 35.0)]);
+    ctx.set_attribute("camera", &[nsi::real_f32!("fov", 35.0)]);
 
     // Screen
     ctx.create("screen", nsi::SCREEN, None);
@@ -315,7 +315,7 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     ctx.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[width as i32, height as i32])
+            nsi::integer_i32_slice!("resolution", &[width as i32, height as i32])
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
         ],
     );
@@ -333,7 +333,7 @@ fn setup_test_output(
         "beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             nsi::string!("scalarformat", "float"),
         ],
     );

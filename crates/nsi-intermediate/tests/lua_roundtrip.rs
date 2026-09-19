@@ -22,20 +22,20 @@ where
     for<'call> R: Nsi<Arg<'call> = nsi::Arg<'call, 'static>>,
 {
     ctx.create("cam", "perspectivecamera", None)?;
-    ctx.set_attribute("cam", &[nsi::f32!("fov", 45.0)])?;
+    ctx.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
     ctx.set_attribute("cam", &[nsi::string!("name", "hero \"cam\"")])?;
 
     ctx.create("m", "mesh", None)?;
     let points = [[0.0f32, 0.0, 0.0], [1.0, 2.0, 3.0]];
-    ctx.set_attribute("m", &[nsi::point_slice!("P", &points)])?;
-    ctx.set_attribute("m", &[nsi::i32_slice!("nvertices", &[4i32])])?;
+    ctx.set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])?;
+    ctx.set_attribute("m", &[nsi::integer_i32_slice!("nvertices", &[4i32])])?;
     let resolution = [1280i32, 720];
     ctx.set_attribute(
         "m",
-        &[nsi::i32_slice!("resolution", &resolution)
+        &[nsi::integer_i32_slice!("resolution", &resolution)
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     )?;
-    ctx.set_attribute("m", &[nsi::color!("c", &[0.1, 0.2, 0.3])])?;
+    ctx.set_attribute("m", &[nsi::color3_f32!("c", &[0.1, 0.2, 0.3])])?;
 
     ctx.create("xf", "transform", None)?;
     #[rustfmt::skip]
@@ -47,7 +47,7 @@ where
     ];
     ctx.set_attribute(
         "xf",
-        &[nsi::matrix_f64!("transformationmatrix", &matrix)],
+        &[nsi::matrix4_f64!("transformationmatrix", &matrix)],
     )?;
 
     ctx.create("attr", "attributes", None)?;
@@ -64,20 +64,20 @@ where
     // An empty numeric slice, which Lua accepts (unlike an empty string
     // array, which aborts the renderer -- see `lua_refuses_*`).
     let nothing: [f32; 0] = [];
-    ctx.set_attribute("m", &[nsi::f32_slice!("empty", &nothing)])?;
+    ctx.set_attribute("m", &[nsi::real_f32_slice!("empty", &nothing)])?;
 
     // `array_len(1)` is a real one-element array.
     ctx.set_attribute(
         "m",
-        &[nsi::f32_slice!("one_array", &[1.0f32, 2.0])
+        &[nsi::real_f32_slice!("one_array", &[1.0f32, 2.0])
             .array_len(const { std::num::NonZeroUsize::new(1).unwrap() })],
     )?;
 
     // A motion sample, at a time that discriminates float printers.
-    ctx.set_attribute_at_time("xf", 1.0 / 3.0, &[nsi::f32!("t", 1.0)])?;
+    ctx.set_attribute_at_time("xf", 1.0 / 3.0, &[nsi::real_f32!("t", 1.0)])?;
 
     // `.global` is reserved: it takes attributes and is never created.
-    ctx.set_attribute(".global", &[nsi::i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
 
     ctx.connect("xf", None, ".root", "objects", None)?;
     ctx.connect("m", None, "xf", "objects", None)?;
@@ -89,7 +89,7 @@ where
         None,
         "m",
         "geometryattributes",
-        Some(&[nsi::i32!("priority", 3)]),
+        Some(&[nsi::integer_i32!("priority", 3)]),
     )?;
     Ok(())
 }
@@ -203,8 +203,8 @@ fn lua_refuses_what_it_cannot_express() {
 
     // Types: `nsi.TypeDouble` and `nsi.TypeInt64` do not exist.
     for arg in [
-        nsi::f64!("a_double", 0.5f64),
-        nsi::i64!("a_big_int", 9_007_199_254_740_993i64),
+        nsi::real_f64!("a_double", 0.5f64),
+        nsi::integer_i64!("a_big_int", 9_007_199_254_740_993i64),
     ] {
         let error = refuse(arg);
         assert!(
@@ -216,7 +216,7 @@ fn lua_refuses_what_it_cannot_express() {
     // Flags: a parameter table has nowhere to put them, and a
     // per-vertex normal emitted without its flag is a different surface.
     let normals = [[0.0f32, 1.0, 0.0], [0.0, 1.0, 0.0]];
-    let error = refuse(nsi::normal_slice!("N", &normals).per_vertex());
+    let error = refuse(nsi::normal3_f32_slice!("N", &normals).per_vertex());
     assert!(
         matches!(error, LuaError::InexpressibleFlags { .. }),
         "got {error:?}"

@@ -13,12 +13,12 @@ fn scene() -> nsi_intermediate::Scene {
     let recorder = Recorder::new();
     recorder.create("cam", "perspectivecamera", None).unwrap();
     recorder
-        .set_attribute("cam", &[nsi::f32!("fov", 45.0)])
+        .set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])
         .unwrap();
     recorder.create("m", "mesh", None).unwrap();
     let points = [[0.0f32, 0.0, 0.0], [1.0, 2.0, 3.0]];
     recorder
-        .set_attribute("m", &[nsi::point_slice!("P", &points)])
+        .set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])
         .unwrap();
     recorder
         .connect("m", None, ".root", "objects", None)

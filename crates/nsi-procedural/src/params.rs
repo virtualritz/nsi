@@ -80,17 +80,17 @@ impl<'a> Param<'a> {
     /// know.
     pub fn type_tag(&self) -> Option<Type> {
         Some(match self.raw.type_ {
-            1 => Type::F32,
-            0x11 => Type::F64,
-            2 => Type::I32,
-            0x12 => Type::I64,
+            1 => Type::RealF32,
+            0x11 => Type::RealF64,
+            2 => Type::IntegerI32,
+            0x12 => Type::IntegerI64,
             3 => Type::String,
-            4 => Type::Color,
-            5 => Type::Point,
-            6 => Type::Vector,
-            7 => Type::Normal,
-            8 => Type::MatrixF32,
-            0x18 => Type::MatrixF64,
+            4 => Type::Color3F32,
+            5 => Type::Point3F32,
+            6 => Type::Vector3F32,
+            7 => Type::Normal3F32,
+            8 => Type::Matrix4F32,
+            0x18 => Type::Matrix4F64,
             9 => Type::Reference,
             _ => return None,
         })
@@ -121,8 +121,8 @@ impl<'a> Param<'a> {
     /// color, 16 for a matrix.
     fn components(type_tag: Type) -> usize {
         match type_tag {
-            Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
-            Type::MatrixF32 | Type::MatrixF64 => 16,
+            Type::Color3F32 | Type::Point3F32 | Type::Vector3F32 | Type::Normal3F32 => 3,
+            Type::Matrix4F32 | Type::Matrix4F64 => 16,
             _ => 1,
         }
     }
@@ -151,28 +151,28 @@ impl<'a> Param<'a> {
     /// `matrix` parameter.
     pub fn f32s(&self) -> Option<&'a [f32]> {
         self.slice(&[
-            Type::F32,
-            Type::Color,
-            Type::Point,
-            Type::Vector,
-            Type::Normal,
-            Type::MatrixF32,
+            Type::RealF32,
+            Type::Color3F32,
+            Type::Point3F32,
+            Type::Vector3F32,
+            Type::Normal3F32,
+            Type::Matrix4F32,
         ])
     }
 
     /// The scalars of a `double` or `doublematrix` parameter.
     pub fn f64s(&self) -> Option<&'a [f64]> {
-        self.slice(&[Type::F64, Type::MatrixF64])
+        self.slice(&[Type::RealF64, Type::Matrix4F64])
     }
 
     /// The values of an `int` parameter.
     pub fn i32s(&self) -> Option<&'a [i32]> {
-        self.slice(&[Type::I32])
+        self.slice(&[Type::IntegerI32])
     }
 
     /// The values of an `int64` parameter.
     pub fn i64s(&self) -> Option<&'a [i64]> {
-        self.slice(&[Type::I64])
+        self.slice(&[Type::IntegerI64])
     }
 
     /// The values of a `pointer` parameter.
@@ -199,7 +199,7 @@ impl<'a> Param<'a> {
 
     /// The first value of a scalar `float` parameter.
     pub fn f32(&self) -> Option<f32> {
-        self.slice(&[Type::F32])?.first().copied()
+        self.slice(&[Type::RealF32])?.first().copied()
     }
 
     /// The first value of a scalar `double` parameter.

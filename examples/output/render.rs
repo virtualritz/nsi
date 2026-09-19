@@ -15,7 +15,7 @@ fn nsi_camera<'a>(
     c.connect("camera_xform", None, nsi::ROOT, "objects", None);
     c.set_attribute(
         "camera_xform",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
@@ -26,7 +26,7 @@ fn nsi_camera<'a>(
     // Setup a camera.
     c.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     c.connect("camera", None, "camera_xform", "objects", None);
-    c.set_attribute("camera", &[nsi::f32!("fov", 35.)]);
+    c.set_attribute("camera", &[nsi::real_f32!("fov", 35.)]);
 
     // Setup a screen.
     c.create("screen", nsi::SCREEN, None);
@@ -34,9 +34,9 @@ fn nsi_camera<'a>(
     c.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[128, 128])
+            nsi::integer_i32_slice!("resolution", &[128, 128])
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
-            nsi::i32!("oversampling", 32),
+            nsi::integer_i32!("oversampling", 32),
         ],
     );
 
@@ -46,7 +46,7 @@ fn nsi_camera<'a>(
         "beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             nsi::string!("scalarformat", "float"),
         ],
     );
@@ -61,7 +61,7 @@ fn nsi_camera<'a>(
         &[
             nsi::string!("drivername", nsi::output::FERRIS_F32),
             nsi::string!("imagefilename", name),
-            nsi::i32!("associatealpha", 1),
+            nsi::integer_i32!("associatealpha", 1),
             nsi::callback!("callback.open", open),
             nsi::callback!("callback.write", write),
             nsi::callback!("callback.finish", finish),
@@ -75,7 +75,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
     c.connect("ground_xform_0", None, nsi::ROOT, "objects", None);
     c.set_attribute(
         "ground_xform_0",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 0., 0., -1., 0.,
@@ -90,7 +90,7 @@ fn nsi_reflective_ground(c: &nsi::Context) {
     c.create("ground_attrib", nsi::ATTRIBUTES, None);
     c.set_attribute(
         "ground_attrib",
-        &[nsi::i32!("visibility.camera", false as _)],
+        &[nsi::integer_i32!("visibility.camera", false as _)],
     );
     c.connect(
         "ground_attrib",
@@ -114,17 +114,17 @@ fn nsi_reflective_ground(c: &nsi::Context) {
         "ground_shader",
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-            nsi::color!("i_color", &[0.001, 0.001, 0.001]),
-            nsi::f32!("roughness", 0.2),
-            nsi::f32!("specular_level", 1.),
-            nsi::f32!("metallic", 1.),
-            nsi::f32!("anisotropy", 1.),
-            nsi::color!("anisotropy_direction", &[1., 0., 0.]),
-            nsi::f32!("sss_weight", 0.),
-            nsi::color!("sss_color", &[0.5, 0.5, 0.5]),
-            nsi::f32!("sss_scale", 0.),
-            nsi::color!("incandescence", &[0., 0., 0.]),
-            nsi::f32!("incandescence_intensity", 0.),
+            nsi::color3_f32!("i_color", &[0.001, 0.001, 0.001]),
+            nsi::real_f32!("roughness", 0.2),
+            nsi::real_f32!("specular_level", 1.),
+            nsi::real_f32!("metallic", 1.),
+            nsi::real_f32!("anisotropy", 1.),
+            nsi::color3_f32!("anisotropy_direction", &[1., 0., 0.]),
+            nsi::real_f32!("sss_weight", 0.),
+            nsi::color3_f32!("sss_color", &[0.5, 0.5, 0.5]),
+            nsi::real_f32!("sss_scale", 0.),
+            nsi::color3_f32!("incandescence", &[0., 0., 0.]),
+            nsi::real_f32!("incandescence_intensity", 0.),
         ],
     );
 }
@@ -143,16 +143,16 @@ fn nsi_material(c: &nsi::Context, name: &str) {
         &shader_name,
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-            nsi::color!("i_color", &[1., 0.6, 0.3]),
-            nsi::f32!("roughness", 0.01),
-            nsi::f32!("specular_level", 1.0),
-            nsi::f32!("metallic", 1.),
-            nsi::f32!("anisotropy", 0.),
-            nsi::f32!("sss_weight", 0.),
-            nsi::color!("sss_color", &[0.5, 0.5, 0.5]),
-            nsi::f32!("sss_scale", 0.),
-            nsi::color!("incandescence", &[0., 0., 0.]),
-            nsi::f32!("incandescence_intensity", 0.),
+            nsi::color3_f32!("i_color", &[1., 0.6, 0.3]),
+            nsi::real_f32!("roughness", 0.01),
+            nsi::real_f32!("specular_level", 1.0),
+            nsi::real_f32!("metallic", 1.),
+            nsi::real_f32!("anisotropy", 0.),
+            nsi::real_f32!("sss_weight", 0.),
+            nsi::color3_f32!("sss_color", &[0.5, 0.5, 0.5]),
+            nsi::real_f32!("sss_scale", 0.),
+            nsi::color3_f32!("incandescence", &[0., 0., 0.]),
+            nsi::real_f32!("incandescence_intensity", 0.),
         ],
     );
 }
@@ -207,12 +207,12 @@ fn nsi_dodecahedron(c: &nsi::Context, name: &str) {
     c.set_attribute(
         name,
         &[
-            nsi::point_slice!(nsi::POSITION, &positions),
-            nsi::i32_slice!("P.indices", &face_index),
-            nsi::i32_slice!("nvertices", &[5; 12]),
+            nsi::point3_f32_slice!(nsi::POSITION, &positions),
+            nsi::integer_i32_slice!("P.indices", &face_index),
+            nsi::integer_i32_slice!("nvertices", &[5; 12]),
             nsi::string!("subdivision.scheme", "catmull-clark"),
-            nsi::i32_slice!("subdivision.creasevertices", &crease_edges),
-            nsi::f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
+            nsi::integer_i32_slice!("subdivision.creasevertices", &crease_edges),
+            nsi::real_f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
         ],
     );
 }
@@ -230,10 +230,10 @@ pub(crate) fn nsi_render<'a>(
     ctx.set_attribute(
         ".global",
         &[
-            nsi::i32!("renderatlowpriority", 1),
+            nsi::integer_i32!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "spiral"),
-            nsi::i32!("quality.shadingsamples", samples as _),
-            nsi::i32!("maximumraydepth.reflection", 6),
+            nsi::integer_i32!("quality.shadingsamples", samples as _),
+            nsi::integer_i32!("maximumraydepth.reflection", 6),
         ],
     );
 

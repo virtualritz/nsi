@@ -837,7 +837,7 @@ impl<'a> Context<'a> {
     ///   ctx.render_control(
     ///       nsi::Action::Start,
     ///       Some(&[
-    ///           nsi::i32!("interactive", true as _),
+    ///           nsi::integer_i32!("interactive", true as _),
     ///           nsi::callback!("callback", status_callback),
     ///       ]),
     ///   );

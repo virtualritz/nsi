@@ -122,56 +122,55 @@ pub(crate) trait ArgDataMethods {
 #[derive(Debug, Clone)]
 pub enum ArgData<'a, 'b> {
     /// Single [`prim@f32`] value.
-    F32,
+    RealF32,
     /// An [`prim@f32`] slice.
-    F32Slice(F32Slice<'a>),
+    RealF32Slice(RealF32Slice<'a>),
     /// Single [`prim@f64`] value.
-    F64,
+    RealF64,
     /// An [`prim@f64`] slice.
-    F64Slice(F64Slice<'a>),
+    RealF64Slice(RealF64Slice<'a>),
     /// Single [`prim@i32`] value.
-    I32,
+    IntegerI32,
     /// An [`prim@i32`] slice.
-    I32Slice(I32Slice<'a>),
+    IntegerI32Slice(IntegerI32Slice<'a>),
     /// Single [`prim@i64`] value.
-    I64,
+    IntegerI64,
     /// An [`prim@i64`] slice.
-    I64Slice(I64Slice<'a>),
+    IntegerI64Slice(IntegerI64Slice<'a>),
     /// A [`String`].
     String(String),
     /// A [`String`] slice.
     StringSlice(StringSlice),
     /// Color in linear space, given as a red, green, blue triplet
     /// of [`prim@f32`] values; usually in the range `0..1`.
-    Color(Color<'a>),
+    Color3F32(Color3F32<'a>),
     /// A flat [`prim@f32`] slice of colors (`len % 3 == 0`).
-    ColorSlice(ColorSlice<'a>),
+    Color3F32Slice(Color3F32Slice<'a>),
     /// Point, given as three [`prim@f32`] values.
-    Point(Point<'a>),
+    Point3F32(Point3F32<'a>),
     /// A flat [`prim@f32`] slice of points (`len % 3 == 0`).
-    PointSlice(PointSlice<'a>),
+    Point3F32Slice(Point3F32Slice<'a>),
     /// Vector, given as three [`prim@f32`] values.
-    Vector(Vector<'a>),
+    Vector3F32(Vector3F32<'a>),
     /// A flat [`prim@f32`] slice of vectors (`len % 3 == 0`).
-    VectorSlice(VectorSlice<'a>),
+    Vector3F32Slice(Vector3F32Slice<'a>),
     /// Normal vector, given as three [`prim@f32`] values.
-    Normal(Normal<'a>),
+    Normal3F32(Normal3F32<'a>),
     /// A flat [`prim@f32`] slice of normals (`len % 3 == 0`).
-    NormalSlice(NormalSlice<'a>),
+    Normal3F32Slice(Normal3F32Slice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`prim@f32`] values.
-    MatrixF32(MatrixF32<'a>),
+    Matrix4F32(Matrix4F32<'a>),
     /// A flat [`prim@f32`] slice of matrices (`len % 16 == 0`).
-    MatrixF32Slice(MatrixF32Slice<'a>),
+    Matrix4F32Slice(Matrix4F32Slice<'a>),
     /// Row-major, 4×4 transformation matrix, given as 16 [`prim@f64`] values.
-    MatrixF64(MatrixF64<'a>),
+    Matrix4F64(Matrix4F64<'a>),
     /// A flat [`prim@f64`] slice of matrices (`len % 16 == 0`).
-    MatrixF64Slice(MatrixF64Slice<'a>),
-    /// A slice of 4-component f32 points (xyzw).
-    /// Wire-side: a flat `NSITypeFloat` slice of `4 * N` floats -- the
-    /// renderer groups them by attribute semantics. Use the
-    /// [`point4_f32_slice!`][crate::point4_f32_slice] macro to keep
-    /// `&[[f32; 4]]` ergonomics in Rust while the FFI sees the flat
-    /// layout.
+    Matrix4F64Slice(Matrix4F64Slice<'a>),
+    /// Homogeneous point, `(w·x, w·y, w·z, w)` as four [`prim@f32`]
+    /// values: `NSITypeHPoint`, which 3Delight 2.9.210 requires for a
+    /// NURBS surface's `Pw`.
+    Point4F32(Point4F32<'a>),
+    /// A slice of homogeneous points, one `NSITypeHPoint` per point.
     Point4F32Slice(Point4F32Slice<'a>),
     /// Reference *with* lifetime guarantees.
     ///
@@ -339,10 +338,10 @@ macro_rules! nsi_tuple_data_def {
     };
 }
 
-nsi_data_def!(f32, F32, DataType::F32);
-nsi_data_def!(f64, F64, DataType::F64);
-nsi_data_def!(i32, I32, DataType::I32);
-nsi_data_def!(i64, I64, DataType::I64);
+nsi_data_def!(f32, RealF32, DataType::RealF32);
+nsi_data_def!(f64, RealF64, DataType::RealF64);
+nsi_data_def!(i32, IntegerI32, DataType::IntegerI32);
+nsi_data_def!(i64, IntegerI64, DataType::IntegerI64);
 
 /// See [`ArgData`] for details.
 /// A reference to data that will be passed through FFI.
@@ -613,52 +612,18 @@ impl ArgDataMethods for String {
     }
 }
 
-nsi_data_array_def!(f32, F32Slice, DataType::F32);
-nsi_data_array_def!(f64, F64Slice, DataType::F64);
-nsi_data_array_def!(i32, I32Slice, DataType::I32);
-nsi_data_array_def!(i64, I64Slice, DataType::I64);
-nsi_tuple_data_array_def!(f32, ColorSlice, DataType::Color, 3);
-nsi_tuple_data_array_def!(f32, PointSlice, DataType::Point, 3);
-nsi_tuple_data_array_def!(f32, VectorSlice, DataType::Vector, 3);
-nsi_tuple_data_array_def!(f32, NormalSlice, DataType::Normal, 3);
-nsi_tuple_data_array_def!(f32, MatrixF32Slice, DataType::MatrixF32, 16);
-nsi_tuple_data_array_def!(f64, MatrixF64Slice, DataType::MatrixF64, 16);
+nsi_data_array_def!(f32, RealF32Slice, DataType::RealF32);
+nsi_data_array_def!(f64, RealF64Slice, DataType::RealF64);
+nsi_data_array_def!(i32, IntegerI32Slice, DataType::IntegerI32);
+nsi_data_array_def!(i64, IntegerI64Slice, DataType::IntegerI64);
+nsi_tuple_data_array_def!(f32, Color3F32Slice, DataType::Color3F32, 3);
+nsi_tuple_data_array_def!(f32, Point3F32Slice, DataType::Point3F32, 3);
+nsi_tuple_data_array_def!(f32, Vector3F32Slice, DataType::Vector3F32, 3);
+nsi_tuple_data_array_def!(f32, Normal3F32Slice, DataType::Normal3F32, 3);
+nsi_tuple_data_array_def!(f32, Matrix4F32Slice, DataType::Matrix4F32, 16);
+nsi_tuple_data_array_def!(f64, Matrix4F64Slice, DataType::Matrix4F64, 16);
 
-/// Slice of weighted (rational) homogeneous 4-component f32 control points
-/// -- backing for [`point4_f32_slice!`][crate::point4_f32_slice] (NURBS
-/// rational positions `Pw`, RGBA-style colour-with-alpha attributes, etc.).
-///
-/// On the wire this is a flat `NSITypeFloat` slice -- the renderer infers
-/// the 4-component grouping from the attribute name (`Pw`). The wrapper
-/// exists so callers can keep the natural `&[[f32; 4]]` shape in Rust
-/// while the FFI sees `4 * N` flat floats.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Point4F32Slice<'a> {
-    data: &'a [[f32; 4]],
-}
-
-impl<'a> Point4F32Slice<'a> {
-    pub fn new(data: &'a [[f32; 4]]) -> Self {
-        Self { data }
-    }
-}
-
-impl<'a> ArgDataMethods for Point4F32Slice<'a> {
-    fn type_(&self) -> DataType {
-        DataType::F32
-    }
-
-    /// Total flat `f32` count = `4 * number-of-points`. With the
-    /// default `arraylength = 1` the renderer receives that many
-    /// scalar floats and groups them by attribute semantics.
-    fn len(&self) -> usize {
-        self.data.len() * 4
-    }
-
-    fn as_c_ptr(&self) -> *const c_void {
-        self.data.as_ptr() as _
-    }
-}
+nsi_tuple_data_array_def!(f32, Point4F32Slice, DataType::Point4F32, 4);
 
 /// See [`ArgData`] for details.
 #[derive(Debug, Clone)]
@@ -737,43 +702,47 @@ impl ArgDataMethods for StringSlice {
     }
 }
 
-nsi_tuple_data_def!(f32, 3, Color, DataType::Color);
-nsi_tuple_data_def!(f32, 3, Point, DataType::Point);
-nsi_tuple_data_def!(f32, 3, Vector, DataType::Vector);
-nsi_tuple_data_def!(f32, 3, Normal, DataType::Normal);
-nsi_tuple_data_def!(f32, 16, MatrixF32, DataType::MatrixF32);
-nsi_tuple_data_def!(f64, 16, MatrixF64, DataType::MatrixF64);
+nsi_tuple_data_def!(f32, 3, Color3F32, DataType::Color3F32);
+nsi_tuple_data_def!(f32, 3, Point3F32, DataType::Point3F32);
+nsi_tuple_data_def!(f32, 3, Vector3F32, DataType::Vector3F32);
+nsi_tuple_data_def!(f32, 3, Normal3F32, DataType::Normal3F32);
+nsi_tuple_data_def!(f32, 16, Matrix4F32, DataType::Matrix4F32);
+nsi_tuple_data_def!(f64, 16, Matrix4F64, DataType::Matrix4F64);
+nsi_tuple_data_def!(f32, 4, Point4F32, DataType::Point4F32);
 
 /// Identifies an [`Arg`]’s data type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub(crate) enum DataType {
     /// A single [`prim@f32`] value.
-    F32 = NSIType::F32 as _,
+    RealF32 = NSIType::F32 as _,
     /// A single [`prim@f64`] value.
-    F64 = NSIType::F64 as _,
+    RealF64 = NSIType::F64 as _,
     /// Single [`prim@i32`] value.
-    I32 = NSIType::I32 as _,
+    IntegerI32 = NSIType::I32 as _,
     /// Single [`prim@i64`] value.
-    I64 = NSIType::I64 as _,
+    IntegerI64 = NSIType::I64 as _,
     /// A [`String`].
     String = NSIType::String as _,
     /// Color, given as three [`prim@f32`] values,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]. Assumed to be in a linear color space.`
-    Color = NSIType::Color as _,
+    Color3F32 = NSIType::Color as _,
     /// Point, given as three [`prim@f32`] values.
-    Point = NSIType::Point as _,
+    Point3F32 = NSIType::Point as _,
     /// Vector, given as three [`prim@f32`] values.
-    Vector = NSIType::Vector as _,
+    Vector3F32 = NSIType::Vector as _,
     /// Normal vector, given as three [`prim@f32`] values.
-    Normal = NSIType::Normal as _,
+    Normal3F32 = NSIType::Normal as _,
     /// Transformation matrix, given as 16 [`prim@f32`] values.
-    MatrixF32 = NSIType::MatrixF32 as _,
+    Matrix4F32 = NSIType::MatrixF32 as _,
     /// Transformation matrix, given as 16 [`prim@f64`] values.
-    MatrixF64 = NSIType::MatrixF64 as _,
+    Matrix4F64 = NSIType::MatrixF64 as _,
     /// Raw (`*const T`) pointer.
     Reference = NSIType::Pointer as _,
+    /// Homogeneous point, given as four [`prim@f32`] values
+    /// `(w·x, w·y, w·z, w)`. `NSITypeHPoint`, 3Delight 2.9.210 and later.
+    Point4F32 = NSIType::HPoint as _,
 }
 
 impl DataType {
@@ -781,251 +750,304 @@ impl DataType {
     #[inline]
     pub(crate) fn elemensize(&self) -> usize {
         match self {
-            DataType::F32 => 1,
-            DataType::F64 => 1,
-            DataType::I32 => 1,
-            DataType::I64 => 1,
+            DataType::RealF32 => 1,
+            DataType::RealF64 => 1,
+            DataType::IntegerI32 => 1,
+            DataType::IntegerI64 => 1,
             DataType::String => 1,
-            DataType::Color => 3,
-            DataType::Point => 3,
-            DataType::Vector => 3,
-            DataType::Normal => 3,
-            DataType::MatrixF32 => 16,
-            DataType::MatrixF64 => 16,
+            DataType::Color3F32 => 3,
+            DataType::Point3F32 => 3,
+            DataType::Vector3F32 => 3,
+            DataType::Normal3F32 => 3,
+            DataType::Matrix4F32 => 16,
+            DataType::Matrix4F64 => 16,
             DataType::Reference => 1,
+            DataType::Point4F32 => 4,
         }
     }
 }
 
-/// Create a [`F32`] argument.
+/// Create a [`RealF32`](crate::argument::RealF32) argument.
 ///
 /// Name accepts a string literal (escape hatch) or a typed
 /// [`Attribute<f32>`](crate::Attribute)/[`Parameter<f32>`](crate::Parameter)
 /// constant (compile-time type-checked).
 #[macro_export]
-macro_rules! f32 {
+macro_rules! real_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::F32::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::RealF32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<f32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::F32::new($value)),
+            $crate::ArgData::from($crate::argument::RealF32::new($value)),
         )
     }};
 }
 
-/// Create a [`F32Slice`] array argument.
+/// Create a [`RealF32Slice`](crate::argument::RealF32Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[f32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! f32_slice {
+macro_rules! real_f32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::F32Slice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::RealF32Slice::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[f32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::F32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::RealF32Slice::new($value)),
         )
     }};
 }
 
-/// Create a [`F64`] precision argument.
+/// Create a [`RealF64`](crate::argument::RealF64) precision argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<f64>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! f64 {
+macro_rules! real_f64 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::F64::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::RealF64::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<f64> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::F64::new($value)),
+            $crate::ArgData::from($crate::argument::RealF64::new($value)),
         )
     }};
 }
 
-/// Create a [`F64Slice`] precision array argument.
+/// Create a [`RealF64Slice`](crate::argument::RealF64Slice) precision array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[f64]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! f64_slice {
+macro_rules! real_f64_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::F64Slice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::RealF64Slice::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[f64]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::F64Slice::new($value)),
+            $crate::ArgData::from($crate::argument::RealF64Slice::new($value)),
         )
     }};
 }
 
-/// Create a [`I32`] argument.
+/// Create a [`IntegerI32`](crate::argument::IntegerI32) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<i32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! i32 {
+macro_rules! integer_i32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::I32::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::IntegerI32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<i32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::I32::new($value)),
+            $crate::ArgData::from($crate::argument::IntegerI32::new($value)),
         )
     }};
 }
 
-/// Create a [`I32Slice`] array argument.
+/// Create a [`IntegerI32Slice`](crate::argument::IntegerI32Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[i32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! i32_slice {
+macro_rules! integer_i32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::I32Slice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::IntegerI32Slice::new(
+                $value,
+            )),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[i32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::I32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::IntegerI32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`I64`] argument.
+/// Create a [`IntegerI64`](crate::argument::IntegerI64) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<i64>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! i64 {
+macro_rules! integer_i64 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::I64::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::IntegerI64::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<i64> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::I64::new($value)),
+            $crate::ArgData::from($crate::argument::IntegerI64::new($value)),
         )
     }};
 }
 
-/// Create a [`I64Slice`] array argument.
+/// Create a [`IntegerI64Slice`](crate::argument::IntegerI64Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[i64]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! i64_slice {
+macro_rules! integer_i64_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::I64Slice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::IntegerI64Slice::new(
+                $value,
+            )),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[i64]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::I64Slice::new($value)),
+            $crate::ArgData::from($crate::argument::IntegerI64Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`Color`] argument.
+/// Create a [`Color3F32`](crate::argument::Color3F32) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Color3F32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! color {
+macro_rules! color3_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Color::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Color3F32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Color3F32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::Color::new($value)),
+            $crate::ArgData::from($crate::argument::Color3F32::new($value)),
         )
     }};
 }
 
-/// Create a [`ColorSlice`] array argument.
+/// Create a [`Color3F32Slice`](crate::argument::Color3F32Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Color3F32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! color_slice {
+macro_rules! color3_f32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::ColorSlice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Color3F32Slice::new(
+                $value,
+            )),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Color3F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::ColorSlice::new($value)),
+            $crate::ArgData::from($crate::argument::Color3F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`Point`] argument.
+/// Create a [`Point3F32`](crate::argument::Point3F32) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Point3F32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! point {
+macro_rules! point3_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Point::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Point3F32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Point3F32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::Point::new($value)),
+            $crate::ArgData::from($crate::argument::Point3F32::new($value)),
         )
     }};
 }
 
-/// Create a [`PointSlice`] array argument.
+/// Create a [`Point3F32Slice`](crate::argument::Point3F32Slice) array argument.
 ///
 /// First argument may be either:
 /// * a string literal (escape hatch -- no static check), or
 /// * a typed name constant of type [`Attribute<[Point3F32]>`](crate::Attribute) /
 ///   [`Parameter<[Point3F32]>`](crate::Parameter) (compile-time type-checked).
 #[macro_export]
-macro_rules! point_slice {
+macro_rules! point3_f32_slice {
     // String-literal name -- legacy/escape hatch (no type check).
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::PointSlice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Point3F32Slice::new(
+                $value,
+            )),
+        )
     };
     // Typed Attribute<[Point3F32]> path -- compile-time type-checked.
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Point3F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::PointSlice::new($value)),
+            $crate::ArgData::from($crate::argument::Point3F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a slice-of-4-component-f32-points argument.
+/// Create a [`Point4F32Slice`](crate::argument::Point4F32Slice) argument:
+/// homogeneous points, one `NSITypeHPoint` per point.
 ///
-/// Wraps a `&[[f32; 4]]` (e.g. weighted homogeneous control points
-/// `Pw` for NURBS, RGBA colour-with-alpha attributes, or any other
-/// 4-float-per-element vertex datum) and sends it as a **flat**
-/// `NSITypeFloat` slice -- the renderer groups the floats into
-/// 4-tuples by attribute name, analogous to how `uknot`/`vknot` are
-/// flat float slices.
+/// Each point is `(w·x, w·y, w·z, w)` -- the coordinates premultiplied by
+/// the weight -- as a NURBS surface's `Pw` expects. 3Delight 2.9.210
+/// requires this type for `Pw` and rejects the same data sent as flat
+/// `float`s. Not for other four-component data such as RGBA colors:
+/// the type says *homogeneous point*.
 ///
 /// Name accepts:
 /// * a string literal (escape hatch -- no static check), or
@@ -1036,142 +1058,197 @@ macro_rules! point_slice {
 macro_rules! point4_f32_slice {
     // String-literal name -- legacy/escape hatch (no type check).
     ($name: literal, $value: expr) => {
-        nsi::Arg::new(
+        $crate::Arg::new(
             $name,
-            nsi::ArgData::from(nsi::Point4F32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Point4F32Slice::new(
+                $value,
+            )),
         )
     };
     // Typed Attribute<[Point4F32]> path -- compile-time type-checked.
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Point4F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::Point4F32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Point4F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`Vector`] argument.
+/// Create a [`Point4F32`](crate::argument::Point4F32) argument: one
+/// homogeneous point, `(w·x, w·y, w·z, w)`, as `NSITypeHPoint`.
+///
+/// Name accepts a string literal or a typed
+/// [`Attribute<Point4F32>`](crate::Attribute) constant.
+#[macro_export]
+macro_rules! point4_f32 {
+    // String-literal name -- legacy/escape hatch (no type check).
+    ($name: literal, $value: expr) => {
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Point4F32::new($value)),
+        )
+    };
+    // Typed Attribute<Point4F32> path -- compile-time type-checked.
+    ($name: path, $value: expr) => {{
+        const __ATTR_CHECK: $crate::Attribute<$crate::Point4F32> = $name;
+        $crate::Arg::new(
+            __ATTR_CHECK.name(),
+            $crate::ArgData::from($crate::argument::Point4F32::new($value)),
+        )
+    }};
+}
+
+/// Create a [`Vector3F32`](crate::argument::Vector3F32) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Vector3F32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! vector {
+macro_rules! vector3_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Vector::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Vector3F32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Vector3F32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::Vector::new($value)),
+            $crate::ArgData::from($crate::argument::Vector3F32::new($value)),
         )
     }};
 }
 
-/// Create a [`VectorSlice`] array argument.
+/// Create a [`Vector3F32Slice`](crate::argument::Vector3F32Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Vector3F32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! vector_slice {
+macro_rules! vector3_f32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::VectorSlice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Vector3F32Slice::new(
+                $value,
+            )),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Vector3F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::VectorSlice::new($value)),
+            $crate::ArgData::from($crate::argument::Vector3F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`Normal`] argument.
+/// Create a [`Normal3F32`](crate::argument::Normal3F32) argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Normal3F32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! normal {
+macro_rules! normal3_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::Normal::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Normal3F32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Normal3F32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::Normal::new($value)),
+            $crate::ArgData::from($crate::argument::Normal3F32::new($value)),
         )
     }};
 }
 
-/// Create a [`NormalSlice`] array argument.
+/// Create a [`Normal3F32Slice`](crate::argument::Normal3F32Slice) array argument.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Normal3F32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! normal_slice {
+macro_rules! normal3_f32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::NormalSlice::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Normal3F32Slice::new(
+                $value,
+            )),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Normal3F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::NormalSlice::new($value)),
+            $crate::ArgData::from($crate::argument::Normal3F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`MatrixF32`] row-major, 4×4 transformation matrix argument.
+/// Create a [`Matrix4F32`](crate::argument::Matrix4F32) row-major, 4×4 transformation matrix argument.
 /// The matrix is given as 16 [`prim@f32`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<Matrix4F32>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! matrix_f32 {
+macro_rules! matrix4_f32 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF32::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Matrix4F32::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Matrix4F32> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::MatrixF32::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F32::new($value)),
         )
     }};
 }
 
-/// Create a [`MatrixF32Slice`] row-major, 4×4 transformation matrices argument.
+/// Create a [`Matrix4F32Slice`](crate::argument::Matrix4F32Slice) row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`prim@f32`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Matrix4F32]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! matrix_f32_slice {
+macro_rules! matrix4_f32_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new(
+        $crate::Arg::new(
             $name,
-            nsi::ArgData::from(nsi::MatrixF32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F32Slice::new(
+                $value,
+            )),
         )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Matrix4F32]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::MatrixF32Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F32Slice::new(
+                $value,
+            )),
         )
     }};
 }
 
-/// Create a [`MatrixF64`] row-major, 4×4 transformation matrix argument.
+/// Create a [`Matrix4F64`](crate::argument::Matrix4F64) row-major, 4×4 transformation matrix argument.
 /// The matrix is given as 16 [`prim@f64`] values.
 ///
 /// # Examples
 ///
 /// ```
 /// # use nsi_ffi_wrap as nsi;
-/// # let ctx = nsi::Context::new(None).unwrap();
+/// # let ctx = $crate::argument::Context::new(None).unwrap();
 /// // Setup a transform node.
 /// ctx.create("xform", nsi::TRANSFORM, None);
 /// ctx.connect("xform", None, nsi::ROOT, "objects", None);
@@ -1179,7 +1256,7 @@ macro_rules! matrix_f32_slice {
 /// // Translate 5 units along z-axis.
 /// ctx.set_attribute(
 ///     "xform",
-///     &[nsi::matrix_f64!(
+///     &[nsi::matrix4_f64!(
 ///         "transformationmatrix",
 ///         &[
 ///             1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.,
@@ -1188,37 +1265,44 @@ macro_rules! matrix_f32_slice {
 /// );
 /// ```
 #[macro_export]
-macro_rules! matrix_f64 {
+macro_rules! matrix4_f64 {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new($name, nsi::ArgData::from(nsi::MatrixF64::new($value)))
+        $crate::Arg::new(
+            $name,
+            $crate::ArgData::from($crate::argument::Matrix4F64::new($value)),
+        )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<$crate::Matrix4F64> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::MatrixF64::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F64::new($value)),
         )
     }};
 }
 
-/// Create a [`MatrixF64Slice`] row-major, 4×4 transformation matrices argument.
+/// Create a [`Matrix4F64Slice`](crate::argument::Matrix4F64Slice) row-major, 4×4 transformation matrices argument.
 /// Each matrix is given as 16 [`prim@f64`] values.
 ///
 /// Name accepts a string literal or a typed
 /// [`Attribute<[Matrix4F64]>`](crate::Attribute) constant.
 #[macro_export]
-macro_rules! matrix_f64_slice {
+macro_rules! matrix4_f64_slice {
     ($name: literal, $value: expr) => {
-        nsi::Arg::new(
+        $crate::Arg::new(
             $name,
-            nsi::ArgData::from(nsi::MatrixF64Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F64Slice::new(
+                $value,
+            )),
         )
     };
     ($name: path, $value: expr) => {{
         const __ATTR_CHECK: $crate::Attribute<[$crate::Matrix4F64]> = $name;
-        nsi::Arg::new(
+        $crate::Arg::new(
             __ATTR_CHECK.name(),
-            nsi::ArgData::from(nsi::MatrixF64Slice::new($value)),
+            $crate::ArgData::from($crate::argument::Matrix4F64Slice::new(
+                $value,
+            )),
         )
     }};
 }
@@ -1341,7 +1425,7 @@ mod tests {
             [
                 Arg::new(
                     "resolution",
-                    ArgData::from(I32Slice::new(&resolution)),
+                    ArgData::from(IntegerI32Slice::new(&resolution)),
                 )
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
             ];
@@ -1359,7 +1443,7 @@ mod tests {
         let resolution = [1280, 720];
         let args = [Arg::new(
             "resolution",
-            ArgData::from(I32Slice::new(&resolution)),
+            ArgData::from(IntegerI32Slice::new(&resolution)),
         )];
 
         let (_len, _ptr, params) = to_c_param_vec(Some(&args));
@@ -1440,4 +1524,186 @@ mod pointer_marshalling_tests {
              the bytes it points at"
         );
     }
+}
+
+// Names before the role-and-machine-type scheme. ----------------------
+
+/// Renamed to [`real_f32!`](crate::real_f32).
+#[deprecated(since = "0.11.0", note = "use `real_f32!`")]
+#[macro_export]
+macro_rules! f32 {
+    ($($arguments: tt)*) => {
+        $crate::real_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`real_f32_slice!`](crate::real_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `real_f32_slice!`")]
+#[macro_export]
+macro_rules! f32_slice {
+    ($($arguments: tt)*) => {
+        $crate::real_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`real_f64!`](crate::real_f64).
+#[deprecated(since = "0.11.0", note = "use `real_f64!`")]
+#[macro_export]
+macro_rules! f64 {
+    ($($arguments: tt)*) => {
+        $crate::real_f64!($($arguments)*)
+    };
+}
+
+/// Renamed to [`real_f64_slice!`](crate::real_f64_slice).
+#[deprecated(since = "0.11.0", note = "use `real_f64_slice!`")]
+#[macro_export]
+macro_rules! f64_slice {
+    ($($arguments: tt)*) => {
+        $crate::real_f64_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`integer_i32!`](crate::integer_i32).
+#[deprecated(since = "0.11.0", note = "use `integer_i32!`")]
+#[macro_export]
+macro_rules! i32 {
+    ($($arguments: tt)*) => {
+        $crate::integer_i32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`integer_i32_slice!`](crate::integer_i32_slice).
+#[deprecated(since = "0.11.0", note = "use `integer_i32_slice!`")]
+#[macro_export]
+macro_rules! i32_slice {
+    ($($arguments: tt)*) => {
+        $crate::integer_i32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`integer_i64!`](crate::integer_i64).
+#[deprecated(since = "0.11.0", note = "use `integer_i64!`")]
+#[macro_export]
+macro_rules! i64 {
+    ($($arguments: tt)*) => {
+        $crate::integer_i64!($($arguments)*)
+    };
+}
+
+/// Renamed to [`integer_i64_slice!`](crate::integer_i64_slice).
+#[deprecated(since = "0.11.0", note = "use `integer_i64_slice!`")]
+#[macro_export]
+macro_rules! i64_slice {
+    ($($arguments: tt)*) => {
+        $crate::integer_i64_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`color3_f32!`](crate::color3_f32).
+#[deprecated(since = "0.11.0", note = "use `color3_f32!`")]
+#[macro_export]
+macro_rules! color {
+    ($($arguments: tt)*) => {
+        $crate::color3_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`color3_f32_slice!`](crate::color3_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `color3_f32_slice!`")]
+#[macro_export]
+macro_rules! color_slice {
+    ($($arguments: tt)*) => {
+        $crate::color3_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`point3_f32!`](crate::point3_f32).
+#[deprecated(since = "0.11.0", note = "use `point3_f32!`")]
+#[macro_export]
+macro_rules! point {
+    ($($arguments: tt)*) => {
+        $crate::point3_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`point3_f32_slice!`](crate::point3_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `point3_f32_slice!`")]
+#[macro_export]
+macro_rules! point_slice {
+    ($($arguments: tt)*) => {
+        $crate::point3_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`vector3_f32!`](crate::vector3_f32).
+#[deprecated(since = "0.11.0", note = "use `vector3_f32!`")]
+#[macro_export]
+macro_rules! vector {
+    ($($arguments: tt)*) => {
+        $crate::vector3_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`vector3_f32_slice!`](crate::vector3_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `vector3_f32_slice!`")]
+#[macro_export]
+macro_rules! vector_slice {
+    ($($arguments: tt)*) => {
+        $crate::vector3_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`normal3_f32!`](crate::normal3_f32).
+#[deprecated(since = "0.11.0", note = "use `normal3_f32!`")]
+#[macro_export]
+macro_rules! normal {
+    ($($arguments: tt)*) => {
+        $crate::normal3_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`normal3_f32_slice!`](crate::normal3_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `normal3_f32_slice!`")]
+#[macro_export]
+macro_rules! normal_slice {
+    ($($arguments: tt)*) => {
+        $crate::normal3_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`matrix4_f32!`](crate::matrix4_f32).
+#[deprecated(since = "0.11.0", note = "use `matrix4_f32!`")]
+#[macro_export]
+macro_rules! matrix_f32 {
+    ($($arguments: tt)*) => {
+        $crate::matrix4_f32!($($arguments)*)
+    };
+}
+
+/// Renamed to [`matrix4_f32_slice!`](crate::matrix4_f32_slice).
+#[deprecated(since = "0.11.0", note = "use `matrix4_f32_slice!`")]
+#[macro_export]
+macro_rules! matrix_f32_slice {
+    ($($arguments: tt)*) => {
+        $crate::matrix4_f32_slice!($($arguments)*)
+    };
+}
+
+/// Renamed to [`matrix4_f64!`](crate::matrix4_f64).
+#[deprecated(since = "0.11.0", note = "use `matrix4_f64!`")]
+#[macro_export]
+macro_rules! matrix_f64 {
+    ($($arguments: tt)*) => {
+        $crate::matrix4_f64!($($arguments)*)
+    };
+}
+
+/// Renamed to [`matrix4_f64_slice!`](crate::matrix4_f64_slice).
+#[deprecated(since = "0.11.0", note = "use `matrix4_f64_slice!`")]
+#[macro_export]
+macro_rules! matrix_f64_slice {
+    ($($arguments: tt)*) => {
+        $crate::matrix4_f64_slice!($($arguments)*)
+    };
 }

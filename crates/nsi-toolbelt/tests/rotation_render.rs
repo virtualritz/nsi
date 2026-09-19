@@ -45,7 +45,7 @@ fn render(place: impl FnOnce(&nsi::Context) -> (String, String)) -> Centroid {
         let camera_transform =
             scene::translation(&ctx, Some("camera_xform"), &[0.0, 0.0, 10.0]);
         let camera = scene::perspective_camera(&ctx, Some("camera"));
-        camera.set(&ctx, &[nsi::f32!("fov", 35.0)]);
+        camera.set(&ctx, &[nsi::real_f32!("fov", 35.0)]);
         scene::root().append(&ctx, &camera_transform);
         camera_transform.append(&ctx, &camera);
 
@@ -53,12 +53,12 @@ fn render(place: impl FnOnce(&nsi::Context) -> (String, String)) -> Centroid {
         screen.set(
             &ctx,
             &[
-                nsi::i32_slice!(
+                nsi::integer_i32_slice!(
                     "resolution",
                     &[RESOLUTION as i32, RESOLUTION as i32]
                 )
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
-                nsi::i32!("oversampling", 4),
+                nsi::integer_i32!("oversampling", 4),
             ],
         );
         camera.screens(&ctx, &screen);
@@ -115,8 +115,8 @@ fn render(place: impl FnOnce(&nsi::Context) -> (String, String)) -> Centroid {
         quad.set(
             &ctx,
             &[
-                nsi::i32!("nvertices", 4),
-                nsi::point_slice!(
+                nsi::integer_i32!("nvertices", 4),
+                nsi::point3_f32_slice!(
                     "P",
                     &[
                         [-0.5f32, -0.5, 0.0],

@@ -162,13 +162,13 @@ fn build_scene(
     denoise: bool,
 ) {
     if let Some(rt) = renderthreads {
-        ctx.set_attribute(".global", &[nsi::i32!("renderthreads", rt)]);
+        ctx.set_attribute(".global", &[nsi::integer_i32!("renderthreads", rt)]);
     }
     if !denoise {
         // Interactive renders auto-apply OIDN denoising, which uses the GPU.
         // Disable it so the render is pure-CPU (needed to run in a sandbox
         // where the GPU is unreachable, and to isolate non-OIDN behaviour).
-        ctx.set_attribute(".global", &[nsi::i32!("quality.denoise", 0)]);
+        ctx.set_attribute(".global", &[nsi::integer_i32!("quality.denoise", 0)]);
     }
 
     // Camera.
@@ -176,7 +176,7 @@ fn build_scene(
     ctx.connect("camera_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "camera_xform",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             &[
                 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 5., 1.
@@ -185,7 +185,7 @@ fn build_scene(
     );
     ctx.create("camera", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("camera", None, "camera_xform", "objects", None);
-    ctx.set_attribute("camera", &[nsi::f32!("fov", 45.)]);
+    ctx.set_attribute("camera", &[nsi::real_f32!("fov", 45.)]);
 
     // Screen + beauty layer + FERRIS driver.
     ctx.create("screen", nsi::SCREEN, None);
@@ -193,21 +193,21 @@ fn build_scene(
     ctx.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[64, 64])
+            nsi::integer_i32_slice!("resolution", &[64, 64])
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
-            nsi::i32!("oversampling", 4),
+            nsi::integer_i32!("oversampling", 4),
         ],
     );
 
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);
     let mut beauty_attrs = vec![
         nsi::string!("variablename", "Ci"),
-        nsi::i32!("withalpha", 1),
+        nsi::integer_i32!("withalpha", 1),
         nsi::string!("scalarformat", "float"),
-        nsi::f64!("filterwidth", 1.0),
+        nsi::real_f64!("filterwidth", 1.0),
     ];
     if !denoise {
-        beauty_attrs.push(nsi::i32!("denoise", 0));
+        beauty_attrs.push(nsi::integer_i32!("denoise", 0));
     }
     ctx.set_attribute("beauty", &beauty_attrs);
     ctx.connect("beauty", None, "screen", "outputlayers", None);
@@ -280,9 +280,9 @@ fn build_scene(
     ctx.set_attribute(
         "quad",
         &[
-            nsi::point_slice!("P", points),
-            nsi::i32_slice!("P.indices", &[0, 1, 2, 3]),
-            nsi::i32_slice!("nvertices", &[4]),
+            nsi::point3_f32_slice!("P", points),
+            nsi::integer_i32_slice!("P.indices", &[0, 1, 2, 3]),
+            nsi::integer_i32_slice!("nvertices", &[4]),
         ],
     );
     ctx.create("quad_attrib", nsi::ATTRIBUTES, None);
@@ -293,8 +293,8 @@ fn build_scene(
         "quad_shader",
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlConstant"),
-            nsi::color!("i_color", &[0.2, 0.5, 0.8]),
-            nsi::f32!("intensity", 1.),
+            nsi::color3_f32!("i_color", &[0.2, 0.5, 0.8]),
+            nsi::real_f32!("intensity", 1.),
         ],
     );
 }
@@ -352,8 +352,8 @@ fn drive_context(
         args.push(nsi::callback!("callback", status));
     }
     if cfg.interactive {
-        args.push(nsi::i32!("interactive", 1));
-        args.push(nsi::i32!("progressive", 1));
+        args.push(nsi::integer_i32!("interactive", 1));
+        args.push(nsi::integer_i32!("progressive", 1));
     }
     ctx.render_control(nsi::Action::Start, Some(&args));
     if cfg.interactive && cfg.do_sync {

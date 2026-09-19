@@ -14,9 +14,12 @@ use crate::{
 use alloc_free::{SmallArgs, SmallStrs};
 use core::num::NonZeroUsize;
 use nsi_ffi_wrap::{
-    Arg, ArgData, ColorSlice, F32Slice, F64Slice, I32Slice, I64Slice,
-    MatrixF32Slice, MatrixF64Slice, NormalSlice, PointSlice, StringSlice,
-    VectorSlice,
+    Arg, ArgData, StringSlice,
+    argument::{
+        Color3F32Slice, IntegerI32Slice, IntegerI64Slice, Matrix4F32Slice,
+        Matrix4F64Slice, Normal3F32Slice, Point3F32Slice, Point4F32Slice,
+        RealF32Slice, RealF64Slice, Vector3F32Slice,
+    },
 };
 use nsi_trait::Action;
 use std::borrow::Cow;
@@ -35,6 +38,8 @@ enum Base {
     Normal,
     MatrixF32,
     MatrixF64,
+    /// A homogeneous point, four floats: 3Delight 2.9.210's `hpoint`.
+    HPoint,
 }
 
 impl Base {
@@ -52,6 +57,7 @@ impl Base {
             "normal" => Self::Normal,
             "matrix" => Self::MatrixF32,
             "doublematrix" => Self::MatrixF64,
+            "hpoint" => Self::HPoint,
             _ => return None,
         })
     }
@@ -64,7 +70,8 @@ impl Base {
             | Self::Point
             | Self::Vector
             | Self::Normal
-            | Self::MatrixF32 => Storage::F32,
+            | Self::MatrixF32
+            | Self::HPoint => Storage::F32,
             Self::F64 | Self::MatrixF64 => Storage::F64,
             Self::I32 => Storage::I32,
             Self::I64 => Storage::I64,
@@ -112,6 +119,8 @@ pub(crate) struct Scratch<'a> {
     /// Colour, point, vector and normal, which the argument types take
     /// as triples rather than as a flat slice.
     triples: Vec<[f32; 3]>,
+    /// Homogeneous points, likewise taken as quadruples.
+    quads: Vec<[f32; 4]>,
     matrices_f32: Vec<[f32; 16]>,
     matrices_f64: Vec<[f64; 16]>,
 }
@@ -126,6 +135,7 @@ impl<'a> Scratch<'a> {
         self.i64s.clear();
         self.strings.clear();
         self.triples.clear();
+        self.quads.clear();
         self.matrices_f32.clear();
         self.matrices_f64.clear();
     }
@@ -185,38 +195,41 @@ impl<'a> Scratch<'a> {
             .filter(|d| Some(d.name.as_ref()) != skip)
             .map(|d| {
                 let data = match d.base {
-                    Base::F32 => {
-                        ArgData::from(F32Slice::new(&self.f32s[d.start..d.end]))
-                    }
-                    Base::F64 => {
-                        ArgData::from(F64Slice::new(&self.f64s[d.start..d.end]))
-                    }
-                    Base::I32 => {
-                        ArgData::from(I32Slice::new(&self.i32s[d.start..d.end]))
-                    }
-                    Base::I64 => {
-                        ArgData::from(I64Slice::new(&self.i64s[d.start..d.end]))
-                    }
+                    Base::F32 => ArgData::from(RealF32Slice::new(
+                        &self.f32s[d.start..d.end],
+                    )),
+                    Base::F64 => ArgData::from(RealF64Slice::new(
+                        &self.f64s[d.start..d.end],
+                    )),
+                    Base::I32 => ArgData::from(IntegerI32Slice::new(
+                        &self.i32s[d.start..d.end],
+                    )),
+                    Base::I64 => ArgData::from(IntegerI64Slice::new(
+                        &self.i64s[d.start..d.end],
+                    )),
                     Base::String => ArgData::from(StringSlice::new(
                         &borrowed[d.start..d.end],
                     )),
-                    Base::Color => ArgData::from(ColorSlice::new(
+                    Base::Color => ArgData::from(Color3F32Slice::new(
                         &self.triples[d.start..d.end],
                     )),
-                    Base::Point => ArgData::from(PointSlice::new(
+                    Base::Point => ArgData::from(Point3F32Slice::new(
                         &self.triples[d.start..d.end],
                     )),
-                    Base::Vector => ArgData::from(VectorSlice::new(
+                    Base::Vector => ArgData::from(Vector3F32Slice::new(
                         &self.triples[d.start..d.end],
                     )),
-                    Base::Normal => ArgData::from(NormalSlice::new(
+                    Base::Normal => ArgData::from(Normal3F32Slice::new(
                         &self.triples[d.start..d.end],
                     )),
-                    Base::MatrixF32 => ArgData::from(MatrixF32Slice::new(
+                    Base::MatrixF32 => ArgData::from(Matrix4F32Slice::new(
                         &self.matrices_f32[d.start..d.end],
                     )),
-                    Base::MatrixF64 => ArgData::from(MatrixF64Slice::new(
+                    Base::MatrixF64 => ArgData::from(Matrix4F64Slice::new(
                         &self.matrices_f64[d.start..d.end],
+                    )),
+                    Base::HPoint => ArgData::from(Point4F32Slice::new(
+                        &self.quads[d.start..d.end],
                     )),
                 };
 
@@ -330,6 +343,7 @@ fn start_of(scratch: &Scratch<'_>, base: Base) -> usize {
         Base::Color | Base::Point | Base::Vector | Base::Normal => {
             scratch.triples.len()
         }
+        Base::HPoint => scratch.quads.len(),
         Base::MatrixF32 => scratch.matrices_f32.len(),
         Base::MatrixF64 => scratch.matrices_f64.len(),
         Base::F32 => scratch.f32s.len(),
@@ -358,6 +372,16 @@ fn fold(
             }
             for chunk in run.as_chunks::<3>().0 {
                 scratch.triples.push([chunk[0], chunk[1], chunk[2]]);
+            }
+            scratch.f32s.truncate(flat_f32);
+        }
+        Base::HPoint => {
+            let run = &scratch.f32s[flat_f32..];
+            if !run.len().is_multiple_of(4) {
+                return Err(());
+            }
+            for chunk in run.as_chunks::<4>().0 {
+                scratch.quads.push(*chunk);
             }
             scratch.f32s.truncate(flat_f32);
         }

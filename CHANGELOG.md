@@ -2,7 +2,31 @@
 
 ## Unreleased
 
-### `nsi-intermediate` 0.1.0 -> 0.1.1 (not yet published)
+### Type names and `hpoint` (spec 011; not yet published)
+
+Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),
+`nsi-ffi-wrap` (0.11.0), `nsi` (0.11.0), and `nsi-parse` and
+`nsi-intermediate` (0.2.0), whose public types carry `Type`.
+
+- **Rational NURBS from Rust render again.** 3Delight 2.9.210 requires a
+  `nurbs` node's `Pw` as `hpoint` and refuses flat floats (`E6007`), then
+  drops the patch. `point4_f32_slice!` sent flat floats; it now sends
+  `NSITypeHPoint`. New `point4_f32!` for one homogeneous point.
+- **Types are named by role, component count and machine type**:
+  `Type::RealF32`, `IntegerI32`, `Color3F32`, `Point3F32`, `Point4F32`
+  (new, `NSITypeHPoint`), `Matrix4F64`, ... The argument wrappers take the
+  same names in `nsi::argument` (`nsi::argument::Color3F32`); the macros
+  become `real_f32!`, `integer_i32!`, `color3_f32!`, `point3_f32_slice!`,
+  `matrix4_f64!`, ...
+- **Old names still compile**, with a deprecation warning naming the
+  replacement: `Type::F32`, `nsi::F32`, `nsi::Color`, `nsi::f32!`,
+  `nsi::point_slice!` and the rest. `ArgData`'s variants are renamed
+  without aliases; build `ArgData` through `From`.
+- `nsi-parse` reads `hpoint` and Lua's `nsi.TypeHPoint`;
+  `nsi-intermediate` records and writes them.
+- `nsi-sys` binds the 3Delight 2.9.210 header.
+
+### `nsi-intermediate` 0.1.0 -> 0.2.0 (not yet published)
 
 - `Scene::order_decided` and `order_decided_along` report every
   attribute or shader that two or more nodes define at the same priority
@@ -13,7 +37,7 @@
   which is what 3Delight renders; that is now pinned by mirrored tests.
   Additive.
 
-### `nsi-parse` 0.1.0 -> 0.1.1 (not yet published)
+### `nsi-parse` 0.1.0 -> 0.2.0 (not yet published)
 
 - `parse_stream_parallel`, behind a new `parallel` feature: reads and
   applies a stream on every core. Every `Create` first, then every
@@ -33,7 +57,7 @@ links the same code in and calls it through `execute`, with no C in
 between. Parameters are read in place, every type and arrays
 included; errors and panics are reported through the renderer.
 
-### `nsi-ffi-wrap` 0.10.3 -> 0.10.4 (not yet published)
+### `nsi-ffi-wrap` 0.10.3 -> 0.11.0 (not yet published)
 
 - `Context::from_renderer_context(handle, library)`: a `Context` over a
   context the renderer owns, which never runs `NSIEnd` on it --

@@ -12,23 +12,85 @@ use std::error::Error;
 /// NSI data type discriminant, binary-compatible with `NSIType_t` from `nsi.h`.
 ///
 /// Values use bit flags from the C header -- they are NOT sequential.
+///
+/// # Naming
+///
+/// A name is the value's *role* in mathematical terms, then its component
+/// count, then the machine type of one scalar: [`Type::Color3F32`] is a
+/// color of three `f32`s, [`Type::RealF64`] a real number stored as an
+/// `f64`. The shaped aliases -- [`Color3F32`](crate::Color3F32),
+/// [`Point4F32`](crate::Point4F32) -- read the same way.
+///
+/// The names before this scheme (`Type::F32`, `Type::Color`, ...) remain
+/// as deprecated associated constants, so existing code, patterns
+/// included, keeps compiling.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Invalid = 0,
-    F32 = 1,
-    F64 = 0x11,
-    I32 = 2,
-    I64 = 0x12,
+    /// A real number, as an `f32`. `NSITypeFloat`, `float` in a stream.
+    RealF32 = 1,
+    /// A real number, as an `f64`. `NSITypeDouble`, `double`.
+    RealF64 = 0x11,
+    /// An integer, as an `i32`. `NSITypeInteger`, `int`.
+    IntegerI32 = 2,
+    /// An integer, as an `i64`. `NSITypeInt64`, `int64`.
+    IntegerI64 = 0x12,
+    /// A string. `NSITypeString`, `string`.
     String = 3,
-    Color = 4,
-    Point = 5,
-    Vector = 6,
-    Normal = 7,
-    MatrixF32 = 8,
-    MatrixF64 = 0x18,
+    /// A linear RGB color of three `f32`s. `NSITypeColor`, `color`.
+    Color3F32 = 4,
+    /// A point of three `f32`s. `NSITypePoint`, `point`.
+    Point3F32 = 5,
+    /// A vector of three `f32`s. `NSITypeVector`, `vector`.
+    Vector3F32 = 6,
+    /// A normal of three `f32`s. `NSITypeNormal`, `normal`.
+    Normal3F32 = 7,
+    /// A 4×4 matrix of `f32`s. `NSITypeMatrix`, `matrix`.
+    Matrix4F32 = 8,
+    /// A 4×4 matrix of `f64`s. `NSITypeDoubleMatrix`, `doublematrix`.
+    Matrix4F64 = 0x18,
     /// Called "Pointer" in the C API; renamed for clarity.
     Reference = 9,
+    /// A homogeneous point of four `f32`s, `(w·x, w·y, w·z, w)`: the
+    /// coordinates are premultiplied by the weight. `NSITypeHPoint`,
+    /// `hpoint` in a stream. New in 3Delight 2.9.210, which requires it
+    /// for a NURBS surface's `Pw`.
+    Point4F32 = 10,
+}
+
+#[allow(non_upper_case_globals)]
+impl Type {
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Color3F32`")]
+    pub const Color: Type = Type::Color3F32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::RealF32`")]
+    pub const F32: Type = Type::RealF32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::RealF64`")]
+    pub const F64: Type = Type::RealF64;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::IntegerI32`")]
+    pub const I32: Type = Type::IntegerI32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::IntegerI64`")]
+    pub const I64: Type = Type::IntegerI64;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Matrix4F32`")]
+    pub const MatrixF32: Type = Type::Matrix4F32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Matrix4F64`")]
+    pub const MatrixF64: Type = Type::Matrix4F64;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Normal3F32`")]
+    pub const Normal: Type = Type::Normal3F32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Point3F32`")]
+    pub const Point: Type = Type::Point3F32;
+    /// Renamed; see [`Type`]'s naming rule.
+    #[deprecated(since = "0.5.0", note = "use `Type::Vector3F32`")]
+    pub const Vector: Type = Type::Vector3F32;
 }
 
 // ─── Flags ──────────────────────────────────────────────────────────────────
@@ -319,17 +381,17 @@ mod tests {
     #[test]
     fn type_values_match_c_header() {
         assert_eq!(Type::Invalid as i32, 0);
-        assert_eq!(Type::F32 as i32, 1);
-        assert_eq!(Type::F64 as i32, 0x11);
-        assert_eq!(Type::I32 as i32, 2);
-        assert_eq!(Type::I64 as i32, 0x12);
+        assert_eq!(Type::RealF32 as i32, 1);
+        assert_eq!(Type::RealF64 as i32, 0x11);
+        assert_eq!(Type::IntegerI32 as i32, 2);
+        assert_eq!(Type::IntegerI64 as i32, 0x12);
         assert_eq!(Type::String as i32, 3);
-        assert_eq!(Type::Color as i32, 4);
-        assert_eq!(Type::Point as i32, 5);
-        assert_eq!(Type::Vector as i32, 6);
-        assert_eq!(Type::Normal as i32, 7);
-        assert_eq!(Type::MatrixF32 as i32, 8);
-        assert_eq!(Type::MatrixF64 as i32, 0x18);
+        assert_eq!(Type::Color3F32 as i32, 4);
+        assert_eq!(Type::Point3F32 as i32, 5);
+        assert_eq!(Type::Vector3F32 as i32, 6);
+        assert_eq!(Type::Normal3F32 as i32, 7);
+        assert_eq!(Type::Matrix4F32 as i32, 8);
+        assert_eq!(Type::Matrix4F64 as i32, 0x18);
         assert_eq!(Type::Reference as i32, 9);
     }
 

@@ -38,7 +38,8 @@ enum NSIType_t
 	NSITypeNormal = 7,
 	NSITypeMatrix = 8,
 	NSITypeDoubleMatrix = NSITypeMatrix | 0x10,
-	NSITypePointer = 9
+	NSITypePointer = 9,
+	NSITypeHPoint = 10
 };
 
 static inline
@@ -48,7 +49,7 @@ size_t NSITypeSizeOf(unsigned t)
 	{
 		0, sizeof(float), sizeof(int), sizeof(char*),
 		3*sizeof(float), 3*sizeof(float), 3*sizeof(float), 3*sizeof(float),
-		16*sizeof(float), sizeof(void*), 0, 0,
+		16*sizeof(float), sizeof(void*), 4*sizeof(float), 0,
 		0, 0, 0, 0,
 		0, sizeof(double), 8, 0,
 		0, 0, 0, 0,

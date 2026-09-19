@@ -62,15 +62,15 @@ pub fn main() {
                                 "shaderfilename",
                                 "${DELIGHT}/osl/vdbVolume"
                             ),
-                            nsi::f32!("density", 8.0),
-                            nsi::f32!("multiple_scattering_intensity", 0.44),
-                            nsi::f32!("emissionramp_intensity", 1.0),
-                            nsi::f32_slice!(
+                            nsi::real_f32!("density", 8.0),
+                            nsi::real_f32!("multiple_scattering_intensity", 0.44),
+                            nsi::real_f32!("emissionramp_intensity", 1.0),
+                            nsi::real_f32_slice!(
                                 "emissionramp_color_curve_Knots",
                                 &[0.0, 0.09034268, 0.83800625, 1.0]
                             )
                             .array_len(const { NonZeroUsize::new(4).unwrap() }),
-                            nsi::color_slice!(
+                            nsi::color3_f32_slice!(
                                 "emissionramp_color_curve_Colors",
                                 &[
                                     [0., 0., 0.],
@@ -80,7 +80,7 @@ pub fn main() {
                                 ]
                             )
                             .array_len(const { NonZeroUsize::new(4).unwrap() }),
-                            nsi::i32_slice!(
+                            nsi::integer_i32_slice!(
                                 "emissionramp_color_curve_Interp",
                                 &[3, 3, 3, 3,]
                             )
@@ -130,9 +130,9 @@ pub fn main() {
                     None,
                     nsi::node::PERSPECTIVE_CAMERA,
                     Some(&[
-                        nsi::f32!("fov", field_of_view),
-                        /*nsi::f64_slice!("shutterrange", &[-0.01042,
-                         * 0.01042]), nsi::f64_slice!
+                        nsi::real_f32!("fov", field_of_view),
+                        /*nsi::real_f64_slice!("shutterrange", &[-0.01042,
+                         * 0.01042]), nsi::real_f64_slice!
                          * ("shutteropening", &[0.333, 0.666]), */
                     ]),
                 ),
@@ -144,11 +144,11 @@ pub fn main() {
                         None,
                         nsi::node::SCREEN,
                         Some(&[
-                            nsi::i32_slice!("resolution", &[1024, 512])
+                            nsi::integer_i32_slice!("resolution", &[1024, 512])
                                 .array_len(
                                     const { NonZeroUsize::new(2).unwrap() },
                                 ),
-                            nsi::i32!("oversampling", 64),
+                            nsi::integer_i32!("oversampling", 64),
                         ]),
                     ),
                     Some("outputlayers"),
@@ -160,7 +160,7 @@ pub fn main() {
                             nsi::node::OUTPUT_LAYER,
                             Some(&[
                                 nsi::string!("variablename", "Ci"),
-                                nsi::i32!("withalpha", 1),
+                                nsi::integer_i32!("withalpha", 1),
                                 nsi::string!("scalarformat", "float"),
                             ]),
                         ),
@@ -184,9 +184,9 @@ pub fn main() {
     ctx.set_attribute(
         ".global",
         &[
-            nsi::i32!("renderatlowpriority", 1),
+            nsi::integer_i32!("renderatlowpriority", 1),
             nsi::string!("bucketorder", "spiral"),
-            nsi::i32!("quality.volumesamples", 16),
+            nsi::integer_i32!("quality.volumesamples", 16),
         ],
     );
 

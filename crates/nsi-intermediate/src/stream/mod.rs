@@ -436,8 +436,12 @@ fn element_count(arg: &OwnedArgument) -> usize {
 
 const fn components_per_element(type_tag: Type) -> usize {
     match type_tag {
-        Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
-        Type::MatrixF32 | Type::MatrixF64 => 16,
+        Type::Color3F32
+        | Type::Point3F32
+        | Type::Vector3F32
+        | Type::Normal3F32 => 3,
+        Type::Point4F32 => 4,
+        Type::Matrix4F32 | Type::Matrix4F64 => 16,
         _ => 1,
     }
 }
@@ -484,18 +488,19 @@ fn flag_prefix(flags: i32) -> String {
 /// Verified against 3Delight 2.9.207 apistream output.
 const fn base_type_name(type_tag: Type) -> &'static str {
     match type_tag {
-        Type::F32 => "float",
-        Type::F64 => "double",
-        Type::I32 => "int",
-        Type::I64 => "int64",
+        Type::RealF32 => "float",
+        Type::RealF64 => "double",
+        Type::IntegerI32 => "int",
+        Type::IntegerI64 => "int64",
         Type::String => "string",
-        Type::Color => "color",
-        Type::Point => "point",
-        Type::Vector => "vector",
-        Type::Normal => "normal",
-        Type::MatrixF32 => "matrix",
-        Type::MatrixF64 => "doublematrix",
+        Type::Color3F32 => "color",
+        Type::Point3F32 => "point",
+        Type::Vector3F32 => "vector",
+        Type::Normal3F32 => "normal",
+        Type::Matrix4F32 => "matrix",
+        Type::Matrix4F64 => "doublematrix",
         Type::Reference => "pointer",
+        Type::Point4F32 => "hpoint",
         Type::Invalid => "invalid",
     }
 }

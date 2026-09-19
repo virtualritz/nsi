@@ -10,19 +10,19 @@ use std::num::NonZeroUsize;
 
 #[test]
 fn owns_a_single_f32() {
-    let arg = nsi::f32!("roughness", 0.3);
+    let arg = nsi::real_f32!("roughness", 0.3);
     let owned = OwnedArgument::from_param(&arg);
     assert_eq!(owned.name, "roughness");
-    assert_eq!(owned.type_tag, Type::F32);
+    assert_eq!(owned.type_tag, Type::RealF32);
     assert_eq!(owned.data, OwnedData::F32(vec![0.3]));
 }
 
 #[test]
 fn owns_a_point_slice_with_all_floats() {
     let points = [[0.0f32, 0.0, 0.0], [1.0, 0.0, 0.0]];
-    let arg = nsi::point_slice!("P", &points);
+    let arg = nsi::point3_f32_slice!("P", &points);
     let owned = OwnedArgument::from_param(&arg);
-    assert_eq!(owned.type_tag, Type::Point);
+    assert_eq!(owned.type_tag, Type::Point3F32);
     // Two points, three floats each: the storage keeps all six,
     // flattened.
     assert_eq!(
@@ -38,7 +38,7 @@ fn owns_a_point_slice_with_all_floats() {
 fn owns_every_scalar_of_an_array_len_argument() {
     use NonZeroUsize;
     let resolution = [1280i32, 720];
-    let arg = nsi::i32_slice!("resolution", &resolution)
+    let arg = nsi::integer_i32_slice!("resolution", &resolution)
         .array_len(const { NonZeroUsize::new(2).unwrap() });
     let owned = OwnedArgument::from_param(&arg);
     assert_eq!(owned.array_length, 2);
@@ -94,7 +94,7 @@ fn owns_a_string() {
 fn an_array_len_run_is_rounded_down_as_the_c_call_does() {
     use NonZeroUsize;
 
-    let arg = nsi::f32_slice!("x", &[1.0f32, 2.0, 3.0])
+    let arg = nsi::real_f32_slice!("x", &[1.0f32, 2.0, 3.0])
         .array_len(const { NonZeroUsize::new(2).unwrap() });
     let owned = OwnedArgument::from_param(&arg);
 
@@ -111,7 +111,7 @@ fn a_tuple_array_len_run_is_rounded_down_too() {
     use NonZeroUsize;
 
     let points = [[0.0f32, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]];
-    let arg = nsi::point_slice!("P", &points)
+    let arg = nsi::point3_f32_slice!("P", &points)
         .array_len(const { NonZeroUsize::new(2).unwrap() });
     let owned = OwnedArgument::from_param(&arg);
 
@@ -153,14 +153,14 @@ fn recording_keeps_a_non_utf8_byte() {
 /// component of a colour as a scalar, or sixteen `double`s as a matrix.
 #[test]
 fn typed_accessors_refuse_the_wrong_layout() {
-    let fov = OwnedArgument::from_param(&nsi::f32!("fov", 45.0));
+    let fov = OwnedArgument::from_param(&nsi::real_f32!("fov", 45.0));
     assert_eq!(fov.as_f32(), Some(45.0));
     assert_eq!(fov.as_f32s(), Some(&[45.0f32][..]));
     assert!(fov.as_i32s().is_none());
     assert!(fov.as_matrix().is_none());
 
     // A colour is three `f32`s, so the scalar accessor must decline.
-    let c = OwnedArgument::from_param(&nsi::color!("c", &[0.1, 0.2, 0.3]));
+    let c = OwnedArgument::from_param(&nsi::color3_f32!("c", &[0.1, 0.2, 0.3]));
     assert_eq!(c.as_f32s().map(<[f32]>::len), Some(3));
     assert_eq!(c.as_f32(), None, "not the first component of a colour");
 
@@ -171,13 +171,13 @@ fn typed_accessors_refuse_the_wrong_layout() {
         0.0, 0.0, 1.0, 0.0,
         7.0, 0.0, 0.0, 1.0,
     ];
-    let matrix = OwnedArgument::from_param(&nsi::matrix_f64!("m", &m));
+    let matrix = OwnedArgument::from_param(&nsi::matrix4_f64!("m", &m));
     assert_eq!(matrix.as_matrix().map(|v| v[12]), Some(7.0));
 
     // Sixteen `double`s are not a `doublematrix`; 3Delight refuses it.
     let sixteen = OwnedArgument {
         name: "m".to_string(),
-        type_tag: Type::F64,
+        type_tag: Type::RealF64,
         array_length: 1,
         flags: 0,
         data: OwnedData::F64(m.to_vec()),

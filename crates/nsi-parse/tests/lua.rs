@@ -19,7 +19,7 @@ fn a_lua_script_this_workspace_wrote_reads_back_the_same() {
     let original = Recorder::new();
     original.create("cam", "perspectivecamera", None).unwrap();
     original
-        .set_attribute("cam", &[nsi::f32!("fov", 45.0)])
+        .set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])
         .unwrap();
     original
         .set_attribute("cam", &[nsi::string!("name", "he said \"hi\"")])
@@ -27,15 +27,15 @@ fn a_lua_script_this_workspace_wrote_reads_back_the_same() {
     original.create("m", "mesh", None).unwrap();
     let points = [[0.0f32, 0.0, 0.0], [1.0, 2.0, 3.0]];
     original
-        .set_attribute("m", &[nsi::point_slice!("P", &points)])
+        .set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])
         .unwrap();
     original
-        .set_attribute("m", &[nsi::color!("c", &[0.1, 0.2, 0.3])])
+        .set_attribute("m", &[nsi::color3_f32!("c", &[0.1, 0.2, 0.3])])
         .unwrap();
     original
         .set_attribute(
             "m",
-            &[nsi::i32_slice!("res", &[1280i32, 720])
+            &[nsi::integer_i32_slice!("res", &[1280i32, 720])
                 .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
         )
         .unwrap();
@@ -50,11 +50,11 @@ fn a_lua_script_this_workspace_wrote_reads_back_the_same() {
     original
         .set_attribute(
             "xf",
-            &[nsi::matrix_f64!("transformationmatrix", &matrix)],
+            &[nsi::matrix4_f64!("transformationmatrix", &matrix)],
         )
         .unwrap();
     original
-        .set_attribute_at_time("xf", 0.5, &[nsi::f32!("t", 1.0)])
+        .set_attribute_at_time("xf", 0.5, &[nsi::real_f32!("t", 1.0)])
         .unwrap();
     original
         .connect("xf", None, ".root", "objects", None)
@@ -316,10 +316,10 @@ fn the_order_the_samples_were_set_in_survives_the_lua_round_trip() {
     original.create("a", "attributes", None).unwrap();
     // The later time first, so call order and time order disagree.
     original
-        .set_attribute_at_time("a", 1.0, &[nsi::i32!("visibility", 0)])
+        .set_attribute_at_time("a", 1.0, &[nsi::integer_i32!("visibility", 0)])
         .unwrap();
     original
-        .set_attribute_at_time("a", 0.0, &[nsi::i32!("visibility", 1)])
+        .set_attribute_at_time("a", 0.0, &[nsi::integer_i32!("visibility", 1)])
         .unwrap();
 
     let mut script = Vec::new();
@@ -378,21 +378,21 @@ fn a_superseded_same_time_call_survives_the_lua_round_trip() {
         .set_attribute_at_time(
             "xf",
             0.0,
-            &[nsi::matrix_f64!("transformationmatrix", &good(-1.5))],
+            &[nsi::matrix4_f64!("transformationmatrix", &good(-1.5))],
         )
         .unwrap();
     original
         .set_attribute_at_time(
             "xf",
             1.0,
-            &[nsi::f32!("transformationmatrix", 0.5)],
+            &[nsi::real_f32!("transformationmatrix", 0.5)],
         )
         .unwrap();
     original
         .set_attribute_at_time(
             "xf",
             1.0,
-            &[nsi::matrix_f64!("transformationmatrix", &good(-3.0))],
+            &[nsi::matrix4_f64!("transformationmatrix", &good(-3.0))],
         )
         .unwrap();
 

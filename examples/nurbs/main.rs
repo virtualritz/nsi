@@ -62,7 +62,7 @@ fn main() {
     ctx.connect("cam_xform", None, nsi::ROOT, "objects", None);
     ctx.set_attribute(
         "cam_xform",
-        &[nsi::matrix_f64!(
+        &[nsi::matrix4_f64!(
             "transformationmatrix",
             // Pull the camera back along +z and tilt down slightly.
             &[
@@ -76,16 +76,16 @@ fn main() {
 
     ctx.create("cam", nsi::PERSPECTIVE_CAMERA, None);
     ctx.connect("cam", None, "cam_xform", "objects", None);
-    ctx.set_attribute("cam", &[nsi::f32!("fov", 35.0)]);
+    ctx.set_attribute("cam", &[nsi::real_f32!("fov", 35.0)]);
 
     ctx.create("screen", nsi::SCREEN, None);
     ctx.connect("screen", None, "cam", "screens", None);
     ctx.set_attribute(
         "screen",
         &[
-            nsi::i32_slice!("resolution", &[512, 512])
+            nsi::integer_i32_slice!("resolution", &[512, 512])
                 .array_len(const { NonZeroUsize::new(2).unwrap() }),
-            nsi::i32!("oversampling", 32),
+            nsi::integer_i32!("oversampling", 32),
         ],
     );
 
@@ -117,7 +117,7 @@ fn main() {
         "env_shader",
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/environmentLight"),
-            nsi::f32!("intensity", 1.0),
+            nsi::real_f32!("intensity", 1.0),
         ],
     );
 
@@ -170,24 +170,24 @@ fn main() {
         "patch",
         &[
             // Surface intrinsics.
-            nsi::i32!("nu", NU),
-            nsi::i32!("nv", NV),
-            nsi::i32!("uorder", UORDER),
-            nsi::i32!("vorder", VORDER),
+            nsi::integer_i32!("nu", NU),
+            nsi::integer_i32!("nv", NV),
+            nsi::integer_i32!("uorder", UORDER),
+            nsi::integer_i32!("vorder", VORDER),
             // uknot/vknot are flat float slices, NOT fixed-size tuples,
             // so no .array_len() — that would encode the value as
             // `float[N]` (one tuple) and the renderer rejects it with
             // E6007. Same rule applies to every `trimcurves.*` array
             // below.
-            nsi::f32_slice!("uknot", &uknot),
-            nsi::f32_slice!("vknot", &vknot),
+            nsi::real_f32_slice!("uknot", &uknot),
+            nsi::real_f32_slice!("vknot", &vknot),
             // Surface domain (analogous to RiNuPatch's umin/umax/vmin/vmax).
             // Constraints: umin ≥ uknot[uorder-1], umax ≤ uknot[nu]
             // (and the same for v). Defaults to 0..1 if omitted.
-            nsi::f32!("umin", 0.0),
-            nsi::f32!("umax", 1.0),
-            nsi::f32!("vmin", 0.0),
-            nsi::f32!("vmax", 1.0),
+            nsi::real_f32!("umin", 0.0),
+            nsi::real_f32!("umax", 1.0),
+            nsi::real_f32!("vmin", 0.0),
+            nsi::real_f32!("vmax", 1.0),
             // Rational form. `point4_f32_slice!` keeps the
             // `&[[f32; 4]]` shape on the Rust side and ships a flat
             // `NSITypeFloat` slice of `4 * NU * NV` floats — same
@@ -196,19 +196,19 @@ fn main() {
             //     nsi::point4_f32_slice!(nsi::WEIGHTED_POSITION, &pw)
             nsi::point4_f32_slice!("Pw", &pw),
             // Trim.
-            nsi::i32!("trimcurves.nloops", 1),
-            nsi::i32_slice!("trimcurves.ncurves", &[1]),
-            nsi::i32_slice!("trimcurves.n", &[TRIM_N]),
-            nsi::i32_slice!("trimcurves.order", &[TRIM_ORDER]),
-            nsi::f32_slice!("trimcurves.knot", &trim_knot),
-            nsi::f32_slice!("trimcurves.min", &[0.0_f32]),
-            nsi::f32_slice!("trimcurves.max", &[1.0_f32]),
-            nsi::f32_slice!("trimcurves.u", &trim_u),
-            nsi::f32_slice!("trimcurves.v", &trim_v),
-            nsi::f32_slice!("trimcurves.w", &trim_w),
+            nsi::integer_i32!("trimcurves.nloops", 1),
+            nsi::integer_i32_slice!("trimcurves.ncurves", &[1]),
+            nsi::integer_i32_slice!("trimcurves.n", &[TRIM_N]),
+            nsi::integer_i32_slice!("trimcurves.order", &[TRIM_ORDER]),
+            nsi::real_f32_slice!("trimcurves.knot", &trim_knot),
+            nsi::real_f32_slice!("trimcurves.min", &[0.0_f32]),
+            nsi::real_f32_slice!("trimcurves.max", &[1.0_f32]),
+            nsi::real_f32_slice!("trimcurves.u", &trim_u),
+            nsi::real_f32_slice!("trimcurves.v", &trim_v),
+            nsi::real_f32_slice!("trimcurves.w", &trim_w),
             // 0 = keep inside the loop, 1 = keep outside (i.e. the loop
             // is a hole). For a hole we want to *remove* the inside.
-            nsi::i32_slice!("trimcurves.sense", &[1]),
+            nsi::integer_i32_slice!("trimcurves.sense", &[1]),
         ],
     );
 
@@ -221,8 +221,8 @@ fn main() {
         "surf_shader",
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlPrincipled"),
-            nsi::color!("i_color", &[0.7, 0.55, 0.4]),
-            nsi::f32!("roughness", 0.4),
+            nsi::color3_f32!("i_color", &[0.7, 0.55, 0.4]),
+            nsi::real_f32!("roughness", 0.4),
         ],
     );
 

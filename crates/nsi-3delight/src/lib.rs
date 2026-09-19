@@ -64,7 +64,7 @@ pub fn environment(
                 ctx,
                 None,
                 nsi::node::ATTRIBUTES,
-                Some(&[nsi::i32!(
+                Some(&[nsi::integer_i32!(
                     "visibility.camera",
                     visible.unwrap_or(true) as _
                 )]),
@@ -127,7 +127,7 @@ where
         shader.as_str(),
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/environmentLight"),
-            nsi::f32!("intensity", 2.0f32.powf(exposure.unwrap_or(0.0))),
+            nsi::real_f32!("intensity", 2.0f32.powf(exposure.unwrap_or(0.0))),
             nsi::string!("image", texture),
         ],
     );
@@ -176,7 +176,7 @@ where
         shader.as_str(),
         &[
             nsi::string!("shaderfilename", "${DELIGHT}/osl/dlSky"),
-            nsi::f32!("intensity", 2.0f32.powf(exposure.unwrap_or(0.0))),
+            nsi::real_f32!("intensity", 2.0f32.powf(exposure.unwrap_or(0.0))),
         ],
     );
 

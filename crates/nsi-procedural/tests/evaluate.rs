@@ -50,7 +50,7 @@ fn evaluate(context: &nsi::Context<'_>, library: &Path, count: i32) {
     context.evaluate(&[
         nsi::string!("type", "dynamiclibrary"),
         nsi::string!("filename", library.to_str().unwrap()),
-        nsi::i32!("count", count),
+        nsi::integer_i32!("count", count),
     ]);
 }
 

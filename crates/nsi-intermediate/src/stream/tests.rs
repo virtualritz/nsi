@@ -38,7 +38,7 @@ fn the_reserved_handles_are_never_declared() {
             crate::GLOBAL,
             vec![OwnedArgument {
                 name: "renderatlowpriority".to_string(),
-                type_tag: Type::I32,
+                type_tag: Type::IntegerI32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::I32(vec![1]),
@@ -69,7 +69,7 @@ fn an_empty_slice_still_brackets() {
             "m",
             vec![OwnedArgument {
                 name: "empty".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(Vec::new()),

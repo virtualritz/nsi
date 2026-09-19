@@ -22,7 +22,7 @@ fn translate(x: f64, y: f64, z: f64) -> OwnedArgument {
     ];
     OwnedArgument {
         name: "transformationmatrix".to_string(),
-        type_tag: Type::MatrixF64,
+        type_tag: Type::Matrix4F64,
         array_length: 1,
         flags: 0,
         data: OwnedData::F64(m),
@@ -39,7 +39,7 @@ fn scale(s: f64) -> OwnedArgument {
     ];
     OwnedArgument {
         name: "transformationmatrix".to_string(),
-        type_tag: Type::MatrixF64,
+        type_tag: Type::Matrix4F64,
         array_length: 1,
         flags: 0,
         data: OwnedData::F64(m),
@@ -244,7 +244,7 @@ fn motion_samples_of_other_attributes_do_not_block_resolution() {
             0.5,
             vec![OwnedArgument {
                 name: "unrelated".to_string(),
-                type_tag: Type::F64,
+                type_tag: Type::RealF64,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F64(vec![1.0]),
@@ -344,7 +344,7 @@ fn a_static_chain_has_no_motion_times() {
             0.5,
             vec![OwnedArgument {
                 name: "unrelated".to_string(),
-                type_tag: Type::F64,
+                type_tag: Type::RealF64,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F64(vec![1.0]),
@@ -481,7 +481,7 @@ fn a_non_f64_matrix_is_skipped_not_reinterpreted() {
             "xf",
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::MatrixF32,
+                type_tag: Type::Matrix4F32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(m),
@@ -504,7 +504,7 @@ fn index_arg(value: i32) -> OwnedArgument {
 fn priority(value: i32) -> OwnedArgument {
     OwnedArgument {
         name: "priority".to_string(),
-        type_tag: Type::I32,
+        type_tag: Type::IntegerI32,
         array_length: 1,
         flags: 0,
         data: OwnedData::I32(vec![value]),
@@ -1170,7 +1170,7 @@ fn multiple_screens_yield_one_output_each() {
 fn doubles(name: &str, values: Vec<f64>) -> OwnedArgument {
     OwnedArgument {
         name: name.to_string(),
-        type_tag: Type::MatrixF64,
+        type_tag: Type::Matrix4F64,
         array_length: 1,
         flags: 0,
         data: OwnedData::F64(values),
@@ -1180,7 +1180,7 @@ fn doubles(name: &str, values: Vec<f64>) -> OwnedArgument {
 fn integers(name: &str, values: Vec<i32>) -> OwnedArgument {
     OwnedArgument {
         name: name.to_string(),
-        type_tag: Type::I32,
+        type_tag: Type::IntegerI32,
         array_length: 1,
         flags: 0,
         data: OwnedData::I32(values),
@@ -1663,7 +1663,7 @@ fn a_non_integer_priority_is_ignored() {
                 integers("visibility", vec![1]),
                 OwnedArgument {
                     name: "visibility.priority".to_string(),
-                    type_tag: Type::F32,
+                    type_tag: Type::RealF32,
                     array_length: 1,
                     flags: 0,
                     data: OwnedData::F32(vec![10.0]),
@@ -1748,7 +1748,7 @@ fn an_int64_priority_is_ignored() {
                 integers("visibility", vec![1]),
                 OwnedArgument {
                     name: "visibility.priority".to_string(),
-                    type_tag: Type::I64,
+                    type_tag: Type::IntegerI64,
                     array_length: 1,
                     flags: 0,
                     data: OwnedData::I64(vec![10]),
@@ -1907,7 +1907,7 @@ fn an_unreadable_priority_alone_is_not_a_definition() {
             "near",
             vec![OwnedArgument {
                 name: "visibility.priority".to_string(),
-                type_tag: Type::I64,
+                type_tag: Type::IntegerI64,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::I64(vec![10]),
@@ -2459,7 +2459,7 @@ fn a_set_provides_shader_attributes_below_the_geometry() {
 fn points(values: Vec<f32>) -> OwnedArgument {
     OwnedArgument {
         name: "P".to_string(),
-        type_tag: Type::Point,
+        type_tag: Type::Point3F32,
         array_length: 1,
         flags: 0,
         data: OwnedData::F32(values),
@@ -3936,7 +3936,7 @@ fn a_wrong_typed_later_sample_clears_the_attribute() {
             1.0,
             vec![OwnedArgument {
                 name: "disabledinstances".to_string(),
-                type_tag: Type::I64,
+                type_tag: Type::IntegerI64,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::I64(vec![0]),
@@ -4149,7 +4149,7 @@ fn the_borrowed_instances_agree_with_the_copied_ones() {
 fn instancer_matrices_are_a_doublematrix_by_declaration() {
     let plain_doubles = |values: Vec<f64>| OwnedArgument {
         name: "transformationmatrices".to_string(),
-        type_tag: Type::F64,
+        type_tag: Type::RealF64,
         array_length: 1,
         flags: 0,
         data: OwnedData::F64(values),
@@ -4292,12 +4292,12 @@ fn the_two_interpolating_accessors_refuse_alike() {
 fn the_typing_rule_is_available_for_any_attribute() {
     let point = |x: f32| OwnedArgument {
         name: "P".to_string(),
-        type_tag: Type::Point,
+        type_tag: Type::Point3F32,
         array_length: 1,
         flags: 0,
         data: OwnedData::F32(vec![x, 0.0, 0.0]),
     };
-    let readable = |arg: &OwnedArgument| arg.type_tag == Type::Point;
+    let readable = |arg: &OwnedArgument| arg.type_tag == Type::Point3F32;
 
     let mut scene = Scene::default();
     scene.create("q", "mesh").unwrap();
@@ -4327,7 +4327,7 @@ fn the_typing_rule_is_available_for_any_attribute() {
             1.0,
             vec![OwnedArgument {
                 name: "P".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -4541,7 +4541,7 @@ fn a_wrong_typed_last_transform_sample_unsets_it() {
             1.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -4621,7 +4621,7 @@ fn a_wrong_typed_earlier_sample_is_dropped() {
             0.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -4682,7 +4682,7 @@ fn motion_times_and_attribute_times_differ_on_an_unreadable_sample() {
             0.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -4741,7 +4741,7 @@ fn an_unreadable_sample_discards_the_ones_before_it() {
             1.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -4811,7 +4811,7 @@ fn a_double_typed_matrix_is_not_a_matrix() {
             "xf",
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F64,
+                type_tag: Type::RealF64,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F64(sixteen),
@@ -4939,7 +4939,7 @@ fn a_same_time_reset_after_an_unreadable_sample_stands_alone() {
             1.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -5018,7 +5018,7 @@ fn a_later_definition_supersedes_an_unreadable_sample() {
             1.0,
             vec![OwnedArgument {
                 name: "transformationmatrix".to_string(),
-                type_tag: Type::F32,
+                type_tag: Type::RealF32,
                 array_length: 1,
                 flags: 0,
                 data: OwnedData::F32(vec![0.5]),
@@ -5092,7 +5092,7 @@ fn sampled_reads_the_attribute_it_was_asked_for() {
 fn an_unreadable_sample_discards_only_what_was_defined_before_it() {
     let float = || OwnedArgument {
         name: "transformationmatrix".to_string(),
-        type_tag: Type::F32,
+        type_tag: Type::RealF32,
         array_length: 1,
         flags: 0,
         data: OwnedData::F32(vec![0.5]),
@@ -5328,14 +5328,14 @@ fn an_output_layer_reads_what_it_sets() {
                 string_attribute("colorprofile", "acescg"),
                 OwnedArgument::new(
                     "filterwidth",
-                    Type::F64,
+                    Type::RealF64,
                     1,
                     0,
                     OwnedData::F64(vec![1.0]),
                 ),
                 OwnedArgument::new(
                     "withalpha",
-                    Type::I32,
+                    Type::IntegerI32,
                     1,
                     0,
                     OwnedData::I32(vec![1]),
@@ -5378,7 +5378,7 @@ fn layers_order_by_sort_key_then_by_connection() {
                     handle,
                     vec![OwnedArgument::new(
                         "sortkey",
-                        Type::I32,
+                        Type::IntegerI32,
                         1,
                         0,
                         OwnedData::I32(vec![key]),
@@ -5497,7 +5497,7 @@ fn a_mesh_without_nvertices_is_an_error() {
 
 /// An `int` attribute, spelled once for the mesh tests.
 fn int_attribute(name: &str, values: &[i32]) -> OwnedArgument {
-    OwnedArgument::new(name, Type::I32, 1, 0, OwnedData::I32(values.to_vec()))
+    OwnedArgument::new(name, Type::IntegerI32, 1, 0, OwnedData::I32(values.to_vec()))
 }
 
 /// Two quads sharing an edge: 6 vertices, 2 faces, 8 face-vertices.
@@ -5511,7 +5511,7 @@ fn indexed_quads() -> Scene {
                 int_attribute("nvertices", &[4, 4]),
                 OwnedArgument::new(
                     "P",
-                    Type::Point,
+                    Type::Point3F32,
                     1,
                     0,
                     OwnedData::F32(vec![0.0; 6 * 3]),
@@ -5623,7 +5623,7 @@ fn the_per_face_flag_breaks_the_tetrahedron_tie() {
                 int_attribute("nvertices", &[3, 3, 3, 3]),
                 OwnedArgument::new(
                     "P",
-                    Type::Point,
+                    Type::Point3F32,
                     1,
                     0,
                     OwnedData::F32(vec![0.0; 4 * 3]),
@@ -5634,7 +5634,7 @@ fn the_per_face_flag_breaks_the_tetrahedron_tie() {
                 ),
                 OwnedArgument::new(
                     "id",
-                    Type::F32,
+                    Type::RealF32,
                     1,
                     NSIParamFlags::PerFace.bits(),
                     OwnedData::F32(vec![0.0; 4]),
@@ -5699,7 +5699,7 @@ fn tetrahedron(flags: i32) -> Scene {
                 int_attribute("nvertices", &[3, 3, 3, 3]),
                 OwnedArgument::new(
                     "P",
-                    Type::Point,
+                    Type::Point3F32,
                     1,
                     0,
                     OwnedData::F32(vec![0.0; 4 * 3]),
@@ -5710,7 +5710,7 @@ fn tetrahedron(flags: i32) -> Scene {
                 ),
                 OwnedArgument::new(
                     "id",
-                    Type::F32,
+                    Type::RealF32,
                     1,
                     flags,
                     OwnedData::F32(vec![0.0; 4]),
@@ -5768,7 +5768,7 @@ fn an_absent_variable_is_none() {
 
 /// A `float` attribute, spelled once for the primitive-variable tests.
 fn float_attribute(name: &str, values: &[f32]) -> OwnedArgument {
-    OwnedArgument::new(name, Type::F32, 1, 0, OwnedData::F32(values.to_vec()))
+    OwnedArgument::new(name, Type::RealF32, 1, 0, OwnedData::F32(values.to_vec()))
 }
 
 /// A plane with two sibling `attributes` nodes, `aa_hidden` setting

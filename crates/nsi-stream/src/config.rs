@@ -94,7 +94,7 @@ impl CallbackPointer {
 /// The value of one attribute, in the three ɴsɪ types this vocabulary uses.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AttrValue {
-    /// [`Type::I32`].
+    /// [`Type::IntegerI32`].
     Int(i32),
     /// [`Type::String`].
     String(String),
@@ -107,7 +107,7 @@ impl AttrValue {
     #[inline]
     pub const fn type_tag(&self) -> Type {
         match self {
-            Self::Int(_) => Type::I32,
+            Self::Int(_) => Type::IntegerI32,
             Self::String(_) => Type::String,
             Self::Pointer(_) => Type::Reference,
         }

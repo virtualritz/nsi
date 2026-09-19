@@ -211,7 +211,114 @@ fn load_renderer(name: &str) -> Result<api::ApiImpl, std::string::String> {
 
 #[macro_use]
 pub mod argument;
-pub use argument::*;
+// The wrappers that borrow argument data share their names with the
+// data shapes `nsi-trait` exports (`Color3F32` is both `[f32; 3]` and
+// the wrapper around a `&[f32; 3]`), so they stay in `argument` and only
+// the names without a twin are re-exported here.
+pub use argument::{
+    Arg, ArgData, ArgSlice, ArgVec, Callback, CallbackPtr, Reference,
+    ReferenceSlice, StableDeref, String, StringSlice,
+};
+pub(crate) use argument::{ArgDataMethods, to_c_param_vec};
+
+/// Names before the role-and-machine-type scheme; see
+/// [`Type`](crate::Type) for the rule.
+mod deprecated_names {
+    use crate::argument;
+
+    /// Renamed to [`argument::RealF32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::RealF32`")]
+    pub type F32 = argument::RealF32;
+    /// Renamed to [`argument::RealF64`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::RealF64`")]
+    pub type F64 = argument::RealF64;
+    /// Renamed to [`argument::IntegerI32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::IntegerI32`")]
+    pub type I32 = argument::IntegerI32;
+    /// Renamed to [`argument::IntegerI64`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::IntegerI64`")]
+    pub type I64 = argument::IntegerI64;
+    /// Renamed to [`argument::RealF32Slice`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::RealF32Slice`")]
+    pub type F32Slice<'a> = argument::RealF32Slice<'a>;
+    /// Renamed to [`argument::RealF64Slice`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::RealF64Slice`")]
+    pub type F64Slice<'a> = argument::RealF64Slice<'a>;
+    /// Renamed to [`argument::IntegerI32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::IntegerI32Slice`"
+    )]
+    pub type I32Slice<'a> = argument::IntegerI32Slice<'a>;
+    /// Renamed to [`argument::IntegerI64Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::IntegerI64Slice`"
+    )]
+    pub type I64Slice<'a> = argument::IntegerI64Slice<'a>;
+    /// Renamed to [`argument::Color3F32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Color3F32`")]
+    pub type Color<'a> = argument::Color3F32<'a>;
+    /// Renamed to [`argument::Color3F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Color3F32Slice`"
+    )]
+    pub type ColorSlice<'a> = argument::Color3F32Slice<'a>;
+    /// Renamed to [`argument::Point3F32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Point3F32`")]
+    pub type Point<'a> = argument::Point3F32<'a>;
+    /// Renamed to [`argument::Point3F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Point3F32Slice`"
+    )]
+    pub type PointSlice<'a> = argument::Point3F32Slice<'a>;
+    /// Renamed to [`argument::Vector3F32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Vector3F32`")]
+    pub type Vector<'a> = argument::Vector3F32<'a>;
+    /// Renamed to [`argument::Vector3F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Vector3F32Slice`"
+    )]
+    pub type VectorSlice<'a> = argument::Vector3F32Slice<'a>;
+    /// Renamed to [`argument::Normal3F32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Normal3F32`")]
+    pub type Normal<'a> = argument::Normal3F32<'a>;
+    /// Renamed to [`argument::Normal3F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Normal3F32Slice`"
+    )]
+    pub type NormalSlice<'a> = argument::Normal3F32Slice<'a>;
+    /// Renamed to [`argument::Matrix4F32`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Matrix4F32`")]
+    pub type MatrixF32<'a> = argument::Matrix4F32<'a>;
+    /// Renamed to [`argument::Matrix4F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Matrix4F32Slice`"
+    )]
+    pub type MatrixF32Slice<'a> = argument::Matrix4F32Slice<'a>;
+    /// Renamed to [`argument::Matrix4F64`].
+    #[deprecated(since = "0.11.0", note = "use `nsi::argument::Matrix4F64`")]
+    pub type MatrixF64<'a> = argument::Matrix4F64<'a>;
+    /// Renamed to [`argument::Matrix4F64Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Matrix4F64Slice`"
+    )]
+    pub type MatrixF64Slice<'a> = argument::Matrix4F64Slice<'a>;
+    /// Renamed to [`argument::Point4F32Slice`].
+    #[deprecated(
+        since = "0.11.0",
+        note = "use `nsi::argument::Point4F32Slice`"
+    )]
+    pub type Point4F32Slice<'a> = argument::Point4F32Slice<'a>;
+}
+#[allow(deprecated)]
+pub use deprecated_names::*;
 
 // The canonical NSI trait, the Attribute<T> typed-name machinery, type
 // aliases (Point3F32/Color3F32/Matrix4F64/…) and standard node-type

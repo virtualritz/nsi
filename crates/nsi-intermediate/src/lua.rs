@@ -405,16 +405,19 @@ fn quoted_str(value: &str) -> String {
 /// parse error in the renderer.
 const fn lua_type_name(type_tag: Type) -> Option<&'static str> {
     match type_tag {
-        Type::F32 => Some("TypeFloat"),
-        Type::I32 => Some("TypeInteger"),
+        Type::RealF32 => Some("TypeFloat"),
+        Type::IntegerI32 => Some("TypeInteger"),
         Type::String => Some("TypeString"),
-        Type::Color => Some("TypeColor"),
-        Type::Point => Some("TypePoint"),
-        Type::Vector => Some("TypeVector"),
-        Type::Normal => Some("TypeNormal"),
-        Type::MatrixF32 => Some("TypeMatrix"),
-        Type::MatrixF64 => Some("TypeDoubleMatrix"),
-        Type::F64 | Type::I64 | Type::Reference | Type::Invalid => None,
+        Type::Color3F32 => Some("TypeColor"),
+        Type::Point3F32 => Some("TypePoint"),
+        Type::Vector3F32 => Some("TypeVector"),
+        Type::Normal3F32 => Some("TypeNormal"),
+        Type::Matrix4F32 => Some("TypeMatrix"),
+        Type::Matrix4F64 => Some("TypeDoubleMatrix"),
+        Type::Point4F32 => Some("TypeHPoint"),
+        Type::RealF64 | Type::IntegerI64 | Type::Reference | Type::Invalid => {
+            None
+        }
     }
 }
 

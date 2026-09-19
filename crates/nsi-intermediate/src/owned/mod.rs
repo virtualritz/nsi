@@ -235,8 +235,12 @@ impl OwnedArgument {
     /// value per face, per vertex or per face-vertex.
     pub fn element_count(&self) -> usize {
         let per = match self.type_tag {
-            Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
-            Type::MatrixF32 | Type::MatrixF64 => 16,
+            Type::Color3F32
+            | Type::Point3F32
+            | Type::Vector3F32
+            | Type::Normal3F32 => 3,
+            Type::Point4F32 => 4,
+            Type::Matrix4F32 | Type::Matrix4F64 => 16,
             _ => 1,
         };
         let scalars = match &self.data {
@@ -252,7 +256,7 @@ impl OwnedArgument {
 
     /// A 4x4 `doublematrix`, row-major.
     ///
-    /// `None` unless the declared type is [`nsi_trait::Type::MatrixF64`]
+    /// `None` unless the declared type is [`nsi_trait::Type::Matrix4F64`]
     /// with sixteen values: sixteen `double`s are not a `doublematrix`,
     /// and 3Delight refuses that too.
     pub fn as_matrix(&self) -> Option<[f64; 16]> {
@@ -278,7 +282,7 @@ impl OwnedArgument {
     /// and **nothing draws**, where the plain `"doublematrix" 2` draws
     /// two copies. Reading the tag alone drew them anyway.
     pub fn as_matrices(&self) -> Option<&[f64]> {
-        if self.type_tag != Type::MatrixF64 || self.is_array() {
+        if self.type_tag != Type::Matrix4F64 || self.is_array() {
             return None;
         }
         match &self.data {
@@ -337,24 +341,25 @@ impl OwnedArgument {
         // by `type_tag`, valid while `param` lives, which is this call.
         let data = unsafe {
             match type_tag {
-                Type::F32
-                | Type::Color
-                | Type::Point
-                | Type::Vector
-                | Type::Normal
-                | Type::MatrixF32 => OwnedData::F32(
+                Type::RealF32
+                | Type::Color3F32
+                | Type::Point3F32
+                | Type::Vector3F32
+                | Type::Normal3F32
+                | Type::Matrix4F32
+                | Type::Point4F32 => OwnedData::F32(
                     slice::from_raw_parts(c.data as *const f32, scalars)
                         .to_vec(),
                 ),
-                Type::F64 | Type::MatrixF64 => OwnedData::F64(
+                Type::RealF64 | Type::Matrix4F64 => OwnedData::F64(
                     slice::from_raw_parts(c.data as *const f64, scalars)
                         .to_vec(),
                 ),
-                Type::I32 => OwnedData::I32(
+                Type::IntegerI32 => OwnedData::I32(
                     slice::from_raw_parts(c.data as *const i32, scalars)
                         .to_vec(),
                 ),
-                Type::I64 => OwnedData::I64(
+                Type::IntegerI64 => OwnedData::I64(
                     slice::from_raw_parts(c.data as *const i64, scalars)
                         .to_vec(),
                 ),
@@ -405,8 +410,12 @@ impl OwnedArgument {
 #[inline]
 const fn components_per_element(type_tag: Type) -> usize {
     match type_tag {
-        Type::Color | Type::Point | Type::Vector | Type::Normal => 3,
-        Type::MatrixF32 | Type::MatrixF64 => 16,
+        Type::Color3F32
+        | Type::Point3F32
+        | Type::Vector3F32
+        | Type::Normal3F32 => 3,
+        Type::Point4F32 => 4,
+        Type::Matrix4F32 | Type::Matrix4F64 => 16,
         _ => 1,
     }
 }

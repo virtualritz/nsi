@@ -44,10 +44,10 @@ trait _Jupyter<'a> {
 ///     "screen",
 ///     &[
 ///         // Some 2:1 wide angle view.
-///         nsi::i32_slice!("resolution", &[1280, 640])
+///         nsi::integer_i32_slice!("resolution", &[1280, 640])
 ///             .array_len(const { NonZeroUsize::new(2).unwrap() }),
 ///         // 20 antialiasing samples per pixel.
-///         nsi::i32!("oversampling", 20),
+///         nsi::integer_i32!("oversampling", 20),
 ///     ],
 /// );
 ///
@@ -63,7 +63,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
         "jupyter_beauty",
         &[
             nsi::string!("variablename", "Ci"),
-            nsi::i32!("withalpha", 1),
+            nsi::integer_i32!("withalpha", 1),
             nsi::string!("scalarformat", "float"),
         ],
     );
@@ -116,7 +116,7 @@ pub fn as_jupyter(ctx: &nsi::Context, screen: &str) {
     ctx.render_control(nsi::Action::Wait, None);
 
     // Make our Context pristine again.
-    ctx.delete("jupyter_beauty", Some(&[nsi::i32!("recursive", 1)]));
+    ctx.delete("jupyter_beauty", Some(&[nsi::integer_i32!("recursive", 1)]));
 }
 
 /// Multi-threaded color profile application & quantization to 8bit.

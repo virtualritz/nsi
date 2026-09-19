@@ -43,18 +43,18 @@ where
 {
     // Every scalar and tuple type.
     ctx.create("types", "mesh", None)?;
-    ctx.set_attribute("types", &[nsi::f32!("a_float", 0.1)])?;
-    ctx.set_attribute("types", &[nsi::f64!("a_double", 1.0 / 3.0)])?;
-    ctx.set_attribute("types", &[nsi::i32!("an_int", -7)])?;
-    ctx.set_attribute("types", &[nsi::i64!("a_long", i64::MIN)])?;
+    ctx.set_attribute("types", &[nsi::real_f32!("a_float", 0.1)])?;
+    ctx.set_attribute("types", &[nsi::real_f64!("a_double", 1.0 / 3.0)])?;
+    ctx.set_attribute("types", &[nsi::integer_i32!("an_int", -7)])?;
+    ctx.set_attribute("types", &[nsi::integer_i64!("a_long", i64::MIN)])?;
     ctx.set_attribute("types", &[nsi::string!("a_string", "plain")])?;
-    ctx.set_attribute("types", &[nsi::color!("a_color", &[0.1, 0.2, 0.3])])?;
+    ctx.set_attribute("types", &[nsi::color3_f32!("a_color", &[0.1, 0.2, 0.3])])?;
     let points = [[0.0f32, 1.0, 2.0], [3.0, 4.0, 5.0]];
-    ctx.set_attribute("types", &[nsi::point_slice!("points", &points)])?;
+    ctx.set_attribute("types", &[nsi::point3_f32_slice!("points", &points)])?;
     let vectors = [[1.0f32, 0.0, 0.0]];
-    ctx.set_attribute("types", &[nsi::vector_slice!("vectors", &vectors)])?;
+    ctx.set_attribute("types", &[nsi::vector3_f32_slice!("vectors", &vectors)])?;
     let normals = [[0.0f32, 1.0, 0.0]];
-    ctx.set_attribute("types", &[nsi::normal_slice!("normals", &normals)])?;
+    ctx.set_attribute("types", &[nsi::normal3_f32_slice!("normals", &normals)])?;
     #[rustfmt::skip]
     let m32 = [
         2.0f32, 0.0, 0.0, 0.0,
@@ -62,7 +62,7 @@ where
         0.0, 0.0, 2.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
     ];
-    ctx.set_attribute("types", &[nsi::matrix_f32!("m32", &m32)])?;
+    ctx.set_attribute("types", &[nsi::matrix4_f32!("m32", &m32)])?;
     #[rustfmt::skip]
     let m64 = [
         1.0f64, 0.0, 0.0, 0.0,
@@ -70,26 +70,26 @@ where
         0.0, 0.0, 1.0, 0.0,
         1.0, 2.0, 3.0, 1.0,
     ];
-    ctx.set_attribute("types", &[nsi::matrix_f64!("m64", &m64)])?;
+    ctx.set_attribute("types", &[nsi::matrix4_f64!("m64", &m64)])?;
 
     // Floats that discriminate the two printers.
-    ctx.set_attribute("types", &[nsi::f32!("f_exp", 100_000.0f32)])?;
-    ctx.set_attribute("types", &[nsi::f32!("f_tiny", 1e-7f32)])?;
-    ctx.set_attribute("types", &[nsi::f64!("d_tenth", 0.1f64)])?;
-    ctx.set_attribute("types", &[nsi::f64!("d_huge", 1e20f64)])?;
-    ctx.set_attribute("types", &[nsi::f64!("d_neg_zero", -0.0f64)])?;
+    ctx.set_attribute("types", &[nsi::real_f32!("f_exp", 100_000.0f32)])?;
+    ctx.set_attribute("types", &[nsi::real_f32!("f_tiny", 1e-7f32)])?;
+    ctx.set_attribute("types", &[nsi::real_f64!("d_tenth", 0.1f64)])?;
+    ctx.set_attribute("types", &[nsi::real_f64!("d_huge", 1e20f64)])?;
+    ctx.set_attribute("types", &[nsi::real_f64!("d_neg_zero", -0.0f64)])?;
 
     // All three flags, together and apart.
     ctx.create("flags", "mesh", None)?;
     ctx.set_attribute(
         "flags",
-        &[nsi::point_slice!("pv", &points).per_vertex()],
+        &[nsi::point3_f32_slice!("pv", &points).per_vertex()],
     )?;
-    ctx.set_attribute("flags", &[nsi::f32!("pf", 1.0).per_face()])?;
-    ctx.set_attribute("flags", &[nsi::f32!("li", 1.0).linear_interpolation()])?;
+    ctx.set_attribute("flags", &[nsi::real_f32!("pf", 1.0).per_face()])?;
+    ctx.set_attribute("flags", &[nsi::real_f32!("li", 1.0).linear_interpolation()])?;
     ctx.set_attribute(
         "flags",
-        &[nsi::normal_slice!("both", &normals)
+        &[nsi::normal3_f32_slice!("both", &normals)
             .per_vertex()
             .linear_interpolation()],
     )?;
@@ -98,16 +98,16 @@ where
     ctx.create("arrays", "mesh", None)?;
     ctx.set_attribute(
         "arrays",
-        &[nsi::i32_slice!("two", &[1280i32, 720])
+        &[nsi::integer_i32_slice!("two", &[1280i32, 720])
             .array_len(const { std::num::NonZeroUsize::new(2).unwrap() })],
     )?;
     ctx.set_attribute(
         "arrays",
-        &[nsi::f32_slice!("one", &[1.0f32, 2.0])
+        &[nsi::real_f32_slice!("one", &[1.0f32, 2.0])
             .array_len(const { std::num::NonZeroUsize::new(1).unwrap() })],
     )?;
     let nothing: [f32; 0] = [];
-    ctx.set_attribute("arrays", &[nsi::f32_slice!("empty", &nothing)])?;
+    ctx.set_attribute("arrays", &[nsi::real_f32_slice!("empty", &nothing)])?;
 
     // Strings the stream has to escape, octal included.
     ctx.create("strings", "mesh", None)?;
@@ -121,12 +121,12 @@ where
     ctx.set_attribute("strings", &[nsi::string_slice!("several", &many)])?;
 
     // `.global` is reserved: attributes but never declared.
-    ctx.set_attribute(".global", &[nsi::i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
 
     // Motion samples.
     ctx.create("moving", "transform", None)?;
-    ctx.set_attribute_at_time("moving", 0.0, &[nsi::f64!("t", 0.0)])?;
-    ctx.set_attribute_at_time("moving", 1.0 / 3.0, &[nsi::f64!("t", 1.0)])?;
+    ctx.set_attribute_at_time("moving", 0.0, &[nsi::real_f64!("t", 0.0)])?;
+    ctx.set_attribute_at_time("moving", 1.0 / 3.0, &[nsi::real_f64!("t", 1.0)])?;
 
     // Every connection class the specification declares, plus a
     // shader-network edge and one carrying arguments.
@@ -171,7 +171,7 @@ where
         None,
         "types",
         "geometryattributes",
-        Some(&[nsi::i32!("priority", 3), nsi::i32!("strength", 1)]),
+        Some(&[nsi::integer_i32!("priority", 3), nsi::integer_i32!("strength", 1)]),
     )?;
     Ok(())
 }
@@ -224,10 +224,10 @@ fn the_order_the_samples_were_set_in_survives_the_round_trip() {
     let original = Recorder::new();
     original.create("a", "attributes", None).expect("create");
     original
-        .set_attribute_at_time("a", 1.0, &[nsi::i32!("visibility", 0)])
+        .set_attribute_at_time("a", 1.0, &[nsi::integer_i32!("visibility", 0)])
         .expect("set");
     original
-        .set_attribute_at_time("a", 0.0, &[nsi::i32!("visibility", 1)])
+        .set_attribute_at_time("a", 0.0, &[nsi::integer_i32!("visibility", 1)])
         .expect("set");
     let written = stream_of(&original.into_scene());
 
@@ -289,21 +289,21 @@ fn a_superseded_same_time_call_survives_the_stream_round_trip() {
         .set_attribute_at_time(
             "xf",
             0.0,
-            &[nsi::matrix_f64!("transformationmatrix", &good(-1.5))],
+            &[nsi::matrix4_f64!("transformationmatrix", &good(-1.5))],
         )
         .unwrap();
     original
         .set_attribute_at_time(
             "xf",
             1.0,
-            &[nsi::f32!("transformationmatrix", 0.5)],
+            &[nsi::real_f32!("transformationmatrix", 0.5)],
         )
         .unwrap();
     original
         .set_attribute_at_time(
             "xf",
             1.0,
-            &[nsi::matrix_f64!("transformationmatrix", &good(-3.0))],
+            &[nsi::matrix4_f64!("transformationmatrix", &good(-3.0))],
         )
         .unwrap();
 
