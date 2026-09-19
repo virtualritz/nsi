@@ -19,9 +19,23 @@ nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 [dev-dependencies]
 nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
 log = "0.4"
+# The `step_procedural` example: STEP loading and B-rep faces. The same
+# revision `monster-step-viewer` builds against, whose loader and
+# B-rep-to-`nurbs` conversion the example lifts.
+monstertruck = { git = "https://github.com/virtualritz/monstertruck.git", rev = "9018a0f28a3cb85225b2bbc00425a79151f8ffed", features = [
+    "step",
+] }
+rayon = "1"
+# Reads the image the `step` test renders.
+png = "0.18"
 
 [[example]]
 name = "hello_procedural"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "step_procedural"
+path = "examples/step/lib.rs"
 crate-type = ["cdylib"]
 
 [package.metadata.docs.rs]
