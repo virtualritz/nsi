@@ -107,10 +107,9 @@ fn set_up_render(context: &nsi::Context<'_>, image: &Path) {
                 format!("{delight}/osl/dlConstant.oso").as_str()
             ),
             nsi::color3_f32!("i_color", &[1.0, 0.0, 0.0]),
-            // The faces this example emits have their `du × dv` side facing
-            // into the solid, and 3Delight takes that side as the front: a
-            // one-sided constant shades the outside black.
-            nsi::integer_i32!("doublesided", 1),
+            // One-sided, so the part shows red only where its faces' fronts
+            // face out.
+            nsi::integer_i32!("doublesided", 0),
         ],
     );
     context.create("look", nsi::ATTRIBUTES, None);

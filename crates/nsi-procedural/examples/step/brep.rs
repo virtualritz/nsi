@@ -4,9 +4,9 @@
 //!
 //! Lifted from `monster-step-viewer`'s `src/nsi_render/brep.rs`, itself
 //! adapted from akatela's `nsi_render/brep.rs`. Its conventions -- domain
-//! alignment, face orientation, the 3Delight v-axis flip, periodic seam
-//! handling, girdle bands -- were validated against 3Delight renders and are
-//! kept as they are. Changes against the viewer:
+//! alignment, face orientation, periodic seam handling, girdle bands -- were
+//! validated against 3Delight renders and are kept as they are. Changes
+//! against the viewer:
 //!
 //! * Every trim curve remembers the boundary edge-use it came from
 //!   ([`EdgeUse`]), so the caller can declare weld tables. Curves the
@@ -18,6 +18,9 @@
 //! * No `trimcurves.nloops` and no `trimcurves.sense`: the shipped `nurbs`
 //!   node has neither, and 3Delight 2.9.210 renders the same with or
 //!   without the latter.
+//! * No v-axis mirror. The viewer mirrored every face in v, which keeps
+//!   the trimmed region but turns `∂P/∂u × ∂P/∂v`, the side 3Delight
+//!   takes as the front, into the solid; its two-sided shader hid that.
 //! * A boundary that lies wholly on another lap of a periodic axis is moved
 //!   onto the surface's own ([`shift_periodic_trim_entries_into_domain`]).
 //!
@@ -260,10 +263,6 @@ fn face_to_nsi(
         &mut surface,
         trim_loops.as_deref_mut(),
         face.orientation,
-    );
-    apply_three_delight_v_axis_convention(
-        &mut surface,
-        trim_loops.as_deref_mut(),
     );
     let sampled_trim_fallback_count = trim_loops
         .as_ref()
@@ -735,18 +734,6 @@ fn trim_loops_from_boundaries(
     }
 }
 
-fn apply_three_delight_v_axis_convention(
-    surface: &mut NsiBrepSurfaceData,
-    trim_loops: Option<&mut [TrimLoop]>,
-) {
-    mirror_surface_v_axis(surface);
-    if let Some(trim_loops) = trim_loops {
-        trim_loops.iter_mut().for_each(|trim_loop| {
-            mirror_trim_loop_v_axis(trim_loop, surface.vmin, surface.vmax);
-            reverse_trim_loop(trim_loop);
-        });
-    }
-}
 
 fn apply_face_orientation_convention(
     surface: &mut NsiBrepSurfaceData,
@@ -781,45 +768,7 @@ fn mirror_surface_u_axis(surface: &mut NsiBrepSurfaceData) {
         .collect();
 }
 
-fn mirror_surface_v_axis(surface: &mut NsiBrepSurfaceData) {
-    let Some((nu, nv)) = surface_dimensions(surface) else {
-        return;
-    };
-    if surface.pw.len() != nu.saturating_mul(nv) {
-        return;
-    }
-    let flipped_pw: Vec<[f32; 4]> = surface
-        .pw
-        .chunks(nu)
-        .rev()
-        .flat_map(|row| row.iter().copied())
-        .collect();
-    if flipped_pw.len() == surface.pw.len() {
-        surface.pw = flipped_pw;
-    }
-    let v_origin = surface.vmin + surface.vmax;
-    surface.vknot = surface
-        .vknot
-        .iter()
-        .rev()
-        .map(|knot| v_origin - *knot)
-        .collect();
-}
 
-fn mirror_trim_loop_v_axis(trim_loop: &mut TrimLoop, vmin: f32, vmax: f32) {
-    let v_origin = vmin + vmax;
-    trim_loop.curves.iter_mut().for_each(|curve| {
-        curve
-            .v
-            .iter_mut()
-            .zip(curve.w.iter())
-            .for_each(|(v, w)| *v = v_origin * *w - *v);
-    });
-    trim_loop
-        .topology_points
-        .iter_mut()
-        .for_each(|point| point.y = v_origin as f64 - point.y);
-}
 
 fn mirror_trim_loop_u_axis(trim_loop: &mut TrimLoop, umin: f32, umax: f32) {
     let u_origin = umin + umax;

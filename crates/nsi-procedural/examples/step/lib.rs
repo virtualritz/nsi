@@ -50,11 +50,9 @@
 //!
 //! # Facing
 //!
-//! The B-rep conversion keeps `monster-step-viewer`'s orientation and
-//! v-axis conventions, which leave every face's `du × dv` side facing into
-//! the solid. 3Delight 2.9.210 takes that side as the front, so a
-//! one-sided shader -- `dlConstant` with its default `doublesided` 0 --
-//! shades the part black from outside.
+//! Every face's `∂P/∂u × ∂P/∂v` side faces out of the solid: the side
+//! 3Delight 2.9.210 takes as the front, and the side `nsi-tessellate`
+//! orients its meshes to. A one-sided shader shades the part from outside.
 
 mod assembly;
 mod brep;
