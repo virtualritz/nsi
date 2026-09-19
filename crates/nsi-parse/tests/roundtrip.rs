@@ -19,7 +19,10 @@ where
     ctx.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
     ctx.set_attribute("cam", &[nsi::real_f64!("shutter", 0.1f64)])?;
     ctx.set_attribute("cam", &[nsi::integer_i32!("n", 4)])?;
-    ctx.set_attribute("cam", &[nsi::integer_i64!("big", 9_007_199_254_740_993i64)])?;
+    ctx.set_attribute(
+        "cam",
+        &[nsi::integer_i64!("big", 9_007_199_254_740_993i64)],
+    )?;
     ctx.set_attribute("cam", &[nsi::string!("name", "he said \"hi\"\nbye")])?;
 
     ctx.create("m", "mesh", None)?;
@@ -27,7 +30,10 @@ where
     ctx.set_attribute("m", &[nsi::point3_f32_slice!("P", &points)])?;
     ctx.set_attribute("m", &[nsi::color3_f32!("c", &[0.1, 0.2, 0.3])])?;
     let normals = [[0.0f32, 1.0, 0.0], [0.0, 1.0, 0.0]];
-    ctx.set_attribute("m", &[nsi::normal3_f32_slice!("N", &normals).per_vertex()])?;
+    ctx.set_attribute(
+        "m",
+        &[nsi::normal3_f32_slice!("N", &normals).per_vertex()],
+    )?;
     ctx.set_attribute("m", &[nsi::real_f32!("w", 1.0).per_face()])?;
 
     // A flat scalar and a tuple parameter on one node: folding the

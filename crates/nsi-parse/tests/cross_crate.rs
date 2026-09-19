@@ -48,13 +48,22 @@ where
     ctx.set_attribute("types", &[nsi::integer_i32!("an_int", -7)])?;
     ctx.set_attribute("types", &[nsi::integer_i64!("a_long", i64::MIN)])?;
     ctx.set_attribute("types", &[nsi::string!("a_string", "plain")])?;
-    ctx.set_attribute("types", &[nsi::color3_f32!("a_color", &[0.1, 0.2, 0.3])])?;
+    ctx.set_attribute(
+        "types",
+        &[nsi::color3_f32!("a_color", &[0.1, 0.2, 0.3])],
+    )?;
     let points = [[0.0f32, 1.0, 2.0], [3.0, 4.0, 5.0]];
     ctx.set_attribute("types", &[nsi::point3_f32_slice!("points", &points)])?;
     let vectors = [[1.0f32, 0.0, 0.0]];
-    ctx.set_attribute("types", &[nsi::vector3_f32_slice!("vectors", &vectors)])?;
+    ctx.set_attribute(
+        "types",
+        &[nsi::vector3_f32_slice!("vectors", &vectors)],
+    )?;
     let normals = [[0.0f32, 1.0, 0.0]];
-    ctx.set_attribute("types", &[nsi::normal3_f32_slice!("normals", &normals)])?;
+    ctx.set_attribute(
+        "types",
+        &[nsi::normal3_f32_slice!("normals", &normals)],
+    )?;
     #[rustfmt::skip]
     let m32 = [
         2.0f32, 0.0, 0.0, 0.0,
@@ -86,7 +95,10 @@ where
         &[nsi::point3_f32_slice!("pv", &points).per_vertex()],
     )?;
     ctx.set_attribute("flags", &[nsi::real_f32!("pf", 1.0).per_face()])?;
-    ctx.set_attribute("flags", &[nsi::real_f32!("li", 1.0).linear_interpolation()])?;
+    ctx.set_attribute(
+        "flags",
+        &[nsi::real_f32!("li", 1.0).linear_interpolation()],
+    )?;
     ctx.set_attribute(
         "flags",
         &[nsi::normal3_f32_slice!("both", &normals)
@@ -121,12 +133,19 @@ where
     ctx.set_attribute("strings", &[nsi::string_slice!("several", &many)])?;
 
     // `.global` is reserved: attributes but never declared.
-    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(
+        ".global",
+        &[nsi::integer_i32!("renderatlowpriority", 1)],
+    )?;
 
     // Motion samples.
     ctx.create("moving", "transform", None)?;
     ctx.set_attribute_at_time("moving", 0.0, &[nsi::real_f64!("t", 0.0)])?;
-    ctx.set_attribute_at_time("moving", 1.0 / 3.0, &[nsi::real_f64!("t", 1.0)])?;
+    ctx.set_attribute_at_time(
+        "moving",
+        1.0 / 3.0,
+        &[nsi::real_f64!("t", 1.0)],
+    )?;
 
     // Every connection class the specification declares, plus a
     // shader-network edge and one carrying arguments.
@@ -171,7 +190,10 @@ where
         None,
         "types",
         "geometryattributes",
-        Some(&[nsi::integer_i32!("priority", 3), nsi::integer_i32!("strength", 1)]),
+        Some(&[
+            nsi::integer_i32!("priority", 3),
+            nsi::integer_i32!("strength", 1),
+        ]),
     )?;
     Ok(())
 }

@@ -22,7 +22,10 @@ where
 {
     // `.global` is reserved: it carries attributes but is never
     // declared, so a stream that emits `Create ".global" ""` diverges.
-    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(
+        ".global",
+        &[nsi::integer_i32!("renderatlowpriority", 1)],
+    )?;
 
     ctx.create("cam", "perspectivecamera", None)?;
     ctx.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])?;
@@ -54,7 +57,10 @@ where
         0.0, 0.0, 1.0, 0.0,
         1.0, 2.0, 3.0, 1.0,
     ];
-    ctx.set_attribute("xf", &[nsi::matrix4_f64!("transformationmatrix", &m64)])?;
+    ctx.set_attribute(
+        "xf",
+        &[nsi::matrix4_f64!("transformationmatrix", &m64)],
+    )?;
     #[rustfmt::skip]
     let m32 = [
         2.0f32, 0.0, 0.0, 0.0,
@@ -144,7 +150,11 @@ where
     ctx.set_attribute("floats", &[nsi::real_f32_slice!("empty", &nothing)])?;
 
     // A sample time that also discriminates the two formatters.
-    ctx.set_attribute_at_time("floats", 1.0 / 3.0, &[nsi::real_f64!("t", 1.0)])?;
+    ctx.set_attribute_at_time(
+        "floats",
+        1.0 / 3.0,
+        &[nsi::real_f64!("t", 1.0)],
+    )?;
 
     ctx.create("prio_attr", "attributes", None)?;
     ctx.create("s1", "shader", None)?;

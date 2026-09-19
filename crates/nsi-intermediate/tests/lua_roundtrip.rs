@@ -77,7 +77,10 @@ where
     ctx.set_attribute_at_time("xf", 1.0 / 3.0, &[nsi::real_f32!("t", 1.0)])?;
 
     // `.global` is reserved: it takes attributes and is never created.
-    ctx.set_attribute(".global", &[nsi::integer_i32!("renderatlowpriority", 1)])?;
+    ctx.set_attribute(
+        ".global",
+        &[nsi::integer_i32!("renderatlowpriority", 1)],
+    )?;
 
     ctx.connect("xf", None, ".root", "objects", None)?;
     ctx.connect("m", None, "xf", "objects", None)?;

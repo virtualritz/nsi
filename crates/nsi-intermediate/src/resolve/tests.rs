@@ -5497,7 +5497,13 @@ fn a_mesh_without_nvertices_is_an_error() {
 
 /// An `int` attribute, spelled once for the mesh tests.
 fn int_attribute(name: &str, values: &[i32]) -> OwnedArgument {
-    OwnedArgument::new(name, Type::IntegerI32, 1, 0, OwnedData::I32(values.to_vec()))
+    OwnedArgument::new(
+        name,
+        Type::IntegerI32,
+        1,
+        0,
+        OwnedData::I32(values.to_vec()),
+    )
 }
 
 /// Two quads sharing an edge: 6 vertices, 2 faces, 8 face-vertices.
@@ -5768,7 +5774,13 @@ fn an_absent_variable_is_none() {
 
 /// A `float` attribute, spelled once for the primitive-variable tests.
 fn float_attribute(name: &str, values: &[f32]) -> OwnedArgument {
-    OwnedArgument::new(name, Type::RealF32, 1, 0, OwnedData::F32(values.to_vec()))
+    OwnedArgument::new(
+        name,
+        Type::RealF32,
+        1,
+        0,
+        OwnedData::F32(values.to_vec()),
+    )
 }
 
 /// A plane with two sibling `attributes` nodes, `aa_hidden` setting

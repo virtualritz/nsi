@@ -44,7 +44,10 @@ fn strings(name: &str, values: &[&str]) -> OwnedArgument {
         array_length: 1,
         flags: 0,
         data: OwnedData::String(
-            values.iter().map(|value| value.as_bytes().to_vec()).collect(),
+            values
+                .iter()
+                .map(|value| value.as_bytes().to_vec())
+                .collect(),
         ),
     }
 }
@@ -246,7 +249,9 @@ fn ids_are_local_to_their_weld_node() {
     scene
         .set_attribute("elsewhere", vec![integers("nvertices", &[3])])
         .unwrap();
-    scene.connect("elsewhere", None, ".root", "objects").unwrap();
+    scene
+        .connect("elsewhere", None, ".root", "objects")
+        .unwrap();
     scene
         .connect("other_welds", None, "elsewhere", "weld")
         .unwrap();

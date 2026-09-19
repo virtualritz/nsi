@@ -20,7 +20,8 @@ fn recorder_implements_nsi() {
 fn records_a_node_and_its_attribute() {
     let r = Recorder::new();
     r.create("cam", "perspectivecamera", None).unwrap();
-    r.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)]).unwrap();
+    r.set_attribute("cam", &[nsi::real_f32!("fov", 45.0)])
+        .unwrap();
 
     let scene = r.scene();
     assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
