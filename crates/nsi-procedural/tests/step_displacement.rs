@@ -267,9 +267,6 @@ fn red_pixels(
 }
 
 #[test]
-#[ignore = "needs monstertruck-meshing to seed a trim projection at the \
-            trim's start; 0.4.0 folds faces along closed welded edges, \
-            see specs/007-tessellation/spec.md"]
 fn the_displaced_part_stays_closed_only_where_welded() {
     if !Path::new(PART).exists() {
         eprintln!("skipped: {PART} is absent");

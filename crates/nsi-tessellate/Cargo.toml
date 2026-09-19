@@ -21,7 +21,9 @@ nurbs = ["dep:monstertruck", "dep:ahash"]
 
 [dependencies]
 ahash = { version = "0.8", optional = true }
-monstertruck = { version = "0.4", features = ["meshing"], optional = true }
+# 0.4.1: a closed trim projected its start to its far end and folded faces
+# along closed welded edges.
+monstertruck = { version = "0.4.1", features = ["meshing"], optional = true }
 nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
 subdiv-kernels = "0.1"
 

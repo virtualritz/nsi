@@ -212,9 +212,9 @@ fn project_boundary_point(&self, point: Point3, hint: Option<f64>) -> Option<(f6
 | With them and the upstream fix    | 0                  | 3940     |
 
 With the upstream fix, displaced by 1.0, the welded part renders closed
-(0 inside pixels) and the unwelded part cracks (1268). The test stays
-`#[ignore]`d until `nsi-tessellate` can depend on a `monstertruck` with
-the fix.
+(0 inside pixels) and the unwelded part cracks (1268). The fix shipped
+in `monstertruck` 0.4.1 (2026-09-19), which `nsi-tessellate` now
+requires.
 
 #### Natural Sides (2026-09-19)
 
