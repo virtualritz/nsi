@@ -45,8 +45,11 @@
 //! conversion makes up -- a band's seam sides, a closing line -- trace no
 //! edge and are declared by no use.
 //!
-//! With `weld` 1, trim loops that merely trace the surface's domain are
-//! kept: their curves are edges a neighbour shares.
+//! A trim loop that merely traces the surface's domain is dropped, welded
+//! or not: the patch's own domain says as much. Its edges are shared with
+//! neighbours all the same, so with `weld` 1 each edge-use it traced is
+//! declared as `nurbs-side` segments: the side it runs along, the part of
+//! that side as `weld.range`, and its direction as `weld.reverse`.
 //!
 //! # Facing
 //!
@@ -58,7 +61,7 @@ mod assembly;
 mod brep;
 pub mod loader;
 
-use brep::{NsiBrepSurfaceData, NsiBrepTrimData, TrimLoopPolicy};
+use brep::{NsiBrepSurfaceData, NsiBrepTrimData, SideUse, TrimLoopPolicy};
 use nsi_ffi_wrap as nsi;
 use nsi_procedural::{Error, Params, Procedural, Report};
 use std::{num::NonZeroUsize, path::Path};
@@ -67,26 +70,39 @@ use std::{num::NonZeroUsize, path::Path};
 pub struct StepProcedural;
 
 /// A face's weld table, in the draft's layout.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct WeldTable {
     /// Per use, `weld.id`: the edge's index in the shell's `edges`.
     pub ids: Vec<i32>,
-    /// Per use, `weld.segment-count`: how many trim curves trace it.
+    /// Per use, `weld.segment-count`: how many segments trace it.
     pub segment_counts: Vec<i32>,
-    /// Per segment, the trim curve it selects, counted over the
-    /// flattened curves of all loops.
-    pub curves: Vec<i32>,
+    /// Per segment, `weld.kind`: `trim-curve` or `nurbs-side`.
+    pub kinds: Vec<&'static str>,
+    /// Per segment, the first component of `weld.index`: the trim curve,
+    /// counted over the flattened curves of all loops, or the side.
+    pub indices: Vec<i32>,
+    /// Per segment, `weld.reverse`.
+    pub reverse: Vec<i32>,
+    /// Per segment, `weld.range`.
+    pub ranges: Vec<[f32; 2]>,
 }
 
 impl WeldTable {
-    /// The table of a face with `trims`: one use per boundary edge-use,
-    /// its segments the curves that trace it, in loop order.
-    pub fn of(trims: &NsiBrepTrimData) -> Result<Self, Error> {
+    /// The table of a face with `trims` and natural `sides`: one use per
+    /// boundary edge-use, its segments the trim curves or the parts of
+    /// sides that trace it, in loop order.
+    pub fn of(
+        trims: Option<&NsiBrepTrimData>,
+        sides: &[SideUse],
+    ) -> Result<Self, Error> {
         let mut table = Self::default();
+        let (ncurves, all_edge_uses) = trims.map_or((&[][..], &[][..]), |trims| {
+            (&trims.ncurves[..], &trims.edge_uses[..])
+        });
         let mut first = 0;
-        for &count in &trims.ncurves {
+        for &count in ncurves {
             let count = usize::try_from(count)?;
-            let edge_uses = &trims.edge_uses[first..first + count];
+            let edge_uses = &all_edge_uses[first..first + count];
             let at = |position: usize| edge_uses[position % count];
             // Start where a run of one edge-use begins, so a use whose
             // curves wrap around the loop's first curve stays one chain.
@@ -103,16 +119,44 @@ impl WeldTable {
                     table.ids.push(i32::try_from(edge_use.edge)?);
                     table.segment_counts.push(i32::try_from(run)?);
                     for next in position..position + run {
-                        table.curves.push(i32::try_from(
-                            first + (start + next) % count,
-                        )?);
+                        table.push_segment(
+                            "trim-curve",
+                            i32::try_from(first + (start + next) % count)?,
+                            false,
+                            [0.0, 1.0],
+                        );
                     }
                 }
                 position += run;
             }
             first += count;
         }
+        for run in sides.chunk_by(|a, b| a.edge_use == b.edge_use) {
+            table.ids.push(i32::try_from(run[0].edge_use.edge)?);
+            table.segment_counts.push(i32::try_from(run.len())?);
+            run.iter().for_each(|side| {
+                table.push_segment(
+                    "nurbs-side",
+                    side.side,
+                    side.reverse,
+                    side.range,
+                )
+            });
+        }
         Ok(table)
+    }
+
+    fn push_segment(
+        &mut self,
+        kind: &'static str,
+        index: i32,
+        reverse: bool,
+        range: [f32; 2],
+    ) {
+        self.kinds.push(kind);
+        self.indices.push(index);
+        self.reverse.push(i32::from(reverse));
+        self.ranges.push(range);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -132,7 +176,7 @@ impl StepProcedural {
         for<'call> N: nsi::Nsi<Arg<'call> = nsi::Arg<'call, 'static>>,
     {
         let policy = if weld {
-            TrimLoopPolicy::KeepAll
+            TrimLoopPolicy::NaturalSides
         } else {
             TrimLoopPolicy::DropFullDomain
         };
@@ -166,12 +210,13 @@ impl StepProcedural {
             set_surface(nsi, &face, surface)?;
             if let Some(trims) = &surface.trims {
                 set_trims(nsi, &face, trims)?;
-                if weld {
-                    let table = WeldTable::of(trims)?;
-                    if !table.is_empty() {
-                        nsi.connect(&welds, None, &face, "weld", None)?;
-                        set_weld_table(nsi, &face, &table)?;
-                    }
+            }
+            if weld {
+                let table =
+                    WeldTable::of(surface.trims.as_ref(), &surface.sides)?;
+                if !table.is_empty() {
+                    nsi.connect(&welds, None, &face, "weld", None)?;
+                    set_weld_table(nsi, &face, &table)?;
                 }
             }
         }
@@ -283,12 +328,12 @@ fn set_weld_table<N>(
 where
     for<'call> N: nsi::Nsi<Arg<'call> = nsi::Arg<'call, 'static>>,
 {
-    let kinds = vec!["trim-curve"; table.curves.len()];
     let indices = table
-        .curves
+        .indices
         .iter()
-        .flat_map(|&curve| [curve, 0, 0])
+        .flat_map(|&index| [index, 0, 0])
         .collect::<Vec<_>>();
+    let ranges = table.ranges.concat();
     nsi.set_attribute(
         face,
         &[
@@ -297,10 +342,14 @@ where
                 "weld.segment-count",
                 &table.segment_counts
             ),
-            nsi::string_slice!("weld.kind", &kinds),
+            nsi::string_slice!("weld.kind", &table.kinds),
             nsi::integer_i32_slice!("weld.index", &indices)
                 // SAFETY: 3 is not zero, and a zero would fail to compile.
                 .array_len(const { NonZeroUsize::new(3).unwrap() }),
+            nsi::integer_i32_slice!("weld.reverse", &table.reverse),
+            nsi::real_f32_slice!("weld.range", &ranges)
+                // SAFETY: 2 is not zero, and a zero would fail to compile.
+                .array_len(const { NonZeroUsize::new(2).unwrap() }),
         ],
     )?;
     Ok(())

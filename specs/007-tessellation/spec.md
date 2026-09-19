@@ -216,9 +216,53 @@ With the upstream fix, displaced by 1.0, the welded part renders closed
 `#[ignore]`d until `nsi-tessellate` can depend on a `monstertruck` with
 the fix.
 
-### Non-Goals
+#### Natural Sides (2026-09-19)
 
-- Natural-side (`nurbs-side`) welds on untrimmed faces: the STEP
-  procedural keeps full-domain trim loops when welding, so every welded
-  boundary is a trim curve. Sides are a follow-up.
+A STEP face whose only trim loop traces its surface's domain is, in ɴsɪ,
+an untrimmed patch; most of `io1-ec-214`'s faces and half of `boxy`'s
+are. Their shared edges are natural sides, so welding them needs
+`nurbs-side`, against another side or against a trim curve.
+
+- A patch that declares side welds gets its active domain's outline
+  (`umin`..`vmax`, else the knot range) as one more boundary loop,
+  counter-clockwise in `(u, v)`. Each side is a straight trim, and the
+  sides join the same shared-edge machinery as trim curves.
+- `weld.range` splits a side or a trim curve where its selections begin
+  and end, and each part belongs to the use whose range covers it. So a
+  side can be shared, part by part, with several neighbours.
+- A use through both a side and trim curves is reported and left
+  unwelded. The sides form a loop of their own, and no STEP export here
+  produces such a use.
+- `weld.reverse` is not needed to weld: direction comes from the
+  geometry, as for trim curves.
+- The STEP procedural drops full-domain loops whether it welds or not.
+  With welds, it declares each edge-use such a loop traced as
+  `nurbs-side` segments, with the part of the side as `weld.range` and
+  its direction as `weld.reverse`.
+
+Evidence:
+
+| Fixture | Welded open edges | Unwelded |
+| ------- | ----------------- | -------- |
+| Cube, faces 0, 2, 4 by sides, rest by trims | 0 | > 0 |
+| Cube, all six by sides | 0 | > 0 |
+| The mixed cube, every edge two welds by range | 0 | > 0 |
+
+The mixed cube, halves and all, displaced by 0.15 in 3Delight renders
+closed (0 inside pixels) where unwelded it cracks (3753).
+
+On the real parts, `io1-ec-214` has 12 of 17 faces untrimmed (48 side
+segments, 22 trim segments) and `boxy` 43 of 80 (116 and 132). Every
+weld on both is closed and manifold. With the `monstertruck` fix,
+`io1-ec-214` tessellates with 0 open edges and, displaced by 1.0,
+renders closed (0 inside pixels) where unwelded it cracks (1267).
+
+Falsified:
+- building no domain loop fails every side test;
+- ignoring ranges fails the range test, and so does a fixture that
+  counts ranges from the wrong end;
+- a procedural declaring no sides fails `untrimmed_faces_weld_by_their_natural_sides`
+  and the manifold test, and leaves the real part with 3940 open edges.
+
+### Non-Goals
 - Mesh-edge welds between `nurbs` and subdivision surfaces.

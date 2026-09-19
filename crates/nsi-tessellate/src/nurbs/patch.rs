@@ -27,6 +27,10 @@ pub(super) struct Patch {
     pub surface: Surface,
     /// Trim loops, each its curves in stored order; empty when untrimmed.
     pub loops: Vec<Vec<TrimCurve>>,
+    /// The active domain, `((umin, umax), (vmin, vmax))`: the knot range
+    /// unless `umin` and its kin narrow it. Its sides are what
+    /// `nurbs-side` welds select.
+    pub domain: ((f64, f64), (f64, f64)),
 }
 
 fn integers<'a>(node: &'a Node, name: &str) -> Option<&'a [i32]> {
@@ -107,9 +111,19 @@ pub(super) fn read(node: &Node) -> Result<Patch, String> {
         (uknot[uorder - 1] as f64, uknot[nu] as f64),
         (vknot[vorder - 1] as f64, vknot[nv] as f64),
     );
+    let bound = |name: &str, default: f64| {
+        floats(node, name)
+            .and_then(|values| values.first())
+            .map_or(default, |&value| value as f64)
+    };
+    let active = (
+        (bound("umin", domain.0.0), bound("umax", domain.0.1)),
+        (bound("vmin", domain.1.0), bound("vmax", domain.1.1)),
+    );
     Ok(Patch {
         surface,
         loops: read_trims(node, domain)?,
+        domain: active,
     })
 }
 

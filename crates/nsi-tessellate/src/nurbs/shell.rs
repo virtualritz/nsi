@@ -3,7 +3,9 @@
 use super::patch::{self, Patch, Surface, TrimCurve};
 use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use monstertruck::{
-    geometry::prelude::{ParameterCurve, Point3},
+    geometry::prelude::{
+        BsplineCurve, KnotVector, NurbsCurve, ParameterCurve, Point3, Vector3,
+    },
     meshing::prelude::{
         PolygonMesh, TessellationOptions, trimmed_cshell_triangulation_with,
     },
@@ -11,9 +13,9 @@ use monstertruck::{
         CompressedEdge, CompressedEdgeUse, CompressedTrimmedFace,
         CompressedTrimmedShell,
     },
-    traits::{BoundedCurve, Concat, Invertible, ParametricCurve},
+    traits::{BoundedCurve, Concat, Cut, Invertible, ParametricCurve},
 };
-use nsi_intermediate::{Scene, WeldKind};
+use nsi_intermediate::{NurbsSide, Scene, WeldKind};
 
 /// A shared edge's curve, and a face-local trim: a trim curve on the
 /// surface it lies on.
@@ -90,26 +92,52 @@ pub fn nurbs_meshes(
         .problems
         .extend(welds.problems.iter().map(ToString::to_string));
 
-    // Which weld use covers which trim curve, or which whole trim loop,
-    // of which node.
+    // Which weld use covers which trim curve, whole trim loop, or side of
+    // the active domain -- or which part of one -- of which node.
     let mut welded = Welded::default();
     let mut namespace_of: HashMap<&str, &str> = HashMap::default();
     for weld in &welds.welds {
         for weld_use in &weld.uses {
             namespace_of.insert(weld_use.geometry, weld.weld);
             let key = (weld.weld.to_string(), weld.id);
+            let has_side = weld_use.segments.iter().any(|segment| {
+                matches!(segment.kind, WeldKind::NurbsSide { .. })
+            });
+            let has_trim = weld_use.segments.iter().any(|segment| {
+                matches!(
+                    segment.kind,
+                    WeldKind::TrimCurve { .. } | WeldKind::TrimLoop { .. }
+                )
+            });
+            // The sides form a loop of their own, so one chain cannot run
+            // through a side and a trim curve.
+            if has_side && has_trim {
+                tessellation.problems.push(format!(
+                    "ɴsɪ weld {:?} {} on {:?}: a use through both a side \
+                     and trim curves is not tessellated welded yet; that \
+                     boundary stays unwelded",
+                    weld.weld, weld.id, weld_use.geometry
+                ));
+                continue;
+            }
             for segment in &weld_use.segments {
+                let range = segment.range.map(f64::from);
                 match segment.kind {
-                    WeldKind::TrimCurve { curve_index } => {
-                        welded
-                            .curves
-                            .insert((weld_use.geometry, curve_index), key.clone());
-                    }
+                    WeldKind::TrimCurve { curve_index } => welded
+                        .curves
+                        .entry((weld_use.geometry, curve_index))
+                        .or_default()
+                        .push((range, key.clone())),
                     WeldKind::TrimLoop { loop_index } => {
                         welded
                             .loops
                             .insert((weld_use.geometry, loop_index), key.clone());
                     }
+                    WeldKind::NurbsSide { side } => welded
+                        .sides
+                        .entry(weld_use.geometry)
+                        .or_default()[side_index(side)]
+                    .push((range, key.clone())),
                     other => tessellation.problems.push(format!(
                         "ɴsɪ weld {:?} {} on {:?}: {other:?} is not tessellated \
                          welded yet; that boundary stays unwelded",
@@ -152,54 +180,158 @@ pub fn nurbs_meshes(
     tessellation
 }
 
-/// The weld use, as `(weld node, id)`, of each welded trim curve and
-/// whole trim loop, by node.
+/// A weld use's hold on part of a curve or side: the part, normalized to
+/// `[0, 1]` along its natural direction, and the use as `(weld node, id)`.
+type Selection = ([f64; 2], (String, u32));
+
+/// The weld uses of each welded trim curve, whole trim loop, and side of
+/// the active domain, by node. Sides are indexed as the draft numbers them.
 #[derive(Default)]
 struct Welded<'a> {
-    curves: HashMap<(&'a str, usize), (String, u32)>,
+    curves: HashMap<(&'a str, usize), Vec<Selection>>,
     loops: HashMap<(&'a str, usize), (String, u32)>,
+    sides: HashMap<&'a str, [Vec<Selection>; 4]>,
+}
+
+/// The draft's number for `side`.
+fn side_index(side: NurbsSide) -> usize {
+    match side {
+        NurbsSide::UMin => 0,
+        NurbsSide::UMax => 1,
+        NurbsSide::VMin => 2,
+        NurbsSide::VMax => 3,
+    }
 }
 
 /// Splits each trim loop of `patch` into pieces: runs of consecutive
-/// curves belonging to one weld use, and single unwelded curves.
+/// curves, or parts of curves, belonging to one weld use, and unwelded
+/// curves. A patch with welded sides gets its active domain's outline as
+/// one more loop, the first.
 fn pieces(handle: &str, patch: &Patch, welded: &Welded<'_>) -> Vec<Vec<Piece>> {
     let mut first_curve = 0;
-    patch
-        .loops
-        .iter()
-        .enumerate()
-        .map(|(loop_index, curves)| {
-            let whole_loop = welded.loops.get(&(handle, loop_index));
-            let mut pieces: Vec<Piece> = Vec::new();
-            for (offset, curve) in curves.iter().enumerate() {
-                let weld = whole_loop
-                    .or_else(|| {
-                        welded.curves.get(&(handle, first_curve + offset))
-                    })
-                    .cloned();
-                // A curve continues the previous piece when both belong to
-                // the same weld use.
-                match pieces.last_mut() {
-                    Some(last) if weld.is_some() && last.weld == weld => {
-                        if let Ok(joined) = last.curve.try_concat(curve) {
-                            last.curve = joined;
-                            continue;
-                        }
-                        pieces.push(Piece {
-                            curve: curve.clone(),
-                            weld,
-                        });
-                    }
-                    _ => pieces.push(Piece {
-                        curve: curve.clone(),
-                        weld,
-                    }),
-                }
-            }
-            first_curve += curves.len();
-            pieces
-        })
+    let trim_loops = patch.loops.iter().enumerate().map(|(loop_index, curves)| {
+        let whole_loop = welded.loops.get(&(handle, loop_index));
+        let pieces = curves.iter().enumerate().fold(
+            Vec::new(),
+            |mut pieces, (offset, curve)| {
+                let parts = match whole_loop {
+                    Some(weld) => vec![(curve.clone(), Some(weld.clone()))],
+                    None => split(
+                        curve,
+                        welded
+                            .curves
+                            .get(&(handle, first_curve + offset))
+                            .map_or(&[][..], Vec::as_slice),
+                    ),
+                };
+                parts
+                    .into_iter()
+                    .for_each(|(curve, weld)| push_piece(&mut pieces, curve, weld));
+                pieces
+            },
+        );
+        first_curve += curves.len();
+        pieces
+    });
+    welded
+        .sides
+        .get(handle)
+        .map(|sides| domain_loop(patch.domain, sides))
+        .into_iter()
+        .chain(trim_loops)
         .collect()
+}
+
+/// Appends `curve` to `pieces`, joining it to the last piece when both
+/// belong to the same weld use.
+fn push_piece(
+    pieces: &mut Vec<Piece>,
+    curve: TrimCurve,
+    weld: Option<(String, u32)>,
+) {
+    let joined = pieces
+        .last()
+        .filter(|last| weld.is_some() && last.weld == weld)
+        .and_then(|last| last.curve.try_concat(&curve).ok());
+    match (joined, pieces.last_mut()) {
+        (Some(joined), Some(last)) => last.curve = joined,
+        _ => pieces.push(Piece { curve, weld }),
+    }
+}
+
+/// Splits `curve` where the selections' ranges begin and end, and gives
+/// each part the use whose range covers it.
+fn split(
+    curve: &TrimCurve,
+    selections: &[Selection],
+) -> Vec<(TrimCurve, Option<(String, u32)>)> {
+    let (t0, t1) = curve.range_tuple();
+    let mut breaks: Vec<f64> = selections
+        .iter()
+        .flat_map(|(range, _)| *range)
+        .filter(|&at| 0.0 < at && at < 1.0)
+        .collect();
+    breaks.sort_by(f64::total_cmp);
+    breaks.dedup();
+    let owner = |from: f64, to: f64| {
+        let middle = 0.5 * (from + to);
+        selections
+            .iter()
+            .find(|([a, b], _)| a.min(*b) <= middle && middle <= a.max(*b))
+            .map(|(_, weld)| weld.clone())
+    };
+    let mut rest = curve.clone();
+    let mut from = 0.0;
+    let mut parts: Vec<_> = breaks
+        .into_iter()
+        .map(|at| {
+            let tail = rest.cut(t0 + at * (t1 - t0));
+            let part = (std::mem::replace(&mut rest, tail), owner(from, at));
+            from = at;
+            part
+        })
+        .collect();
+    parts.push((rest, owner(from, 1.0)));
+    parts
+}
+
+/// The outline of the active `domain`, counter-clockwise in `(u, v)`:
+/// the v-min, u-max, v-max and u-min sides, each split by the uses that
+/// select parts of it. A u-side runs along increasing `v` and a v-side
+/// along increasing `u`, so the loop runs the last two backwards.
+fn domain_loop(
+    ((u0, u1), (v0, v1)): ((f64, f64), (f64, f64)),
+    sides: &[Vec<Selection>; 4],
+) -> Vec<Piece> {
+    [
+        (2, (u0, v0), (u1, v0), false),
+        (1, (u1, v0), (u1, v1), false),
+        (3, (u0, v1), (u1, v1), true),
+        (0, (u0, v0), (u0, v1), true),
+    ]
+    .into_iter()
+    .fold(Vec::new(), |mut pieces, (side, from, to, backwards)| {
+        let mut parts = split(&line(from, to), &sides[side]);
+        if backwards {
+            parts.reverse();
+            parts.iter_mut().for_each(|(curve, _)| curve.invert());
+        }
+        parts
+            .into_iter()
+            .for_each(|(curve, weld)| push_piece(&mut pieces, curve, weld));
+        pieces
+    })
+}
+
+/// A straight trim curve from `from` to `to`.
+fn line(from: (f64, f64), to: (f64, f64)) -> TrimCurve {
+    NurbsCurve::new(BsplineCurve::new(
+        KnotVector::bezier_knot(1),
+        vec![
+            Vector3::new(from.0, from.1, 1.0),
+            Vector3::new(to.0, to.1, 1.0),
+        ],
+    ))
 }
 
 /// Union-find over vertex slots.

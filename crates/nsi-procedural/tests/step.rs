@@ -207,3 +207,39 @@ fn without_welds_there_are_no_weld_tables() {
     let welds = scene.welds();
     assert!(welds.welds.is_empty() && welds.problems.is_empty());
 }
+
+/// A face whose only trim loop traced its domain comes out untrimmed, and
+/// declares the edges it shares as parts of its natural sides. `io1-ec-214`
+/// and `boxy` have such faces; each one's every weld use is `nurbs-side`.
+#[test]
+fn untrimmed_faces_weld_by_their_natural_sides() {
+    for name in [PART, "boxy_with_surfacetex.stp"] {
+        let Some(path) = part(name) else { continue };
+        let scene = record(&path, 1);
+        let untrimmed: Vec<&str> = faces(&scene)
+            .into_iter()
+            .filter(|&face| {
+                scene
+                    .node(face)
+                    .unwrap()
+                    .attribute("trimcurves.ncurves")
+                    .is_none()
+            })
+            .collect();
+        assert!(!untrimmed.is_empty(), "{name} has untrimmed faces");
+        for face in untrimmed {
+            let table = scene.weld_table(face);
+            assert!(table.problems.is_empty(), "{face}: {:?}", table.problems);
+            assert!(!table.uses.is_empty(), "{face} declares its edges");
+            assert!(
+                table.uses.iter().flat_map(|use_| &use_.segments).all(
+                    |segment| matches!(
+                        segment.kind,
+                        nsi_intermediate::WeldKind::NurbsSide { .. }
+                    )
+                ),
+                "{face} welds by its sides"
+            );
+        }
+    }
+}

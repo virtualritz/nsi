@@ -12,9 +12,10 @@
 //!   ([`EdgeUse`]), so the caller can declare weld tables. Curves the
 //!   conversion makes up -- closing lines, domain rectangles, seam lines --
 //!   come from no edge-use.
-//! * Loops that merely trace the parameter domain can be kept
-//!   ([`TrimLoopPolicy::KeepAll`]): their edges must stay selectable for
-//!   welding.
+//! * The edge-uses of loops that merely trace the parameter domain can be
+//!   named as parts of the patch's natural sides
+//!   ([`TrimLoopPolicy::NaturalSides`]), so a weld can select them as
+//!   `nurbs-side` while the loop itself is still dropped.
 //! * No `trimcurves.nloops` and no `trimcurves.sense`: the shipped `nurbs`
 //!   node has neither, and 3Delight 2.9.210 renders the same with or
 //!   without the latter.
@@ -94,9 +95,26 @@ pub enum TrimLoopPolicy {
     /// Drop it, as the viewer does: it says nothing the patch's domain does
     /// not already say.
     DropFullDomain,
-    /// Keep it: its curves are the face's boundary edges, and a weld
-    /// declaration must be able to select them.
-    KeepAll,
+    /// Drop it too, and name each edge-use its curves trace as a part of
+    /// one of the patch's natural sides ([`SideUse`]): the face's boundary
+    /// edges, shared with its neighbours, stay selectable for welding.
+    NaturalSides,
+}
+
+/// A part of one of a patch's natural sides that a boundary edge-use
+/// traces.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SideUse {
+    /// The side, numbered as the weld draft numbers them: 0 = u-min,
+    /// 1 = u-max, 2 = v-min, 3 = v-max.
+    pub side: i32,
+    /// The part, normalized to `[0, 1]` along the side's natural
+    /// direction: increasing `v` on a u-side, increasing `u` on a v-side.
+    pub range: [f32; 2],
+    /// Whether the edge-use runs against that direction.
+    pub reverse: bool,
+    /// The edge-use.
+    pub edge_use: EdgeUse,
 }
 
 /// Trim-aware NURBS surface in NSI's flat-arrays layout.
@@ -115,6 +133,9 @@ pub struct NsiBrepSurfaceData {
     pub vmax: f32,
     pub pw: Vec<[f32; 4]>,
     pub trims: Option<NsiBrepTrimData>,
+    /// With [`TrimLoopPolicy::NaturalSides`], the edge-uses of the dropped
+    /// full-domain loops, as parts of the natural sides.
+    pub sides: Vec<SideUse>,
     pub sampled_trim_fallback_count: usize,
 }
 
@@ -284,26 +305,77 @@ fn face_to_nsi(
     // 43 of 80 faces on `boxy` and 8 of 17 on `io1-ec-214`, each costing the
     // renderer a trim evaluation for nothing.
     //
-    // A weld declaration needs those loops, though: their curves are the
-    // face's boundary edges, shared with its neighbours.
-    let trims = trim_loops
-        .map(|loops| {
-            loops
-                .into_iter()
-                .filter(|trim_loop| {
-                    policy == TrimLoopPolicy::KeepAll
-                        || !trim_loop_is_full_domain(trim_loop, &surface)
-                })
-                .collect::<Vec<_>>()
-        })
+    // A weld declaration needs those loops' curves, though: they are the
+    // face's boundary edges, shared with its neighbours. So they become
+    // parts of the patch's natural sides, which a weld selects just as well.
+    let (full_domain, kept): (Vec<_>, Vec<_>) = trim_loops
+        .unwrap_or_default()
+        .into_iter()
+        .partition(|trim_loop| trim_loop_is_full_domain(trim_loop, &surface));
+    let sides = if policy == TrimLoopPolicy::NaturalSides {
+        full_domain
+            .iter()
+            .flat_map(|trim_loop| trim_loop.curves.iter())
+            .filter_map(|curve| side_use(curve, &surface))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let trims = Some(kept)
         .filter(|loops| !loops.is_empty())
         .map(trim_loops_to_nsi_data);
 
     Some(NsiBrepSurfaceData {
         face_index,
         trims,
+        sides,
         sampled_trim_fallback_count,
         ..surface
+    })
+}
+
+/// The part of a natural side that `curve`, a curve of a loop tracing the
+/// domain, runs along; `None` when it traces no edge-use, or does not lie
+/// on one side.
+fn side_use(
+    curve: &NsiBrepTrimCurveData,
+    surface: &NsiBrepSurfaceData,
+) -> Option<SideUse> {
+    let edge_use = curve.edge_use?;
+    let last = curve.u.len().checked_sub(1)?;
+    let point = |index: usize| {
+        (curve.u[index] / curve.w[index], curve.v[index] / curve.w[index])
+    };
+    let (from, to) = (point(0), point(last));
+    let on = |a: f32, b: f32, edge: f32| {
+        [a, b].iter().all(|&value| {
+            ((value - edge).abs() as f64) <= TRIM_CLOSURE_TOLERANCE
+        })
+    };
+    let (side, along, (start, end)) = if on(from.0, to.0, surface.umin) {
+        (0, (from.1, to.1), (surface.vmin, surface.vmax))
+    } else if on(from.0, to.0, surface.umax) {
+        (1, (from.1, to.1), (surface.vmin, surface.vmax))
+    } else if on(from.1, to.1, surface.vmin) {
+        (2, (from.0, to.0), (surface.umin, surface.umax))
+    } else if on(from.1, to.1, surface.vmax) {
+        (3, (from.0, to.0), (surface.umin, surface.umax))
+    } else {
+        log::warn!(
+            "NSI BRep emitter: a domain-tracing curve of edge {} lies on no \
+             one side; it is not declared",
+            edge_use.edge
+        );
+        return None;
+    };
+    let normalized =
+        |value: f32| ((value - start) / (end - start)).clamp(0.0, 1.0);
+    let (a, b) = (normalized(along.0), normalized(along.1));
+    (a != b).then_some(SideUse {
+        side,
+        range: [a.min(b), a.max(b)],
+        reverse: a > b,
+        edge_use,
     })
 }
 
@@ -699,6 +771,7 @@ fn surface_to_nsi_data(surface: &Surface) -> Option<NsiBrepSurfaceData> {
         vmax,
         pw,
         trims: None,
+        sides: Vec::new(),
         sampled_trim_fallback_count: 0,
     })
 }

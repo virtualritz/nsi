@@ -11,7 +11,7 @@
 
 mod common;
 
-use common::{Facing, cube, cube_facing};
+use common::{Facing, cube, cube_facing, cube_with};
 use nsi_ffi_wrap as nsi;
 use nsi_intermediate::{Scene, write_stream};
 use nsi_tessellate::{NurbsOptions, NurbsTessellation, nurbs_meshes};
@@ -334,4 +334,35 @@ fn displaced_welded_patches_stay_closed_and_unwelded_ones_crack() {
         unwelded_red > 200,
         "the unwelded cube cracks: {unwelded_red}"
     );
+}
+
+/// The same end to end with natural sides: faces z = 0, y = 0 and x = 0
+/// untrimmed and welded by `nurbs-side`, the rest by trim curves, and every
+/// cube edge split in two by `weld.range`.
+#[test]
+fn displaced_side_welded_patches_stay_closed_and_unwelded_ones_crack() {
+    let shaders = shaders();
+    let options = NurbsOptions { tolerance: 0.002 };
+    let sides = [true, false, true, false, true, false];
+    let welded =
+        nurbs_meshes(&cube_with(true, Facing::Outward, sides, true), &options);
+    let unwelded =
+        nurbs_meshes(&cube_with(false, Facing::Outward, sides, true), &options);
+    assert_eq!(welded.open_edges, 0);
+    assert!(unwelded.open_edges > 0);
+
+    let push = 0.15;
+    let welded_red =
+        red_pixels(Subject::Meshes(&welded), push, "sides_welded", &shaders);
+    let unwelded_red = red_pixels(
+        Subject::Meshes(&unwelded),
+        push,
+        "sides_unwelded",
+        &shaders,
+    );
+    println!(
+        "sides, displaced by {push}: welded {welded_red} red px, unwelded {unwelded_red}"
+    );
+    assert!(welded_red < 20, "the welded cube stays closed: {welded_red}");
+    assert!(unwelded_red > 200, "the unwelded cube cracks: {unwelded_red}");
 }
