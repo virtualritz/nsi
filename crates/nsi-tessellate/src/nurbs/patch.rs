@@ -103,14 +103,39 @@ pub(super) fn read(node: &Node) -> Result<Patch, String> {
             .map_err(|error| format!("not a valid surface: {error}"))?;
     let surface = NurbsSurface::new(bspline);
 
+    let domain = (
+        (uknot[uorder - 1] as f64, uknot[nu] as f64),
+        (vknot[vorder - 1] as f64, vknot[nv] as f64),
+    );
     Ok(Patch {
         surface,
-        loops: read_trims(node)?,
+        loops: read_trims(node, domain)?,
     })
 }
 
+/// A parameter a rounding past `(start, end)` moved outside it, moved
+/// back; any other parameter as it is.
+///
+/// A trim that runs round a closed surface ends on the domain's edge, and
+/// an `f32` that should be 2π can be a rounding past it. The mesher reads
+/// such a point as lying on the far side of the seam and folds the face
+/// over itself.
+fn clamp_rounding(parameter: f64, (start, end): (f64, f64)) -> f64 {
+    let slack = 1e-5 * (end - start).abs().max(1.0);
+    if parameter < start && start - parameter <= slack {
+        start
+    } else if end < parameter && parameter - end <= slack {
+        end
+    } else {
+        parameter
+    }
+}
+
 /// The trim loops, from `trimcurves.*`.
-fn read_trims(node: &Node) -> Result<Vec<Vec<TrimCurve>>, String> {
+fn read_trims(
+    node: &Node,
+    (u_domain, v_domain): ((f64, f64), (f64, f64)),
+) -> Result<Vec<Vec<TrimCurve>>, String> {
     let Some(curves_per_loop) = integers(node, "trimcurves.ncurves") else {
         return Ok(Vec::new());
     };
@@ -154,7 +179,14 @@ fn read_trims(node: &Node) -> Result<Vec<Vec<TrimCurve>>, String> {
             return Err(format!("trim curve {curve} runs past its arrays"));
         }
         let control_points = (point_start..point_end)
-            .map(|i| Vector3::new(u[i] as f64, v[i] as f64, w[i] as f64))
+            .map(|i| {
+                let w = w[i] as f64;
+                Vector3::new(
+                    clamp_rounding(u[i] as f64 / w, u_domain) * w,
+                    clamp_rounding(v[i] as f64 / w, v_domain) * w,
+                    w,
+                )
+            })
             .collect();
         let knot_vector = KnotVector::from(
             knots[knot_start..knot_end]

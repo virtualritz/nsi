@@ -166,6 +166,56 @@ displace at all). Red pixels are surface seen from inside.
 Falsified: skipping the merge of welded seam points, or flipping the
 shell orientation, each fails the suite.
 
+#### A Real Part
+
+`nsi-procedural`'s `step_procedural` example emits `io1-ec-214.stp`, a
+flange with a bore and six holes, as 17 `nurbs` nodes welded along 35
+edges. `tests/step_displacement.rs` tessellates it and renders it
+displaced by 1.0 along `N`.
+
+The cube hid four defects that the part exposed. The first three are
+fixed in `nsi-tessellate`:
+
+- **Rounding past the domain.** A trim that should end at 2π ends at
+  `6.283186` in `f32`, past the knot end `6.2831855`, and the mesher
+  folds the face over itself (face area 3.2× and 7.8× the true one).
+  Parameters a rounding outside the domain are clamped onto it.
+- **Closed edges have no direction by their ends.** A circle starts and
+  ends at one vertex, so comparing ends made every use of it "forward".
+  Direction is decided by the ends and the quarter points.
+- **Samples moved by rounding.** On periodic surfaces the mesher
+  re-evaluates boundary samples from their parameters, and a loop's
+  closing vertex can come back twice, a rounding apart, inside a fold of
+  slivers. Vertices are snapped onto the shared samples of the welded
+  edges *their own face* uses. A boundary vertex snaps within the
+  tolerance and any other vertex within a hundredth of it. Triangles
+  that collapse in the merge are dropped.
+
+The fourth is in `monstertruck-meshing` 0.4.0. It projects a boundary's
+first point onto a trim with no hint. On a trim closed in space but
+open in `uv` (a cylinder's circle, `u` from 0 to 2π) both ends match, so
+Newton can land on the far end. The walk then runs off the curve, and
+the `uv` boundary spans 12 laps. The fix is to seed the projection at
+the trim's start, in `impl ExactTrimBoundary2D for ParameterCurve`:
+
+```rust
+fn project_boundary_point(&self, point: Point3, hint: Option<f64>) -> Option<(f64, Point2)> {
+    let hint = hint.or(Some(self.curve().range_tuple().0));
+    self.search_parameter(point, hint, 100)
+    // ... unchanged
+```
+
+| Tessellation of the part          | Open edges, welded | Unwelded |
+| --------------------------------- | ------------------ | -------- |
+| Before the three fixes            | 1819               | 3940     |
+| With them, stock `monstertruck`   | 172                | 3940     |
+| With them and the upstream fix    | 0                  | 3940     |
+
+With the upstream fix, displaced by 1.0, the welded part renders closed
+(0 inside pixels) and the unwelded part cracks (1268). The test stays
+`#[ignore]`d until `nsi-tessellate` can depend on a `monstertruck` with
+the fix.
+
 ### Non-Goals
 
 - Natural-side (`nurbs-side`) welds on untrimmed faces: the STEP

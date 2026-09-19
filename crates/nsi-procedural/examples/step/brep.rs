@@ -734,7 +734,6 @@ fn trim_loops_from_boundaries(
     }
 }
 
-
 fn apply_face_orientation_convention(
     surface: &mut NsiBrepSurfaceData,
     trim_loops: Option<&mut [TrimLoop]>,
@@ -767,8 +766,6 @@ fn mirror_surface_u_axis(surface: &mut NsiBrepSurfaceData) {
         .map(|knot| u_origin - *knot)
         .collect();
 }
-
-
 
 fn mirror_trim_loop_u_axis(trim_loop: &mut TrimLoop, umin: f32, umax: f32) {
     let u_origin = umin + umax;

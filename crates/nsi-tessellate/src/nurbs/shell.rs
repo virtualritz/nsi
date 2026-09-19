@@ -277,11 +277,21 @@ fn mesh_shell(
                         // piece starts at. Identity came from the weld.
                         let (curve, edge_start, edge_end) = &edges[edge];
                         let (e0, e1) = curve.range_tuple();
-                        let (a, b) =
-                            (point_at(&local, t0), point_at(&local, t1));
-                        let (p, q) = (point_at(curve, e0), point_at(curve, e1));
-                        let direct = distance2(a, p) + distance2(b, q);
-                        let reversed = distance2(a, q) + distance2(b, p);
+                        // Ends and quarter points: the ends alone cannot
+                        // tell the directions of a closed edge apart, nor
+                        // can the middle -- both run through it.
+                        let at = |curve: &EdgeCurve, (t0, t1): (f64, f64)| {
+                            [0.0, 0.25, 0.75, 1.0]
+                                .map(|f| point_at(curve, t0 + f * (t1 - t0)))
+                        };
+                        let this = at(&local, (t0, t1));
+                        let edge_points = at(curve, (e0, e1));
+                        let direct: f64 = (0..4)
+                            .map(|i| distance2(this[i], edge_points[i]))
+                            .sum();
+                        let reversed: f64 = (0..4)
+                            .map(|i| distance2(this[i], edge_points[3 - i]))
+                            .sum();
                         let forward = direct <= reversed;
                         let (edge_start, edge_end) = (*edge_start, *edge_end);
                         if forward {
@@ -310,6 +320,13 @@ fn mesh_shell(
         }
         faces.push(face_loops);
     }
+
+    // Per face, the edges it uses; the welded ones' samples are the only
+    // points its boundary may snap to.
+    let edges_of_face: Vec<Vec<usize>> = faces
+        .iter()
+        .map(|loops| loops.iter().flatten().map(|use_| use_.0).collect())
+        .collect();
 
     // One vertex per slot class, placed where its first edge puts it.
     let mut vertex_of_class: HashMap<usize, usize> = HashMap::default();
@@ -385,11 +402,33 @@ fn mesh_shell(
     let face_meshes: Vec<(&str, PolygonMesh)> = patches
         .iter()
         .zip(&meshed.faces)
-        .filter_map(|((handle, _), face)| {
+        .zip(&edges_of_face)
+        .filter_map(|(((handle, _), face), edges)| {
             let mut mesh = face.surface.clone()?;
             if !face.orientation {
                 mesh.invert();
             }
+            // A polyline's ends are resampled from its curve; the shell's
+            // vertices are the one position its ends, and every other
+            // edge's ends there, share.
+            let samples: Vec<Point3> = edges
+                .iter()
+                .filter(|&&edge| uses_of_edge[edge] > 1)
+                .flat_map(|&edge| {
+                    let edge = &meshed.edges[edge];
+                    let points = &edge.curve.0;
+                    let inner = points
+                        .get(1..points.len().saturating_sub(1))
+                        .unwrap_or_default();
+                    [
+                        meshed.vertices[edge.vertices.0],
+                        meshed.vertices[edge.vertices.1],
+                    ]
+                    .into_iter()
+                    .chain(inner.iter().copied())
+                })
+                .collect();
+            snap_boundary(&mut mesh, &samples, options.tolerance);
             Some((*handle, mesh))
         })
         .collect();
@@ -402,6 +441,49 @@ fn mesh_shell(
     }
 
     merge_and_emit(face_meshes, &welded_points, tessellation);
+}
+
+/// Moves vertices of `mesh` onto the nearest of `samples`, the shared
+/// samples of the welded edges its face uses: a boundary vertex within
+/// `tolerance`, any vertex within a hundredth of it.
+///
+/// The mesher places a face's boundary on those samples, but where it
+/// re-evaluates them from their parameters, rounding moves them: close,
+/// not bit-identical. Where a loop closes, it can also leave a second copy
+/// of its first vertex a rounding away, inside a fold of slivers, so not
+/// on the face's boundary. Only a face's own welded edges are candidates,
+/// so identity still comes from the weld declarations; the distance only
+/// undoes the rounding.
+fn snap_boundary(mesh: &mut PolygonMesh, samples: &[Point3], tolerance: f64) {
+    if samples.is_empty() {
+        return;
+    }
+    let mut edge_uses: HashMap<(usize, usize), usize> = HashMap::default();
+    for [a, b, c] in mesh.faces().triangle_iter() {
+        for (from, to) in [(a.pos, b.pos), (b.pos, c.pos), (c.pos, a.pos)] {
+            *edge_uses.entry((from.min(to), from.max(to))).or_default() += 1;
+        }
+    }
+    let boundary: HashSet<usize> = edge_uses
+        .into_iter()
+        .filter(|&(_, uses)| uses == 1)
+        .flat_map(|((a, b), _)| [a, b])
+        .collect();
+    let positions = mesh.positions_mut();
+    for (vertex, position) in positions.iter_mut().enumerate() {
+        let reach = if boundary.contains(&vertex) {
+            tolerance
+        } else {
+            0.01 * tolerance
+        };
+        let point = *position;
+        if let Some(&nearest) = samples.iter().min_by(|&&a, &&b| {
+            distance2(point, a).total_cmp(&distance2(point, b))
+        }) && distance2(point, nearest) <= reach * reach
+        {
+            *position = nearest;
+        }
+    }
 }
 
 fn distance2(a: Point3, b: Point3) -> f64 {
@@ -444,6 +526,7 @@ fn merge_and_emit(
                 }
             })
             .collect();
+        // A triangle whose corners merged into one another is gone.
         let triangles = mesh
             .faces()
             .triangle_iter()
@@ -454,6 +537,7 @@ fn merge_and_emit(
                     local_to_global[c.pos],
                 ]
             })
+            .filter(|[a, b, c]| a != b && b != c && c != a)
             .collect();
         faces.push((handle, local_to_global, triangles));
     }
