@@ -264,5 +264,26 @@ Falsified:
 - a procedural declaring no sides fails `untrimmed_faces_weld_by_their_natural_sides`
   and the manifold test, and leaves the real part with 3940 open edges.
 
+#### What This Is For (2026-09-20)
+
+A procedural emits ɴsɪ nodes and the renderer dices them, so tessellating
+in the procedural is only ever needed for geometry a renderer cannot
+express. That is a deliberate design choice, not a gap: ɴsɪ passes a
+procedural no detail metric, no camera and no screen size, the way
+RenderMan's `Subdivide` passed the bound's raster size.
+
+So this feature has two audiences, and 3Delight is not really one of
+them:
+
+- **MoonRay**, which needs the ɴsɪ `nurbs` welded and meshed. Its
+  tolerance should come from MoonRay's own screen-space metrics rather
+  than `NurbsOptions`' fixed 0.01 scene units, which cannot know whether
+  a part fills the frame or covers four pixels.
+- **Testing**, here. 3Delight renders `nurbs` natively, and once it
+  consumes `weld` nodes it will keep shared boundaries itself. The
+  renders in `tests/displacement.rs` and
+  `nsi-procedural/tests/step_displacement.rs` are an oracle for the
+  weld resolution and the tessellator, not the shipping path.
+
 ### Non-Goals
 - Mesh-edge welds between `nurbs` and subdivision surfaces.
