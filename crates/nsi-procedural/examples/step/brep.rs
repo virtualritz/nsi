@@ -344,7 +344,10 @@ fn side_use(
     let edge_use = curve.edge_use?;
     let last = curve.u.len().checked_sub(1)?;
     let point = |index: usize| {
-        (curve.u[index] / curve.w[index], curve.v[index] / curve.w[index])
+        (
+            curve.u[index] / curve.w[index],
+            curve.v[index] / curve.w[index],
+        )
     };
     let (from, to) = (point(0), point(last));
     let on = |a: f32, b: f32, edge: f32| {

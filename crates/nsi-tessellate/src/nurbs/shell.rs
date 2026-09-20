@@ -73,8 +73,10 @@ type FaceTriangles<'a> = (&'a str, Vec<usize>, Vec<[usize; 3]>);
 /// edge use.
 struct Piece {
     curve: TrimCurve,
-    /// The `(weld node, id)` it is a use of, if it is welded.
-    weld: Option<(String, u32)>,
+    /// The use it belongs to, if it is welded, and whether this piece --
+    /// as it is stored, in loop order -- runs against that weld's
+    /// reference traversal.
+    weld: Option<Welding>,
 }
 
 /// Tessellates every `nurbs` node in `scene`, welding what its weld
@@ -109,12 +111,15 @@ pub fn nurbs_meshes(
                     WeldKind::TrimCurve { .. } | WeldKind::TrimLoop { .. }
                 )
             });
-            // The sides form a loop of their own, so one chain cannot run
-            // through a side and a trim curve.
+            // The contract allows a chain through both, where the two
+            // are consecutive portions of one retained boundary. This
+            // mesher builds boundaries loop by loop, and a patch's sides
+            // and its trim loops are different loops, so it reports the
+            // limitation rather than weld half of such a use.
             if has_side && has_trim {
                 tessellation.problems.push(format!(
                     "ɴsɪ weld {:?} {} on {:?}: a use through both a side \
-                     and trim curves is not tessellated welded yet; that \
+                     and trim curves is not welded by this mesher; that \
                      boundary stays unwelded",
                     weld.weld, weld.id, weld_use.geometry
                 ));
@@ -127,17 +132,26 @@ pub fn nurbs_meshes(
                         .curves
                         .entry((weld_use.geometry, curve_index))
                         .or_default()
-                        .push((range, key.clone())),
+                        .push(Selection {
+                            range,
+                            weld: key.clone(),
+                            reverse: segment.reverse,
+                        }),
                     WeldKind::TrimLoop { loop_index } => {
-                        welded
-                            .loops
-                            .insert((weld_use.geometry, loop_index), key.clone());
+                        welded.loops.insert(
+                            (weld_use.geometry, loop_index),
+                            (key.clone(), segment.reverse),
+                        );
                     }
                     WeldKind::NurbsSide { side } => welded
                         .sides
                         .entry(weld_use.geometry)
                         .or_default()[side_index(side)]
-                    .push((range, key.clone())),
+                    .push(Selection {
+                        range,
+                        weld: key.clone(),
+                        reverse: segment.reverse,
+                    }),
                     other => tessellation.problems.push(format!(
                         "ɴsɪ weld {:?} {} on {:?}: {other:?} is not tessellated \
                          welded yet; that boundary stays unwelded",
@@ -181,17 +195,29 @@ pub fn nurbs_meshes(
 }
 
 /// A weld use's hold on part of a curve or side: the part, normalized to
-/// `[0, 1]` along its natural direction, and the use as `(weld node, id)`.
-type Selection = ([f64; 2], (String, u32));
+/// `[0, 1]` along the selector's own direction, the use as
+/// `(weld node, id)`, and whether the use traverses it backwards.
+#[derive(Clone)]
+struct Selection {
+    range: [f64; 2],
+    weld: (String, u32),
+    /// `weld.reverse`: the selected segment is traversed against its own
+    /// direction to follow the weld's reference traversal.
+    reverse: bool,
+}
 
 /// The weld uses of each welded trim curve, whole trim loop, and side of
 /// the active domain, by node. Sides are indexed as the draft numbers them.
 #[derive(Default)]
 struct Welded<'a> {
     curves: HashMap<(&'a str, usize), Vec<Selection>>,
-    loops: HashMap<(&'a str, usize), (String, u32)>,
+    loops: HashMap<(&'a str, usize), Welding>,
     sides: HashMap<&'a str, [Vec<Selection>; 4]>,
 }
+
+/// A piece's weld: the use it belongs to, and whether the piece runs
+/// against that weld's reference traversal.
+type Welding = ((String, u32), bool);
 
 /// The draft's number for `side`.
 fn side_index(side: NurbsSide) -> usize {
@@ -209,30 +235,31 @@ fn side_index(side: NurbsSide) -> usize {
 /// one more loop, the first.
 fn pieces(handle: &str, patch: &Patch, welded: &Welded<'_>) -> Vec<Vec<Piece>> {
     let mut first_curve = 0;
-    let trim_loops = patch.loops.iter().enumerate().map(|(loop_index, curves)| {
-        let whole_loop = welded.loops.get(&(handle, loop_index));
-        let pieces = curves.iter().enumerate().fold(
-            Vec::new(),
-            |mut pieces, (offset, curve)| {
-                let parts = match whole_loop {
-                    Some(weld) => vec![(curve.clone(), Some(weld.clone()))],
-                    None => split(
-                        curve,
-                        welded
-                            .curves
-                            .get(&(handle, first_curve + offset))
-                            .map_or(&[][..], Vec::as_slice),
-                    ),
-                };
-                parts
-                    .into_iter()
-                    .for_each(|(curve, weld)| push_piece(&mut pieces, curve, weld));
-                pieces
-            },
-        );
-        first_curve += curves.len();
-        pieces
-    });
+    let trim_loops =
+        patch.loops.iter().enumerate().map(|(loop_index, curves)| {
+            let whole_loop = welded.loops.get(&(handle, loop_index));
+            let pieces = curves.iter().enumerate().fold(
+                Vec::new(),
+                |mut pieces, (offset, curve)| {
+                    let parts = match whole_loop {
+                        Some(weld) => vec![(curve.clone(), Some(weld.clone()))],
+                        None => split(
+                            curve,
+                            welded
+                                .curves
+                                .get(&(handle, first_curve + offset))
+                                .map_or(&[][..], Vec::as_slice),
+                        ),
+                    };
+                    parts.into_iter().for_each(|(curve, weld)| {
+                        push_piece(&mut pieces, curve, weld)
+                    });
+                    pieces
+                },
+            );
+            first_curve += curves.len();
+            pieces
+        });
     welded
         .sides
         .get(handle)
@@ -243,11 +270,11 @@ fn pieces(handle: &str, patch: &Patch, welded: &Welded<'_>) -> Vec<Vec<Piece>> {
 }
 
 /// Appends `curve` to `pieces`, joining it to the last piece when both
-/// belong to the same weld use.
+/// belong to the same weld use and run the same way along it.
 fn push_piece(
     pieces: &mut Vec<Piece>,
     curve: TrimCurve,
-    weld: Option<(String, u32)>,
+    weld: Option<Welding>,
 ) {
     let joined = pieces
         .last()
@@ -264,11 +291,11 @@ fn push_piece(
 fn split(
     curve: &TrimCurve,
     selections: &[Selection],
-) -> Vec<(TrimCurve, Option<(String, u32)>)> {
+) -> Vec<(TrimCurve, Option<Welding>)> {
     let (t0, t1) = curve.range_tuple();
     let mut breaks: Vec<f64> = selections
         .iter()
-        .flat_map(|(range, _)| *range)
+        .flat_map(|selection| selection.range)
         .filter(|&at| 0.0 < at && at < 1.0)
         .collect();
     breaks.sort_by(f64::total_cmp);
@@ -277,8 +304,11 @@ fn split(
         let middle = 0.5 * (from + to);
         selections
             .iter()
-            .find(|([a, b], _)| a.min(*b) <= middle && middle <= a.max(*b))
-            .map(|(_, weld)| weld.clone())
+            .find(|selection| {
+                let [a, b] = selection.range;
+                a.min(b) <= middle && middle <= a.max(b)
+            })
+            .map(|selection| (selection.weld.clone(), selection.reverse))
     };
     let mut rest = curve.clone();
     let mut from = 0.0;
@@ -314,7 +344,14 @@ fn domain_loop(
         let mut parts = split(&line(from, to), &sides[side]);
         if backwards {
             parts.reverse();
-            parts.iter_mut().for_each(|(curve, _)| curve.invert());
+            parts.iter_mut().for_each(|(curve, weld)| {
+                curve.invert();
+                // Stored the other way round than the side runs, so a use
+                // that followed the side now runs against its weld.
+                if let Some((_, against)) = weld {
+                    *against = !*against;
+                }
+            });
         }
         parts
             .into_iter()
@@ -370,8 +407,9 @@ fn mesh_shell(
     tessellation: &mut NurbsTessellation,
 ) {
     let mut slots = Slots(Vec::new());
-    // Per edge: its curve, and its start and end slots.
-    let mut edges: Vec<(EdgeCurve, usize, usize)> = Vec::new();
+    // Per edge: its curve, its start and end slots, and whether the use
+    // that made it runs against its weld's reference traversal.
+    let mut edges: Vec<(EdgeCurve, usize, usize, bool)> = Vec::new();
     let mut edge_of_weld: HashMap<(String, u32), usize> = HashMap::default();
     let mut uses_of_edge: Vec<usize> = Vec::new();
     // Per face, per loop, per piece: (edge, orientation, face-local trim).
@@ -397,35 +435,28 @@ fn mesh_shell(
             {
                 let local =
                     ParameterCurve::new(piece.curve, patch.surface.clone());
-                let (t0, t1) = local.range_tuple();
                 let existing = piece
                     .weld
                     .as_ref()
-                    .and_then(|key| edge_of_weld.get(key))
+                    .and_then(|(key, _)| edge_of_weld.get(key))
                     .copied();
                 let (edge, orientation) = match existing {
                     Some(edge) => {
-                        // Direction only: which end of the shared edge this
-                        // piece starts at. Identity came from the weld.
-                        let (curve, edge_start, edge_end) = &edges[edge];
-                        let (e0, e1) = curve.range_tuple();
-                        // Ends and quarter points: the ends alone cannot
-                        // tell the directions of a closed edge apart, nor
-                        // can the middle -- both run through it.
-                        let at = |curve: &EdgeCurve, (t0, t1): (f64, f64)| {
-                            [0.0, 0.25, 0.75, 1.0]
-                                .map(|f| point_at(curve, t0 + f * (t1 - t0)))
-                        };
-                        let this = at(&local, (t0, t1));
-                        let edge_points = at(curve, (e0, e1));
-                        let direct: f64 = (0..4)
-                            .map(|i| distance2(this[i], edge_points[i]))
-                            .sum();
-                        let reversed: f64 = (0..4)
-                            .map(|i| distance2(this[i], edge_points[3 - i]))
-                            .sum();
-                        let forward = direct <= reversed;
-                        let (edge_start, edge_end) = (*edge_start, *edge_end);
+                        // Declared, not measured. Every use of a weld
+                        // follows one reference traversal once its
+                        // ranges, segment order and `weld.reverse` are
+                        // applied, so two pieces run the same way along
+                        // their edge exactly when they sit the same way
+                        // against that traversal. A closed edge's ends
+                        // are one point and cannot tell the two senses
+                        // apart, which is why the contract forbids
+                        // inferring direction from them.
+                        let against = piece
+                            .weld
+                            .as_ref()
+                            .is_some_and(|(_, against)| *against);
+                        let forward = against == edges[edge].3;
+                        let (_, edge_start, edge_end, _) = edges[edge];
                         if forward {
                             slots.union(start, edge_start);
                             slots.union(end, edge_end);
@@ -436,10 +467,14 @@ fn mesh_shell(
                         (edge, forward)
                     }
                     None => {
-                        edges.push((local.clone(), start, end));
+                        let against = piece
+                            .weld
+                            .as_ref()
+                            .is_some_and(|(_, against)| *against);
+                        edges.push((local.clone(), start, end, against));
                         uses_of_edge.push(0);
                         let edge = edges.len() - 1;
-                        if let Some(key) = piece.weld {
+                        if let Some((key, _)) = piece.weld {
                             edge_of_weld.insert(key, edge);
                         }
                         (edge, true)
@@ -464,7 +499,7 @@ fn mesh_shell(
     let mut vertex_of_class: HashMap<usize, usize> = HashMap::default();
     let mut vertices: Vec<Point3> = Vec::new();
     let mut edge_vertices = Vec::with_capacity(edges.len());
-    for (curve, start, end) in &edges {
+    for (curve, start, end, _) in &edges {
         let (t0, t1) = curve.range_tuple();
         let mut vertex = |slot: usize, t: f64| {
             let class = slots.find(slot);
@@ -481,7 +516,7 @@ fn mesh_shell(
         edges: edges
             .iter()
             .zip(&edge_vertices)
-            .map(|((curve, _, _), &vertices)| CompressedEdge {
+            .map(|((curve, _, _, _), &vertices)| CompressedEdge {
                 vertices,
                 curve: curve.clone(),
             })

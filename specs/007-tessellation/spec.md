@@ -182,7 +182,8 @@ fixed in `nsi-tessellate`:
   Parameters a rounding outside the domain are clamped onto it.
 - **Closed edges have no direction by their ends.** A circle starts and
   ends at one vertex, so comparing ends made every use of it "forward".
-  Direction is decided by the ends and the quarter points.
+  Direction was first decided by the ends and the quarter points; the
+  revised contract moved that decision to the exporter (below).
 - **Samples moved by rounding.** On periodic surfaces the mesher
   re-evaluates boundary samples from their parameters, and a loop's
   closing vertex can come back twice, a rounding apart, inside a fold of
@@ -284,6 +285,44 @@ them:
   renders in `tests/displacement.rs` and
   `nsi-procedural/tests/step_displacement.rs` are an oracle for the
   weld resolution and the tessellator, not the shipping path.
+
+#### The Revised Contract (2026-09-21)
+
+The weld draft was revised after this implementation reported back. What
+it changed here:
+
+- **Direction is declared, not measured.** Every use of a weld follows
+  one reference traversal once its ranges, segment order and
+  `weld.reverse` are applied, and a renderer must not infer a closed
+  use's direction from its coincident endpoints. So the tessellator
+  pairs two uses by their declarations -- they run the same way along
+  their edge exactly when they sit the same way against that traversal
+  -- and the geometric test moved to the exporter, which holds the
+  geometry. `step_procedural` samples each use at its ends and quarter
+  points, the first use of an id fixing the reference.
+- **A weld belongs to the retained surface beside its boundary.** The
+  incident surface is defined whichever way `trimcurves.inside` or the
+  draft's `trim-curves.hole` runs, so refusing `inside` 0 is this
+  mesher's limitation, not an ambiguity, and is reported as such.
+- **Mixed side and trim uses are allowed** where they are consecutive
+  portions of one retained boundary, and a renderer that does not
+  support them must report that. This one builds boundaries loop by
+  loop, so it reports.
+- **Corresponding use endpoints and weld junctions must agree
+  geometrically**, which is what the snapping of shared samples relies
+  on. Local range numbers need not match, and sample runs may not be
+  paired by index or parameter -- this mesher samples a shared edge once
+  and projects, so it never did.
+
+Evidence: the cube fixtures declare a reference traversal per edge (from
+its smaller corner to its larger) and still weld watertight, welded 0
+open edges against 3753 red pixels unwelded when displaced. io1-ec-214
+through `step_procedural` keeps 0 open edges and renders closed.
+
+Falsified: an exporter that declares no reversal -- the cube's
+`weld.reverse` forced to 0, and the procedural's direction pass made a
+no-op -- leaves the cube tests failing and the real part with 390 open
+edges. The tessellator no longer papers over it.
 
 ### Non-Goals
 - Mesh-edge welds between `nurbs` and subdivision surfaces.

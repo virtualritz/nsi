@@ -131,21 +131,24 @@ pub fn cube_with(
             // Border piece k of the domain runs from `corners[k]` to
             // `corners[k + 1]`. As a trim curve it is curve k, stored in
             // that direction. As a natural side it is v-min, u-max, v-max,
-            // u-min in turn, and the last two run the other way.
+            // u-min in turn; the first two run along the border piece and
+            // the last two against it, a u-side running along increasing
+            // `v` and a v-side along increasing `u`.
             const SIDE: [i32; 4] = [2, 1, 3, 0];
             let uses: Vec<(i32, i32, i32, [f32; 2])> = (0..4)
                 .flat_map(|k| {
                     let (a, b) = (corners[k], corners[(k + 1) % 4]);
                     // A cube edge's id: its two corners, smaller first.
                     let edge = (a.min(b) * 8 + a.max(b)) as i32;
-                    let (index, reverse) = if sides[face] {
-                        (SIDE[k], i32::from(k >= 2))
-                    } else {
-                        (k as i32, 0)
-                    };
-                    // The corner the selected curve starts at, before
-                    // reversal: which end `weld.range` counts from.
-                    let start = if reverse == 1 { b } else { a };
+                    // Every use of a weld follows one reference
+                    // traversal. This exporter's is from the edge's
+                    // smaller corner to its larger, and `weld.reverse`
+                    // says which uses run against it.
+                    let index = if sides[face] { SIDE[k] } else { k as i32 };
+                    // The corner the selector itself starts at, whatever
+                    // the loop does: which end `weld.range` counts from.
+                    let start = if sides[face] && k >= 2 { b } else { a };
+                    let reverse = i32::from(start != a.min(b));
                     let halves: Vec<(i32, i32, i32, [f32; 2])> = if halves {
                         [[0.0, 0.5], [0.5, 1.0]]
                             .into_iter()

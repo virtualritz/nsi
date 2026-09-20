@@ -20,10 +20,17 @@
 //! junction, and a shared edge identifies the junctions at its ends on
 //! every face that uses it.
 //!
+//! Direction comes from the declaration too. Every use of a weld follows
+//! one reference traversal once its ranges, segment order and
+//! `weld.reverse` are applied, so two uses run the same way along their
+//! shared edge exactly when they sit the same way against that
+//! traversal. A closed boundary's ends are one point and cannot tell the
+//! two senses apart, which is why the contract has the exporter declare
+//! the direction and forbids a renderer from measuring it.
+//!
 //! [weld declarations]: https://nsi.readthedocs.io/en/latest/design/shared-boundaries.html
 
 mod patch;
 mod shell;
 
 pub use shell::{NurbsMesh, NurbsOptions, NurbsTessellation, nurbs_meshes};
-

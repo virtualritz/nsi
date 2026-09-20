@@ -161,12 +161,13 @@ fn read_trims(
         return Ok(Vec::new());
     };
     // 3Delight 2.9.210 renders what lies inside a trim loop, and
-    // `trimcurves.inside` 0 asks for the outside instead. The mesher
-    // keeps the inside, so the outside would come back inverted; refuse
-    // it rather than tessellate the wrong side.
+    // `trimcurves.inside` 0 asks for the outside instead. A weld belongs
+    // to the retained surface beside its boundary either way, so the
+    // declaration stays meaningful; this mesher only keeps the inside,
+    // which is a limitation to report rather than a side to guess.
     if integer(node, "trimcurves.inside") == Some(0) {
         return Err("`trimcurves.inside` 0 -- the surface outside its \
-                    trim loops -- is not tessellated yet"
+                    trim loops -- is not tessellated by this mesher"
             .to_string());
     }
     let points = integers(node, "trim-curves.point-count")

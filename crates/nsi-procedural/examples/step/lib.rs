@@ -60,11 +60,14 @@
 mod assembly;
 mod brep;
 pub mod loader;
+mod sample;
 
 use brep::{NsiBrepSurfaceData, NsiBrepTrimData, SideUse, TrimLoopPolicy};
+use monstertruck::geometry::prelude::Point3;
 use nsi_ffi_wrap as nsi;
 use nsi_procedural::{Error, Params, Procedural, Report};
-use std::{num::NonZeroUsize, path::Path};
+use sample::FaceGeometry;
+use std::{collections::HashMap, num::NonZeroUsize, path::Path};
 
 /// The STEP procedural.
 pub struct StepProcedural;
@@ -96,9 +99,10 @@ impl WeldTable {
         sides: &[SideUse],
     ) -> Result<Self, Error> {
         let mut table = Self::default();
-        let (ncurves, all_edge_uses) = trims.map_or((&[][..], &[][..]), |trims| {
-            (&trims.ncurves[..], &trims.edge_uses[..])
-        });
+        let (ncurves, all_edge_uses) = trims
+            .map_or((&[][..], &[][..]), |trims| {
+                (&trims.ncurves[..], &trims.edge_uses[..])
+            });
         let mut first = 0;
         for &count in ncurves {
             let count = usize::try_from(count)?;
@@ -159,6 +163,62 @@ impl WeldTable {
         self.ranges.push(range);
     }
 
+    /// Sets `weld.reverse` on every use, against the reference traversal
+    /// of its weld: the first use of that id, whichever face declared it.
+    ///
+    /// Without geometry -- a surface this cannot evaluate -- the uses are
+    /// left as they were declared, which is honest: a wrong direction
+    /// would fold the neighbouring face.
+    fn declare_directions(
+        &mut self,
+        surface: &NsiBrepSurfaceData,
+        geometry: Option<&FaceGeometry>,
+        references: &mut HashMap<i32, [Point3; 4]>,
+    ) {
+        let Some(geometry) = geometry else {
+            return;
+        };
+        let mut segment = 0;
+        for (use_index, &id) in self.ids.iter().enumerate() {
+            let count = self.segment_counts[use_index].max(0) as usize;
+            let first = segment;
+            segment += count;
+            // One segment is the measured case; a chain would need its
+            // pieces sampled end to end, which no export here produces.
+            if count != 1 {
+                log::warn!(
+                    "NSI BRep emitter: weld {id} has a {count}-segment use; \
+                     its direction is left as declared"
+                );
+                continue;
+            }
+            let samples = match self.kinds[first] {
+                "nurbs-side" => geometry.side_samples(
+                    surface,
+                    self.indices[first],
+                    self.ranges[first],
+                ),
+                _ => geometry.trim_samples(
+                    self.indices[first].max(0) as usize,
+                    self.ranges[first],
+                ),
+            };
+            let Some(samples) = samples else {
+                continue;
+            };
+            match references.get(&id) {
+                Some(reference) => {
+                    self.reverse[first] =
+                        i32::from(sample::runs_against(reference, &samples));
+                }
+                None => {
+                    references.insert(id, samples);
+                    self.reverse[first] = 0;
+                }
+            }
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
@@ -203,6 +263,12 @@ impl StepProcedural {
         if weld {
             nsi.create(&welds, "weld", None)?;
         }
+        // Every use of a weld must follow one reference traversal. The
+        // first use of each id sets it, in space; the rest say with
+        // `weld.reverse` whether they run against it. A renderer cannot
+        // work this out for a closed boundary, whose ends are one point,
+        // so the exporter owes it the answer.
+        let mut references: HashMap<i32, [Point3; 4]> = HashMap::default();
         for surface in &surfaces {
             let face = format!("{prefix}_face{}", surface.face_index);
             nsi.create(&face, nsi::NURBS, None)?;
@@ -212,8 +278,13 @@ impl StepProcedural {
                 set_trims(nsi, &face, trims)?;
             }
             if weld {
-                let table =
+                let mut table =
                     WeldTable::of(surface.trims.as_ref(), &surface.sides)?;
+                table.declare_directions(
+                    surface,
+                    FaceGeometry::of(surface, surface.trims.as_ref()).as_ref(),
+                    &mut references,
+                );
                 if !table.is_empty() {
                     nsi.connect(&welds, None, &face, "weld", None)?;
                     set_weld_table(nsi, &face, &table)?;
