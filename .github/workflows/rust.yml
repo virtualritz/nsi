@@ -47,7 +47,7 @@ jobs:
       - name: Test nsi-intermediate
         run: |
           cargo test -p nsi-intermediate --lib --features lua,gzip,zstd
-          cargo test -p nsi-intermediate --test classifier
+          cargo test -p nsi-intermediate --test classifier --test names
       - name: Test nsi-parse
         run: |
           cargo test -p nsi-parse --features lua,gzip,zstd,parallel \

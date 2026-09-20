@@ -266,7 +266,7 @@ nsi.SetAttribute("d",{name="imagefilename", data="caf\xE9.exr"})"#;
             .into_scene()
             .node("d")
             .unwrap()
-            .attribute("imagefilename")
+            .attribute("filename")
             .unwrap()
             .data,
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
@@ -410,7 +410,7 @@ fn a_superseded_same_time_call_survives_the_lua_round_trip() {
         scene
             .node("xf")
             .expect("node")
-            .sample_calls("transformationmatrix")
+            .sample_calls("matrix")
             .unwrap()
             .len(),
         3,
