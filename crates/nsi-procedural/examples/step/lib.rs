@@ -195,7 +195,7 @@ impl WeldTable {
             let count = self.segment_counts[use_index].max(0) as usize;
             let first = segment;
             segment += count;
-            let mut keep = |table: &mut Self, reverse: Option<i32>| {
+            let keep = |table: &mut Self, reverse: Option<i32>| {
                 table.ids.push(id);
                 table.segment_counts.push(count as i32);
                 for at in first..first + count {
