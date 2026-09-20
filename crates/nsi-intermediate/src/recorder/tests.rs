@@ -24,10 +24,15 @@ fn records_a_node_and_its_attribute() {
         .unwrap();
 
     let scene = r.scene();
-    assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
+    assert_eq!(scene.node("cam").unwrap().node_type(), "perspective-camera");
     assert_eq!(
-        scene.node("cam").unwrap().attribute("fov").unwrap().name,
-        "fov"
+        scene
+            .node("cam")
+            .unwrap()
+            .attribute("field-of-view")
+            .unwrap()
+            .name,
+        "field-of-view"
     );
 }
 

@@ -184,13 +184,18 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
                 out,
                 "nsi.Create({}, {})",
                 quoted_str(handle),
-                quoted_str(&node.node_type)
+                quoted_str(
+                    crate::names::legacy_node_type(&node.node_type)
+                        .unwrap_or(&node.node_type)
+                )
             )?;
         }
 
+        let node_type =
+            crate::names::reserved_node_type(handle).unwrap_or(&node.node_type);
         for arg in node.attribute_table().values() {
             write!(out, "nsi.SetAttribute({}, ", quoted_str(handle))?;
-            write_arg(out, handle, arg)?;
+            write_arg(out, handle, node_type, arg)?;
             writeln!(out, ")")?;
         }
 
@@ -203,7 +208,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
                     quoted_str(handle),
                     lua_number(*time)
                 )?;
-                write_arg(out, handle, arg)?;
+                write_arg(out, handle, node_type, arg)?;
                 writeln!(out, ")")?;
             }
         }
@@ -227,7 +232,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
         )?;
         for arg in &edge.args {
             write!(out, ", ")?;
-            write_arg(out, &edge.from, arg)?;
+            write_arg(out, &edge.from, "", arg)?;
         }
         writeln!(out, ")")?;
     }
@@ -239,6 +244,7 @@ pub fn write_lua<W: Write>(scene: &Scene, out: &mut W) -> Result<(), LuaError> {
 fn write_arg<W: Write>(
     out: &mut W,
     handle: &str,
+    node_type: &str,
     arg: &OwnedArgument,
 ) -> Result<(), LuaError> {
     // A Lua parameter table has room for `name`, `data`, `type` and
@@ -270,7 +276,11 @@ fn write_arg<W: Write>(
             type_tag: arg.type_tag,
         })?;
 
-    write!(out, "{{name={}", quoted_str(&arg.name))?;
+    // A `Scene` holds the naming-convention draft's names; the script
+    // carries the ones the renderer of today reads.
+    let name = crate::names::legacy_attribute(node_type, &arg.name)
+        .unwrap_or(&arg.name);
+    write!(out, "{{name={}", quoted_str(name))?;
     if arg.flags & NSIParamFlags::IsArray.bits() != 0 {
         write!(out, ", arraylength={}", arg.array_length)?;
     }
@@ -469,7 +479,7 @@ impl<W: Write> LuaWriter<W> {
         write!(out, "nsi.{call}({head}")?;
         for arg in args {
             write!(out, ", ")?;
-            write_arg(&mut *out, handle, &OwnedArgument::from_param(arg))?;
+            write_arg(&mut *out, handle, "", &OwnedArgument::from_param(arg))?;
         }
         writeln!(out, ")")?;
         Ok(())
@@ -604,7 +614,12 @@ impl<W: Write + Send> Nsi for LuaWriter<W> {
             if index > 0 {
                 write!(out, ", ")?;
             }
-            write_arg(&mut *out, "Evaluate", &OwnedArgument::from_param(arg))?;
+            write_arg(
+                &mut *out,
+                "Evaluate",
+                "",
+                &OwnedArgument::from_param(arg),
+            )?;
         }
         writeln!(out, ")")?;
         Ok(())
@@ -623,6 +638,7 @@ impl<W: Write + Send> Nsi for LuaWriter<W> {
         write_arg(
             &mut *out,
             "RenderControl",
+            "",
             &OwnedArgument::new(
                 "action",
                 Type::String,
@@ -637,7 +653,7 @@ impl<W: Write + Send> Nsi for LuaWriter<W> {
                 continue;
             }
             write!(out, ", ")?;
-            write_arg(&mut *out, "RenderControl", &owned)?;
+            write_arg(&mut *out, "RenderControl", "", &owned)?;
         }
         writeln!(out, ")")?;
         Ok(())

@@ -339,7 +339,7 @@ fn a_superseded_same_time_call_survives_the_stream_round_trip() {
         scene
             .node("xf")
             .expect("node")
-            .sample_calls("transformationmatrix")
+            .sample_calls("matrix")
             .unwrap()
             .len(),
         3,

@@ -218,6 +218,24 @@ impl Edge {
 /// itself is connected, so it classifies by destination like any other
 /// node-level connection.
 pub fn classify(from_attribute: Option<&str>, to_attribute: &str) -> EdgeKind {
+    classify_on("", from_attribute, to_attribute)
+}
+
+/// The same, knowing the node the connection is made *to*.
+///
+/// One destination name means two things: a connection into `objects`
+/// is the models being instanced on an `instances` node -- what
+/// `sourcemodels` named before the [naming-convention draft] -- and
+/// scene membership everywhere else. Both spellings of every renamed
+/// destination classify alike, so a scene reads the same whichever
+/// vocabulary wrote it.
+///
+/// [naming-convention draft]: https://nsi.readthedocs.io/en/latest/naming-convention.html
+pub fn classify_on(
+    to_node_type: &str,
+    from_attribute: Option<&str>,
+    to_attribute: &str,
+) -> EdgeKind {
     // A named source port is always a shader network edge, whatever the
     // destination is called.
     if let Some(from_port) = from_attribute.filter(|port| !port.is_empty()) {
@@ -227,7 +245,16 @@ pub fn classify(from_attribute: Option<&str>, to_attribute: &str) -> EdgeKind {
         };
     }
 
+    // The draft's spellings classify as the shipped ones they replace,
+    // so a scene reads the same whichever vocabulary wrote it.
+    let to_attribute =
+        crate::names::legacy_attribute(to_node_type, to_attribute)
+            .unwrap_or(to_attribute);
+
     match to_attribute {
+        // `objects` on an `instances` node was normalized to
+        // `sourcemodels` just above, the draft having renamed it there;
+        // anywhere else the word is scene membership.
         "objects" => EdgeKind::SceneMember,
         "geometryattributes" => EdgeKind::AttributeBinding,
         "surfaceshader" => EdgeKind::SurfaceShader,

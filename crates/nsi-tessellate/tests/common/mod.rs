@@ -110,15 +110,15 @@ pub fn cube_with(
                 .set_attribute(
                     &handle,
                     &[
-                    nsi::integer_i32_slice!("trimcurves.ncurves", &[4]),
-                    nsi::integer_i32_slice!("trimcurves.n", &[2; 4]),
-                    nsi::integer_i32_slice!("trimcurves.order", &[2; 4]),
-                    nsi::real_f32_slice!("trimcurves.knot", &knots),
-                    nsi::real_f32_slice!("trimcurves.min", &[0.0; 4]),
-                    nsi::real_f32_slice!("trimcurves.max", &[1.0; 4]),
-                    nsi::real_f32_slice!("trimcurves.u", &u),
-                    nsi::real_f32_slice!("trimcurves.v", &v),
-                    nsi::real_f32_slice!("trimcurves.w", &[1.0; 8]),
+                        nsi::integer_i32_slice!("trimcurves.ncurves", &[4]),
+                        nsi::integer_i32_slice!("trimcurves.n", &[2; 4]),
+                        nsi::integer_i32_slice!("trimcurves.order", &[2; 4]),
+                        nsi::real_f32_slice!("trimcurves.knot", &knots),
+                        nsi::real_f32_slice!("trimcurves.min", &[0.0; 4]),
+                        nsi::real_f32_slice!("trimcurves.max", &[1.0; 4]),
+                        nsi::real_f32_slice!("trimcurves.u", &u),
+                        nsi::real_f32_slice!("trimcurves.v", &v),
+                        nsi::real_f32_slice!("trimcurves.w", &[1.0; 8]),
                     ],
                 )
                 .unwrap();
@@ -152,7 +152,9 @@ pub fn cube_with(
                             .map(|range| {
                                 // Half 0 is the one at the smaller corner.
                                 let near_start = range[0] == 0.0;
-                                let half = i32::from(near_start != (start == a.min(b)));
+                                let half = i32::from(
+                                    near_start != (start == a.min(b)),
+                                );
                                 (edge * 2 + half, index, reverse, range)
                             })
                             .collect()
@@ -168,13 +170,20 @@ pub fn cube_with(
             let reverse: Vec<i32> = uses.iter().map(|use_| use_.2).collect();
             let ranges: Vec<f32> =
                 uses.iter().flat_map(|use_| use_.3).collect();
-            let kind = if sides[face] { "nurbs-side" } else { "trim-curve" };
+            let kind = if sides[face] {
+                "nurbs-side"
+            } else {
+                "trim-curve"
+            };
             recorder
                 .set_attribute(
                     &handle,
                     &[
                         nsi::integer_i32_slice!("weld.id", &ids),
-                        nsi::string_slice!("weld.kind", &vec![kind; uses.len()]),
+                        nsi::string_slice!(
+                            "weld.kind",
+                            &vec![kind; uses.len()]
+                        ),
                         nsi::integer_i32_slice!("weld.index", &indices)
                             .array_len(NonZeroUsize::new(3).unwrap()),
                         nsi::integer_i32_slice!("weld.reverse", &reverse),

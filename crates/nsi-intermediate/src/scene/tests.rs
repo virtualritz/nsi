@@ -40,7 +40,8 @@ fn arg(name: &str, value: f32) -> OwnedArgument {
 fn creates_and_finds_a_node() {
     let mut scene = Scene::default();
     scene.create("cam", "perspectivecamera").unwrap();
-    assert_eq!(scene.node("cam").unwrap().node_type(), "perspectivecamera");
+    // Created with the shipped name, stored as the draft's.
+    assert_eq!(scene.node("cam").unwrap().node_type(), "perspective-camera");
 }
 
 #[test]
@@ -51,7 +52,12 @@ fn set_attribute_overwrites_by_name() {
     scene.set_attribute("cam", vec![arg("fov", 60.0)]).unwrap();
     assert_eq!(scene.node("cam").unwrap().attributes().count(), 1);
     assert_eq!(
-        scene.node("cam").unwrap().attribute("fov").unwrap().data,
+        scene
+            .node("cam")
+            .unwrap()
+            .attribute("field-of-view")
+            .unwrap()
+            .data,
         OwnedData::F32(vec![60.0])
     );
 }

@@ -1,9 +1,15 @@
 //! One ɴsɪ `nurbs` node, read into `monstertruck` geometry.
 //!
-//! The attribute names are the ones 3Delight 2.9.210 reads -- `nu`,
-//! `uorder`, `uknot`, `P` or `Pw`, `trimcurves.*` -- with control points
-//! stored u-fastest and `Pw` premultiplied by its weight, `(w·x, w·y, w·z,
-//! w)`, the layout `monstertruck` uses too.
+//! The names are the ones a [`Scene`](nsi_intermediate::Scene) holds --
+//! the naming-convention draft's `u.count`, `u.order`, `u.knot`,
+//! `trim-curves.*` -- which is what an exporter writing 3Delight
+//! 2.9.210's `nu`, `uorder`, `trimcurves.*` is recorded as. `P` and `Pw`
+//! keep their names, being what a shader reads them as; the two rows
+//! the draft marks as API changes, `trimcurves.u`/`.v`/`.w` and
+//! `trimcurves.inside`, keep theirs too.
+//!
+//! Control points are stored u-fastest and `Pw` premultiplied by its
+//! weight, `(w·x, w·y, w·z, w)`, the layout `monstertruck` uses too.
 
 use monstertruck::{
     geometry::prelude::{
@@ -49,12 +55,12 @@ fn floats<'a>(node: &'a Node, name: &str) -> Option<&'a [f32]> {
 
 /// Why a `nurbs` node could not be read.
 pub(super) fn read(node: &Node) -> Result<Patch, String> {
-    let nu = integer(node, "nu").ok_or("missing `nu`")?;
-    let nv = integer(node, "nv").ok_or("missing `nv`")?;
-    let uorder = integer(node, "uorder").ok_or("missing `uorder`")?;
-    let vorder = integer(node, "vorder").ok_or("missing `vorder`")?;
-    let uknot = floats(node, "uknot").ok_or("missing `uknot`")?;
-    let vknot = floats(node, "vknot").ok_or("missing `vknot`")?;
+    let nu = integer(node, "u.count").ok_or("missing `u.count`")?;
+    let nv = integer(node, "v.count").ok_or("missing `v.count`")?;
+    let uorder = integer(node, "u.order").ok_or("missing `u.order`")?;
+    let vorder = integer(node, "v.order").ok_or("missing `v.order`")?;
+    let uknot = floats(node, "u.knot").ok_or("missing `u.knot`")?;
+    let vknot = floats(node, "v.knot").ok_or("missing `v.knot`")?;
     if uknot.len() != nu + uorder || vknot.len() != nv + vorder {
         return Err(format!(
             "knot vectors have {} and {} values, expected {} and {}",
@@ -117,8 +123,8 @@ pub(super) fn read(node: &Node) -> Result<Patch, String> {
             .map_or(default, |&value| value as f64)
     };
     let active = (
-        (bound("umin", domain.0.0), bound("umax", domain.0.1)),
-        (bound("vmin", domain.1.0), bound("vmax", domain.1.1)),
+        (bound("u.min", domain.0.0), bound("u.max", domain.0.1)),
+        (bound("v.min", domain.1.0), bound("v.max", domain.1.1)),
     );
     Ok(Patch {
         surface,
@@ -150,19 +156,29 @@ fn read_trims(
     node: &Node,
     (u_domain, v_domain): ((f64, f64), (f64, f64)),
 ) -> Result<Vec<Vec<TrimCurve>>, String> {
-    let Some(curves_per_loop) = integers(node, "trimcurves.ncurves") else {
+    let Some(curves_per_loop) = integers(node, "trim-curves.curve-count")
+    else {
         return Ok(Vec::new());
     };
-    let points =
-        integers(node, "trimcurves.n").ok_or("missing `trimcurves.n`")?;
-    let orders = integers(node, "trimcurves.order")
-        .ok_or("missing `trimcurves.order`")?;
+    // 3Delight 2.9.210 renders what lies inside a trim loop, and
+    // `trimcurves.inside` 0 asks for the outside instead. The mesher
+    // keeps the inside, so the outside would come back inverted; refuse
+    // it rather than tessellate the wrong side.
+    if integer(node, "trimcurves.inside") == Some(0) {
+        return Err("`trimcurves.inside` 0 -- the surface outside its \
+                    trim loops -- is not tessellated yet"
+            .to_string());
+    }
+    let points = integers(node, "trim-curves.point-count")
+        .ok_or("missing `trim-curves.point-count`")?;
+    let orders = integers(node, "trim-curves.order")
+        .ok_or("missing `trim-curves.order`")?;
     let knots =
-        floats(node, "trimcurves.knot").ok_or("missing `trimcurves.knot`")?;
+        floats(node, "trim-curves.knot").ok_or("missing `trim-curves.knot`")?;
     let minimum =
-        floats(node, "trimcurves.min").ok_or("missing `trimcurves.min`")?;
+        floats(node, "trim-curves.min").ok_or("missing `trim-curves.min`")?;
     let maximum =
-        floats(node, "trimcurves.max").ok_or("missing `trimcurves.max`")?;
+        floats(node, "trim-curves.max").ok_or("missing `trim-curves.max`")?;
     let u = floats(node, "trimcurves.u").ok_or("missing `trimcurves.u`")?;
     let v = floats(node, "trimcurves.v").ok_or("missing `trimcurves.v`")?;
     let w = floats(node, "trimcurves.w").ok_or("missing `trimcurves.w`")?;

@@ -221,6 +221,7 @@ mod error;
 mod handle;
 #[cfg(feature = "lua")]
 mod lua;
+mod names;
 mod owned;
 mod recorder;
 mod resolve;
@@ -238,10 +239,13 @@ pub(crate) type HashMap<K, V> = ahash::AHashMap<K, V>;
 /// The crate's hash set, hashed by `ahash`. See [`HashMap`].
 pub(crate) type HashSet<T> = ahash::AHashSet<T>;
 
-pub use edge::{Edge, EdgeKind, classify};
+pub use edge::{Edge, EdgeKind, classify, classify_on};
 pub use error::RecordError;
 #[cfg(feature = "lua")]
 pub use lua::{LuaError, LuaWriter, write_lua};
+pub use names::{
+    draft_attribute, draft_node_type, legacy_attribute, legacy_node_type,
+};
 pub use owned::{HostPointer, OwnedArgument, OwnedData};
 pub use recorder::{Recorder, RenderState};
 pub use resolve::{

@@ -359,12 +359,7 @@ fn a_non_utf8_string_value_survives_parsing() {
     use nsi_intermediate::OwnedData;
     let scene = recorder.into_scene();
     assert_eq!(
-        scene
-            .node("d")
-            .unwrap()
-            .attribute("imagefilename")
-            .unwrap()
-            .data,
+        scene.node("d").unwrap().attribute("filename").unwrap().data,
         OwnedData::String(vec![b"caf\xE9.exr".to_vec()]),
         "the byte is preserved, not replaced with U+FFFD",
     );

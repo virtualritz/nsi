@@ -4699,15 +4699,12 @@ fn motion_times_and_attribute_times_differ_on_an_unreadable_sample() {
         "the unreadable sample is not a motion time",
     );
     assert_eq!(
-        scene.attribute_times("xf", "transformationmatrix").unwrap(),
+        scene.attribute_times("xf", "matrix").unwrap(),
         vec![0.0, 1.0],
         "but it was recorded, and this reports what was recorded",
     );
     assert_eq!(
-        scene
-            .attribute_samples("xf", "transformationmatrix")
-            .unwrap()
-            .len(),
+        scene.attribute_samples("xf", "matrix").unwrap().len(),
         2,
         "with the arguments, so a caller that knows the type can judge",
     );

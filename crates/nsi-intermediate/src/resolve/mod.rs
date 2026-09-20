@@ -42,18 +42,21 @@ pub const IDENTITY: [f64; 16] = [
     0.0, 0.0, 0.0, 1.0,
 ];
 
+// The names here are the naming-convention draft's, which is what a
+// `Scene` stores whichever vocabulary wrote it. See spec 012.
+
 /// The ɴsɪ attribute holding a transform node's matrix.
-const TRANSFORMATION_MATRIX: &str = "transformationmatrix";
+const TRANSFORMATION_MATRIX: &str = "matrix";
 
 /// An `instances` node's per-instance matrices.
-const MATRICES: &str = "transformationmatrices";
+const MATRICES: &str = "matrices";
 
 /// Which prototype each instance draws.
-const MODEL_INDICES: &str = "modelindices";
+const MODEL_INDICES: &str = "object-index";
 
 /// `mesh` topology, which only means something as a pair.
-const FACE_VERTEX_COUNTS: &str = "nvertices";
-const HOLE_COUNTS: &str = "nholes";
+const FACE_VERTEX_COUNTS: &str = "vertex-count";
+const HOLE_COUNTS: &str = "hole-count";
 
 /// Positions, and ɴsɪ's indirect-lookup suffix.
 const POSITIONS: &str = "P";
@@ -62,20 +65,20 @@ const INDICES: &str = ".indices";
 // `outputlayer` attribute names, spelled once. The defaults they fall
 // back to live with `Scene::output_layer`, next to the specification
 // section that states them.
-const VARIABLE_NAME: &str = "variablename";
-const VARIABLE_SOURCE: &str = "variablesource";
-const LAYER_NAME: &str = "layername";
-const LAYER_TYPE: &str = "layertype";
-const SCALAR_FORMAT: &str = "scalarformat";
-const WITH_ALPHA: &str = "withalpha";
+const VARIABLE_NAME: &str = "variable-name";
+const VARIABLE_SOURCE: &str = "variable-source";
+const LAYER_NAME: &str = "layer-name";
+const LAYER_TYPE: &str = "layer-type";
+const SCALAR_FORMAT: &str = "scalar-format";
+const WITH_ALPHA: &str = "with-alpha";
 const DITHERING: &str = "dithering";
-const FILTER: &str = "filter";
-const FILTER_WIDTH: &str = "filterwidth";
-const COLOR_PROFILE: &str = "colorprofile";
-const SORT_KEY: &str = "sortkey";
+const FILTER: &str = "filter.name";
+const FILTER_WIDTH: &str = "filter.width";
+const COLOR_PROFILE: &str = "color-profile";
+const SORT_KEY: &str = "sort-key";
 
 /// The instances an `instances` node skips.
-const DISABLED: &str = "disabledinstances";
+const DISABLED: &str = "disabled-index";
 
 /// Why a scene could not be resolved into flat facts.
 ///

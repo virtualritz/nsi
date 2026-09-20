@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""Generates `src/names/table.rs` from the ɴsɪ naming-convention draft.
+
+Usage: names_from_draft.py <path to naming-convention.md>
+
+The draft's "Complete Attribute Mapping" is a table per node section.
+Rows that are not one shipped name mapped to one draft name -- new
+attributes, consolidations, the ᴏsʟ globals, the API arguments -- are
+counted and skipped; spec 012 says why.
+"""
+import re
+import sys
+from pathlib import Path
+
+# A draft section, and the shipped node types it covers. Empty means
+# every node.
+SECTIONS = {
+    "Common (All Nodes)": [""],
+    "`global` Node": ["global"],
+    "`root` Node": ["root"],
+    "`set` Node": ["set"],
+    "`mesh` Node": ["mesh"],
+    "`nurbs` Node": ["nurbs"],
+    "`t-nurcc` Node": ["t-nurcc"],
+    "`face-set` Node": ["faceset"],
+    "`curves` Node": ["curves"],
+    "`particles` Node": ["particles"],
+    "`procedural` Node": ["procedural"],
+    "`environment` Node": ["environment"],
+    "`shader` Node": ["shader"],
+    "`attributes` (geometry) Node": ["attributes"],
+    "`transform` Node": ["transform"],
+    "`instances` Node": ["instances"],
+    "`output-driver` Node": ["outputdriver"],
+    "`output-layer` Node": ["outputlayer"],
+    "`screen` Node": ["screen"],
+    "`vdb-particles` Node": ["vdbparticles"],
+    "`volume` Node": ["volume"],
+    "Camera Nodes (`perspective-camera`, `fisheye-camera`, "
+    "`cylindrical-camera`)": [
+        "perspectivecamera",
+        "fisheyecamera",
+        "cylindricalcamera",
+    ],
+}
+
+# The camera section scopes its rows further, with bold labels: `fov` is
+# `field-of-view` on two of the three and `field-of-view.vertical` on
+# the third.
+SUBSECTIONS = {
+    "**Common (all cameras):**": [
+        "perspectivecamera",
+        "fisheyecamera",
+        "cylindricalcamera",
+    ],
+    "**`perspective-camera`:**": ["perspectivecamera"],
+    "**`fisheye-camera`:**": ["fisheyecamera"],
+    "**`cylindrical-camera`:**": ["cylindricalcamera"],
+}
+
+# The node types the draft renames, as its section headers spell them.
+NODE_TYPES = {
+    "faceset": "face-set",
+    "outputdriver": "output-driver",
+    "outputlayer": "output-layer",
+    "vdbparticles": "vdb-particles",
+    "perspectivecamera": "perspective-camera",
+    "fisheyecamera": "fisheye-camera",
+    "cylindricalcamera": "cylindrical-camera",
+}
+
+# What a shader reads them as. The draft leaves the conflict open; spec
+# 012 takes its Option A and keeps them.
+OSL_GLOBALS = {"P", "N", "Pw", "Ng", "u", "v", "dPdu", "dPdv", "I"}
+
+API_SECTIONS = {
+    "`NSIBegin`",
+    "`NSIDelete`",
+    "`NSIConnect`",
+    "`NSIEvaluate`",
+    "`NSIRenderControl`",
+}
+
+
+def main(draft: Path) -> str:
+    section, subsection, pairs = None, None, []
+    counts = {
+        "api": 0,
+        "new": 0,
+        "api_change": 0,
+        "consolidation": 0,
+        "osl": 0,
+        "same": 0,
+    }
+    text = draft.read_text()
+    for line in text[text.index("## Complete Attribute Mapping") :].splitlines():
+        if line.startswith("### "):
+            section, subsection = line[4:].strip(), None
+            continue
+        if line.strip() in SUBSECTIONS:
+            subsection = SUBSECTIONS[line.strip()]
+            continue
+        row = re.match(r"\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.*?)\s*\|\s*$", line)
+        if not row or set(line) <= set("| -"):
+            continue
+        shipped, drafted, note = row.group(1), row.group(2), row.group(3)
+        if shipped.strip("` ") in ("Current", "Legacy"):
+            continue
+        if section in API_SECTIONS:
+            counts["api"] += 1
+            continue
+        if shipped.strip() == "--":
+            counts["new"] += 1
+            continue
+        # A row the draft marks as an API change is not a rename: its
+        # values change too. `trimcurves.inside` 1 keeps the surface
+        # inside a loop, while `trim-curves.hole` 1 removes it, one
+        # value per loop. Aliasing the two would invert the trim.
+        if "API change" in note:
+            counts["api_change"] += 1
+            continue
+        names = re.findall(r"`([^`]+)`", shipped)
+        replacements = re.findall(r"`([^`]+)`", drafted)
+        if len(names) != 1 or len(replacements) != 1:
+            counts["consolidation"] += 1
+            continue
+        if names[0] in OSL_GLOBALS:
+            counts["osl"] += 1
+            continue
+        if names[0] == replacements[0]:
+            counts["same"] += 1
+            continue
+        for node in subsection or SECTIONS[section]:
+            pairs.append((node, names[0], replacements[0]))
+
+    pairs.sort()
+    print(f"{len(pairs)} pairs, skipped {counts}", file=sys.stderr)
+    rows = "\n".join(
+        f'    ("{node}", "{legacy}", "{draft}"),' for node, legacy, draft in pairs
+    )
+    types = "\n".join(
+        f'    ("{legacy}", "{draft}"),' for legacy, draft in sorted(NODE_TYPES.items())
+    )
+    return f"""//! The ɴsɪ naming-convention draft's mapping, as a table.
+//!
+//! Generated by `tools/names_from_draft.py` from the draft's *Complete
+//! Attribute Mapping*. Do not edit: regenerate it.
+//!
+//! [The draft]: https://nsi.readthedocs.io/en/latest/naming-convention.html
+
+/// Per row: the shipped node type the row belongs to -- empty for every
+/// node -- the shipped name, and the draft's.
+pub(super) const ATTRIBUTES: &[(&str, &str, &str)] = &[
+{rows}
+];
+
+/// The node types the draft renames: shipped, then the draft's.
+pub(super) const NODE_TYPES: &[(&str, &str)] = &[
+{types}
+];
+"""
+
+
+if __name__ == "__main__":
+    Path("src/names/table.rs").write_text(main(Path(sys.argv[1])))

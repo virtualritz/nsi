@@ -51,6 +51,8 @@ ustr_handles = ["dep:ustr"]
 
 [dependencies]
 ahash = "0.8"
+# Warns, once per name, about a deprecated attribute spelling.
+log = "0.4"
 indexmap = "2"
 parking_lot = "0.12"
 ustr = { version = "1", optional = true }

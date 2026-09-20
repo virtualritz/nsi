@@ -37,7 +37,7 @@ Directory numbers reflect creation order, not coverage order.
 | `009-procedurals` | Procedurals in Rust: a trait and an export macro, standalone through C or compiled into a Rust renderer | active; T8, T9 partial |
 | `010-parallel-parse` | Parsing a stream in parallel: phases per segment, barriers between; connection order rendered, 3Delight's serial context measured | active; T8 (parallel scan) open |
 | `011-type-names` | Type names by role, components and machine type; `hpoint` sent, parsed and written | done |
-| `012-attribute-vocabulary` | Draft attribute and node names as the default, legacy names deprecated | planned |
+| `012-attribute-vocabulary` | Draft attribute and node names as the default, legacy names deprecated | in progress |
 | `013-welds` | Weld declarations in `nsi-intermediate`: parse, validate, group by `(weld, id)` | active; T7, T8 open |
 
 `003` arrived with the crate, which was extracted from `nsi-mitsuba`

@@ -4,7 +4,9 @@
 mod common;
 
 use common::{Facing, cube, cube_with};
+use nsi_intermediate::{OwnedArgument, OwnedData};
 use nsi_tessellate::{NurbsOptions, nurbs_meshes};
+use nsi_trait::Type;
 
 #[test]
 fn a_welded_cube_is_watertight() {
@@ -100,4 +102,38 @@ fn ranges_weld_parts_of_sides_and_curves() {
     let (welded, unwelded) = open_edges(MIXED, true, 24);
     assert_eq!(welded, 0, "every triangle edge has a partner");
     assert!(unwelded > 0, "unwelded borders stay open");
+}
+
+/// `trimcurves.inside` 0 asks for the surface *outside* the trim loops.
+/// The mesher keeps the inside, so the patch is refused rather than
+/// tessellated the wrong way round. The draft renames the attribute to
+/// `trim-curves.hole`, which is per loop and inverted, so the two are
+/// not aliases and a scene carries whichever it was given.
+#[test]
+fn keeping_the_outside_of_a_trim_is_refused() {
+    let mut scene = cube(false);
+    scene
+        .set_attribute(
+            "face0",
+            vec![OwnedArgument::new(
+                "trimcurves.inside",
+                Type::IntegerI32,
+                1,
+                0,
+                OwnedData::I32(vec![0]),
+            )],
+        )
+        .unwrap();
+
+    let tessellation = nurbs_meshes(&scene, &NurbsOptions::default());
+
+    assert_eq!(tessellation.meshes.len(), 5, "the other five are meshed");
+    assert!(
+        tessellation
+            .problems
+            .iter()
+            .any(|problem| problem.contains("trimcurves.inside")),
+        "{:?}",
+        tessellation.problems
+    );
 }

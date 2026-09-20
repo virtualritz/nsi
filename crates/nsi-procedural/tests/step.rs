@@ -163,15 +163,17 @@ fn every_trim_curve_ends_inside_its_domain() {
         for weld in [0, 1] {
             let scene = record(&path, weld);
             for face in faces(&scene) {
-                let [umin, umax, vmin, vmax] = ["umin", "umax", "vmin", "vmax"]
-                    .map(|name| floats(&scene, face, name)[0]);
+                let [umin, umax, vmin, vmax] =
+                    ["u.min", "u.max", "v.min", "v.max"]
+                        .map(|name| floats(&scene, face, name)[0]);
                 let (u, v, w) = (
                     floats(&scene, face, "trimcurves.u"),
                     floats(&scene, face, "trimcurves.v"),
                     floats(&scene, face, "trimcurves.w"),
                 );
                 let mut first = 0;
-                for &count in integers(&scene, face, "trimcurves.n") {
+                for &count in integers(&scene, face, "trim-curves.point-count")
+                {
                     // A clamped curve passes through its end points.
                     for point in [first, first + count as usize - 1] {
                         let (u, v) = (u[point] / w[point], v[point] / w[point]);
@@ -222,7 +224,7 @@ fn untrimmed_faces_weld_by_their_natural_sides() {
                 scene
                     .node(face)
                     .unwrap()
-                    .attribute("trimcurves.ncurves")
+                    .attribute("trim-curves.curve-count")
                     .is_none()
             })
             .collect();

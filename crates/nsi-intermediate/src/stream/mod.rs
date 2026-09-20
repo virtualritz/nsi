@@ -278,7 +278,8 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
     for args in scene.evaluations() {
         write!(out, "Evaluate")?;
         for arg in args {
-            write_arg(out, arg)?;
+            // An `Evaluate` argument sits on no node.
+            write_arg(out, "", arg)?;
         }
         writeln!(out)?;
     }
@@ -291,13 +292,20 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
                 out,
                 "Create {} {}",
                 quoted_str(handle),
-                quoted_str(&node.node_type)
+                quoted_str(
+                    crate::names::legacy_node_type(&node.node_type)
+                        .unwrap_or(&node.node_type)
+                )
             )?;
         }
 
+        // A `Scene` holds the naming-convention draft's names; the
+        // stream carries the ones the renderer of today reads.
+        let node_type =
+            crate::names::reserved_node_type(handle).unwrap_or(&node.node_type);
         for arg in node.attribute_table().values() {
             writeln!(out, "SetAttribute {}", quoted_str(handle))?;
-            write_arg(out, arg)?;
+            write_arg(out, node_type, arg)?;
         }
 
         // Every call, in the order it arrived. Replaying the
@@ -314,7 +322,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
                     quoted_str(handle),
                     format_f64(*time)
                 )?;
-                write_arg(out, arg)?;
+                write_arg(out, node_type, arg)?;
             }
         }
     }
@@ -337,7 +345,7 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
         // ɴsɪ emits connection arguments as indented parameter lines
         // under the `Connect`, exactly as for `SetAttribute`.
         for arg in &edge.args {
-            write_arg(out, arg)?;
+            write_arg(out, "", arg)?;
         }
     }
 
@@ -345,7 +353,14 @@ pub fn write_stream<W: Write>(scene: &Scene, out: &mut W) -> io::Result<()> {
 }
 
 /// Write one attribute line: two-space indent, name, type, count, data.
-fn write_arg<W: Write>(out: &mut W, arg: &OwnedArgument) -> io::Result<()> {
+///
+/// `node_type` is the node the attribute sits on, whose rows say which
+/// shipped name the draft's replaced.
+fn write_arg<W: Write>(
+    out: &mut W,
+    node_type: &str,
+    arg: &OwnedArgument,
+) -> io::Result<()> {
     // A host pointer has no stream representation. 3Delight omits the
     // whole parameter line, keeping the statement that carried it, so
     // writing a header with no value would be malformed where 3Delight
@@ -357,7 +372,10 @@ fn write_arg<W: Write>(out: &mut W, arg: &OwnedArgument) -> io::Result<()> {
     write!(
         out,
         "  {} {} {} ",
-        quoted_str(&arg.name),
+        quoted_str(
+            crate::names::legacy_attribute(node_type, &arg.name)
+                .unwrap_or(&arg.name)
+        ),
         quoted_str(&type_name(arg)),
         element_count(arg)
     )?;
@@ -566,7 +584,9 @@ impl<W: Write> StreamWriter<W> {
             if skip == Some(owned.name.as_str()) {
                 continue;
             }
-            write_arg(&mut *out, &owned)?;
+            // A filter writes the calls it is handed, whichever
+            // vocabulary they are in.
+            write_arg(&mut *out, "", &owned)?;
         }
         Ok(())
     }

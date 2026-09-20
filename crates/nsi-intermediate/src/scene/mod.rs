@@ -6,7 +6,7 @@
 
 use crate::{
     ALL, Edge, EdgeKind, HashMap, HashSet, OwnedArgument, RecordError,
-    classify,
+    classify_on,
     handle::{self, Handle},
 };
 use core::{cmp::Ordering, mem};
@@ -1026,6 +1026,16 @@ impl Scene {
             });
         }
 
+        // A scene speaks the naming-convention draft's vocabulary,
+        // whichever one created it.
+        let node_type = match crate::names::draft_node_type(node_type) {
+            Some(draft) => {
+                crate::names::warn_deprecated(node_type, draft);
+                draft
+            }
+            None => node_type,
+        };
+
         match handle::map_get(&self.nodes, handle) {
             Some(existing) if existing.node_type() != node_type => {
                 Err(RecordError::TypeMismatch {
@@ -1218,7 +1228,11 @@ impl Scene {
             .nodes
             .get_mut(&node_handle)
             .expect("node_mut found or created it");
-        for arg in args {
+        let node_type = crate::names::reserved_node_type(handle)
+            .unwrap_or(node.node_type())
+            .to_string();
+        for mut arg in args {
+            crate::names::to_draft(&node_type, &mut arg);
             let name = handle::handle(&arg.name);
             // Only when the node has samples: reaching for the table
             // through `sample_table_mut` would allocate one for every
@@ -1286,7 +1300,11 @@ impl Scene {
             .nodes
             .get_mut(&node_handle)
             .expect("node_mut found or created it");
-        for arg in args {
+        let node_type = crate::names::reserved_node_type(handle)
+            .unwrap_or(node.node_type())
+            .to_string();
+        for mut arg in args {
+            crate::names::to_draft(&node_type, &mut arg);
             let name = handle::handle(&arg.name);
             // ɴsɪ: setting at a time "replaces any value previously set
             // by NSISetAttribute", so the static value goes.
@@ -1312,6 +1330,18 @@ impl Scene {
     /// Remove one attribute by name, from static and every time sample.
     /// Silent when absent, as ɴsɪ is.
     pub fn delete_attribute(&mut self, handle: &str, name: &str) {
+        // A delete names an attribute, so it takes the shipped
+        // vocabulary as a set does.
+        let node_type = crate::names::reserved_node_type(handle)
+            .or_else(|| {
+                handle::map_get(&self.nodes, handle)
+                    .map(|node| node.node_type())
+            })
+            .unwrap_or_default()
+            .to_string();
+        let name = crate::names::draft_attribute(&node_type, name)
+            .inspect(|draft| crate::names::warn_deprecated(name, draft))
+            .unwrap_or(name);
         // Recorded whether or not it was set: ɴsɪ is silent about
         // deleting an absent attribute, and a consumer asking "what
         // should I look at again" is not harmed by one extra name.
@@ -1363,7 +1393,11 @@ impl Scene {
         to_attribute: &str,
         args: Vec<OwnedArgument>,
     ) -> Result<(), RecordError> {
-        let kind = classify(from_attribute, to_attribute);
+        let kind = classify_on(
+            self.node(to).map_or("", Node::node_type),
+            from_attribute,
+            to_attribute,
+        );
 
         // ɴsɪ: "the nodes on which the connection is performed must
         // exist." `.root` and `.global` are reserved and need no
@@ -1453,7 +1487,11 @@ impl Scene {
         let kind = if to_attribute == ALL {
             None
         } else {
-            Some(classify(from_attribute, to_attribute))
+            Some(classify_on(
+                self.node(to).map_or("", Node::node_type),
+                from_attribute,
+                to_attribute,
+            ))
         };
 
         let from_port = from_attribute.unwrap_or_default();

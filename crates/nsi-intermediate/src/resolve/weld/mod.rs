@@ -282,12 +282,12 @@ impl Boundaries {
         };
         match node.node_type() {
             "nurbs" => Self::Nurbs {
-                curves_per_loop: counts("trimcurves.ncurves")
+                curves_per_loop: counts("trim-curves.curve-count")
                     .unwrap_or_default(),
             },
             "mesh" => {
-                let vertices = counts("nvertices").unwrap_or_default();
-                let loops_per_face = match counts("nholes") {
+                let vertices = counts("vertex-count").unwrap_or_default();
+                let loops_per_face = match counts("hole-count") {
                     // With holes, each face takes its outer perimeter
                     // plus one count per hole.
                     Some(holes) => {
