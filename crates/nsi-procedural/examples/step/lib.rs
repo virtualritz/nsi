@@ -63,11 +63,17 @@ pub mod loader;
 mod sample;
 
 use brep::{NsiBrepSurfaceData, NsiBrepTrimData, SideUse, TrimLoopPolicy};
-use monstertruck::geometry::prelude::Point3;
+use monstertruck::{
+    step::load::step_geometry::Curve3D, topology::compress::CompressedEdge,
+};
 use nsi_ffi_wrap as nsi;
 use nsi_procedural::{Error, Params, Procedural, Report};
 use sample::FaceGeometry;
-use std::{collections::HashMap, num::NonZeroUsize, path::Path};
+use std::{num::NonZeroUsize, path::Path};
+
+/// How far a use may sit from its edge's own traversal and still be
+/// declared: a rounding, not a different anchor. In scene units.
+const ANCHOR_TOLERANCE: f64 = 1.0e-4;
 
 /// The STEP procedural.
 pub struct StepProcedural;
@@ -164,7 +170,12 @@ impl WeldTable {
     }
 
     /// Sets `weld.reverse` on every use, against the reference traversal
-    /// of its weld: the first use of that id, whichever face declared it.
+    /// of its weld.
+    ///
+    /// That traversal is the shared edge's own curve: the one thing both
+    /// faces have in common, and for a closed edge an anchor at its
+    /// vertex rather than wherever a face's trim happens to start. A use
+    /// that cannot follow it is dropped rather than declared.
     ///
     /// Without geometry -- a surface this cannot evaluate -- the uses are
     /// left as they were declared, which is honest: a wrong direction
@@ -173,16 +184,28 @@ impl WeldTable {
         &mut self,
         surface: &NsiBrepSurfaceData,
         geometry: Option<&FaceGeometry>,
-        references: &mut HashMap<i32, [Point3; 4]>,
+        edges: &[CompressedEdge<Curve3D>],
     ) {
         let Some(geometry) = geometry else {
             return;
         };
+        let mut kept = Self::default();
         let mut segment = 0;
         for (use_index, &id) in self.ids.iter().enumerate() {
             let count = self.segment_counts[use_index].max(0) as usize;
             let first = segment;
             segment += count;
+            let mut keep = |table: &mut Self, reverse: Option<i32>| {
+                table.ids.push(id);
+                table.segment_counts.push(count as i32);
+                for at in first..first + count {
+                    table.kinds.push(self.kinds[at]);
+                    table.indices.push(self.indices[at]);
+                    table.reverse.push(reverse.unwrap_or(self.reverse[at]));
+                    table.ranges.push(self.ranges[at]);
+                }
+            };
+
             // One segment is the measured case; a chain would need its
             // pieces sampled end to end, which no export here produces.
             if count != 1 {
@@ -190,33 +213,51 @@ impl WeldTable {
                     "NSI BRep emitter: weld {id} has a {count}-segment use; \
                      its direction is left as declared"
                 );
+                keep(&mut kept, None);
                 continue;
             }
-            let samples = match self.kinds[first] {
-                "nurbs-side" => geometry.side_samples(
+            let traversal = match self.kinds[first] {
+                "nurbs-side" => geometry.side(
                     surface,
                     self.indices[first],
                     self.ranges[first],
                 ),
-                _ => geometry.trim_samples(
+                _ => geometry.trim(
                     self.indices[first].max(0) as usize,
                     self.ranges[first],
                 ),
             };
-            let Some(samples) = samples else {
+            let reference = usize::try_from(id)
+                .ok()
+                .and_then(|edge| edges.get(edge))
+                .map(sample::edge);
+            let (Some(traversal), Some(reference)) = (traversal, reference)
+            else {
+                keep(&mut kept, None);
                 continue;
             };
-            match references.get(&id) {
-                Some(reference) => {
-                    self.reverse[first] =
-                        i32::from(sample::runs_against(reference, &samples));
-                }
-                None => {
-                    references.insert(id, samples);
-                    self.reverse[first] = 0;
-                }
+
+            // The anchor is the edge's own start, which on a closed edge
+            // is its vertex. A use that begins elsewhere describes the
+            // same locus from a different place, which the contract asks
+            // an exporter to re-express as two ranges; this one says so
+            // rather than claim a traversal it has not written.
+            if reference.is_closed(ANCHOR_TOLERANCE)
+                && !traversal.anchors_with(&reference, ANCHOR_TOLERANCE)
+            {
+                log::warn!(
+                    "NSI BRep emitter: a use of weld {id} starts away from \
+                     its edge's anchor; the declaration is not conforming"
+                );
             }
+            keep(
+                &mut kept,
+                Some(i32::from(
+                    traversal.runs_against(&reference, ANCHOR_TOLERANCE),
+                )),
+            );
         }
+        *self = kept;
     }
 
     pub fn is_empty(&self) -> bool {
@@ -268,7 +309,7 @@ impl StepProcedural {
         // `weld.reverse` whether they run against it. A renderer cannot
         // work this out for a closed boundary, whose ends are one point,
         // so the exporter owes it the answer.
-        let mut references: HashMap<i32, [Point3; 4]> = HashMap::default();
+
         for surface in &surfaces {
             let face = format!("{prefix}_face{}", surface.face_index);
             nsi.create(&face, nsi::NURBS, None)?;
@@ -283,7 +324,7 @@ impl StepProcedural {
                 table.declare_directions(
                     surface,
                     FaceGeometry::of(surface, surface.trims.as_ref()).as_ref(),
-                    &mut references,
+                    &shell.shell.edges,
                 );
                 if !table.is_empty() {
                     nsi.connect(&welds, None, &face, "weld", None)?;
