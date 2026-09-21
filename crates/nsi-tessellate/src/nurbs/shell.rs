@@ -77,6 +77,9 @@ struct Piece {
     /// as it is stored, in loop order -- runs against that weld's
     /// reference traversal.
     weld: Option<Welding>,
+    /// Which part of its weld's boundary it is: 0, unless the uses of a
+    /// closed weld start at different points and it was split there.
+    part: usize,
 }
 
 /// Tessellates every `nurbs` node in `scene`, welding what its weld
@@ -282,7 +285,11 @@ fn push_piece(
         .and_then(|last| last.curve.try_concat(&curve).ok());
     match (joined, pieces.last_mut()) {
         (Some(joined), Some(last)) => last.curve = joined,
-        _ => pieces.push(Piece { curve, weld }),
+        _ => pieces.push(Piece {
+            curve,
+            weld,
+            part: 0,
+        }),
     }
 }
 
@@ -383,11 +390,12 @@ impl Slots {
     fn find(&mut self, slot: usize) -> usize {
         let parent = self.0[slot];
         if parent == slot {
-            return slot;
+            slot
+        } else {
+            let root = self.find(parent);
+            self.0[slot] = root;
+            root
         }
-        let root = self.find(parent);
-        self.0[slot] = root;
-        root
     }
 
     fn union(&mut self, a: usize, b: usize) {
@@ -410,14 +418,21 @@ fn mesh_shell(
     // Per edge: its curve, its start and end slots, and whether the use
     // that made it runs against its weld's reference traversal.
     let mut edges: Vec<(EdgeCurve, usize, usize, bool)> = Vec::new();
-    let mut edge_of_weld: HashMap<(String, u32), usize> = HashMap::default();
+    let mut edge_of_weld: HashMap<((String, u32), usize), usize> =
+        HashMap::default();
     let mut uses_of_edge: Vec<usize> = Vec::new();
     // Per face, per loop, per piece: (edge, orientation, face-local trim).
     let mut faces: Vec<Vec<Vec<(usize, bool, EdgeCurve)>>> = Vec::new();
 
-    for (handle, patch) in &patches {
+    let mut face_pieces: Vec<Vec<Vec<Piece>>> = patches
+        .iter()
+        .map(|(handle, patch)| pieces(handle, patch, welded))
+        .collect();
+    split_at_anchors(&patches, &mut face_pieces, options.tolerance);
+
+    for ((_, patch), loops) in patches.iter().zip(face_pieces) {
         let mut face_loops = Vec::new();
-        for loop_pieces in pieces(handle, patch, welded) {
+        for loop_pieces in loops {
             // Each piece gets a start and end slot; consecutive pieces
             // share their junction, and the last closes onto the first.
             let piece_slots: Vec<(usize, usize)> = loop_pieces
@@ -438,7 +453,9 @@ fn mesh_shell(
                 let existing = piece
                     .weld
                     .as_ref()
-                    .and_then(|(key, _)| edge_of_weld.get(key))
+                    .and_then(|(key, _)| {
+                        edge_of_weld.get(&(key.clone(), piece.part))
+                    })
                     .copied();
                 let (edge, orientation) = match existing {
                     Some(edge) => {
@@ -475,7 +492,7 @@ fn mesh_shell(
                         uses_of_edge.push(0);
                         let edge = edges.len() - 1;
                         if let Some((key, _)) = piece.weld {
-                            edge_of_weld.insert(key, edge);
+                            edge_of_weld.insert((key, piece.part), edge);
                         }
                         (edge, true)
                     }
@@ -622,35 +639,227 @@ fn mesh_shell(
 /// so identity still comes from the weld declarations; the distance only
 /// undoes the rounding.
 fn snap_boundary(mesh: &mut PolygonMesh, samples: &[Point3], tolerance: f64) {
-    if samples.is_empty() {
-        return;
-    }
-    let mut edge_uses: HashMap<(usize, usize), usize> = HashMap::default();
-    for [a, b, c] in mesh.faces().triangle_iter() {
-        for (from, to) in [(a.pos, b.pos), (b.pos, c.pos), (c.pos, a.pos)] {
-            *edge_uses.entry((from.min(to), from.max(to))).or_default() += 1;
+    // A face with no welded edges has nothing to snap to.
+    if !samples.is_empty() {
+        let mut edge_uses: HashMap<(usize, usize), usize> = HashMap::default();
+        for [a, b, c] in mesh.faces().triangle_iter() {
+            for (from, to) in [(a.pos, b.pos), (b.pos, c.pos), (c.pos, a.pos)] {
+                *edge_uses.entry((from.min(to), from.max(to))).or_default() +=
+                    1;
+            }
+        }
+        let boundary: HashSet<usize> = edge_uses
+            .into_iter()
+            .filter(|&(_, uses)| uses == 1)
+            .flat_map(|((a, b), _)| [a, b])
+            .collect();
+        let positions = mesh.positions_mut();
+        for (vertex, position) in positions.iter_mut().enumerate() {
+            let reach = if boundary.contains(&vertex) {
+                tolerance
+            } else {
+                0.01 * tolerance
+            };
+            let point = *position;
+            if let Some(&nearest) = samples.iter().min_by(|&&a, &&b| {
+                distance2(point, a).total_cmp(&distance2(point, b))
+            }) && distance2(point, nearest) <= reach * reach
+            {
+                *position = nearest;
+            }
         }
     }
-    let boundary: HashSet<usize> = edge_uses
-        .into_iter()
-        .filter(|&(_, uses)| uses == 1)
-        .flat_map(|((a, b), _)| [a, b])
+}
+
+/// Splits the uses of every closed weld whose uses start at different
+/// points, each at every other use's start.
+///
+/// The contract lets a closed weld's uses start anywhere -- a periodic
+/// patch's side starts at its seam, wherever the source edge began -- and
+/// leaves matching them to the renderer. Left whole, the shared edge has
+/// one face's start as its only vertex, and the other face's start lands
+/// part way along it: one point the two do not share, and a crack. Split
+/// at every start, each use is a run of open arcs whose ends both faces
+/// hold. Which arc is which is found by position, which is the renderer's
+/// to establish once the declaration has said the two are one boundary.
+fn split_at_anchors(
+    patches: &[(&str, Patch)],
+    faces: &mut [Vec<Vec<Piece>>],
+    tolerance: f64,
+) {
+    let limit = tolerance * tolerance;
+    let local = |face: usize, piece: &Piece| {
+        ParameterCurve::new(
+            piece.curve.clone(),
+            patches[face].1.surface.clone(),
+        )
+    };
+
+    // Every welded use: its weld, the face it lies on, where it starts,
+    // and whether it comes back there.
+    let uses: Vec<((String, u32), usize, Point3, bool)> = faces
+        .iter()
+        .enumerate()
+        .flat_map(|(face, loops)| {
+            loops.iter().flatten().filter_map(move |piece| {
+                piece.weld.as_ref().map(|(key, _)| (face, piece, key))
+            })
+        })
+        .map(|(face, piece, key)| {
+            let curve = local(face, piece);
+            let (t0, t1) = curve.range_tuple();
+            let (start, end) = (point_at(&curve, t0), point_at(&curve, t1));
+            (key.clone(), face, start, distance2(start, end) <= limit)
+        })
         .collect();
-    let positions = mesh.positions_mut();
-    for (vertex, position) in positions.iter_mut().enumerate() {
-        let reach = if boundary.contains(&vertex) {
-            tolerance
+
+    // The welds whose uses are all closed and do not all start at one
+    // point: their distinct starts, and the midpoints of the arcs between
+    // them along the first use.
+    let plans: HashMap<(String, u32), (Vec<Point3>, Vec<Point3>)> = uses
+        .iter()
+        .map(|(key, ..)| key)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .filter_map(|key| {
+            let of_weld: Vec<_> =
+                uses.iter().filter(|(other, ..)| other == key).collect();
+            let anchors = of_weld.iter().fold(
+                Vec::new(),
+                |mut anchors: Vec<Point3>, (_, _, start, _)| {
+                    if anchors
+                        .iter()
+                        .all(|anchor| distance2(*anchor, *start) > limit)
+                    {
+                        anchors.push(*start);
+                    }
+                    anchors
+                },
+            );
+            let (_, face, ..) = of_weld[0];
+            let splits =
+                anchors.len() > 1 && of_weld.iter().all(|(.., closed)| *closed);
+            faces[*face]
+                .iter()
+                .flatten()
+                .find(|piece| {
+                    piece.weld.as_ref().is_some_and(|(other, _)| other == key)
+                })
+                .filter(|_| splits)
+                .map(|first| {
+                    let curve = local(*face, first);
+                    let midpoints = arcs(&curve, &anchors, limit)
+                        .iter()
+                        .map(|&(from, to)| point_at(&curve, 0.5 * (from + to)))
+                        .collect();
+                    (key.clone(), (anchors, midpoints))
+                })
+        })
+        .collect();
+
+    faces.iter_mut().enumerate().for_each(|(face, loops)| {
+        loops.iter_mut().for_each(|loop_pieces| {
+            *loop_pieces = loop_pieces
+                .drain(..)
+                .flat_map(|piece| {
+                    match piece
+                        .weld
+                        .as_ref()
+                        .and_then(|(key, _)| plans.get(key))
+                    {
+                        Some((anchors, midpoints)) => split_piece(
+                            &local(face, &piece),
+                            piece,
+                            anchors,
+                            midpoints,
+                            limit,
+                        ),
+                        None => vec![piece],
+                    }
+                })
+                .collect();
+        });
+    });
+}
+
+/// `piece` as the arcs between `anchors`, each tagged with the part of
+/// its weld whose midpoint -- among `midpoints` -- lies nearest its own.
+fn split_piece(
+    curve: &EdgeCurve,
+    piece: Piece,
+    anchors: &[Point3],
+    midpoints: &[Point3],
+    limit: f64,
+) -> Vec<Piece> {
+    let mut rest = piece.curve;
+    arcs(curve, anchors, limit)
+        .into_iter()
+        .map(|(from, to)| {
+            // What lies before `to` is this arc; the rest goes on.
+            let arc = if to < rest.range_tuple().1 {
+                let tail = rest.cut(to);
+                std::mem::replace(&mut rest, tail)
+            } else {
+                rest.clone()
+            };
+            let middle = point_at(curve, 0.5 * (from + to));
+            let part = midpoints
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    distance2(**a, middle).total_cmp(&distance2(**b, middle))
+                })
+                .map_or(0, |(part, _)| part);
+            Piece {
+                curve: arc,
+                weld: piece.weld.clone(),
+                part,
+            }
+        })
+        .collect()
+}
+
+/// The arcs of the closed `curve` between the given points, as parameter
+/// intervals in its own order.
+fn arcs(curve: &EdgeCurve, points: &[Point3], limit: f64) -> Vec<(f64, f64)> {
+    let (t0, t1) = curve.range_tuple();
+    let start = point_at(curve, t0);
+    let mut cuts: Vec<f64> = points
+        .iter()
+        .filter(|point| distance2(**point, start) > limit)
+        .map(|point| nearest_parameter(curve, *point))
+        .filter(|&t| t0 < t && t < t1)
+        .collect();
+    cuts.sort_by(f64::total_cmp);
+    let bounds: Vec<f64> = std::iter::once(t0)
+        .chain(cuts)
+        .chain(std::iter::once(t1))
+        .collect();
+    bounds.windows(2).map(|pair| (pair[0], pair[1])).collect()
+}
+
+/// The parameter of `curve` nearest `point`: the nearest of evenly spaced
+/// samples, refined by ternary search around it.
+fn nearest_parameter(curve: &EdgeCurve, point: Point3) -> f64 {
+    const SAMPLES: usize = 64;
+    let (t0, t1) = curve.range_tuple();
+    let step = (t1 - t0) / SAMPLES as f64;
+    let distance = |t: f64| distance2(point_at(curve, t), point);
+    let nearest = (0..=SAMPLES)
+        .map(|at| t0 + at as f64 * step)
+        .min_by(|&a, &b| distance(a).total_cmp(&distance(b)))
+        .unwrap_or(t0);
+    let (mut low, mut high) =
+        ((nearest - step).max(t0), (nearest + step).min(t1));
+    for _ in 0..64 {
+        let third = (high - low) / 3.0;
+        if distance(low + third) < distance(high - third) {
+            high -= third;
         } else {
-            0.01 * tolerance
-        };
-        let point = *position;
-        if let Some(&nearest) = samples.iter().min_by(|&&a, &&b| {
-            distance2(point, a).total_cmp(&distance2(point, b))
-        }) && distance2(point, nearest) <= reach * reach
-        {
-            *position = nearest;
+            low += third;
         }
     }
+    0.5 * (low + high)
 }
 
 fn distance2(a: Point3, b: Point3) -> f64 {

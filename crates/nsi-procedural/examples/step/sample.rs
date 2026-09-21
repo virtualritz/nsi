@@ -79,14 +79,6 @@ impl Traversal {
             reversed < direct
         }
     }
-
-    /// Whether it starts where `reference` does -- the anchor the
-    /// contract asks every use of a weld to share.
-    pub fn anchors_with(&self, reference: &Self, tolerance: f64) -> bool {
-        let tolerance = tolerance * tolerance;
-        distance(self.start(), reference.start()) <= tolerance
-            || distance(self.end(), reference.start()) <= tolerance
-    }
 }
 
 fn distance(a: Point3, b: Point3) -> f64 {

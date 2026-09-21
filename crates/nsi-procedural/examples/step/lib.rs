@@ -71,9 +71,9 @@ use nsi_procedural::{Error, Params, Procedural, Report};
 use sample::FaceGeometry;
 use std::{num::NonZeroUsize, path::Path};
 
-/// How far a use may sit from its edge's own traversal and still be
-/// declared: a rounding, not a different anchor. In scene units.
-const ANCHOR_TOLERANCE: f64 = 1.0e-4;
+/// When two points on a boundary count as one, in scene units: what
+/// tells a closed edge from an open one.
+const CLOSURE_TOLERANCE: f64 = 1.0e-4;
 
 /// The STEP procedural.
 pub struct StepProcedural;
@@ -237,23 +237,15 @@ impl WeldTable {
                 continue;
             };
 
-            // The anchor is the edge's own start, which on a closed edge
-            // is its vertex. A use that begins elsewhere describes the
-            // same locus from a different place, which the contract asks
-            // an exporter to re-express as two ranges; this one says so
-            // rather than claim a traversal it has not written.
-            if reference.is_closed(ANCHOR_TOLERANCE)
-                && !traversal.anchors_with(&reference, ANCHOR_TOLERANCE)
-            {
-                log::warn!(
-                    "NSI BRep emitter: a use of weld {id} starts away from \
-                     its edge's anchor; the declaration is not conforming"
-                );
-            }
+            // A closed weld's uses may start at different points: the
+            // contract prefers a shared anchor, which a periodic patch's
+            // side cannot offer without a parameter search, and leaves
+            // matching them to the renderer. Only the direction is
+            // declared here.
             keep(
                 &mut kept,
                 Some(i32::from(
-                    traversal.runs_against(&reference, ANCHOR_TOLERANCE),
+                    traversal.runs_against(&reference, CLOSURE_TOLERANCE),
                 )),
             );
         }

@@ -40,6 +40,12 @@ pub enum Facing {
     Inward,
 }
 
+/// The fixtures below write the naming-convention draft's names, as a new
+/// exporter would: a `Scene` stores them either way. `P` and `Pw` keep
+/// theirs, being what a shader reads, and so do `trimcurves.u`, `.v`,
+/// `.w`, which the draft replaces with one interleaved array rather than
+/// renaming.
+///
 /// A cube of six bilinear patches, each trimmed by the four lines around
 /// its domain -- the shape a STEP solid's faces take in ɴsɪ. With
 /// `welded`, one weld per cube edge, each used by the two faces it joins.
@@ -95,12 +101,12 @@ pub fn cube_with(
             .set_attribute(
                 &handle,
                 &[
-                    nsi::integer_i32!("nu", 2),
-                    nsi::integer_i32!("nv", 2),
-                    nsi::integer_i32!("uorder", 2),
-                    nsi::integer_i32!("vorder", 2),
-                    nsi::real_f32_slice!("uknot", &[0.0, 0.0, 1.0, 1.0]),
-                    nsi::real_f32_slice!("vknot", &[0.0, 0.0, 1.0, 1.0]),
+                    nsi::integer_i32!("u.count", 2),
+                    nsi::integer_i32!("v.count", 2),
+                    nsi::integer_i32!("u.order", 2),
+                    nsi::integer_i32!("v.order", 2),
+                    nsi::real_f32_slice!("u.knot", &[0.0, 0.0, 1.0, 1.0]),
+                    nsi::real_f32_slice!("v.knot", &[0.0, 0.0, 1.0, 1.0]),
                     nsi::point3_f32_slice!("P", &control),
                 ],
             )
@@ -110,12 +116,12 @@ pub fn cube_with(
                 .set_attribute(
                     &handle,
                     &[
-                        nsi::integer_i32_slice!("trimcurves.ncurves", &[4]),
-                        nsi::integer_i32_slice!("trimcurves.n", &[2; 4]),
-                        nsi::integer_i32_slice!("trimcurves.order", &[2; 4]),
-                        nsi::real_f32_slice!("trimcurves.knot", &knots),
-                        nsi::real_f32_slice!("trimcurves.min", &[0.0; 4]),
-                        nsi::real_f32_slice!("trimcurves.max", &[1.0; 4]),
+                        nsi::integer_i32_slice!("trim-curves.curve-count", &[4]),
+                        nsi::integer_i32_slice!("trim-curves.point-count", &[2; 4]),
+                        nsi::integer_i32_slice!("trim-curves.order", &[2; 4]),
+                        nsi::real_f32_slice!("trim-curves.knot", &knots),
+                        nsi::real_f32_slice!("trim-curves.min", &[0.0; 4]),
+                        nsi::real_f32_slice!("trim-curves.max", &[1.0; 4]),
                         nsi::real_f32_slice!("trimcurves.u", &u),
                         nsi::real_f32_slice!("trimcurves.v", &v),
                         nsi::real_f32_slice!("trimcurves.w", &[1.0; 8]),
@@ -192,6 +198,131 @@ pub fn cube_with(
                         nsi::integer_i32_slice!("weld.reverse", &reverse),
                         nsi::real_f32_slice!("weld.range", &ranges)
                             .array_len(NonZeroUsize::new(2).unwrap()),
+                    ],
+                )
+                .unwrap();
+        }
+    }
+    recorder.into_scene()
+}
+
+/// Two cylinder patches stacked along `z`, sharing the circle between
+/// them: the lower one's v-max side welded to the upper one's v-min
+/// side.
+///
+/// With `rotate_seam`, the upper patch's control net starts a quarter
+/// turn round, so its seam -- and with it the start of its side -- is
+/// elsewhere than the lower patch's. The two uses of that weld then
+/// begin at different points, which the [weld contract] allows and a
+/// renderer has to cope with.
+///
+/// [weld contract]: https://nsi.readthedocs.io/en/latest/design/shared-boundaries.html
+pub fn stacked_cylinders(welded: bool, rotate_seam: bool) -> Scene {
+    // A circle as four rational quadratic arcs: on-axis points at the
+    // quarters, corner points a `sqrt(2)` out at the diagonals, weighted
+    // to pull the arc back onto the circle.
+    const CORNER: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    let ring = |turn: f32| -> Vec<[f32; 3]> {
+        (0..9)
+            .map(|at| {
+                let angle = turn + at as f32 * std::f32::consts::FRAC_PI_4;
+                let radius = if at % 2 == 0 {
+                    1.0
+                } else {
+                    std::f32::consts::SQRT_2
+                };
+                [radius * angle.cos(), radius * angle.sin(), 0.0]
+            })
+            .collect()
+    };
+    let weights: Vec<f32> = (0..9)
+        .map(|at| if at % 2 == 0 { 1.0 } else { CORNER })
+        .collect();
+    let quarter = std::f32::consts::FRAC_PI_2;
+    let u_knot: Vec<f32> = vec![
+        0.0,
+        0.0,
+        0.0,
+        quarter,
+        quarter,
+        2.0 * quarter,
+        2.0 * quarter,
+        3.0 * quarter,
+        3.0 * quarter,
+        4.0 * quarter,
+        4.0 * quarter,
+        4.0 * quarter,
+    ];
+
+    let recorder = Recorder::new();
+    if welded {
+        recorder.create("stack_welds", "weld", None).unwrap();
+    }
+    for (patch, (bottom, top)) in [(0.0, 1.0), (1.0, 2.0)].iter().enumerate() {
+        let handle = format!("band{patch}");
+        recorder.create(&handle, nsi::NURBS, None).unwrap();
+        recorder
+            .connect(&handle, None, nsi::ROOT, "objects", None)
+            .unwrap();
+
+        let turn = if patch == 1 && rotate_seam {
+            quarter
+        } else {
+            0.0
+        };
+        // ɴsɪ stores control points u-fastest, and `Pw` premultiplied.
+        let control: Vec<[f32; 4]> = [*bottom, *top]
+            .iter()
+            .flat_map(|z| {
+                ring(turn)
+                    .into_iter()
+                    .zip(&weights)
+                    .map(|(point, weight)| {
+                        [
+                            point[0] * weight,
+                            point[1] * weight,
+                            z * weight,
+                            *weight,
+                        ]
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        recorder
+            .set_attribute(
+                &handle,
+                &[
+                    nsi::integer_i32!("u.count", 9),
+                    nsi::integer_i32!("v.count", 2),
+                    nsi::integer_i32!("u.order", 3),
+                    nsi::integer_i32!("v.order", 2),
+                    nsi::real_f32_slice!("u.knot", &u_knot),
+                    nsi::real_f32_slice!(
+                        "v.knot",
+                        &[*bottom, *bottom, *top, *top]
+                    ),
+                    nsi::point4_f32_slice!("Pw", &control),
+                ],
+            )
+            .unwrap();
+
+        if welded {
+            recorder
+                .connect("stack_welds", None, &handle, "weld", None)
+                .unwrap();
+            // The lower patch's v-max side, the upper one's v-min: both
+            // run along increasing `u`, which is the same way round the
+            // axis, so neither is reversed.
+            let side = if patch == 0 { 3 } else { 2 };
+            recorder
+                .set_attribute(
+                    &handle,
+                    &[
+                        nsi::integer_i32_slice!("weld.id", &[0]),
+                        nsi::string_slice!("weld.kind", &["nurbs-side"]),
+                        nsi::integer_i32_slice!("weld.index", &[side, 0, 0])
+                            .array_len(NonZeroUsize::new(3).unwrap()),
+                        nsi::integer_i32_slice!("weld.reverse", &[0]),
                     ],
                 )
                 .unwrap();

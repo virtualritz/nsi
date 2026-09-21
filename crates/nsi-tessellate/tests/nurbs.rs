@@ -137,3 +137,47 @@ fn keeping_the_outside_of_a_trim_is_refused() {
         tessellation.problems
     );
 }
+
+/// The two uses of a closed weld may start at different points: the
+/// contract prefers a shared anchor but does not require one, and a
+/// renderer has to cope. Here the upper cylinder's seam is a quarter
+/// turn round from the lower one's, so the shared circle's two uses
+/// begin a quarter apart.
+#[test]
+fn a_closed_weld_joins_uses_that_start_at_different_points() {
+    let options = NurbsOptions::default();
+    let shared = |rotate_seam: bool| {
+        let tessellation = nurbs_meshes(
+            &common::stacked_cylinders(true, rotate_seam),
+            &options,
+        );
+        assert_eq!(tessellation.problems, Vec::<String>::new());
+        assert_eq!(tessellation.meshes.len(), 2);
+        // Points the two patches hold in common, which is what welding
+        // them produced.
+        let mut seen = std::collections::HashMap::new();
+        let mut shared = 0;
+        for mesh in &tessellation.meshes {
+            for (position, normal) in mesh.positions.iter().zip(&mesh.normals) {
+                let key = position.map(f64::to_bits);
+                if let Some(previous) = seen.insert(key, *normal) {
+                    assert_eq!(previous, *normal, "at {position:?}");
+                    shared += 1;
+                }
+            }
+        }
+        (shared, tessellation.open_edges)
+    };
+
+    let (aligned, aligned_open) = shared(false);
+    let (rotated, rotated_open) = shared(true);
+    assert!(aligned > 0, "the aligned seams share their circle");
+    assert!(rotated > 0, "and so do the rotated ones");
+    // The shared counts differ -- the rotated join is two arcs, sampled
+    // apart -- but a crack would show as open edges, and there are no
+    // more of those than where the seams line up.
+    assert_eq!(
+        rotated_open, aligned_open,
+        "no crack where the starts differ"
+    );
+}

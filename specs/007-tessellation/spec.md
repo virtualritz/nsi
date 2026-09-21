@@ -324,5 +324,37 @@ Falsified: an exporter that declares no reversal -- the cube's
 no-op -- leaves the cube tests failing and the real part with 390 open
 edges. The tessellator no longer papers over it.
 
+#### Closed Welds That Start At Different Points (2026-09-21)
+
+The draft was revised again: a closed weld's uses may start at different
+points, a shared anchor is only preferred, and a renderer that supports
+closed welds must cope with differing starts -- or report that it
+cannot -- rather than drop the join.
+
+This one could not, silently. With one shared edge made from the first
+use, the other use's start lands part way along it: a point the two
+faces do not share. Two stacked cylinder patches, the upper one's seam a
+quarter turn round, came out with 70 open edges against 68 when the
+seams line up -- a two-edge crack at the T-junction.
+
+Now every closed weld whose uses start apart is split at each use's
+start, before any edge is made, so every face carries every junction.
+The arcs are matched across faces by their midpoints: geometric matching,
+but only within a weld the declaration has already joined. With it, the
+rotated stack has exactly as many open edges as the aligned one.
+
+The exporter side follows: `step_procedural` no longer calls a differing
+start non-conforming. A periodic patch's side starts at its seam
+wherever the source edge began, and aligning the two would cost a
+parameter search the draft now spares the exporter.
+
+The fixtures moved to the draft's names -- `u.count`, `trim-curves.*` --
+as a new exporter writes them. What talks to 3Delight directly keeps the
+shipped ones: the render setup, and the STEP procedural, which runs
+inside the renderer.
+
+Falsified: without the split, the different-start test fails, 70 open
+edges against 68.
+
 ### Non-Goals
 - Mesh-edge welds between `nurbs` and subdivision surfaces.
