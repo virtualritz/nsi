@@ -211,7 +211,10 @@ fn nsi_dodecahedron(c: &nsi::Context, name: &str) {
             nsi::integer_i32_slice!("P.indices", &face_index),
             nsi::integer_i32_slice!("nvertices", &[5; 12]),
             nsi::string!("subdivision.scheme", "catmull-clark"),
-            nsi::integer_i32_slice!("subdivision.creasevertices", &crease_edges),
+            nsi::integer_i32_slice!(
+                "subdivision.creasevertices",
+                &crease_edges
+            ),
             nsi::real_f32_slice!("subdivision.creasesharpness", &[4.2; 30]),
         ],
     );

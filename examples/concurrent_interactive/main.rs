@@ -168,7 +168,10 @@ fn build_scene(
         // Interactive renders auto-apply OIDN denoising, which uses the GPU.
         // Disable it so the render is pure-CPU (needed to run in a sandbox
         // where the GPU is unreachable, and to isolate non-OIDN behaviour).
-        ctx.set_attribute(".global", &[nsi::integer_i32!("quality.denoise", 0)]);
+        ctx.set_attribute(
+            ".global",
+            &[nsi::integer_i32!("quality.denoise", 0)],
+        );
     }
 
     // Camera.

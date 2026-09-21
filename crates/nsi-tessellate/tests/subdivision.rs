@@ -21,7 +21,13 @@ fn cube(scheme: Option<&str>) -> Scene {
     ];
 
     let mut attributes = vec![
-        OwnedArgument::new("P", Type::Point3F32, 1, 0, OwnedData::F32(positions)),
+        OwnedArgument::new(
+            "P",
+            Type::Point3F32,
+            1,
+            0,
+            OwnedData::F32(positions),
+        ),
         OwnedArgument::new(
             "nvertices",
             Type::IntegerI32,

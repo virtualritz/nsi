@@ -76,7 +76,10 @@ fn callback_lifetime_management() {
         ];
         ctx.set_attribute(
             "mesh",
-            &[nsi::point3_f32_slice!("P", positions), nsi::integer_i32!("nvertices", 4)],
+            &[
+                nsi::point3_f32_slice!("P", positions),
+                nsi::integer_i32!("nvertices", 4),
+            ],
         );
 
         // Write callback that increments counter - use f32 driver.
@@ -181,8 +184,10 @@ fn thread_safety() {
                 // Each thread creates its own node.
                 let node_name = format!("thread_node_{}", i);
                 ctx_clone.create(&node_name, nsi::ATTRIBUTES, None);
-                ctx_clone
-                    .set_attribute(&node_name, &[nsi::integer_i32!("thread_id", i)]);
+                ctx_clone.set_attribute(
+                    &node_name,
+                    &[nsi::integer_i32!("thread_id", i)],
+                );
             })
         })
         .collect();

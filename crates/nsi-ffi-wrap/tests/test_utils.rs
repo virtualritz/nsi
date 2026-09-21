@@ -314,10 +314,11 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
     ctx.connect("screen", None, "camera", "screens", None);
     ctx.set_attribute(
         "screen",
-        &[
-            nsi::integer_i32_slice!("resolution", &[width as i32, height as i32])
-                .array_len(const { NonZeroUsize::new(2).unwrap() }),
-        ],
+        &[nsi::integer_i32_slice!(
+            "resolution",
+            &[width as i32, height as i32]
+        )
+        .array_len(const { NonZeroUsize::new(2).unwrap() })],
     );
 }
 

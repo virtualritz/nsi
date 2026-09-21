@@ -193,7 +193,10 @@ pub fn add_area_light(
 
     ctx.set_attribute(
         name,
-        &[nsi::integer_i32!("nvertices", 4), nsi::point3_f32_slice!("P", points)],
+        &[
+            nsi::integer_i32!("nvertices", 4),
+            nsi::point3_f32_slice!("P", points),
+        ],
     );
 
     // Attributes

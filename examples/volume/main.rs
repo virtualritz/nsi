@@ -63,7 +63,10 @@ pub fn main() {
                                 "${DELIGHT}/osl/vdbVolume"
                             ),
                             nsi::real_f32!("density", 8.0),
-                            nsi::real_f32!("multiple_scattering_intensity", 0.44),
+                            nsi::real_f32!(
+                                "multiple_scattering_intensity",
+                                0.44
+                            ),
                             nsi::real_f32!("emissionramp_intensity", 1.0),
                             nsi::real_f32_slice!(
                                 "emissionramp_color_curve_Knots",

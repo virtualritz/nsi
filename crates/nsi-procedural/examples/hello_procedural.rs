@@ -47,7 +47,10 @@ impl Procedural for Row {
         nsi.connect("row", None, nsi::ROOT, "objects", None)?;
         nsi.set_attribute(
             "row",
-            &[nsi::point3_f32_slice!("P", &positions), nsi::real_f32!("width", 1.0)],
+            &[
+                nsi::point3_f32_slice!("P", &positions),
+                nsi::real_f32!("width", 1.0),
+            ],
         )?;
 
         report.info(&format!("hello_procedural created {count} spheres"));

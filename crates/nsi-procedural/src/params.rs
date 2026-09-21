@@ -121,7 +121,10 @@ impl<'a> Param<'a> {
     /// color, 16 for a matrix.
     fn components(type_tag: Type) -> usize {
         match type_tag {
-            Type::Color3F32 | Type::Point3F32 | Type::Vector3F32 | Type::Normal3F32 => 3,
+            Type::Color3F32
+            | Type::Point3F32
+            | Type::Vector3F32
+            | Type::Normal3F32 => 3,
             Type::Matrix4F32 | Type::Matrix4F64 => 16,
             _ => 1,
         }

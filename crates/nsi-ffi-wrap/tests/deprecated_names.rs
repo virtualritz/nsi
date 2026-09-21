@@ -27,7 +27,8 @@ fn old_macros_forward_to_the_new_ones() {
 #[test]
 fn old_wrapper_names_are_aliases() {
     let points = [[0.0f32, 1.0, 2.0]];
-    let old = nsi::Arg::new("P", nsi::ArgData::from(nsi::PointSlice::new(&points)));
+    let old =
+        nsi::Arg::new("P", nsi::ArgData::from(nsi::PointSlice::new(&points)));
     assert_eq!(old.type_tag(), Type::Point3F32);
 }
 

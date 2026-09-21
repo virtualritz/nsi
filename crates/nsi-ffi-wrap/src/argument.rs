@@ -1421,14 +1421,11 @@ mod tests {
     #[test]
     fn array_len_divides_element_count() {
         let resolution = [1280, 720];
-        let args =
-            [
-                Arg::new(
-                    "resolution",
-                    ArgData::from(IntegerI32Slice::new(&resolution)),
-                )
-                .array_len(const { NonZeroUsize::new(2).unwrap() }),
-            ];
+        let args = [Arg::new(
+            "resolution",
+            ArgData::from(IntegerI32Slice::new(&resolution)),
+        )
+        .array_len(const { NonZeroUsize::new(2).unwrap() })];
 
         let (len, _ptr, params) = to_c_param_vec(Some(&args));
 

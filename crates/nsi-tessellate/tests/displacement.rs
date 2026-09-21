@@ -363,6 +363,12 @@ fn displaced_side_welded_patches_stay_closed_and_unwelded_ones_crack() {
     println!(
         "sides, displaced by {push}: welded {welded_red} red px, unwelded {unwelded_red}"
     );
-    assert!(welded_red < 20, "the welded cube stays closed: {welded_red}");
-    assert!(unwelded_red > 200, "the unwelded cube cracks: {unwelded_red}");
+    assert!(
+        welded_red < 20,
+        "the welded cube stays closed: {welded_red}"
+    );
+    assert!(
+        unwelded_red > 200,
+        "the unwelded cube cracks: {unwelded_red}"
+    );
 }
