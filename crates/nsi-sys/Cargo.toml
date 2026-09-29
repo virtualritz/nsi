@@ -31,7 +31,7 @@ omit_functions = []
 # driver) pins the same `0.72` line already, so this also collapses two
 # `bindgen`/`syn` copies in the tree to one. Lift the cap once a `0.73.x`
 # release fixes the mismatch, or once `prettyplease` moves to `syn` 3.
-bindgen = ">=0.72, <0.73"
+bindgen = ">=0.72, <0.74"
 
 [dependencies]
 bitflags = "2"
