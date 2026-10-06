@@ -39,6 +39,7 @@ Directory numbers reflect creation order, not coverage order.
 | `011-type-names` | Type names by role, components and machine type; `hpoint` sent, parsed and written | done |
 | `012-attribute-vocabulary` | Draft attribute and node names as the default, legacy names deprecated | in progress |
 | `013-welds` | Weld declarations in `nsi-intermediate`: parse, validate, group by `(weld, id)` | active; T7, T8 open |
+| `014-license-server` | The 3Delight license server helper in `nsi-3delight`: is a license configured, is the server running, start it | active; `start_license_server` manual QA open |
 
 `003` arrived with the crate, which was extracted from `nsi-mitsuba`
 once a second backend made its renderer-agnosticism structural rather

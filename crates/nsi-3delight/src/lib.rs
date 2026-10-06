@@ -2,6 +2,7 @@
 //!
 //! Shortcuts for instancing common nodes.
 pub mod cpp_object;
+pub mod license;
 pub mod progress;
 
 #[cfg(feature = "toolbelt")]
