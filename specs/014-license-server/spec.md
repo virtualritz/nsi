@@ -31,17 +31,20 @@ the server up) and the same spawn, per application.
 - `license_source()` returns the configured license, in order:
   `RLM_LICENSE` (an entry containing `@` is a [`LicenseSource::Server`],
   an existing entry otherwise is a [`LicenseSource::File`]; a server
-  anywhere in the list wins), then the installed
-  `$DELIGHT/licenses/3delight_license.dat`, then the per-user
-  `$HOME/.config/3delight/license.dat`, then the `license.server` key of
-  `$DELIGHT/3delight.config`.
+  anywhere in the list wins), then `$DELIGHT/license.dat` or the
+  server's installed `$DELIGHT/licenses/3delight_license.dat`, then the
+  per-user `$HOME/.config/3delight/license.dat`, then the
+  `license.server` key of `$DELIGHT/3delight.config`. A zero-byte file
+  is skipped, because starting the server leaves such a placeholder
+  behind.
 - `license_file()` returns the file when `license_source()` is a file,
   and `None` for a server or no license.
 - `is_license_server_running()` is true when `$DELIGHT/bin/licutils
   serverstatus` answers and false when it reports `cannot connect`. The
   exit code is `0` in both cases, so the tool's output is the signal.
-- `start_license_server()` runs `$DELIGHT/bin/licserver -d` with no
-  inherited stdio and returns once the process is spawned.
+- `start_license_server()` runs `$DELIGHT/bin/licserver -d <license>`
+  with the file [`license_file`] finds, and no inherited stdio, and
+  returns once the process is spawned.
 - `license_server_request()` is `Some` exactly when a `DELIGHT` root and
   a local license file are present and the server is not running, and
   carries both paths. A configured `port@host` or `license.server` is

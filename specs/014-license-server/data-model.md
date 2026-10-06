@@ -4,8 +4,9 @@
 $DELIGHT/
   bin/licutils              serverstatus answers, or says `cannot connect`
   bin/licserver             -d starts the daemon
+  license.dat               the commercial licence
   licenses/
-    3delight_license.dat    installed by the server
+    3delight_license.dat    installed by the server; empty until one is
 $HOME/.config/3delight/
   license.dat               per-user license the renderer reads
 ```

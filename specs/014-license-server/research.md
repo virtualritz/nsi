@@ -15,13 +15,21 @@ learn the daemon's PID, and `-autostart` installs a service. This helper
 starts only, and does not track the process: the caller starts and
 forgets, and the server outlives it.
 
-## D3: licence at two paths
+## D3: licence at three paths, and one that is not
 
-`licserver`'s strings name `/licenses/3delight_license.dat` relative to
-the installation, which is `$DELIGHT/licenses/3delight_license.dat`.
-`$HOME/.config/3delight/license.dat` is the per-user file the renderer
-reads. Either existing means "has a license". The free tier has neither,
-which is why its absence is the free-tier test.
+`$DELIGHT/license.dat` is where the commercial install puts the
+licence. `licserver`'s strings also name
+`/licenses/3delight_license.dat` relative to the installation, which is
+`$DELIGHT/licenses/3delight_license.dat`; that is where the server
+*installs* one, and starting the server with no argument leaves a
+zero-byte placeholder there. `$HOME/.config/3delight/license.dat` is the
+per-user file the renderer reads. Any existing, non-empty file means
+"has a license"; a zero-byte file is skipped, because treating the
+placeholder as a licence is what made a started server serve nothing.
+
+`licserver` takes the licence file as an optional argument. Passing the
+file `license_file()` finds is what makes the server serve the user's
+licence rather than the empty installed placeholder.
 
 ## Rejected
 

@@ -7,7 +7,8 @@
 | `license_source()` falls back to the installed, per-user and config sources | Partial | `installed_license`, `per_user_license`, `configured_server` | -- | Filesystem-dependent; no fixture writes any of the three |
 | `license_file()` is the file case only | Covered | `license_file` | `installed_licensed_and_down_requests` (policy), `an_existing_rlm_file_entry_is_a_file` | `None` for a server |
 | `is_license_server_running()` treats `cannot connect` as down | Partial | `is_license_server_running` | `the_environment_probes_do_not_panic` | Live 3Delight needed to see the up case |
-| `start_license_server()` spawns `licserver -d` with null stdio | Open | `start_license_server` | -- | Manual QA only; would start a machine-wide daemon |
+| `start_license_server()` spawns `licserver -d <license>` with null stdio | Open | `start_license_server` | -- | Manual QA only; would start a machine-wide daemon. Passes `license_file()` |
+| A zero-byte license placeholder is skipped | Covered | `is_license_file` | `an_empty_file_is_not_a_license` | The server leaves one after a start with no file |
 | The policy is `Some` iff root and license file are present and the server is down | Covered | `license_server_request_for` | `no_root_no_request`, `no_license_no_request`, `running_server_no_request`, `installed_licensed_and_down_requests` | The whole decision, as a pure function |
 | A configured server suppresses the offer | Covered | `license_file` returns `None` for `Server`; `license_server_request_for` needs a file | `no_license_no_request` (The `None` it passes is what a server source yields) | `port@host` and `license.server` alike |
 | No function panics when `DELIGHT`, `HOME` or the binaries are absent | Covered | `?` and `let ... else` throughout | `the_environment_probes_do_not_panic` | |

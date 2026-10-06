@@ -15,7 +15,7 @@
 
 use std::{
     env, fs, io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
@@ -49,9 +49,13 @@ pub enum LicenseSource {
 ///    are `:`- or `;`-separated; an entry containing `@` is a server,
 ///    otherwise it is a file path. A server anywhere in the list wins
 ///    over a file, because a configured server is the whole setup.
-/// 2. `$DELIGHT/licenses/3delight_license.dat`, the installed license.
+/// 2. `$DELIGHT/license.dat`, or the server's own installed
+///    `$DELIGHT/licenses/3delight_license.dat`.
 /// 3. `$HOME/.config/3delight/license.dat`, the per-user file.
 /// 4. The `license.server` key in `$DELIGHT/3delight.config`.
+///
+/// A zero-byte file is skipped: starting the server can leave such a
+/// placeholder behind, and it is not a license.
 ///
 /// A machine with none of these is on the free tier, which needs no
 /// server.
@@ -99,9 +103,12 @@ pub fn is_license_server_running() -> bool {
 
 /// Starts the license server as a daemon.
 ///
-/// Runs `$DELIGHT/bin/licserver -d` with no inherited stdio.
-/// `licserver` forks itself, so the call returns once the process is
-/// spawned and the server keeps running after the caller exits.
+/// Runs `$DELIGHT/bin/licserver -d`, naming the license file
+/// [`license_file`] finds when there is one, so the server serves the
+/// license the user actually has rather than whatever is installed. No
+/// stdio is inherited. `licserver` forks itself, so the call returns
+/// once the process is spawned and the server keeps running after the
+/// caller exits.
 pub fn start_license_server() -> io::Result<()> {
     let root = delight_root().ok_or_else(|| {
         io::Error::new(io::ErrorKind::NotFound, "DELIGHT is not set")
@@ -113,8 +120,12 @@ pub fn start_license_server() -> io::Result<()> {
             format!("no license server at {}", server.display()),
         ));
     }
-    Command::new(server)
-        .arg("-d")
+    let mut command = Command::new(server);
+    command.arg("-d");
+    if let Some(license) = license_file() {
+        command.arg(license);
+    }
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -186,17 +197,23 @@ fn license_source_from_rlm(value: &str) -> Option<LicenseSource> {
             entries
                 .iter()
                 .map(|entry| PathBuf::from(*entry))
-                .find(|path| path.is_file())
+                .find(|path| is_license_file(path))
                 .map(LicenseSource::File)
         })
 }
 
-/// `$DELIGHT/licenses/3delight_license.dat`, if present.
+/// `$DELIGHT/license.dat`, or the server's installed
+/// `$DELIGHT/licenses/3delight_license.dat`, if either is present and
+/// not empty.
 fn installed_license() -> Option<LicenseSource> {
-    let path = delight_root()?
-        .join("licenses")
-        .join("3delight_license.dat");
-    path.is_file().then_some(LicenseSource::File(path))
+    let root = delight_root()?;
+    [
+        root.join("license.dat"),
+        root.join("licenses").join("3delight_license.dat"),
+    ]
+    .into_iter()
+    .find(|path| is_license_file(path))
+    .map(LicenseSource::File)
 }
 
 /// `$HOME/.config/3delight/license.dat`, if present.
@@ -205,7 +222,14 @@ fn per_user_license() -> Option<LicenseSource> {
         .join(".config")
         .join("3delight")
         .join("license.dat");
-    path.is_file().then_some(LicenseSource::File(path))
+    is_license_file(&path).then_some(LicenseSource::File(path))
+}
+
+/// A readable file with content. An empty file is a placeholder the
+/// server may leave behind, not a license.
+fn is_license_file(path: &Path) -> bool {
+    path.metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
 }
 
 /// The `license.server` key of `$DELIGHT/3delight.config`, if set.
@@ -258,6 +282,14 @@ mod tests {
     fn an_rlm_entry_that_is_neither_is_none() {
         assert_eq!(license_source_from_rlm("does-not-exist.lic"), None);
         assert_eq!(license_source_from_rlm(""), None);
+    }
+
+    #[test]
+    fn an_empty_file_is_not_a_license() {
+        let path = std::env::temp_dir().join("nsi-license-empty");
+        fs::write(&path, b"").expect("write the placeholder");
+        assert!(!is_license_file(&path));
+        fs::remove_file(&path).ok();
     }
 
     #[test]
