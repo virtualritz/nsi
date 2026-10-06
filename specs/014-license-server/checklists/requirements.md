@@ -4,4 +4,4 @@
 - [x] The free tier is excluded by the license file's absence, not by detection.
 - [x] Non-goals name what the caller owns: start, stop, scheduling.
 - [x] The policy is a pure function with one test per input combination.
-- [ ] T6 manual QA.
+- [ ] T7 manual QA.
