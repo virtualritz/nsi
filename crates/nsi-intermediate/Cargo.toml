@@ -54,7 +54,7 @@ ahash = "0.8"
 # Warns, once per name, about a deprecated attribute spelling.
 log = "0.4"
 indexmap = "2"
-parking_lot = "0.12"
+parking_lot = "0.13"
 ustr = { version = "1", optional = true }
 flate2 = { version = "1", optional = true }
 zstd = { version = "0.14", optional = true }
