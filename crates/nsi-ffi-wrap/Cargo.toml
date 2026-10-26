@@ -55,7 +55,7 @@ ndspy-sys = { version = "0.2", optional = true }
 nsi-sys = { version = "0.9", path = "../nsi-sys" }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
 num_enum = "0.7"
-parking_lot = "0.12"
+parking_lot = "0.13"
 triomphe = "0.1"
 ustr = "1"
 
