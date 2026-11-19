@@ -116,8 +116,14 @@ pub fn cube_with(
                 .set_attribute(
                     &handle,
                     &[
-                        nsi::integer_i32_slice!("trim-curves.curve-count", &[4]),
-                        nsi::integer_i32_slice!("trim-curves.point-count", &[2; 4]),
+                        nsi::integer_i32_slice!(
+                            "trim-curves.curve-count",
+                            &[4]
+                        ),
+                        nsi::integer_i32_slice!(
+                            "trim-curves.point-count",
+                            &[2; 4]
+                        ),
                         nsi::integer_i32_slice!("trim-curves.order", &[2; 4]),
                         nsi::real_f32_slice!("trim-curves.knot", &knots),
                         nsi::real_f32_slice!("trim-curves.min", &[0.0; 4]),

@@ -209,17 +209,27 @@ fn load_renderer(name: &str) -> Result<api::ApiImpl, std::string::String> {
 
 // Default modules ----------------------------------------------------
 
-#[macro_use]
-pub mod argument;
+// `Arg`, its value types and the argument macros live in `nsi-argument`,
+// which does not depend on `nsi-sys`. Re-exported here under the old
+// paths: `nsi::argument::RealF32`, `nsi::Arg`, `nsi::real_f32!`, ...
+pub use nsi_argument::argument;
 // The wrappers that borrow argument data share their names with the
 // data shapes `nsi-trait` exports (`Color3F32` is both `[f32; 3]` and
 // the wrapper around a `&[f32; 3]`), so they stay in `argument` and only
 // the names without a twin are re-exported here.
-pub use argument::{
+pub use nsi_argument::{
     Arg, ArgData, ArgSlice, ArgVec, Callback, CallbackPtr, Reference,
     ReferenceSlice, StableDeref, String, StringSlice,
 };
-pub(crate) use argument::{ArgDataMethods, to_c_param_vec};
+// The `#[macro_export]` macros (`real_f32!`, `point3_f32_slice!`, ...)
+// sit at `nsi-argument`'s root; the glob re-exports them here, along with
+// `nsi-trait` (see below) and the hidden `ArgDataMethods` the
+// marshalling uses.
+pub use nsi_argument::*;
+
+// `Arg` to the C API's `NSIParam` layout.
+mod param;
+pub(crate) use param::to_c_param_vec;
 
 /// Names before the role-and-machine-type scheme; see
 /// [`Type`](crate::Type) for the rule.
@@ -322,14 +332,13 @@ pub use deprecated_names::*;
 
 // The canonical NSI trait, the Attribute<T> typed-name machinery, type
 // aliases (Point3F32/Color3F32/Matrix4F64/…) and standard node-type
-// constants all live in `nsi-trait`. Re-export everything at this crate's
-// root so users can write `nsi_ffi_wrap::Nsi`, `nsi_ffi_wrap::Point3F32`,
-// `nsi_ffi_wrap::P`, etc. without depending on `nsi-trait` directly.
-pub use ::nsi_trait::*;
+// constants all live in `nsi-trait`. `nsi-argument` re-exports all of it
+// at its root, so the `nsi_argument::*` glob above puts it at this
+// crate's root too: users write `nsi_ffi_wrap::Nsi`,
+// `nsi_ffi_wrap::Point3F32`, `nsi_ffi_wrap::P`, etc. without depending on
+// `nsi-trait` directly.
 
-// Bridges `Arg` onto `nsi_trait::ParamValue`. Reaches into `Arg`'s
-// `pub(crate)` fields, so it has to live inside this crate.
-mod param_value;
+// `impl ParamValue for Arg` lives in `nsi-argument`, next to `Arg`.
 
 // `impl Nsi for Context`. Kept out of `context.rs` so the trait bridge
 // stays reviewable next to the `ParamValue` one.

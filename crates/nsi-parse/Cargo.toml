@@ -34,7 +34,9 @@ parallel = ["dep:rayon", "dep:ahash"]
 ahash = { version = "0.8", optional = true }
 memchr = "2"
 smallvec = "1"
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+# `Arg` without FFI: the parser builds arguments, it never renders, so
+# it does not need `nsi-ffi-wrap` and its `nsi-sys` build.
+nsi-argument = { version = "0.1", path = "../nsi-argument" }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
 rayon = { version = "1.10", optional = true }
 flate2 = { version = "1", optional = true }
@@ -42,6 +44,8 @@ mlua = { version = "0.12", features = ["lua54", "vendored"], optional = true }
 zstd = { version = "0.14", optional = true }
 
 [dev-dependencies]
+# The cross-crate and renderdl tests drive a real `Context`.
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
 nsi-intermediate = { version = "0.1", path = "../nsi-intermediate", features = ["lua", "gzip", "zstd"] }
 rayon = "1.10"
 

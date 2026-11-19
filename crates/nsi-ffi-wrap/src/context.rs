@@ -64,8 +64,8 @@ struct InnerContext<'a> {
 /// renderer that receives an argument it cannot read.
 fn requested_renderer(args: &ArgSlice<'_, '_>) -> Option<std::string::String> {
     args.iter()
-        .find(|arg| crate::backend::RENDERER == arg.name.as_str())
-        .and_then(|arg| match &arg.data {
+        .find(|arg| crate::backend::RENDERER == arg.name_ustr().as_str())
+        .and_then(|arg| match arg.data() {
             ArgData::String(value) => value.as_str(),
             _ => None,
         })
@@ -136,16 +136,18 @@ impl<'a> InnerContext<'a> {
         let mut owned = self.callbacks.lock();
 
         args.iter()
-            .filter_map(|arg| match &arg.data {
-                ArgData::Callback(callback) => Some((arg.name, callback)),
+            .filter_map(|arg| match arg.data() {
+                ArgData::Callback(callback) => {
+                    Some((arg.name_ustr(), callback))
+                }
                 _ => None,
             })
             .for_each(|(name, callback)| {
                 if let Some(displaced) = owned.insert(
                     (handle, name),
                     CallbackOwned {
-                        data: callback.data,
-                        drop_fn: callback.drop_fn,
+                        data: callback.data_ptr(),
+                        drop_fn: callback.drop_fn(),
                     },
                 ) {
                     self.retired.lock().push(displaced);
@@ -369,8 +371,9 @@ impl<'a> Context<'a> {
         );
 
         if let Some(args) = args
-            && let Some(arg) =
-                args.iter().find(|arg| ustr("errorhandler") == arg.name)
+            && let Some(arg) = args
+                .iter()
+                .find(|arg| ustr("errorhandler") == arg.name_ustr())
         {
             // `as_c_ptr` already yields the address of the pointer, which
             // is what ɴsɪ reads a `Pointer` value out of. Taking its address
@@ -385,7 +388,7 @@ impl<'a> Context<'a> {
             });
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("errorhandlerdata").as_char_ptr(),
-                data: arg.data.as_c_ptr(),
+                data: arg.data().as_c_ptr(),
                 type_: NSIType::Pointer as _,
                 arraylength: 1,
                 count: 1,
@@ -867,7 +870,7 @@ impl<'a> Context<'a> {
 
         if let Some(args) = args
             && let Some(arg) =
-                args.iter().find(|arg| ustr("callback") == arg.name)
+                args.iter().find(|arg| ustr("callback") == arg.name_ustr())
         {
             // See the `errorhandlerdata` note in `Context::new`.
             args_out.push(nsi_sys::NSIParam {
@@ -880,7 +883,7 @@ impl<'a> Context<'a> {
             });
             args_out.push(nsi_sys::NSIParam {
                 name: ustr("stoppedcallbackdata").as_char_ptr(),
-                data: arg.data.as_c_ptr(),
+                data: arg.data().as_c_ptr(),
                 type_: NSIType::Pointer as _,
                 arraylength: 1,
                 count: 1,

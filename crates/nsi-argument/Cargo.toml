@@ -1,0 +1,34 @@
+[package]
+name = "nsi-argument"
+version = "0.1.0"
+authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
+edition = "2024"
+# Let-chains, stable for edition 2024 since 1.88.
+rust-version = "1.88"
+keywords = ["graphics", "rendering", "3d", "ray-tracing", "scene-description"]
+categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
+license = "MIT OR Apache-2.0 OR Zlib"
+description = "Typed arguments for Nodal Scene Interface calls, without FFI – ɴsɪ."
+readme = "README.md"
+homepage = "https://www.3delight.com/"
+documentation = "https://docs.rs/nsi-argument/"
+repository = "https://github.com/virtualritz/nsi/"
+# Whitelist rather than blacklist, as the other crates do.
+include = [
+    "src/**/*",
+    "/Cargo.toml",
+    "/README.md",
+]
+
+[dependencies]
+enum_dispatch = "0.3"
+nsi-trait = { version = "0.4", path = "../nsi-trait" }
+ustr = "1"
+
+[dev-dependencies]
+# The doc examples hand their arguments to a real `Context`. A dev-only
+# cycle: the library itself never depends on `nsi-ffi-wrap`.
+nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+
+[package.metadata.docs.rs]
+all-features = true

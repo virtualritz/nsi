@@ -16,8 +16,8 @@ use core::{
     ffi::{CStr, c_char, c_void},
     slice,
 };
-use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
-use nsi_trait::{ParamValue, Type};
+use nsi_argument::Arg;
+use nsi_trait::{Flags, ParamValue, Type};
 
 /// A raw host address recorded from an ɴsɪ `Reference` argument.
 ///
@@ -294,7 +294,7 @@ impl OwnedArgument {
     /// Whether ɴsɪ's `NSIParamIsArray` is set, which makes the
     /// argument's type `T[n]` rather than `T`.
     pub fn is_array(&self) -> bool {
-        self.flags & NSIParamFlags::IsArray.bits() != 0
+        self.flags & Flags::IS_ARRAY.bits() != 0
     }
 
     /// Copy a borrowed parameter into owned storage.
@@ -303,7 +303,7 @@ impl OwnedArgument {
     /// nothing in this crate can reach -- a panic if `as_c_param`
     /// returned `None`, and an empty `f32` array for `Type::Invalid` --
     /// because [`Recorder`](crate::Recorder)'s `Arg` GAT pins the
-    /// parameter to `nsi_ffi_wrap::Arg`, whose `as_c_param` always
+    /// parameter to `nsi_argument::Arg`, whose `as_c_param` always
     /// returns `Some` and which never produces `Invalid`. Only a
     /// *foreign* `ParamValue` could reach either, and only through this
     /// being public.
@@ -331,7 +331,7 @@ impl OwnedArgument {
         let scalars = elements * components_per_element(type_tag);
 
         // SAFETY: unreachable while this is `pub(crate)` -- the only
-        // implementor that reaches here is `nsi_ffi_wrap::Arg`, whose
+        // implementor that reaches here is `nsi_argument::Arg`, whose
         // `as_c_param` returns `Some` unconditionally.
         let c = param
             .as_c_param()
