@@ -1248,7 +1248,7 @@ macro_rules! matrix4_f32_slice {
 ///
 /// ```
 /// # use nsi_ffi_wrap as nsi;
-/// # let ctx = $crate::argument::Context::new(None).unwrap();
+/// # let ctx = nsi::Context::new(None).unwrap();
 /// // Setup a transform node.
 /// ctx.create("xform", nsi::TRANSFORM, None);
 /// ctx.connect("xform", None, nsi::ROOT, "objects", None);

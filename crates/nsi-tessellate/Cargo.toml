@@ -3,7 +3,8 @@ name = "nsi-tessellate"
 version = "0.1.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
-rust-version = "1.88"
+# parking_lot 0.13, through nsi-intermediate, needs 1.95.
+rust-version = "1.95"
 keywords = ["graphics", "rendering", "3d", "subdivision", "tessellation"]
 categories = ["graphics", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"

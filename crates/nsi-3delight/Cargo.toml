@@ -3,8 +3,8 @@ name = "nsi-3delight"
 version = "0.10.3"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
-# Let-chains, stable for edition 2024 since 1.88.
-rust-version = "1.88"
+# parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
+rust-version = "1.95"
 keywords = ["graphics", "rendering", "3d", "ray-tracing", "3delight"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"

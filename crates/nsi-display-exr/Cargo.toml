@@ -3,7 +3,8 @@ name = "nsi-display-exr"
 version = "0.1.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
-rust-version = "1.88"
+# parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
+rust-version = "1.95"
 keywords = ["graphics", "rendering", "openexr", "display-driver", "denoise"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -37,7 +38,7 @@ nsi-display = { version = "0.1", path = "../nsi-display" }
 # compression method", which would make two of this driver's advertised
 # compressions fail only once a render had finished.
 exr = "1.74.2"
-oidn = { version = "2.3", optional = true }
+oidn = { version = "2", optional = true }
 
 [dev-dependencies]
 nsi = { version = "0.10", path = "../..", features = ["output"] }

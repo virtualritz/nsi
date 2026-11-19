@@ -22,16 +22,12 @@ default = []
 omit_functions = []
 
 [build-dependencies]
-# Capped below 0.73: 0.73.2 (the only 0.73.x published) depends on `syn`
-# ^3 directly while still depending on `prettyplease` 0.2, which is still
-# on `syn` ^2 -- `bindgen::codegen`'s `prettyplease::unparse(&syn::parse_quote!(...))`
-# then hands a syn-3 `File` to a function expecting syn-2's, which fails
-# to compile (E0599, `ParseQuote` not implemented). `ndspy-sys` (a sibling
-# dependency wherever this crate is built alongside 3Delight's display
-# driver) pins the same `0.72` line already, so this also collapses two
-# `bindgen`/`syn` copies in the tree to one. Lift the cap once a `0.73.x`
-# release fixes the mismatch, or once `prettyplease` moves to `syn` 3.
-bindgen = ">=0.72, <0.73"
+# 0.73.2 takes `syn` `>=2, <4` and `prettyplease` `>=0.2.7, <0.4`, and
+# `prettyplease` 0.3 is on `syn` 3, so the 0.73.0 mismatch (a syn-3 `File`
+# handed to a syn-2 `prettyplease::unparse`) no longer resolves. `ndspy-sys`
+# 0.2.3 is still on the 0.72 line, so builds with 3Delight's display driver
+# carry two `bindgen` copies until it moves.
+bindgen = "0.73"
 
 [dependencies]
 bitflags = "2"

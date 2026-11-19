@@ -3,8 +3,8 @@ name = "nsi-stream"
 version = "0.1.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
-# Let-chains, stable for edition 2024 since 1.88.
-rust-version = "1.88"
+# parking_lot 0.13 needs 1.95.
+rust-version = "1.95"
 keywords = ["graphics", "rendering", "gpu", "streaming", "3d"]
 categories = ["graphics", "multimedia::images", "rendering::graphics-api"]
 license = "MIT OR Apache-2.0 OR Zlib"
@@ -19,7 +19,7 @@ nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = [
     "output",
 ], optional = true }
 nsi-trait = { version = "0.4", path = "../nsi-trait" }
-parking_lot = "0.12"
+parking_lot = "0.13"
 rustix = { version = "1", optional = true, features = [
     "event",
     "fs",
