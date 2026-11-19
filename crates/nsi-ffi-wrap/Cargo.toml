@@ -52,6 +52,7 @@ enum_dispatch = "0.3"
 lazy_static = "1"
 log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
+nsi-argument = { version = "0.1", path = "../nsi-argument" }
 nsi-sys = { version = "0.10", path = "../nsi-sys" }
 nsi-trait = { version = "0.5", path = "../nsi-trait" }
 num_enum = "0.7"

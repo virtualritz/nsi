@@ -13,7 +13,7 @@
 //! consumer translate.
 //!
 //! A sink brings its own *behaviour*, not its own argument type: every
-//! entry point here binds `Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call,
+//! entry point here binds `Nsi<Arg<'call> = nsi_argument::Arg<'call,
 //! 'static>>`, because the parser has to build the arguments it hands
 //! over and can only build the one shape. Implement [`nsi_trait::Nsi`]
 //! with that associated type and the parser will drive it.
@@ -195,7 +195,7 @@ pub use lua::run_lua;
 pub fn parse_stream<N>(input: &[u8], sink: &N) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     // `0xCC` is a UTF-8 continuation byte, so a text stream can never
     // begin with it. Measured: every `renderdl -cat -binary` output
@@ -256,7 +256,7 @@ pub fn parse_stream_parallel<N>(
 ) -> Result<(), Error<N::Error>>
 where
     N: Nsi + Sync,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     if input.starts_with(&[0xCC, 0x00]) {
         return Err(Error::BinaryStream);
@@ -286,7 +286,7 @@ pub fn parse_compressed<N>(
 ) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     #[cfg(feature = "gzip")]
     if input.starts_with(&[0x1f, 0x8b]) {

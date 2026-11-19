@@ -66,20 +66,30 @@ impl<'a, 'b> ParamValue for Arg<'a, 'b> {
         self.flags
     }
 
+    #[inline]
     fn as_c_param(&self) -> Option<FfiParam> {
-        Some(FfiParam {
-            name: self.name.as_char_ptr(),
-            data: self.data.as_c_ptr(),
-            type_: self.data.type_() as core::ffi::c_int,
-            arraylength: self.array_length.get() as core::ffi::c_int,
-            // `count` is `data.len()/array_length`, exactly as
-            // `to_c_param_vec` computes it. These two must stay
-            // identical or the FFI fast path disagrees with the slow
-            // one. `array_length` is `NonZeroUsize`, so this cannot
-            // divide by zero.
-            count: self.data.len() / self.array_length,
-            flags: self.flags,
-        })
+        Some(FfiParam::from(self))
+    }
+}
+
+/// The C view of an [`Arg`]: the `NSIParam` layout of `nsi.h`.
+///
+/// The single conversion every FFI path uses, both
+/// [`ParamValue::as_c_param`] and `nsi-ffi-wrap`'s marshalling, so the
+/// two cannot disagree.
+impl<'a, 'b> From<&Arg<'a, 'b>> for FfiParam {
+    #[inline]
+    fn from(arg: &Arg<'a, 'b>) -> Self {
+        FfiParam {
+            name: arg.name.as_char_ptr(),
+            data: arg.data.as_c_ptr(),
+            type_: arg.data.type_() as core::ffi::c_int,
+            arraylength: arg.array_length.get() as core::ffi::c_int,
+            // `count` is `data.len()/array_length`. `array_length` is
+            // `NonZeroUsize`, so this cannot divide by zero.
+            count: arg.data.len() / arg.array_length,
+            flags: arg.flags,
+        }
     }
 }
 

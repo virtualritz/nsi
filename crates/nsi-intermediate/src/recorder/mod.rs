@@ -5,7 +5,7 @@
 //! back after a panic in one of these methods is not a `Result`.
 
 use crate::{OwnedArgument, OwnedData, RecordError, Scene};
-use nsi_ffi_wrap::Arg;
+use nsi_argument::Arg;
 use nsi_trait::{Action, Nsi};
 use parking_lot::{Mutex, MutexGuard};
 
@@ -26,7 +26,7 @@ pub enum RenderState {
 ///
 /// # Why there is no context lifetime
 ///
-/// [`nsi_ffi_wrap::Context`] carries a `'a` bounding the borrowed data
+/// `nsi_ffi_wrap::Context` carries a `'a` bounding the borrowed data
 /// handed to it through `Reference`, `ReferenceSlice` and `Callback`.
 /// The recorder does not, and the difference is real rather than an
 /// oversight: `Context` stores no pointers -- its `'a` is a `PhantomData`

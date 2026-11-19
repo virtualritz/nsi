@@ -33,7 +33,7 @@ pub(crate) fn is_keyword(word: &str) -> bool {
 pub(crate) fn parse<N>(input: &[u8], sink: &N) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     let mut lexer = Lexer::new(input);
     let mut pending = lexer.next_token()?;
@@ -73,7 +73,7 @@ pub(crate) fn apply<'a, N>(
 ) -> Result<Option<Token<'a>>, Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     match keyword {
         "Create" => {
