@@ -27,7 +27,7 @@
 //! thing in the scene. A backend indexes its own payload with these.
 
 use super::*;
-use nsi_ffi_wrap::nsi_sys::NSIParamFlags;
+use nsi_trait::Flags;
 
 /// How a primitive variable's values map onto a primitive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -169,12 +169,11 @@ impl Scene {
             });
         }
 
-        let flags = NSIParamFlags::from_bits_truncate(values.flags);
+        let flags = Flags::from_bits_truncate(values.flags);
         // A flag only decides where the count is genuinely ambiguous;
         // it never overrides a count that cannot mean what it claims.
-        let per_face = flags.contains(NSIParamFlags::PerFace) && count == faces;
-        let per_vertex =
-            flags.contains(NSIParamFlags::PerVertex) && count == points;
+        let per_face = flags.contains(Flags::PER_FACE) && count == faces;
+        let per_vertex = flags.contains(Flags::PER_VERTEX) && count == points;
 
         // The case the flags exist for: with as many faces as vertices
         // -- the documentation's tetrahedron -- the count says nothing

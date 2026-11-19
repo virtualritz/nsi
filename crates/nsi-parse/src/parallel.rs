@@ -216,7 +216,7 @@ fn apply_one<'a, N>(
 ) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     let mut lexer = Lexer::starting_at(input, start);
     // SAFETY: `scan` records a statement only at a keyword token, and
@@ -255,7 +255,7 @@ fn run_phase<N>(
 ) -> Result<(), Error<N::Error>>
 where
     N: Nsi + Sync,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     // Stable, so a group is in stream order.
     indices.sort_by_key(|&index| statements[index].key);
@@ -285,7 +285,7 @@ where
 pub(crate) fn parse<N>(input: &[u8], sink: &N) -> Result<(), Error<N::Error>>
 where
     N: Nsi + Sync,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     let Some(statements) = scan(input) else {
         return crate::parse::parse(input, sink);

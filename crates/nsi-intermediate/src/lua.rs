@@ -42,8 +42,8 @@
 
 use crate::{OwnedArgument, OwnedData, Scene};
 use core::{error::Error, fmt};
-use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
-use nsi_trait::{Action, Nsi, Type};
+use nsi_argument::Arg;
+use nsi_trait::{Action, Flags, Nsi, Type};
 use parking_lot::Mutex;
 use std::io::{self, Write};
 
@@ -250,9 +250,9 @@ fn write_arg<W: Write>(
     // A Lua parameter table has room for `name`, `data`, `type` and
     // `arraylength` -- and nothing else. Dropping a flag silently
     // rebuilds a different surface.
-    let inexpressible = NSIParamFlags::PerFace.bits()
-        | NSIParamFlags::PerVertex.bits()
-        | NSIParamFlags::InterpolateLinear.bits();
+    let inexpressible = Flags::PER_FACE.bits()
+        | Flags::PER_VERTEX.bits()
+        | Flags::INTERPOLATE_LINEAR.bits();
     if arg.flags & inexpressible != 0 {
         return Err(LuaError::InexpressibleFlags {
             handle: handle.to_string(),
@@ -281,7 +281,7 @@ fn write_arg<W: Write>(
     let name = crate::names::legacy_attribute(node_type, &arg.name)
         .unwrap_or(&arg.name);
     write!(out, "{{name={}", quoted_str(name))?;
-    if arg.flags & NSIParamFlags::IsArray.bits() != 0 {
+    if arg.flags & Flags::IS_ARRAY.bits() != 0 {
         write!(out, ", arraylength={}", arg.array_length)?;
     }
 

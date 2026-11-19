@@ -1,7 +1,7 @@
 //! Parameter values, and the scratch they are parsed into.
 //!
 //! A statement's parameters are read in two passes: everything lands in
-//! per-type buffers first, then the [`nsi_ffi_wrap::Arg`]s are built
+//! per-type buffers first, then the [`nsi_argument::Arg`]s are built
 //! over disjoint ranges of those buffers. One pass would not borrow-check
 //! -- an `Arg` holds a slice while the next parameter still wants to
 //! push -- and it is also what keeps the steady state allocation-free,
@@ -13,7 +13,7 @@ use crate::{
 };
 use alloc_free::{SmallArgs, SmallStrs};
 use core::num::NonZeroUsize;
-use nsi_ffi_wrap::{
+use nsi_argument::{
     Arg, ArgData, StringSlice,
     argument::{
         Color3F32Slice, IntegerI32Slice, IntegerI64Slice, Matrix4F32Slice,
@@ -541,7 +541,7 @@ fn parse_type(
 /// covers the parameter counts a renderer writes; more spills to the
 /// heap rather than failing.
 mod alloc_free {
-    use nsi_ffi_wrap::Arg;
+    use nsi_argument::Arg;
 
     pub(super) type SmallArgs<'a> = smallvec::SmallVec<[Arg<'a, 'static>; 8]>;
     pub(super) type SmallStrs<'a> = smallvec::SmallVec<[&'a [u8]; 8]>;
