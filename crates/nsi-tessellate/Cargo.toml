@@ -25,10 +25,10 @@ ahash = { version = "0.8", optional = true }
 # 0.4.1: a closed trim projected its start to its far end and folded faces
 # along closed welded edges.
 monstertruck = { version = "0.4.1", features = ["meshing"], optional = true }
-nsi-intermediate = { version = "0.1", path = "../nsi-intermediate" }
+nsi-intermediate = { version = "0.2", path = "../nsi-intermediate" }
 subdiv-kernels = "0.1"
 
 [dev-dependencies]
-nsi-trait = { version = "0.4", path = "../nsi-trait" }
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+nsi-trait = { version = "0.5", path = "../nsi-trait" }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
 png = "0.18"

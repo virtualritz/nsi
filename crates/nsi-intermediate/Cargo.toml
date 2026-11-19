@@ -1,6 +1,6 @@
 [package]
 name = "nsi-intermediate"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13 needs 1.95.
@@ -65,8 +65,8 @@ zstd = { version = "0.14", optional = true }
 #
 # Path deps: this crate lives in the same workspace as what it depends
 # on, which is the whole point of it living here.
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
-nsi-trait = { version = "0.4", path = "../nsi-trait" }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
+nsi-trait = { version = "0.5", path = "../nsi-trait" }
 
 [package.metadata.docs.rs]
 all-features = true

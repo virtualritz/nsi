@@ -1,6 +1,6 @@
 [package]
 name = "nsi"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
@@ -49,19 +49,19 @@ nightly = ["nsi-ffi-wrap/nightly"]
 ustr = ["nsi-ffi-wrap/ustr_handles"]
 
 [dependencies]
-nsi-3delight = { version = "0.10", path = "crates/nsi-3delight", optional = true }
-nsi-ffi-wrap = { version = "0.10", path = "crates/nsi-ffi-wrap" }
-nsi-jupyter = { version = "0.10", path = "crates/nsi-jupyter", optional = true }
-nsi-toolbelt = { version = "0.10", path = "crates/nsi-toolbelt", optional = true }
-nsi-trait = { version = "0.4", path = "crates/nsi-trait" }
+nsi-3delight = { version = "0.11", path = "crates/nsi-3delight", optional = true }
+nsi-ffi-wrap = { version = "0.11", path = "crates/nsi-ffi-wrap" }
+nsi-jupyter = { version = "0.11", path = "crates/nsi-jupyter", optional = true }
+nsi-toolbelt = { version = "0.11", path = "crates/nsi-toolbelt", optional = true }
+nsi-trait = { version = "0.5", path = "crates/nsi-trait" }
 
 [dev-dependencies]
 dl-openvdb-query = "0.1"
 exr = "1"
 log = "0.4"
 libc = "0.2"
-nsi-3delight = { version = "0.10", path = "crates/nsi-3delight" }
-nsi-toolbelt = { version = "0.10", path = "crates/nsi-toolbelt" }
+nsi-3delight = { version = "0.11", path = "crates/nsi-3delight" }
+nsi-toolbelt = { version = "0.11", path = "crates/nsi-toolbelt" }
 png = "0.18"
 
 [[example]]

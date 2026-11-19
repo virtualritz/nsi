@@ -1,6 +1,6 @@
 [package]
 name = "nsi-ffi-wrap"
-version = "0.10.3"
+version = "0.11.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13 needs 1.95.
@@ -52,8 +52,8 @@ enum_dispatch = "0.3"
 lazy_static = "1"
 log = "0.4"
 ndspy-sys = { version = "0.2", optional = true }
-nsi-sys = { version = "0.9", path = "../nsi-sys" }
-nsi-trait = { version = "0.4", path = "../nsi-trait" }
+nsi-sys = { version = "0.10", path = "../nsi-sys" }
+nsi-trait = { version = "0.5", path = "../nsi-trait" }
 num_enum = "0.7"
 parking_lot = "0.13"
 triomphe = "0.1"

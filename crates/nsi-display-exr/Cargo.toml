@@ -41,4 +41,4 @@ exr = "1.74.2"
 oidn = { version = "2", optional = true }
 
 [dev-dependencies]
-nsi = { version = "0.10", path = "../..", features = ["output"] }
+nsi = { version = "0.11", path = "../..", features = ["output"] }

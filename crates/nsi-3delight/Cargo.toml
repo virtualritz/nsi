@@ -1,6 +1,6 @@
 [package]
 name = "nsi-3delight"
-version = "0.10.3"
+version = "0.11.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
@@ -23,11 +23,11 @@ default = ["toolbelt"]
 toolbelt = ["dep:nsi-toolbelt"]
 
 [dependencies]
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
-nsi-toolbelt = { version = "0.10.2", path = "../nsi-toolbelt", optional = true }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
+nsi-toolbelt = { version = "0.11", path = "../nsi-toolbelt", optional = true }
 
 [dev-dependencies]
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap", features = ["output"] }
 
 [package.metadata.docs.rs]
 all-features = true

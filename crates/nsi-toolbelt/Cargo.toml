@@ -1,6 +1,6 @@
 [package]
 name = "nsi-toolbelt"
-version = "0.10.4"
+version = "0.11.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
@@ -19,13 +19,13 @@ repository = "https://github.com/virtualritz/nsi/"
 include = ["src/**/*", "/Cargo.toml", "/README.md"]
 
 [dependencies]
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
 petname = { version = "3", default-features = false, features = ["default-rng", "default-words"] }
 ultraviolet = { version = "0.10", features = ["f64"] }
 
 [dev-dependencies]
 # The render test drives real output callbacks.
-nsi-ffi-wrap = { version = "0.10", path = "../nsi-ffi-wrap", features = ["output"] }
+nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap", features = ["output"] }
 # `connection_rules` holds this crate's typed connection API against
 # `nsi-intermediate`'s classifier, which is the same specification
 # written twice. Path-only and unversioned on purpose: both crates are

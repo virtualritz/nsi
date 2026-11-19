@@ -26,6 +26,19 @@ Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),
   `nsi-intermediate` records and writes them.
 - `nsi-sys` binds the 3Delight 2.9.210 header.
 
+### `nsi-sys` 0.9.0 -> 0.10.0 (not yet published)
+
+- `NSIType` gains `HPoint` from the 3Delight 2.9.210 header. Breaking,
+  because `NSIType` is an exhaustive Rust enum.
+- Builds with `bindgen` 0.73 (was capped below 0.73). 0.73.2 resolves
+  `syn` 3 together with `prettyplease` 0.3, so the old mismatch is gone.
+
+### `nsi-trait` 0.4.2 -> 0.5.0 (not yet published)
+
+- `Type` gains `Point4F32` and renames its variants, as described
+  above. Breaking, because `Type` is exhaustive. The old names stay as
+  deprecated associated constants.
+
 ### `nsi-intermediate` 0.1.0 -> 0.2.0 (not yet published)
 
 - **Weld declarations** (spec 013), from the ɴsɪ draft *Shared
@@ -42,6 +55,10 @@ Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),
   prints none. Resolution already took the first-connected definition,
   which is what 3Delight renders; that is now pinned by mirrored tests.
   Additive.
+- `parking_lot` 0.12 -> 0.13. Breaking on its own: `Recorder::scene`
+  returns a `parking_lot::MutexGuard`. The MSRV is now 1.95, which
+  `parking_lot` 0.13 needs.
+- Requires `nsi-ffi-wrap` 0.11 and `nsi-trait` 0.5.
 
 ### `nsi-parse` 0.1.0 -> 0.2.0 (not yet published)
 
@@ -52,6 +69,9 @@ Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),
   `Evaluate` and `RenderControl` are barriers. The recorded scene is the
   sequential parser's. 1.9x into a null sink; 1.15-1.4x into 3Delight,
   whose context serialises calls. Additive.
+- Requires `nsi-ffi-wrap` 0.11 and `nsi-trait` 0.5. Breaking, because
+  `parse_stream` and the other entry points bound their sink on
+  `nsi-trait`'s `Nsi`. The MSRV is now 1.95, through `nsi-ffi-wrap`.
 
 ### `nsi-procedural` 0.1.0 -- first release (not yet published)
 
@@ -71,6 +91,34 @@ included; errors and panics are reported through the renderer.
   wrapper drops. Callbacks passed through it are leaked rather than
   freed under the renderer. Additive.
 - Drops the unused `null-terminated-str` dependency.
+- `ArgData` renames its variants and gains `Point4F32`, as described
+  above. Breaking.
+- `parking_lot` 0.12 -> 0.13. The MSRV is now 1.95, which `parking_lot`
+  0.13 needs.
+- Requires `nsi-sys` 0.10, which it re-exports as `nsi_sys`, and
+  `nsi-trait` 0.5.
+
+### `nsi` 0.10.1 -> 0.11.0 (not yet published)
+
+- Re-exports `nsi-ffi-wrap` 0.11 and requires `nsi-trait` 0.5,
+  `nsi-3delight` 0.11, `nsi-toolbelt` 0.11 and `nsi-jupyter` 0.11.
+  Breaking, through the re-export. The MSRV is now 1.95.
+
+### `nsi-3delight` 0.10.3 -> 0.11.0 (not yet published)
+
+- Requires `nsi-ffi-wrap` 0.11 and `nsi-toolbelt` 0.11. Breaking,
+  because its functions take `nsi::Context` and return `nsi::Arg`. The
+  MSRV is now 1.95.
+
+### `nsi-toolbelt` 0.10.4 -> 0.11.0 (not yet published)
+
+- Requires `nsi-ffi-wrap` 0.11. Breaking, because its functions take
+  `nsi::Context`. The MSRV is now 1.95.
+
+### `nsi-jupyter` 0.10.0 -> 0.11.0 (not yet published)
+
+- Requires `nsi-ffi-wrap` 0.11. Breaking, because `as_jupyter` takes
+  `nsi::Context`. The MSRV is now 1.95.
 
 ### `nsi` 0.10.0 -> 0.10.1
 
