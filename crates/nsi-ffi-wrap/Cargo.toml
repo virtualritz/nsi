@@ -1,6 +1,6 @@
 [package]
 name = "nsi-ffi-wrap"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13 needs 1.95.

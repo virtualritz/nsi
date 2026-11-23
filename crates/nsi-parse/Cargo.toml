@@ -1,6 +1,6 @@
 [package]
 name = "nsi-parse"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13, through nsi-ffi-wrap, needs 1.95.
@@ -46,8 +46,8 @@ zstd = { version = "0.14", optional = true }
 
 [dev-dependencies]
 # The cross-crate and renderdl tests drive a real `Context`.
-nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
-nsi-intermediate = { version = "0.2", path = "../nsi-intermediate", features = ["lua", "gzip", "zstd"] }
+nsi-ffi-wrap = { version = "0.12", path = "../nsi-ffi-wrap" }
+nsi-intermediate = { version = "0.3", path = "../nsi-intermediate", features = ["lua", "gzip", "zstd"] }
 rayon = "1"
 
 [package.metadata.docs.rs]

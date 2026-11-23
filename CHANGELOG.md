@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### `nsi-argument` 0.1.0, `nsi-ffi-wrap` 0.12.0, `nsi-intermediate` 0.3.0, `nsi-parse` 0.3.0
+
+- **New crate `nsi-argument`**: `Arg`, its value types, the `ParamValue`
+  bridge and the argument macros, on `nsi-trait` alone. It has no `nsi-sys`,
+  so it needs no libclang and no bindgen to build.
+- **`nsi-intermediate` and `nsi-parse` build without `nsi-sys`.** They take
+  `Arg` from `nsi-argument`, not from `nsi-ffi-wrap`. `nsi-ffi-wrap` is only a
+  dev-dependency of both, for the tests that render.
+- **`nsi-ffi-wrap` re-exports `nsi-argument`** under every old path, so
+  `nsi_ffi_wrap::Arg`, `nsi::...` and the macros compile unchanged. The fields
+  of `Arg` are private to `nsi-argument` now, so the minor version goes up.
+- `nsi`, `nsi-3delight`, `nsi-toolbelt` and `nsi-jupyter` require
+  `nsi-ffi-wrap` 0.12 and are not published with this release.
+
 ### Type names and `hpoint` (spec 011; not yet published)
 
 Breaking, so a minor bump for `nsi-sys` (0.10.0), `nsi-trait` (0.5.0),

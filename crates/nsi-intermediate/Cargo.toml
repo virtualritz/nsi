@@ -1,6 +1,6 @@
 [package]
 name = "nsi-intermediate"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # parking_lot 0.13 needs 1.95.
@@ -72,7 +72,7 @@ nsi-trait = { version = "0.5", path = "../nsi-trait" }
 
 [dev-dependencies]
 # The round-trip tests render through 3Delight with `Context`.
-nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.12", path = "../nsi-ffi-wrap" }
 
 [package.metadata.docs.rs]
 all-features = true
