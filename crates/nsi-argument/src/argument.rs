@@ -1,6 +1,6 @@
 //! Optional arguments passed to methods of an ɴsɪ context.
 use enum_dispatch::enum_dispatch;
-use nsi_sys::*;
+use nsi_trait::{Flags, Type};
 use std::{
     ffi::{CString, c_void},
     marker::PhantomData,
@@ -13,38 +13,29 @@ use ustr::{Ustr, ustr};
 #[allow(unused_imports)]
 use crate::*;
 
-#[inline(always)]
-pub(crate) fn to_c_param_vec(
+/// Every argument as the C API reads it, for tests that check the FFI
+/// view. `nsi-ffi-wrap` converts the same [`FfiParam`]s to `NSIParam`.
+#[cfg(test)]
+fn to_c_param_vec(
     args: Option<&ArgSlice>,
-) -> (i32, *const NSIParam, Vec<NSIParam>) {
+) -> (i32, *const FfiParam, Vec<FfiParam>) {
     let args = match args {
-        Some(args) => args
-            .iter()
-            .map(|arg| NSIParam {
-                name: arg.name.as_char_ptr(),
-                data: arg.data.as_c_ptr(),
-                type_: arg.data.type_() as _,
-                arraylength: arg.array_length.get() as _,
-                count: (arg.data.len() / arg.array_length) as _,
-                flags: arg.flags as _,
-            })
-            .collect::<Vec<_>>(),
+        Some(args) => args.iter().map(FfiParam::from).collect::<Vec<_>>(),
         None => Vec::new(),
     };
 
     (args.len() as _, args.as_ptr(), args)
 }
 
-/// A slice of (optional) arguments passed to a method of
-/// [`Context`].
+/// A slice of (optional) arguments passed to a method of an ɴsɪ
+/// context.
 pub type ArgSlice<'a, 'b> = [Arg<'a, 'b>];
 
-/// A vector of (optional) arguments passed to a method of
-/// [`Context`].
+/// A vector of (optional) arguments passed to a method of an ɴsɪ
+/// context.
 pub type ArgVec<'a, 'b> = Vec<Arg<'a, 'b>>;
 
-/// An (optional) argument passed to a method of
-/// [`Context`].
+/// An (optional) argument passed to a method of an ɴsɪ context.
 #[derive(Debug, Clone)]
 pub struct Arg<'a, 'b> {
     pub(crate) name: Ustr,
@@ -74,34 +65,57 @@ impl<'a, 'b> Arg<'a, 'b> {
     #[inline]
     pub fn array_len(mut self, length: NonZeroUsize) -> Self {
         self.array_length = length;
-        self.flags |= NSIParamFlags::IsArray.bits();
+        self.flags |= Flags::IS_ARRAY.bits();
         self
     }
 
     /// Marks this argument as having per-face granularity.
     #[inline]
     pub fn per_face(mut self) -> Self {
-        self.flags |= NSIParamFlags::PerFace.bits();
+        self.flags |= Flags::PER_FACE.bits();
         self
     }
 
     /// Marks this argument as having per-vertex granularity.
     #[inline]
     pub fn per_vertex(mut self) -> Self {
-        self.flags |= NSIParamFlags::PerVertex.bits();
+        self.flags |= Flags::PER_VERTEX.bits();
         self
     }
 
     /// Marks this argument as to be interpolated linearly.
     #[inline]
     pub fn linear_interpolation(mut self) -> Self {
-        self.flags |= NSIParamFlags::InterpolateLinear.bits();
+        self.flags |= Flags::INTERPOLATE_LINEAR.bits();
         self
+    }
+
+    /// The interned name. For `nsi-ffi-wrap`, which compares names by
+    /// pointer; use [`ParamValue::name`](nsi_trait::ParamValue::name)
+    /// otherwise.
+    #[doc(hidden)]
+    #[inline]
+    pub fn name_ustr(&self) -> Ustr {
+        self.name
+    }
+
+    /// The data. For `nsi-ffi-wrap`, which reads callbacks and the
+    /// renderer name out of it.
+    #[doc(hidden)]
+    #[inline]
+    pub fn data(&self) -> &ArgData<'a, 'b> {
+        &self.data
     }
 }
 
+/// Type tag, length and C pointer of an [`ArgData`]. Public only so
+/// `nsi-ffi-wrap` can marshal arguments; not part of the stable API.
+#[doc(hidden)]
+// `len` is the element count the C API reads, not a collection size;
+// the lint fired only once the trait became public.
+#[allow(clippy::len_without_is_empty)]
 #[enum_dispatch(ArgData)]
-pub(crate) trait ArgDataMethods {
+pub trait ArgDataMethods {
     //const TYPE: DataType;
     fn type_(&self) -> DataType;
     fn len(&self) -> usize;
@@ -116,7 +130,7 @@ pub(crate) trait ArgDataMethods {
 /// function call where they get passed.
 ///
 /// Lifetime `'b` is for the arbitrary reference type. This is
-/// pegged to the lifetime of the [`crate::context::Context`].
+/// pegged to the lifetime of the ɴsɪ context.
 /// Use this to pass arbitrary Rust data through the FFI boundary.
 #[enum_dispatch]
 #[derive(Debug, Clone)]
@@ -537,6 +551,22 @@ impl<'a> Callback<'a> {
             _marker: PhantomData,
         }
     }
+
+    /// The erased callback pointer. For the context that takes
+    /// ownership of it.
+    #[doc(hidden)]
+    #[inline]
+    pub fn data_ptr(&self) -> *const c_void {
+        self.data
+    }
+
+    /// The function that reclaims [`data_ptr`](Self::data_ptr). For the
+    /// context that takes ownership of the callback.
+    #[doc(hidden)]
+    #[inline]
+    pub fn drop_fn(&self) -> unsafe fn(*const c_void) {
+        self.drop_fn
+    }
 }
 
 impl<'a> ArgDataMethods for Callback<'a> {
@@ -711,38 +741,42 @@ nsi_tuple_data_def!(f64, 16, Matrix4F64, DataType::Matrix4F64);
 nsi_tuple_data_def!(f32, 4, Point4F32, DataType::Point4F32);
 
 /// Identifies an [`Arg`]’s data type.
+///
+/// The discriminants are `nsi_trait::Type`'s, which are `nsi.h`'s
+/// `NSIType_t` values. Public only for [`ArgDataMethods`].
+#[doc(hidden)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
-pub(crate) enum DataType {
+pub enum DataType {
     /// A single [`prim@f32`] value.
-    RealF32 = NSIType::F32 as _,
+    RealF32 = Type::RealF32 as _,
     /// A single [`prim@f64`] value.
-    RealF64 = NSIType::F64 as _,
+    RealF64 = Type::RealF64 as _,
     /// Single [`prim@i32`] value.
-    IntegerI32 = NSIType::I32 as _,
+    IntegerI32 = Type::IntegerI32 as _,
     /// Single [`prim@i64`] value.
-    IntegerI64 = NSIType::I64 as _,
+    IntegerI64 = Type::IntegerI64 as _,
     /// A [`String`].
-    String = NSIType::String as _,
+    String = Type::String as _,
     /// Color, given as three [`prim@f32`] values,
     /// usually in the range `0..1`. Red would e.g. be `[1.0, 0.0,
     /// 0.0]. Assumed to be in a linear color space.`
-    Color3F32 = NSIType::Color as _,
+    Color3F32 = Type::Color3F32 as _,
     /// Point, given as three [`prim@f32`] values.
-    Point3F32 = NSIType::Point as _,
+    Point3F32 = Type::Point3F32 as _,
     /// Vector, given as three [`prim@f32`] values.
-    Vector3F32 = NSIType::Vector as _,
+    Vector3F32 = Type::Vector3F32 as _,
     /// Normal vector, given as three [`prim@f32`] values.
-    Normal3F32 = NSIType::Normal as _,
+    Normal3F32 = Type::Normal3F32 as _,
     /// Transformation matrix, given as 16 [`prim@f32`] values.
-    Matrix4F32 = NSIType::MatrixF32 as _,
+    Matrix4F32 = Type::Matrix4F32 as _,
     /// Transformation matrix, given as 16 [`prim@f64`] values.
-    Matrix4F64 = NSIType::MatrixF64 as _,
+    Matrix4F64 = Type::Matrix4F64 as _,
     /// Raw (`*const T`) pointer.
-    Reference = NSIType::Pointer as _,
+    Reference = Type::Reference as _,
     /// Homogeneous point, given as four [`prim@f32`] values
     /// `(w·x, w·y, w·z, w)`. `NSITypeHPoint`, 3Delight 2.9.210 and later.
-    Point4F32 = NSIType::HPoint as _,
+    Point4F32 = Type::Point4F32 as _,
 }
 
 impl DataType {
@@ -1465,7 +1499,7 @@ mod pointer_marshalling_tests {
 
     /// Reads the single pointer value the renderer would copy out of a
     /// parameter, exactly as ɴsɪ does for `NSITypePointer`.
-    fn value_read_by_renderer(param: &NSIParam) -> *const c_void {
+    fn value_read_by_renderer(param: &FfiParam) -> *const c_void {
         assert_eq!(DataType::Reference as i32, param.type_);
         assert_eq!(1, param.count);
         // SAFETY: `data` must address a `*const c_void`; that is the

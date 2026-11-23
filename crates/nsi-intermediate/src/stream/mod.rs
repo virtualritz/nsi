@@ -36,8 +36,8 @@
 
 use crate::{EdgeKind, OwnedArgument, OwnedData, Scene};
 use core::fmt;
-use nsi_ffi_wrap::{Arg, nsi_sys::NSIParamFlags};
-use nsi_trait::{Action, Nsi, Type};
+use nsi_argument::Arg;
+use nsi_trait::{Action, Flags, Nsi, Type};
 use parking_lot::Mutex;
 use std::io::{self, Write};
 
@@ -471,7 +471,7 @@ fn type_name(arg: &OwnedArgument) -> String {
     // ɴsɪ marks an array with `NSIParamIsArray`, not by its length, and
     // `array_len(1)` is a real one-element array: 3Delight writes
     // `"al1" "float[1]" 2 [ 1 2 ]`. Keying on `> 1` dropped it.
-    let sized = if arg.flags & NSIParamFlags::IsArray.bits() != 0 {
+    let sized = if arg.flags & Flags::IS_ARRAY.bits() != 0 {
         format!("{base}[{}]", arg.array_length)
     } else {
         base.to_string()
@@ -493,9 +493,9 @@ fn type_name(arg: &OwnedArgument) -> String {
 /// the `[n]` suffix.
 fn flag_prefix(flags: i32) -> String {
     [
-        (NSIParamFlags::PerFace, 'f'),
-        (NSIParamFlags::PerVertex, 'v'),
-        (NSIParamFlags::InterpolateLinear, 'l'),
+        (Flags::PER_FACE, 'f'),
+        (Flags::PER_VERTEX, 'v'),
+        (Flags::INTERPOLATE_LINEAR, 'l'),
     ]
     .iter()
     .filter(|(flag, _)| flags & flag.bits() != 0)

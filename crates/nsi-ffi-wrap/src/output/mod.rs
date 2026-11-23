@@ -1047,7 +1047,7 @@ impl<T: PixelType> AccumulatingCallbacks<T> {
 #[cfg(test)]
 mod ffi_round_trip_tests {
     use super::*;
-    use crate::{Arg, ArgData, Callback, argument::to_c_param_vec};
+    use crate::{Arg, ArgData, Callback, to_c_param_vec};
     use nsi_sys::NSIParam;
     use std::{
         cell::Cell,
@@ -1102,7 +1102,9 @@ mod ffi_round_trip_tests {
         let (_, _, params) = to_c_param_vec(Some(args));
         args.iter()
             .zip(params.iter())
-            .map(|(arg, param)| RendererParam::new(arg.name.as_str(), param))
+            .map(|(arg, param)| {
+                RendererParam::new(arg.name_ustr().as_str(), param)
+            })
             .collect()
     }
 

@@ -13,7 +13,7 @@
 use crate::Error;
 use core::num::NonZeroUsize;
 use mlua::{Lua, Table, Value, Variadic};
-use nsi_ffi_wrap::{
+use nsi_argument::{
     Arg, ArgData, StringSlice,
     argument::{
         Color3F32Slice, IntegerI32Slice, Matrix4F32Slice, Matrix4F64Slice,
@@ -57,7 +57,7 @@ struct Param {
 pub fn run_lua<N>(source: &[u8], sink: &N) -> Result<(), Error<N::Error>>
 where
     N: Nsi,
-    for<'call> N: Nsi<Arg<'call> = nsi_ffi_wrap::Arg<'call, 'static>>,
+    for<'call> N: Nsi<Arg<'call> = nsi_argument::Arg<'call, 'static>>,
 {
     let lua = Lua::new();
     // A sink error is not a Lua error, so it is carried out of the
