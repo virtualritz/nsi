@@ -14,10 +14,10 @@ documentation = "https://docs.rs/nsi-procedural/"
 repository = "https://github.com/virtualritz/nsi/"
 
 [dependencies]
-nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.12", path = "../nsi-ffi-wrap" }
 
 [dev-dependencies]
-nsi-intermediate = { version = "0.2", path = "../nsi-intermediate" }
+nsi-intermediate = { version = "0.3", path = "../nsi-intermediate" }
 log = "0.4"
 # The `step_procedural` example: STEP loading and B-rep faces.
 monstertruck = { version = "0.4", features = ["step"] }

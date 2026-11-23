@@ -50,7 +50,7 @@ ustr = ["nsi-ffi-wrap/ustr_handles"]
 
 [dependencies]
 nsi-3delight = { version = "0.11", path = "crates/nsi-3delight", optional = true }
-nsi-ffi-wrap = { version = "0.11", path = "crates/nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.12", path = "crates/nsi-ffi-wrap" }
 nsi-jupyter = { version = "0.11", path = "crates/nsi-jupyter", optional = true }
 nsi-toolbelt = { version = "0.11", path = "crates/nsi-toolbelt", optional = true }
 nsi-trait = { version = "0.5", path = "crates/nsi-trait" }

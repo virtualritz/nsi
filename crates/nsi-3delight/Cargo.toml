@@ -23,11 +23,11 @@ default = ["toolbelt"]
 toolbelt = ["dep:nsi-toolbelt"]
 
 [dependencies]
-nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap" }
+nsi-ffi-wrap = { version = "0.12", path = "../nsi-ffi-wrap" }
 nsi-toolbelt = { version = "0.11", path = "../nsi-toolbelt", optional = true }
 
 [dev-dependencies]
-nsi-ffi-wrap = { version = "0.11", path = "../nsi-ffi-wrap", features = ["output"] }
+nsi-ffi-wrap = { version = "0.12", path = "../nsi-ffi-wrap", features = ["output"] }
 
 [package.metadata.docs.rs]
 all-features = true
