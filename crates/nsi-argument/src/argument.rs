@@ -1,7 +1,10 @@
 //! Optional arguments passed to methods of an ɴsɪ context.
 use enum_dispatch::enum_dispatch;
-use nsi_trait::{Flags, Type};
+use nsi_trait::{
+    ErrorCallback, Flags, FnError, FnStatus, StatusCallback, Type,
+};
 use std::{
+    any::TypeId,
     ffi::{CString, c_void},
     marker::PhantomData,
     num::NonZeroUsize,
@@ -105,6 +108,16 @@ impl<'a, 'b> Arg<'a, 'b> {
     #[inline]
     pub fn data(&self) -> &ArgData<'a, 'b> {
         &self.data
+    }
+
+    /// The [`Callback`] of a callback argument (`"errorhandler"`,
+    /// `"stoppedcallback"`, ...), or `None` for any other data.
+    #[inline]
+    pub fn callback(&self) -> Option<&Callback<'b>> {
+        match &self.data {
+            ArgData::Callback(callback) => Some(callback),
+            _ => None,
+        }
     }
 }
 
@@ -527,12 +540,66 @@ pub trait CallbackPtr {
     /// must not have been reclaimed already.
     #[doc(hidden)]
     unsafe fn drop_ptr(ptr: *const c_void);
+
+    /// The type of the callback, with every lifetime `'static`, if
+    /// [`Callback`]'s typed accessors may read it back. `None`, the
+    /// default, keeps a callback opaque.
+    #[doc(hidden)]
+    fn callback_type() -> Option<TypeId>
+    where
+        Self: Sized,
+    {
+        None
+    }
+}
+
+impl CallbackPtr for ErrorCallback<'_> {
+    #[doc(hidden)]
+    fn to_ptr(self) -> *const c_void {
+        self.into_raw() as *const _ as _
+    }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnError<'static>>) });
+    }
+
+    #[doc(hidden)]
+    fn callback_type() -> Option<TypeId> {
+        Some(TypeId::of::<ErrorCallback<'static>>())
+    }
+}
+
+impl<C: ?Sized + 'static> CallbackPtr for StatusCallback<'_, C> {
+    #[doc(hidden)]
+    fn to_ptr(self) -> *const c_void {
+        self.into_raw() as *const _ as _
+    }
+
+    #[doc(hidden)]
+    unsafe fn drop_ptr(ptr: *const c_void) {
+        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
+        drop(unsafe {
+            Box::from_raw(ptr as *mut Box<dyn FnStatus<'static, C>>)
+        });
+    }
+
+    #[doc(hidden)]
+    fn callback_type() -> Option<TypeId> {
+        Some(TypeId::of::<StatusCallback<'static, C>>())
+    }
 }
 
 unsafe impl Send for Callback<'static> {}
 unsafe impl Sync for Callback<'static> {}
 
 /// See [`ArgData`] for details.
+///
+/// A backend in Rust reads an [`ErrorCallback`] or a [`StatusCallback`]
+/// back with [`error_handler`](Self::error_handler) and
+/// [`status_callback`](Self::status_callback), and keeps one with
+/// [`adopt`](Self::adopt).
 #[derive(Debug, Clone)]
 pub struct Callback<'a> {
     pub(crate) data: *const c_void,
@@ -540,16 +607,59 @@ pub struct Callback<'a> {
     /// closure type is erased at the FFI boundary; the [`Context`] that
     /// takes ownership needs this to free it correctly.
     pub(crate) drop_fn: unsafe fn(*const c_void),
+    /// [`CallbackPtr::callback_type`] of the erased callback.
+    pub(crate) callback_type: Option<TypeId>,
     _marker: PhantomData<&'a mut ()>,
 }
 
 impl<'a> Callback<'a> {
-    pub fn new<T: CallbackPtr>(data: T) -> Self {
+    /// `T: 'a` ties the closure to the argument: a renderer that keeps the
+    /// callback for `'a` never calls a closure whose borrows have ended.
+    pub fn new<T: CallbackPtr + 'a>(data: T) -> Self {
         Self {
+            callback_type: T::callback_type(),
             data: data.to_ptr(),
             drop_fn: T::drop_ptr,
             _marker: PhantomData,
         }
+    }
+
+    /// The closure of an [`ErrorCallback`], or `None` if this callback is
+    /// of another type.
+    pub fn error_handler(&self) -> Option<&(dyn FnError<'a> + 'a)> {
+        (self.callback_type == Some(TypeId::of::<ErrorCallback<'static>>()))
+            .then(|| {
+                // SAFETY: the type matches, so `data` is the
+                // `ErrorCallback::into_raw` pointer of a closure that lives
+                // for `'a` (`Callback::new`), and nobody reclaimed it while
+                // `self` is borrowed.
+                unsafe { &**(self.data as *const Box<dyn FnError<'a>>) }
+            })
+    }
+
+    /// The closure of a [`StatusCallback`] for the context type `C`, or
+    /// `None` if this callback is of another type or for another context
+    /// type.
+    pub fn status_callback<C: ?Sized + 'static>(
+        &self,
+    ) -> Option<&(dyn FnStatus<'a, C> + 'a)> {
+        (self.callback_type == Some(TypeId::of::<StatusCallback<'static, C>>()))
+            .then(|| {
+                // SAFETY: as in `error_handler`.
+                unsafe { &**(self.data as *const Box<dyn FnStatus<'a, C>>) }
+            })
+    }
+
+    /// Takes ownership of the callback: the result frees the closure when
+    /// it is dropped.
+    ///
+    /// # Safety
+    ///
+    /// The caller must be the one context the host handed the callback to
+    /// (see [`CallbackPtr::drop_ptr`]), and must adopt it once. No other
+    /// copy of this [`Callback`] may be adopted or reclaimed.
+    pub unsafe fn adopt(&self) -> AdoptedCallback<'a> {
+        AdoptedCallback(self.clone())
     }
 
     /// The erased callback pointer. For the context that takes
@@ -566,6 +676,31 @@ impl<'a> Callback<'a> {
     #[inline]
     pub fn drop_fn(&self) -> unsafe fn(*const c_void) {
         self.drop_fn
+    }
+}
+
+/// A [`Callback`] that a context owns, from [`Callback::adopt`]. It frees
+/// the closure when it is dropped, and dereferences to the [`Callback`]
+/// for the typed accessors.
+#[derive(Debug)]
+pub struct AdoptedCallback<'a>(Callback<'a>);
+
+unsafe impl Send for AdoptedCallback<'static> {}
+unsafe impl Sync for AdoptedCallback<'static> {}
+
+impl<'a> std::ops::Deref for AdoptedCallback<'a> {
+    type Target = Callback<'a>;
+
+    fn deref(&self) -> &Callback<'a> {
+        &self.0
+    }
+}
+
+impl Drop for AdoptedCallback<'_> {
+    fn drop(&mut self) {
+        // SAFETY: `adopt` made this the one owner of `data`, and this type
+        // is neither `Copy` nor `Clone`, so it is reclaimed once.
+        unsafe { (self.0.drop_fn)(self.0.data) }
     }
 }
 

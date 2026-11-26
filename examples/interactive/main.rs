@@ -11,7 +11,7 @@ fn main() {
     let (sender, receiver) = std::sync::mpsc::channel();
 
     let status_callback = nsi::StatusCallback::new(
-        |_ctx: &nsi::Context, status: nsi::RenderStatus| {
+        move |_ctx: &nsi::Context, status: nsi::RenderStatus| {
             println!("Status: {:?}", status);
 
             // Send the status through our channel.

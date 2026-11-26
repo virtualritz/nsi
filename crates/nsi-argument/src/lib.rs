@@ -17,8 +17,9 @@ pub mod argument;
 // the wrapper around a `&[f32; 3]`), so they stay in `argument` and only
 // the names without a twin are re-exported here.
 pub use argument::{
-    Arg, ArgData, ArgDataMethods, ArgSlice, ArgVec, Callback, CallbackPtr,
-    DataType, Reference, ReferenceSlice, StableDeref, String, StringSlice,
+    AdoptedCallback, Arg, ArgData, ArgDataMethods, ArgSlice, ArgVec, Callback,
+    CallbackPtr, DataType, Reference, ReferenceSlice, StableDeref, String,
+    StringSlice,
 };
 
 // The macros name `$crate::Attribute` and the shape aliases

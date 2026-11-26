@@ -352,6 +352,10 @@ pub mod c_api;
 // Context should be in the crate root so we keep the module private.
 pub mod context;
 pub use context::*;
+// `nsi-trait`, through the glob of `nsi-argument` above, has a generic
+// `FnStatus` and `StatusCallback` for every context type. This crate's
+// names are those for its `Context`, so they win over the glob.
+pub use context::{FnStatus, StatusCallback};
 
 #[cfg(feature = "output")]
 pub mod output;

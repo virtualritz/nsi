@@ -910,16 +910,10 @@ impl<'a> Context<'a> {
 
 // Action is re-exported from nsi-trait via lib.rs.
 
-/// The status of a *interactive* render session.
-#[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, num_enum::FromPrimitive)]
-pub enum RenderStatus {
-    #[num_enum(default)]
-    Completed = nsi_sys::NSIStoppingStatus::RenderCompleted as _,
-    Aborted = nsi_sys::NSIStoppingStatus::RenderAborted as _,
-    Synchronized = nsi_sys::NSIStoppingStatus::RenderSynchronized as _,
-    Restarted = nsi_sys::NSIStoppingStatus::RenderRestarted as _,
-}
+// The callback types live in `nsi-trait`, so a backend in Rust uses them
+// with no FFI. `RenderStatus` derives `num_enum::FromPrimitive` there,
+// through the `num_enum` feature, as it did here.
+pub use nsi_trait::{ErrorCallback, FnError, RenderStatus};
 
 /// A closure which is called to inform about the status of an ongoing render.
 ///
@@ -969,33 +963,10 @@ trait FnStatus<'a> = FnMut(
     + 'a
 */
 
-/// Wrapper to pass a [`FnStatus`] closure to a [`Context`].
-pub struct StatusCallback<'a>(Box<Box<dyn FnStatus<'a>>>);
-
-unsafe impl Send for StatusCallback<'static> {}
-unsafe impl Sync for StatusCallback<'static> {}
-
-impl<'a> StatusCallback<'a> {
-    pub fn new<F>(fn_status: F) -> Self
-    where
-        F: FnStatus<'a>,
-    {
-        StatusCallback(Box::new(Box::new(fn_status)))
-    }
-}
-
-impl CallbackPtr for StatusCallback<'_> {
-    #[doc(hidden)]
-    fn to_ptr(self) -> *const core::ffi::c_void {
-        Box::into_raw(self.0) as *const _ as _
-    }
-
-    #[doc(hidden)]
-    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
-        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
-        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnStatus<'static>>) });
-    }
-}
+/// Wrapper to pass a [`FnStatus`] closure to a [`Context`]: the
+/// `nsi-trait` [`StatusCallback`](nsi_trait::StatusCallback) for this
+/// crate's [`Context`].
+pub type StatusCallback<'a> = nsi_trait::StatusCallback<'a, Context<'static>>;
 
 // Trampoline function for the FnStatus callback.
 #[unsafe(no_mangle)]
@@ -1011,14 +982,20 @@ pub(crate) extern "C" fn render_status(
             // leaks a `Box<dyn FnStatus>`. We only borrow it here and never take
             // ownership, so the pointer stays valid for the lifetime of the
             // context.
-            let fn_status = unsafe { &*(payload as *mut Box<dyn FnStatus>) };
+            let fn_status = unsafe {
+                &*(payload
+                    as *mut Box<
+                        dyn nsi_trait::FnStatus<'static, Context<'static>>,
+                    >)
+            };
             // The renderer that made this context, so a closure
             // calling back into it reaches the right one. See
             // `crate::renderer_of`.
             let Ok(api) = crate::renderer_of(context) else {
                 return;
             };
-            let ctx = Context(Arc::new(InnerContext::new(context, api)));
+            let ctx: Context<'static> =
+                Context(Arc::new(InnerContext::new(context, api)));
 
             fn_status(&ctx, status.into());
 
@@ -1029,82 +1006,6 @@ pub(crate) extern "C" fn render_status(
         }
     });
     // If we panic, we can't do much -- just return silently.
-}
-
-/// A closure which is called to inform about the errors during scene defintion
-/// or a render.
-///
-/// It is passed to ɴsɪ via [`new()`](Context::new())’s `"errorhandler"`
-/// argument.
-///
-/// # Examples
-///
-/// ```
-/// # use nsi_ffi_wrap as nsi;
-/// use log::{Level, debug, error, info, trace, warn};
-///
-/// let error_handler = nsi::ErrorCallback::new(
-///     |level: Level, message_id: i32, message: &str| match level {
-///         Level::Error => error!("[{}] {}", message_id, message),
-///         Level::Warn => warn!("[{}] {}", message_id, message),
-///         Level::Info => info!("[{}] {}", message_id, message),
-///         Level::Debug => debug!("[{}] {}", message_id, message),
-///         Level::Trace => trace!("[{}] {}", message_id, message),
-///     },
-/// );
-///
-/// let ctx = nsi::Context::new(Some(&[nsi::callback!(
-///     "errorhander",
-///     error_handler
-/// )]))
-/// .unwrap();
-///
-/// // Do something with ctx ...
-/// ```
-pub trait FnError<'a>: Fn(
-    // The error level.
-    log::Level,
-    // The message id.
-    i32,
-    // The message.
-    &str,
-)
-+ 'a {}
-
-#[doc(hidden)]
-impl<
-    'a,
-    T: Fn(log::Level, i32, &str) + 'a + for<'r> Fn(log::Level, i32, &'r str),
-> FnError<'a> for T
-{
-}
-
-/// Wrapper to pass a [`FnError`] closure to a [`Context`].
-pub struct ErrorCallback<'a>(Box<Box<dyn FnError<'a>>>);
-
-unsafe impl Send for ErrorCallback<'static> {}
-unsafe impl Sync for ErrorCallback<'static> {}
-
-impl<'a> ErrorCallback<'a> {
-    pub fn new<F>(fn_error: F) -> Self
-    where
-        F: FnError<'a>,
-    {
-        ErrorCallback(Box::new(Box::new(fn_error)))
-    }
-}
-
-impl CallbackPtr for ErrorCallback<'_> {
-    #[doc(hidden)]
-    fn to_ptr(self) -> *const core::ffi::c_void {
-        Box::into_raw(self.0) as *const _ as _
-    }
-
-    #[doc(hidden)]
-    unsafe fn drop_ptr(ptr: *const core::ffi::c_void) {
-        // SAFETY: `ptr` came from `to_ptr` above and is reclaimed once.
-        drop(unsafe { Box::from_raw(ptr as *mut Box<dyn FnError<'static>>) });
-    }
 }
 
 // Trampoline function for the FnError callback.

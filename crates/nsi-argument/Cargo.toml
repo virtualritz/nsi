@@ -1,6 +1,6 @@
 [package]
 name = "nsi-argument"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Moritz Moeller <virtualritz@protonmail.com>"]
 edition = "2024"
 # Let-chains, stable for edition 2024 since 1.88.
@@ -22,10 +22,11 @@ include = [
 
 [dependencies]
 enum_dispatch = "0.3"
-nsi-trait = { version = "0.5", path = "../nsi-trait" }
+nsi-trait = { version = "0.5.1", path = "../nsi-trait" }
 ustr = "1"
 
 [dev-dependencies]
+log = "0.4"
 # The doc examples hand their arguments to a real `Context`. A dev-only
 # cycle: the library itself never depends on `nsi-ffi-wrap`. No version, so
 # `cargo publish` drops it: nsi-ffi-wrap is published after this crate.

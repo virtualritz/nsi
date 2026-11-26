@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 fn nsi_camera<'a>(
     c: &nsi::Context<'a>,
     name: &str,
-    open: nsi::output::OpenCallback,
+    open: nsi::output::OpenCallback<'a>,
     write: nsi::output::WriteCallback<'a, f32>,
     finish: nsi::output::FinishCallback<'a>,
 ) {
@@ -223,7 +223,7 @@ fn nsi_dodecahedron(c: &nsi::Context, name: &str) {
 pub(crate) fn nsi_render<'a>(
     samples: u32,
     name: &str,
-    open: nsi::output::OpenCallback,
+    open: nsi::output::OpenCallback<'a>,
     write: nsi::output::WriteCallback<'a, f32>,
     finish: nsi::output::FinishCallback<'a>,
 ) {

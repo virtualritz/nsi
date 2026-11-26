@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### `nsi-trait` 0.5.1, `nsi-argument` 0.1.1, `nsi-ffi-wrap` 0.12.1
+
+- **The callback types are in `nsi-trait`**: `RenderStatus`, `FnError` and
+  `ErrorCallback`, and `FnStatus<'a, C>` and `StatusCallback<'a, C>` for any
+  context type `C`. A backend in Rust uses them with no FFI and no
+  `nsi-sys`. The values of `RenderStatus` are those of `nsi.h`.
+  `nsi-trait` gains the dependency `log` and the optional feature
+  `num_enum`, which derives `num_enum::FromPrimitive` for `RenderStatus`.
+- **`nsi-argument` reads them back**: `Arg::callback`, then
+  `Callback::error_handler` and `Callback::status_callback::<C>()`, which
+  return `None` for a callback of another type. `Callback::adopt` gives an
+  `AdoptedCallback` that frees the closure when it is dropped. The
+  `CallbackPtr` impls of the two types moved here.
+- **Soundness fix:** `Callback::new` requires `T: 'a`. A context no longer
+  accepts a callback whose borrows end before the context does. Code that
+  passed a non-`move` closure, or an `OpenCallback` with an elided
+  lifetime, to a longer-lived context stops compiling. The `interactive`
+  and `output` examples had both and are fixed.
+- **`nsi-ffi-wrap` re-exports them** under the old paths.
+  `nsi::StatusCallback` is `nsi_trait::StatusCallback<'a, Context<'static>>`
+  and `nsi::FnStatus` stays this crate's trait, so existing code compiles
+  unchanged.
+
 ### `nsi-argument` 0.1.0, `nsi-ffi-wrap` 0.12.0, `nsi-intermediate` 0.3.0, `nsi-parse` 0.3.0
 
 - **New crate `nsi-argument`**: `Arg`, its value types, the `ParamValue`

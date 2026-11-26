@@ -323,10 +323,10 @@ fn setup_test_camera(ctx: &nsi::Context, width: usize, height: usize) {
 }
 
 /// Setup test output driver.
-fn setup_test_output(
-    ctx: &nsi::Context,
+fn setup_test_output<'a>(
+    ctx: &nsi::Context<'a>,
     test_name: &str,
-    write: nsi::output::WriteCallback<f32>,
+    write: nsi::output::WriteCallback<'a, f32>,
 ) {
     // Output layer.
     ctx.create("beauty", nsi::OUTPUT_LAYER, None);

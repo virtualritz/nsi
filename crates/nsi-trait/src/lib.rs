@@ -14,6 +14,9 @@
 //! - [`Flags`] -- Parameter flags (PerFace, PerVertex, etc.)
 //! - [`Name`] -- Feature-gated string type (`ustr::Ustr` or `String`)
 //! - [`Action`] -- Render control actions
+//! - [`ErrorCallback`] and [`StatusCallback`] -- the error handler and the
+//!   render-stopped callback a host hands to a renderer, with
+//!   [`RenderStatus`]
 //! - [`NodeType`] -- Enum of all standard node types
 //! - Node type constants ([`ROOT`], [`MESH`], etc.)
 //! - [`Attribute<T>`](attribute::Attribute) -- Typed attribute names with
@@ -27,9 +30,11 @@
 //! see the `nsi-ffi-wrap` crate.
 
 pub mod attribute;
+mod callback;
 pub mod node;
 mod nsi_trait;
 
 pub use attribute::*;
+pub use callback::*;
 pub use node::*;
 pub use nsi_trait::*;
